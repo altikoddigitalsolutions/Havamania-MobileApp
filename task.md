@@ -272,3 +272,12 @@ Format: `ID - Gorev (Bagimlilik)`
 - [x] R-006 - Mobil bağımlılıklarını (`npm install`) yükle (Bağımlılık: yok)
 - [x] R-007 - Mobil uygulamayı başlat (Bağımlılık: R-006)
 - [x] R-008 - Yeni başlayanlar için kurulum rehberi oluştur (docs/kurulum_rehberi.md)
+- [x] Native klasörlerin (`ios`, `android`) üretilmesi ve yapılandırılması.
+- [x] Sistem bağımlılıklarının (Ruby, CocoaPods, JDK 17, Android Tools) kurulumu.
+- [x] iOS Podfile ve bağımlılık uyumluluklarının (Nitro, Screens v3.x) giderilmesi.
+- [x] Android `local.properties` ve Kotlin 2.0.21 yapılandırması.
+- [x] Android Build doğrulaması (`assembleDebug` SUCCESS).
+- [x] Git Yapılandırması: `.gitignore` dosyası native ve emülatörler için güncellendi.
+- [x] R-010 - iOS testi (simülatör) gerçekleştirilebilir durumda.
+- [x] R-011 - Android testi (emülatör) gerçekleştirilebilir durumda.
+- [x] Radon IDE: Native katman tanıma ve debug testleri başarıyla tamamlandı.
