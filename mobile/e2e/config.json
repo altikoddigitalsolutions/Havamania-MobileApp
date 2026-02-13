@@ -1,0 +1,4 @@
+{
+  "runner": "detox",
+  "notes": "E2E scaffold only. Configure device and app binary for CI environment."
+}

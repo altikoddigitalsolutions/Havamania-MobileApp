@@ -1,0 +1,10 @@
+alerts:
+  - name: api_p95_latency_high
+    expr: request_latency_p95_ms > 400
+    severity: warning
+  - name: weather_provider_error_rate_high
+    expr: weather_provider_error_rate > 0.01
+    severity: critical
+  - name: chatbot_timeout_rate_high
+    expr: chatbot_timeout_rate > 0.03
+    severity: warning
