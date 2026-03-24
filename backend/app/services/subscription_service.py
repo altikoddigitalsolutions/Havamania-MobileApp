@@ -26,14 +26,18 @@ def get_or_create_subscription(db: Session, user_id: str) -> Subscription:
 def is_premium_active(subscription: Subscription) -> bool:
     now = datetime.now(UTC)
 
+    expires_at = subscription.expires_at
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+
     if subscription.status in ACTIVE_STATUSES:
-        if subscription.expires_at is None:
+        if expires_at is None:
             return True
-        return subscription.expires_at > now
+        return expires_at > now
 
     # Cancellation/grace handling: canceled users keep access until expires_at.
-    if subscription.status == "canceled" and subscription.expires_at is not None:
-        return subscription.expires_at > now
+    if subscription.status == "canceled" and expires_at is not None:
+        return expires_at > now
 
     return False
 

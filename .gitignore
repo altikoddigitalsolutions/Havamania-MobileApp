@@ -50,6 +50,8 @@ mobile/android/.externalNativeBuild/
 # iOS
 mobile/ios/Pods/
 mobile/ios/build/
+mobile/ios/build_temp/
+mobile/ios/fresh_build/
 mobile/ios/*.xcworkspace
 mobile/ios/**/*.xcuserdata
 mobile/ios/**/*.xccheckout

@@ -1,16 +1,27 @@
-.PHONY: backend-run backend-test backend-lint mobile-start mobile-test
+.PHONY: backend-run backend-test backend-lint mobile-start mobile-test dev-setup dev-up dev-down
 
+# Lokal Çalıştırma (Fallback)
 backend-run:
 	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+# Docker İçinde Çalıştırma (Önerilen)
 backend-test:
-	cd backend && pytest -q
+	docker compose run --rm backend pytest -q
 
 backend-lint:
-	cd backend && ruff check app tests
+	docker compose run --rm backend ruff check app tests
 
 mobile-start:
 	cd mobile && npm run start
 
 mobile-test:
 	cd mobile && npm test
+
+dev-setup:
+	bash setup.sh
+
+dev-up:
+	docker compose up -d
+
+dev-down:
+	docker compose down

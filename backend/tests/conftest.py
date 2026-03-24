@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app import models  # Modellerin create_all tarafından görülmesi için
 
-TEST_DATABASE_URL = "sqlite+pysqlite:///:memory:"
+import os
+
+TEST_DATABASE_URL = "sqlite+pysqlite:////tmp/test_db.sqlite"
 
 
 @pytest.fixture()
@@ -25,6 +28,9 @@ def db_session() -> Generator[Session, None, None]:
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+        if os.path.exists("/tmp/test_db.sqlite"):
+            os.remove("/tmp/test_db.sqlite")
 
 
 @pytest.fixture()
