@@ -87,3 +87,5 @@ Ana dizindeyken aşağıdaki komutları kullanabilirsiniz:
 tablete bağlantı için
 adb pair 192.168.0.19:35531
 
+mac için:
+~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36.1

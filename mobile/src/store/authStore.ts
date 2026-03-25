@@ -13,27 +13,30 @@ import {readTokens, saveTokens} from '../services/tokenStorage';
 
 interface AuthState {
   isAuthenticated: boolean;
+  isGuest: boolean;
   initializing: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   signupWithEmail: (email: string, password: string, fullName?: string) => Promise<void>;
   logoutCurrentUser: () => Promise<void>;
+  loginAsGuest: () => void;
   initSession: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
+  isGuest: false,
   initializing: true,
 
   loginWithEmail: async (email: string, password: string) => {
     const tokens = await login(email, password);
     await persistSession(tokens);
-    set({isAuthenticated: true});
+    set({isAuthenticated: true, isGuest: false});
   },
 
   signupWithEmail: async (email: string, password: string, fullName?: string) => {
     const tokens = await signup(email, password, fullName);
     await persistSession(tokens);
-    set({isAuthenticated: true});
+    set({isAuthenticated: true, isGuest: false});
   },
 
   logoutCurrentUser: async () => {
@@ -42,11 +45,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         await logout(stored.refreshToken);
       } catch {
-        // ignore
+        // ignore — misafir modunda veya ağ yoksa
       }
     }
     await clearSession();
-    set({isAuthenticated: false});
+    set({isAuthenticated: false, isGuest: false});
+  },
+
+  /** Kayıt/giriş olmadan uygulamayı kullan */
+  loginAsGuest: () => {
+    set({isAuthenticated: true, isGuest: true});
   },
 
   initSession: async () => {
@@ -58,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         },
         async () => {
           await clearSession();
-          set({isAuthenticated: false});
+          set({isAuthenticated: false, isGuest: false});
         },
       );
       console.log('[DEBUG] authStore: interceptor registered');

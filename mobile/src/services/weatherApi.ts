@@ -1,16 +1,18 @@
-import {apiClient} from './apiClient';
+/**
+ * weatherApi — Artık Open-Meteo'yu doğrudan kullanır.
+ * Backend/Docker çalışmasa bile hava durumu verileri gelir.
+ */
+import {
+  fetchCurrentWeather,
+  fetchDailyWeather,
+  fetchHourlyWeather,
+} from './openMeteoApi';
 
-export async function getCurrentWeather(lat: number, lon: number) {
-  const response = await apiClient.get('/weather/current', {params: {lat, lon}});
-  return response.data;
-}
+export {fetchCurrentWeather as getCurrentWeather};
+export {fetchHourlyWeather as getHourlyWeather};
+export {fetchDailyWeather as getDailyWeather};
 
-export async function getHourlyWeather(lat: number, lon: number, hours = 24) {
-  const response = await apiClient.get('/weather/hourly', {params: {lat, lon, hours}});
-  return response.data;
-}
-
-export async function getDailyWeather(lat: number, lon: number, days = 7) {
-  const response = await apiClient.get('/weather/daily', {params: {lat, lon, days}});
-  return response.data;
+// Geriye dönük uyumluluk için eski imzaları da koru
+export async function getCurrentWeatherLegacy(lat: number, lon: number) {
+  return fetchCurrentWeather(lat, lon);
 }
