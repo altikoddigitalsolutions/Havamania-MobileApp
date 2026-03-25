@@ -41,10 +41,6 @@ export async function updateNotificationPreferences(payload: Record<string, unkn
 }
 
 export async function uploadAvatar(formData: FormData) {
-  const response = await apiClient.post('/profile/avatar', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const response = await apiClient.post('/profile/avatar', formData);
   return response.data;
 }
