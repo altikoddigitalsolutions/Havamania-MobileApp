@@ -23,7 +23,7 @@ app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,4 +40,6 @@ def healthcheck() -> dict[str, str]:
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+# Statik klasörlerin varlığını garanti et
+os.makedirs(os.path.join(static_dir, "avatars"), exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

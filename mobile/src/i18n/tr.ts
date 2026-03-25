@@ -179,6 +179,12 @@ const tr = {
     editPhoto: 'Fotoğrafı Düzenle',
     uploadPhoto: 'Fotoğraf Yükle',
     customizePhoto: 'Fotoğrafı Özelleştir',
+    notifPermTitle: 'Bildirim İzni',
+    notifPermMsg: 'Hava durumu uyarıları alabilmek için bildirim izni gerekiyor. Lütfen ayarlardan izin verin.',
+    notifPermMsgIos: 'Bildirim almak için uygulama ayarlarından bildirimlere izin verin.',
+    openSettings: 'Ayarları Aç',
+    editName: 'İsim Düzenle',
+    editNamePlaceholder: 'Adınızı girin',
   },
   languages: {
     tr: 'Türkçe',

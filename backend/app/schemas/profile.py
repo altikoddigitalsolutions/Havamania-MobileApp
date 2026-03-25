@@ -10,6 +10,15 @@ class ProfileResponse(BaseModel):
     language: str = "tr"
     avatar_emoji: str = "🧑"
     avatar_url: str | None = None
+    # Kullanıcı alanları (User tablosundan gelir)
+    full_name: str | None = None
+    email: str = ""
+    created_at: str = ""          # ISO 8601
+    # Birincil konum etiketi
+    location_label: str | None = None
+    # İstatistikler
+    locations_count: int = 0
+    ai_messages_count: int = 0
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -20,6 +29,7 @@ class ProfileUpdateRequest(BaseModel):
     language: str | None = Field(default=None, pattern="^(tr|en)$")
     avatar_emoji: str | None = Field(default=None, max_length=16)
     avatar_url: str | None = Field(default=None, max_length=255)
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class LocationCreateRequest(BaseModel):

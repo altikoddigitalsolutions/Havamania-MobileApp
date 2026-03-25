@@ -1,18 +1,22 @@
 import React, {useState} from 'react';
 import {
   Alert,
+  Linking,
   Modal,
+  PermissionsAndroid,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Image,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import ImagePicker from 'react-native-image-crop-picker';
 import {ColorMatrix, concatColorMatrices, sepia, grayscale, night, brightness, contrast} from 'react-native-color-matrix-image-filters';
@@ -90,9 +94,13 @@ export function ProfileScreen(): React.JSX.Element {
 
   // Local state for UI but synced with backend
   const [avatarEmoji, setAvatarEmoji] = React.useState('🧑');
+  // Upload sonrası önbelleği kırmak için sabit bir cache-buster tutuyoruz
+  const [avatarCacheBuster, setAvatarCacheBuster] = useState(() => Date.now());
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showFilterPicker, setShowFilterPicker] = useState(false);
+  const [showNameEdit, setShowNameEdit] = useState(false);
+  const [editingName, setEditingName] = useState('');
   const [editingImage, setEditingImage] = useState<any>(null);
   const [selectedFilter, setSelectedFilter] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -157,19 +165,30 @@ export function ProfileScreen(): React.JSX.Element {
     setIsUploading(true);
     try {
       const formData = new FormData();
+      const uri = Platform.OS === 'android' && !editingImage.path.startsWith('file://') 
+        ? `file://${editingImage.path}` 
+        : editingImage.path;
+      
       formData.append('file', {
-        uri: editingImage.path,
-        type: editingImage.mime,
-        name: editingImage.path.split('/').pop(),
+        uri,
+        type: editingImage.mime || 'image/jpeg',
+        name: editingImage.filename || `avatar_${Date.now()}.jpg`,
       } as any);
 
       const res = await uploadAvatar(formData);
-      queryClient.setQueryData(['profile'], res);
+      // Önce cache-buster'ı güncelle (yeni URL için), ardından sorgu önbelleğini set et
+      const ts = Date.now();
+      setAvatarCacheBuster(ts);
+      // setQueryData + invalidate: hem anında günceller hem arka planda teyit eder
+      queryClient.setQueryData(['profile'], (old: any) => ({...(old ?? {}), ...res}));
+      void queryClient.invalidateQueries({queryKey: ['profile']});
       setShowFilterPicker(false);
       setEditingImage(null);
       setSelectedFilter(null);
     } catch (err: any) {
-      Alert.alert('Upload Error', err.message);
+      console.error('Upload error details:', err.response?.data || err.message);
+      const status = err.response?.status ? `(${err.response.status})` : '';
+      Alert.alert('Upload Error', `${err.message} ${status}`);
     } finally {
       setIsUploading(false);
     }
@@ -187,14 +206,51 @@ export function ProfileScreen(): React.JSX.Element {
     }
   };
 
-  const toggleNotifications = (val: boolean) => {
-    if (!isGuest) {
-      updatePrefsMutation.mutate({
-        severe_alert_enabled: val,
-        daily_summary_enabled: val,
-        rain_alert_enabled: val,
-      });
+  const handleNotificationToggle = async (val: boolean) => {
+    if (isGuest) return;
+
+    if (val) {
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            t('profile.notifPermTitle'),
+            t('profile.notifPermMsg'),
+            [{text: t('common.ok')}],
+          );
+          return;
+        }
+      } else if (Platform.OS === 'ios') {
+        Alert.alert(
+          t('profile.notifPermTitle'),
+          t('profile.notifPermMsgIos'),
+          [
+            {text: t('common.cancel'), style: 'cancel'},
+            {text: t('profile.openSettings'), onPress: () => void Linking.openSettings()},
+          ],
+        );
+        return;
+      }
     }
+
+    updatePrefsMutation.mutate({
+      severe_alert_enabled: val,
+      daily_summary_enabled: val,
+      rain_alert_enabled: val,
+    });
+  };
+
+  const handleOpenPrivacyPolicy = () => {
+    void Linking.openURL('https://havamania.app/privacy');
+  };
+
+  const handleSaveName = () => {
+    const trimmed = editingName.trim();
+    if (!trimmed) return;
+    updateProfileMutation.mutate({full_name: trimmed});
+    setShowNameEdit(false);
   };
 
   const s = makeStyles(C);
@@ -221,7 +277,7 @@ export function ProfileScreen(): React.JSX.Element {
             <View style={s.avatar}>
               {profile?.avatar_url ? (
                 <Image
-                  source={{uri: `${BASE_URL}${profile.avatar_url}?t=${Date.now()}`}}
+                  source={{uri: `${BASE_URL}${profile.avatar_url}?t=${avatarCacheBuster}`}}
                   style={s.avatarImage}
                 />
               ) : (
@@ -234,20 +290,38 @@ export function ProfileScreen(): React.JSX.Element {
           </TouchableOpacity>
 
           <Text style={s.changeAvatarHint}>{t('profile.changeAvatar')}</Text>
-          <Text style={s.displayName}>{displayName}</Text>
-          {!isGuest && (
+          <TouchableOpacity
+            onPress={() => {
+              if (!isGuest) {
+                setEditingName(profile?.full_name ?? '');
+                setShowNameEdit(true);
+              }
+            }}>
+            <Text style={s.displayName}>{displayName}</Text>
+          </TouchableOpacity>
+          {!isGuest && profile?.location_label ? (
             <View style={s.locationRow}>
               <Text style={s.locationPin}>📍</Text>
-              <Text style={s.locationText}>{profile?.location ?? 'İstanbul, TR'}</Text>
+              <Text style={s.locationText}>{profile.location_label}</Text>
             </View>
-          )}
+          ) : null}
           <Text style={s.memberSince}>{memberSince}</Text>
 
           {/* İstatistikler */}
           <View style={s.statsRow}>
-            <StatCard value={isGuest ? '0' : '12'} label={t('profile.cities')} icon="🔖" C={C} />
+            <StatCard
+              value={isGuest ? '0' : String(profile?.locations_count ?? 0)}
+              label={t('profile.cities')}
+              icon="🔖"
+              C={C}
+            />
             <View style={s.statDivider} />
-            <StatCard value={isGuest ? '0' : '148'} label={t('profile.aiAsked')} icon="💬" C={C} />
+            <StatCard
+              value={isGuest ? '0' : String(profile?.ai_messages_count ?? 0)}
+              label={t('profile.aiAsked')}
+              icon="💬"
+              C={C}
+            />
             <View style={s.statDivider} />
             <StatCard value={t('profile.sunny')} label={t('profile.favorite')} icon="☀️" C={C} />
           </View>
@@ -306,7 +380,7 @@ export function ProfileScreen(): React.JSX.Element {
               </View>
               <Switch
                 value={notifEnabled}
-                onValueChange={toggleNotifications}
+                onValueChange={val => void handleNotificationToggle(val)}
                 trackColor={{false: C.border, true: C.accent}}
                 thumbColor="#FFFFFF"
               />
@@ -315,7 +389,7 @@ export function ProfileScreen(): React.JSX.Element {
             <View style={s.rowDivider} />
 
             {/* Gizlilik */}
-            <TouchableOpacity style={s.settingsRow}>
+            <TouchableOpacity style={s.settingsRow} onPress={handleOpenPrivacyPolicy}>
               <View style={s.settingsLeft}>
                 <View style={[s.settingsIconBox, {backgroundColor: '#1A5C9A'}]}>
                   <Text style={s.settingsIconText}>🛡️</Text>
@@ -485,6 +559,46 @@ export function ProfileScreen(): React.JSX.Element {
                 {language === lang && <Text style={s.langCheck}>✓</Text>}
               </TouchableOpacity>
             ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── İsim Düzenleme Modal ── */}
+      <Modal
+        visible={showNameEdit}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNameEdit(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowNameEdit(false)}>
+          <View style={[s.modalSheet, {paddingBottom: 40}]}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>{t('profile.editName')}</Text>
+            <TextInput
+              style={s.nameInput}
+              value={editingName}
+              onChangeText={setEditingName}
+              placeholder={t('profile.editNamePlaceholder')}
+              placeholderTextColor={C.textMuted}
+              autoFocus
+              maxLength={255}
+            />
+            <View style={s.filterActions}>
+              <TouchableOpacity
+                style={[s.actionBtn, s.cancelBtn]}
+                onPress={() => setShowNameEdit(false)}>
+                <Text style={s.actionBtnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.actionBtn, s.saveBtn]}
+                onPress={handleSaveName}
+                disabled={updateProfileMutation.isPending}>
+                {updateProfileMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={s.actionBtnText}>{t('common.save')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -833,6 +947,20 @@ const makeStyles = (C: AppColors) =>
       fontSize: FontSize.md,
       fontWeight: '700',
       color: '#fff',
+    },
+
+    // İsim Düzenleme
+    nameInput: {
+      width: '100%',
+      backgroundColor: C.bgInput,
+      borderRadius: Radius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      fontSize: FontSize.md,
+      color: C.text,
+      borderWidth: 1,
+      borderColor: C.border,
+      marginBottom: Spacing.lg,
     },
 
     // Dil Seçici

@@ -179,6 +179,12 @@ const en = {
     editPhoto: 'Edit Photo',
     uploadPhoto: 'Upload Photo',
     customizePhoto: 'Customize Photo',
+    notifPermTitle: 'Notification Permission',
+    notifPermMsg: 'Notification permission is required to receive weather alerts. Please allow it in settings.',
+    notifPermMsgIos: 'To receive notifications, enable them in the app settings.',
+    openSettings: 'Open Settings',
+    editName: 'Edit Name',
+    editNamePlaceholder: 'Enter your name',
   },
   languages: {
     tr: 'Türkçe',

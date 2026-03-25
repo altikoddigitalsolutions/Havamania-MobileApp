@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 import shutil
 import os
 from uuid import uuid4
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
+from app.models.chatbot_usage_daily import ChatbotUsageDaily
 from app.models.location import Location
 from app.models.notification_preference import NotificationPreference
 from app.models.profile import Profile
@@ -21,6 +23,16 @@ from app.schemas.profile import (
 )
 
 router = APIRouter()
+
+# Statik dizin:
+# profile.py → routes/ → v1/ → api/ → app-pkg/ → /app (backend root)
+# Yani routes/ klasöründen 4 seviye yukarı = backend root
+_ROUTES_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.normpath(os.path.join(_ROUTES_DIR, '..', '..', '..', '..', 'static'))
+AVATAR_DIR = os.path.join(STATIC_DIR, "avatars")
+os.makedirs(AVATAR_DIR, exist_ok=True)
+
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
 
 
 def _ensure_profile(db: Session, user_id: str) -> Profile:
@@ -49,9 +61,25 @@ def _apply_primary_location_uniqueness(db: Session, user_id: str, primary_locati
     )
 
 
-@router.get("", response_model=ProfileResponse)
-def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> ProfileResponse:
-    profile = _ensure_profile(db, current_user.id)
+def _build_profile_response(profile: Profile, user: User, db: Session) -> ProfileResponse:
+    """Profile + User + istatistik verilerini birleştirip ProfileResponse döner."""
+    # Birincil konum etiketi
+    location_label: str | None = None
+    if profile.primary_location_id:
+        loc = db.get(Location, profile.primary_location_id)
+        if loc:
+            location_label = loc.label
+
+    # Kayıtlı şehir sayısı
+    locations_count: int = db.query(func.count(Location.id)).filter(
+        Location.user_id == user.id
+    ).scalar() or 0
+
+    # Toplam AI mesaj sayısı
+    ai_messages_count: int = db.query(func.sum(ChatbotUsageDaily.message_count)).filter(
+        ChatbotUsageDaily.user_id == user.id
+    ).scalar() or 0
+
     return ProfileResponse(
         user_id=profile.user_id,
         primary_location_id=profile.primary_location_id,
@@ -61,7 +89,19 @@ def get_profile(current_user: User = Depends(get_current_user), db: Session = De
         language=profile.language,
         avatar_emoji=profile.avatar_emoji,
         avatar_url=profile.avatar_url,
+        full_name=user.full_name,
+        email=user.email,
+        created_at=user.created_at.isoformat(),
+        location_label=location_label,
+        locations_count=locations_count,
+        ai_messages_count=ai_messages_count,
     )
+
+
+@router.get("", response_model=ProfileResponse)
+def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> ProfileResponse:
+    profile = _ensure_profile(db, current_user.id)
+    return _build_profile_response(profile, current_user, db)
 
 
 @router.patch("", response_model=ProfileResponse)
@@ -84,6 +124,9 @@ def update_profile(
         profile.avatar_emoji = payload.avatar_emoji
     if payload.avatar_url is not None:
         profile.avatar_url = payload.avatar_url
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name
+        db.add(current_user)
 
     if payload.primary_location_id is not None:
         location = (
@@ -101,17 +144,9 @@ def update_profile(
     db.add(profile)
     db.commit()
     db.refresh(profile)
+    db.refresh(current_user)
 
-    return ProfileResponse(
-        user_id=profile.user_id,
-        primary_location_id=profile.primary_location_id,
-        temperature_unit=profile.temperature_unit,
-        wind_unit=profile.wind_unit,
-        theme=profile.theme,
-        language=profile.language,
-        avatar_emoji=profile.avatar_emoji,
-        avatar_url=profile.avatar_url,
-    )
+    return _build_profile_response(profile, current_user, db)
 
 
 @router.get("/locations", response_model=list[LocationResponse])
@@ -289,18 +324,22 @@ async def upload_avatar(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ProfileResponse:
-    if not file.content_type.startswith("image/"):
+    # content_type bazen None gelir (React Native FormData quirk) — uzantıya göre tespit et
+    content_type = file.content_type or "image/jpeg"
+    if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    upload_dir = "static/avatars"
-    os.makedirs(upload_dir, exist_ok=True)
+    # Uzantı belirleme: .jpg / .png / .webp
+    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/heic": ".jpg"}
+    raw_ext = os.path.splitext(file.filename or "avatar.jpg")[1].lower()
+    file_ext = raw_ext if raw_ext in {".jpg", ".jpeg", ".png", ".webp"} else ext_map.get(content_type, ".jpg")
 
-    file_ext = os.path.splitext(file.filename)[1]
     file_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
-    file_path = os.path.join(upload_dir, file_name)
+    file_path = os.path.join(AVATAR_DIR, file_name)
 
+    contents = await file.read()
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
 
     profile = _ensure_profile(db, current_user.id)
     profile.avatar_url = f"/static/avatars/{file_name}"
@@ -308,13 +347,4 @@ async def upload_avatar(
     db.commit()
     db.refresh(profile)
 
-    return ProfileResponse(
-        user_id=profile.user_id,
-        primary_location_id=profile.primary_location_id,
-        temperature_unit=profile.temperature_unit,
-        wind_unit=profile.wind_unit,
-        theme=profile.theme,
-        language=profile.language,
-        avatar_emoji=profile.avatar_emoji,
-        avatar_url=profile.avatar_url,
-    )
+    return _build_profile_response(profile, current_user, db)

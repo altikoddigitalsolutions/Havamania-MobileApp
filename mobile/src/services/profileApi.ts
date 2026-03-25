@@ -41,6 +41,13 @@ export async function updateNotificationPreferences(payload: Record<string, unkn
 }
 
 export async function uploadAvatar(formData: FormData) {
-  const response = await apiClient.post('/profile/avatar', formData);
+  const response = await apiClient.post('/profile/avatar', formData, {
+    headers: {
+      // React Native FormData için explicit Content-Type gerekiyor;
+      // boundary bilgisini Axios/fetch otomatik ekler
+      'Content-Type': 'multipart/form-data',
+    },
+    timeout: 60000, // dosya yükleme için 60 saniye
+  });
   return response.data;
 }
