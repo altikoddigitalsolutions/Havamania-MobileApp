@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import shutil
+import os
+from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -55,6 +58,9 @@ def get_profile(current_user: User = Depends(get_current_user), db: Session = De
         temperature_unit=profile.temperature_unit,
         wind_unit=profile.wind_unit,
         theme=profile.theme,
+        language=profile.language,
+        avatar_emoji=profile.avatar_emoji,
+        avatar_url=profile.avatar_url,
     )
 
 
@@ -72,6 +78,12 @@ def update_profile(
         profile.wind_unit = payload.wind_unit
     if payload.theme is not None:
         profile.theme = payload.theme
+    if payload.language is not None:
+        profile.language = payload.language
+    if payload.avatar_emoji is not None:
+        profile.avatar_emoji = payload.avatar_emoji
+    if payload.avatar_url is not None:
+        profile.avatar_url = payload.avatar_url
 
     if payload.primary_location_id is not None:
         location = (
@@ -96,6 +108,9 @@ def update_profile(
         temperature_unit=profile.temperature_unit,
         wind_unit=profile.wind_unit,
         theme=profile.theme,
+        language=profile.language,
+        avatar_emoji=profile.avatar_emoji,
+        avatar_url=profile.avatar_url,
     )
 
 
@@ -265,4 +280,41 @@ def update_notification_preferences(
         severe_alert_enabled=prefs.severe_alert_enabled,
         daily_summary_enabled=prefs.daily_summary_enabled,
         rain_alert_enabled=prefs.rain_alert_enabled,
+    )
+
+
+@router.post("/avatar", response_model=ProfileResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProfileResponse:
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    upload_dir = "static/avatars"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_ext = os.path.splitext(file.filename)[1]
+    file_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
+    file_path = os.path.join(upload_dir, file_name)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    profile = _ensure_profile(db, current_user.id)
+    profile.avatar_url = f"/static/avatars/{file_name}"
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+
+    return ProfileResponse(
+        user_id=profile.user_id,
+        primary_location_id=profile.primary_location_id,
+        temperature_unit=profile.temperature_unit,
+        wind_unit=profile.wind_unit,
+        theme=profile.theme,
+        language=profile.language,
+        avatar_emoji=profile.avatar_emoji,
+        avatar_url=profile.avatar_url,
     )

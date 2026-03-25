@@ -34,16 +34,16 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
   },
 
   setLanguage: async (lang, syncToServer = false) => {
-    await i18n.changeLanguage(lang);
-    set({language: lang});
-    await saveLanguage(lang);
+    try {
+      await i18n.changeLanguage(lang);
+      set({language: lang});
+      await saveLanguage(lang);
 
-    if (syncToServer) {
-      try {
+      if (syncToServer) {
         await updateProfile({language: lang});
-      } catch {
-        // Sunucu yoksa sessizce geç; yerel ayar zaten kaydedildi
       }
+    } catch (err) {
+      console.error('[LanguageStore] Failed to set language:', err);
     }
   },
 }));

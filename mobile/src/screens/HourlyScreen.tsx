@@ -15,6 +15,8 @@ import {useQuery} from '@tanstack/react-query';
 import {getHourlyWeather} from '../services/weatherApi';
 import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing, formatHour, getWeatherEmoji} from '../theme';
 import {useThemeStore} from '../store/themeStore';
+import {useAuthStore} from '../store/authStore';
+import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Hourly'>;
@@ -24,9 +26,17 @@ export function HourlyScreen({route, navigation}: Props): React.JSX.Element {
   const C = theme === 'dark' ? DarkColors : LightColors;
   const {lat, lon, city} = route.params;
 
+  const {isGuest} = useAuthStore();
+  const profileQuery = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: !isGuest,
+  });
+  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+
   const hourlyQuery = useQuery({
-    queryKey: ['weather', 'hourly', lat, lon, 48],
-    queryFn: () => getHourlyWeather(lat, lon, 48),
+    queryKey: ['weather', 'hourly', lat, lon, 48, tempUnit],
+    queryFn: () => getHourlyWeather(lat, lon, 48, tempUnit as any),
     staleTime: 5 * 60 * 1000,
   });
 

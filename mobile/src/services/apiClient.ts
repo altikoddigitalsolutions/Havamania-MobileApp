@@ -2,9 +2,11 @@ import axios from 'axios';
 import {Platform} from 'react-native';
 
 // Android emülatöründe localhost host makinasına ulaşamaz; 10.0.2.2 kullanılmalı
-const API_BASE_URL = Platform.OS === 'android'
-  ? 'http://10.0.2.2:8000/v1'
-  : 'http://localhost:8000/v1';
+export const BASE_URL = Platform.OS === 'android'
+  ? 'http://10.0.2.2:8000'
+  : 'http://localhost:8000';
+
+const API_BASE_URL = `${BASE_URL}/v1`;
 
 let tokenRefreshHandler: null | (() => Promise<string | null>) = null;
 

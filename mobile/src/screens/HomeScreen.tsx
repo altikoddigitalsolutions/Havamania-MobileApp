@@ -15,12 +15,14 @@ import {
   View,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {useQueries} from '@tanstack/react-query';
+import {useQueries, useQuery} from '@tanstack/react-query';
 
 import {useTranslation} from 'react-i18next';
 
 import {getCurrentWeather, getDailyWeather, getHourlyWeather} from '../services/weatherApi';
+import {getProfile} from '../services/profileApi';
 import {GeoResult, getMoonPhase, searchCity, formatSunTime} from '../services/openMeteoApi';
+import {useAuthStore} from '../store/authStore';
 import {
   AppColors,
   DarkColors,
@@ -45,6 +47,7 @@ export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
   const {theme} = useThemeStore();
   const C = theme === 'dark' ? DarkColors : LightColors;
+  const {isGuest} = useAuthStore();
 
   const [refreshing, setRefreshing] = useState(false);
   const [lat, setLat] = useState(DEFAULT_LAT);
@@ -55,21 +58,28 @@ export function HomeScreen(): React.JSX.Element {
   const [locationResults, setLocationResults] = useState<GeoResult[]>([]);
   const [searchingLocation, setSearchingLocation] = useState(false);
 
+  const profileQuery = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: !isGuest,
+  });
+  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+
   const [currentQuery, hourlyQuery, dailyQuery] = useQueries({
     queries: [
       {
-        queryKey: ['weather', 'current', lat, lon],
-        queryFn: () => getCurrentWeather(lat, lon),
+        queryKey: ['weather', 'current', lat, lon, tempUnit],
+        queryFn: () => getCurrentWeather(lat, lon, tempUnit as any),
         staleTime: 5 * 60 * 1000,
       },
       {
-        queryKey: ['weather', 'hourly', lat, lon],
-        queryFn: () => getHourlyWeather(lat, lon, 12),
+        queryKey: ['weather', 'hourly', lat, lon, tempUnit],
+        queryFn: () => getHourlyWeather(lat, lon, 12, tempUnit as any),
         staleTime: 5 * 60 * 1000,
       },
       {
-        queryKey: ['weather', 'daily', lat, lon],
-        queryFn: () => getDailyWeather(lat, lon, 10),
+        queryKey: ['weather', 'daily', lat, lon, tempUnit],
+        queryFn: () => getDailyWeather(lat, lon, 10, tempUnit as any),
         staleTime: 5 * 60 * 1000,
       },
     ],

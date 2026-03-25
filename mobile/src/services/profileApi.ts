@@ -39,3 +39,12 @@ export async function updateNotificationPreferences(payload: Record<string, unkn
   const response = await apiClient.patch('/profile/notifications', payload);
   return response.data;
 }
+
+export async function uploadAvatar(formData: FormData) {
+  const response = await apiClient.post('/profile/avatar', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+}

@@ -75,7 +75,11 @@ function describeWeather(code: number): string {
 }
 
 // ── Mevcut Hava Durumu ────────────────────────────────────────────────────────
-export async function fetchCurrentWeather(lat: number, lon: number): Promise<CurrentWeatherData> {
+export async function fetchCurrentWeather(
+  lat: number,
+  lon: number,
+  tempUnit: 'C' | 'F' = 'C',
+): Promise<CurrentWeatherData> {
   const currentFields = [
     'temperature_2m',
     'relative_humidity_2m',
@@ -92,7 +96,8 @@ export async function fetchCurrentWeather(lat: number, lon: number): Promise<Cur
     'precipitation',
   ].join(',');
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&current=${currentFields}&timezone=auto`;
+  const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&current=${currentFields}&temperature_unit=${tUnit}&timezone=auto`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo current: HTTP ${res.status}`);
   const json = await res.json();
@@ -122,6 +127,7 @@ export async function fetchHourlyWeather(
   lat: number,
   lon: number,
   hours = 48,
+  tempUnit: 'C' | 'F' = 'C',
 ): Promise<HourlyWeatherData> {
   const hourlyFields = [
     'temperature_2m',
@@ -133,7 +139,8 @@ export async function fetchHourlyWeather(
     'wind_gusts_10m',
   ].join(',');
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${hourlyFields}&timezone=auto&forecast_days=3`;
+  const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${hourlyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=3`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo hourly: HTTP ${res.status}`);
   const json = await res.json();
@@ -165,6 +172,7 @@ export async function fetchDailyWeather(
   lat: number,
   lon: number,
   days = 10,
+  tempUnit: 'C' | 'F' = 'C',
 ): Promise<DailyWeatherData> {
   const dailyFields = [
     'weather_code',
@@ -179,7 +187,8 @@ export async function fetchDailyWeather(
     'uv_index_max',
   ].join(',');
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&daily=${dailyFields}&timezone=auto&forecast_days=${days}`;
+  const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&daily=${dailyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=${days}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo daily: HTTP ${res.status}`);
   const json = await res.json();

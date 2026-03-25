@@ -176,6 +176,9 @@ const en = {
     freeLabel: 'FREE',
     proLabel: 'PRO',
     languagePickerTitle: 'Select Language',
+    editPhoto: 'Edit Photo',
+    uploadPhoto: 'Upload Photo',
+    customizePhoto: 'Customize Photo',
   },
   languages: {
     tr: 'Türkçe',

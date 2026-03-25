@@ -10,12 +10,14 @@ import {
   View,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {useQueries} from '@tanstack/react-query';
+import {useQueries, useQuery} from '@tanstack/react-query';
 
 import {getCurrentWeather, getDailyWeather} from '../services/weatherApi';
 import {getMoonPhase, formatSunTime} from '../services/openMeteoApi';
 import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing, getWeatherEmoji} from '../theme';
 import {useThemeStore} from '../store/themeStore';
+import {useAuthStore} from '../store/authStore';
+import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'WeatherDetail'>;
@@ -25,10 +27,18 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
   const C = theme === 'dark' ? DarkColors : LightColors;
   const {lat, lon} = route.params;
 
+  const {isGuest} = useAuthStore();
+  const profileQuery = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: !isGuest,
+  });
+  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+
   const [currentQuery, dailyQuery] = useQueries({
     queries: [
-      {queryKey: ['weather', 'current', lat, lon], queryFn: () => getCurrentWeather(lat, lon), staleTime: 5 * 60 * 1000},
-      {queryKey: ['weather', 'daily', lat, lon, 1], queryFn: () => getDailyWeather(lat, lon, 1), staleTime: 5 * 60 * 1000},
+      {queryKey: ['weather', 'current', lat, lon, tempUnit], queryFn: () => getCurrentWeather(lat, lon, tempUnit as any), staleTime: 5 * 60 * 1000},
+      {queryKey: ['weather', 'daily', lat, lon, 1, tempUnit], queryFn: () => getDailyWeather(lat, lon, 1, tempUnit as any), staleTime: 5 * 60 * 1000},
     ],
   });
 
@@ -74,7 +84,7 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
           <View style={s.heroCard}>
             <Text style={s.heroEmoji}>{getWeatherEmoji(current.weather_code)}</Text>
             <View style={{flex: 1}}>
-              <Text style={s.heroTemp}>{current.temperature}°C</Text>
+              <Text style={s.heroTemp}>{current.temperature}°{tempUnit}</Text>
               <Text style={s.heroDesc}>{current.description}</Text>
               {today && (
                 <Text style={s.heroRange}>

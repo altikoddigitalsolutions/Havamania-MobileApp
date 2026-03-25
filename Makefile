@@ -14,6 +14,12 @@ backend-lint:
 mobile-start:
 	cd mobile && npm run start
 
+mobile-android:
+	cd mobile && npm run android
+
+mobile-ios:
+	cd mobile && npm run ios
+
 mobile-test:
 	cd mobile && npm test
 

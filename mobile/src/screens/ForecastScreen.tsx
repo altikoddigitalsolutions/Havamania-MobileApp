@@ -19,6 +19,8 @@ import {getDailyWeather} from '../services/weatherApi';
 import {searchCity, GeoResult, formatSunTime} from '../services/openMeteoApi';
 import {DarkColors, FontSize, LightColors, Radius, Spacing, formatDayShort, getWeatherEmoji, AppColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
+import {useAuthStore} from '../store/authStore';
+import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Forecast'>;
@@ -35,9 +37,17 @@ export function ForecastScreen({route, navigation}: Props): React.JSX.Element {
   const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const {isGuest} = useAuthStore();
+  const profileQuery = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: !isGuest,
+  });
+  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+
   const dailyQuery = useQuery({
-    queryKey: ['weather', 'daily', lat, lon, 10],
-    queryFn: () => getDailyWeather(lat, lon, 10),
+    queryKey: ['weather', 'daily', lat, lon, 10, tempUnit],
+    queryFn: () => getDailyWeather(lat, lon, 10, tempUnit as any),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -171,6 +181,7 @@ function ForecastRow({
   C: AppColors;
   onPress?: () => void;
 }) {
+  const {t} = useTranslation();
   const s = rowStyles(C);
   const barPct = Math.min(
     90,

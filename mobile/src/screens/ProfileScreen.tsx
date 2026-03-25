@@ -10,11 +10,23 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
-import {useQuery} from '@tanstack/react-query';
+import ImagePicker from 'react-native-image-crop-picker';
+import {ColorMatrix, concatColorMatrices, sepia, grayscale, night, brightness, contrast} from 'react-native-color-matrix-image-filters';
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {useTranslation} from 'react-i18next';
 
-import {getProfile} from '../services/profileApi';
+import {
+  getNotificationPreferences,
+  getProfile,
+  updateNotificationPreferences,
+  updateProfile,
+  uploadAvatar,
+} from '../services/profileApi';
+import {BASE_URL} from '../services/apiClient';
 import {saveAvatarEmoji} from '../services/preferencesStorage';
 import {useAuthStore} from '../store/authStore';
 import {useThemeStore} from '../store/themeStore';
@@ -30,7 +42,19 @@ const AVATAR_EMOJIS = [
   '🤖','👾','🎭','🎪','🔮','🌙','⭐','🌺','🏔️',
 ];
 
+const FILTERS = [
+  {name: 'Normal', matrix: null},
+  {name: 'Grey', matrix: grayscale()},
+  {name: 'Sepia', matrix: sepia()},
+  {name: 'Night', matrix: night()},
+  {name: 'Bright', matrix: brightness(1.2)},
+  {name: 'Contrast', matrix: contrast(1.5)},
+];
+
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
+
 export function ProfileScreen(): React.JSX.Element {
+  const queryClient = useQueryClient();
   const {t} = useTranslation();
   const {theme, setTheme} = useThemeStore();
   const C = theme === 'dark' ? DarkColors : LightColors;
@@ -44,13 +68,44 @@ export function ProfileScreen(): React.JSX.Element {
     enabled: !isGuest,
   });
 
-  const [notifEnabled, setNotifEnabled] = useState(true);
-  const [tempUnit, setTempUnit] = useState<'C' | 'F'>('C');
-  const [avatarEmoji, setAvatarEmoji] = useState('🧑');
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [showLangPicker, setShowLangPicker] = useState(false);
+  const prefsQuery = useQuery({
+    queryKey: ['profile', 'notifications'],
+    queryFn: getNotificationPreferences,
+    retry: false,
+    enabled: !isGuest,
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: () => void queryClient.invalidateQueries({queryKey: ['profile']}),
+  });
+
+  const updatePrefsMutation = useMutation({
+    mutationFn: updateNotificationPreferences,
+    onSuccess: () => void queryClient.invalidateQueries({queryKey: ['profile', 'notifications']}),
+  });
 
   const profile = profileQuery.data;
+  const prefs = prefsQuery.data;
+
+  // Local state for UI but synced with backend
+  const [avatarEmoji, setAvatarEmoji] = React.useState('🧑');
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showFilterPicker, setShowFilterPicker] = useState(false);
+  const [editingImage, setEditingImage] = useState<any>(null);
+  const [selectedFilter, setSelectedFilter] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  React.useEffect(() => {
+    if (profile?.avatar_emoji) {
+      setAvatarEmoji(profile.avatar_emoji);
+    }
+  }, [profile?.avatar_emoji]);
+
+  const notifEnabled = prefs?.severe_alert_enabled ?? true;
+  const tempUnit = profile?.temperature_unit ?? 'C';
+
   const displayName = profile?.full_name ?? (isGuest ? t('profile.guestUser') : t('profile.defaultUser'));
   const memberSince = profile?.created_at
     ? formatMemberSince(profile.created_at, t('profile.memberSince'))
@@ -71,11 +126,75 @@ export function ProfileScreen(): React.JSX.Element {
     setAvatarEmoji(emoji);
     setShowAvatarPicker(false);
     await saveAvatarEmoji(emoji);
+    if (!isGuest) {
+      updateProfileMutation.mutate({avatar_emoji: emoji, avatar_url: null});
+    }
+  };
+
+  const handlePickAndCrop = async () => {
+    try {
+      const image = await ImagePicker.openPicker({
+        width: 400,
+        height: 400,
+        cropping: true,
+        cropperCircleOverlay: true,
+        includeBase64: true,
+        mediaType: 'photo',
+        cropperToolbarTitle: t('profile.editPhoto'),
+      });
+      setEditingImage(image);
+      setShowAvatarPicker(false);
+      setShowFilterPicker(true);
+    } catch (err: any) {
+      if (err.message !== 'User cancelled image selection') {
+        Alert.alert('Error', err.message);
+      }
+    }
+  };
+
+  const handleSaveWithFilter = async () => {
+    if (!editingImage) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: editingImage.path,
+        type: editingImage.mime,
+        name: editingImage.path.split('/').pop(),
+      } as any);
+
+      const res = await uploadAvatar(formData);
+      queryClient.setQueryData(['profile'], res);
+      setShowFilterPicker(false);
+      setEditingImage(null);
+      setSelectedFilter(null);
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleSelectLanguage = async (lang: SupportedLanguage) => {
     setShowLangPicker(false);
     await setLanguage(lang, !isGuest);
+  };
+
+  const toggleTempUnit = () => {
+    const newUnit = tempUnit === 'C' ? 'F' : 'C';
+    if (!isGuest) {
+      updateProfileMutation.mutate({temperature_unit: newUnit});
+    }
+  };
+
+  const toggleNotifications = (val: boolean) => {
+    if (!isGuest) {
+      updatePrefsMutation.mutate({
+        severe_alert_enabled: val,
+        daily_summary_enabled: val,
+        rain_alert_enabled: val,
+      });
+    }
   };
 
   const s = makeStyles(C);
@@ -100,7 +219,14 @@ export function ProfileScreen(): React.JSX.Element {
         <View style={s.profileSection}>
           <TouchableOpacity style={s.avatarWrap} onPress={() => setShowAvatarPicker(true)}>
             <View style={s.avatar}>
-              <Text style={s.avatarEmoji}>{avatarEmoji}</Text>
+              {profile?.avatar_url ? (
+                <Image
+                  source={{uri: `${BASE_URL}${profile.avatar_url}?t=${Date.now()}`}}
+                  style={s.avatarImage}
+                />
+              ) : (
+                <Text style={s.avatarEmoji}>{avatarEmoji}</Text>
+              )}
             </View>
             <View style={s.avatarEditBadge}>
               <Text style={s.avatarEditText}>✏️</Text>
@@ -135,7 +261,7 @@ export function ProfileScreen(): React.JSX.Element {
             {/* Sıcaklık Birimi */}
             <TouchableOpacity
               style={s.settingsRow}
-              onPress={() => setTempUnit(u => (u === 'C' ? 'F' : 'C'))}>
+              onPress={toggleTempUnit}>
               <View style={s.settingsLeft}>
                 <View style={[s.settingsIconBox, {backgroundColor: '#1A5C9A'}]}>
                   <Text style={s.settingsIconText}>🌡️</Text>
@@ -180,7 +306,7 @@ export function ProfileScreen(): React.JSX.Element {
               </View>
               <Switch
                 value={notifEnabled}
-                onValueChange={setNotifEnabled}
+                onValueChange={toggleNotifications}
                 trackColor={{false: C.border, true: C.accent}}
                 thumbColor="#FFFFFF"
               />
@@ -204,7 +330,7 @@ export function ProfileScreen(): React.JSX.Element {
             {/* Tema */}
             <TouchableOpacity
               style={s.settingsRow}
-              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark', !isGuest)}>
               <View style={s.settingsLeft}>
                 <View style={[s.settingsIconBox, {backgroundColor: '#1A5C9A'}]}>
                   <Text style={s.settingsIconText}>{theme === 'dark' ? '🌙' : '☀️'}</Text>
@@ -251,6 +377,13 @@ export function ProfileScreen(): React.JSX.Element {
           <View style={s.modalSheet}>
             <View style={s.modalHandle} />
             <Text style={s.modalTitle}>{t('profile.avatarPickerTitle')}</Text>
+
+            {!isGuest && (
+              <TouchableOpacity style={s.uploadBtn} onPress={handlePickAndCrop}>
+                <Text style={s.uploadBtnText}>📸 {t('profile.uploadPhoto')}</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={s.emojiGrid}>
               {AVATAR_EMOJIS.map(emoji => (
                 <TouchableOpacity
@@ -263,6 +396,71 @@ export function ProfileScreen(): React.JSX.Element {
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ── Filtre Seçici Modal ── */}
+      <Modal
+        visible={showFilterPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterPicker(false)}>
+        <View style={s.filterOverlay}>
+          <View style={s.filterSheet}>
+            <Text style={s.modalTitle}>{t('profile.customizePhoto')}</Text>
+
+            <View style={s.previewContainer}>
+              {editingImage && (
+                selectedFilter ? (
+                  <ColorMatrix matrix={selectedFilter}>
+                    <Image source={{uri: editingImage.path}} style={s.previewImage} />
+                  </ColorMatrix>
+                ) : (
+                  <Image source={{uri: editingImage.path}} style={s.previewImage} />
+                )
+              )}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterList}>
+              {FILTERS.map((f, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.filterItem, selectedFilter === f.matrix && s.filterItemActive]}
+                  onPress={() => setSelectedFilter(f.matrix)}>
+                  <View style={s.filterPreviewBox}>
+                    {editingImage && (
+                      f.matrix ? (
+                        <ColorMatrix matrix={f.matrix}>
+                          <Image source={{uri: editingImage.path}} style={s.smallPreview} />
+                        </ColorMatrix>
+                      ) : (
+                        <Image source={{uri: editingImage.path}} style={s.smallPreview} />
+                      )
+                    )}
+                  </View>
+                  <Text style={s.filterName}>{f.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={s.filterActions}>
+              <TouchableOpacity
+                style={[s.actionBtn, s.cancelBtn]}
+                onPress={() => setShowFilterPicker(false)}>
+                <Text style={s.actionBtnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.actionBtn, s.saveBtn]}
+                onPress={handleSaveWithFilter}
+                disabled={isUploading}>
+                {isUploading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={s.actionBtnText}>{t('common.save')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Dil Seçici Modal ── */}
@@ -535,6 +733,107 @@ const makeStyles = (C: AppColors) =>
       backgroundColor: C.cardHourlyActive,
     },
     emojiCellText: {fontSize: 28},
+
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 45,
+    },
+    uploadBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: C.bgInput,
+      paddingVertical: 12,
+      borderRadius: Radius.md,
+      marginBottom: Spacing.lg,
+      borderWidth: 1,
+      borderColor: C.border,
+    },
+    uploadBtnText: {
+      fontSize: FontSize.md,
+      fontWeight: '700',
+      color: C.accent,
+    },
+
+    // Filter Modal
+    filterOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    filterSheet: {
+      width: '90%',
+      backgroundColor: C.bgCard,
+      borderRadius: Radius.xl,
+      padding: Spacing.lg,
+      alignItems: 'center',
+    },
+    previewContainer: {
+      width: 250,
+      height: 250,
+      borderRadius: 125,
+      overflow: 'hidden',
+      marginBottom: Spacing.xl,
+      borderWidth: 3,
+      borderColor: C.accent,
+    },
+    previewImage: {
+      width: '100%',
+      height: '100%',
+    },
+    filterList: {
+      flexDirection: 'row',
+      marginBottom: Spacing.xl,
+    },
+    filterItem: {
+      alignItems: 'center',
+      marginRight: Spacing.md,
+      gap: 4,
+    },
+    filterItemActive: {
+      transform: [{scale: 1.1}],
+    },
+    filterPreviewBox: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      overflow: 'hidden',
+      borderWidth: 2,
+      borderColor: C.border,
+    },
+    smallPreview: {
+      width: '100%',
+      height: '100%',
+    },
+    filterName: {
+      fontSize: FontSize.xs,
+      color: C.textSecondary,
+      fontWeight: '600',
+    },
+    filterActions: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+      width: '100%',
+    },
+    actionBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+    },
+    cancelBtn: {
+      backgroundColor: C.bgInput,
+    },
+    saveBtn: {
+      backgroundColor: C.accent,
+    },
+    actionBtnText: {
+      fontSize: FontSize.md,
+      fontWeight: '700',
+      color: '#fff',
+    },
 
     // Dil Seçici
     langRow: {

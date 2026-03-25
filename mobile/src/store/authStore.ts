@@ -10,6 +10,9 @@ import {
   signup,
 } from '../services/authApi';
 import {readTokens, saveTokens} from '../services/tokenStorage';
+import {getProfile} from '../services/profileApi';
+import {useThemeStore} from './themeStore';
+import {useLanguageStore} from './languageStore';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -31,6 +34,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const tokens = await login(email, password);
     await persistSession(tokens);
     set({isAuthenticated: true, isGuest: false});
+    // Ayarları backend'den çek ve store'ları güncelle
+    try {
+      const profile = await getProfile();
+      if (profile) {
+        if (profile.theme) {
+          useThemeStore.getState().setTheme(profile.theme as any, false);
+        }
+        if (profile.language) {
+          await useLanguageStore.getState().setLanguage(profile.language as any, false);
+        }
+      }
+    } catch {
+      // Sessizce geç
+    }
   },
 
   signupWithEmail: async (email: string, password: string, fullName?: string) => {

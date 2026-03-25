@@ -16,6 +16,9 @@ class Profile(Base):
     temperature_unit: Mapped[str] = mapped_column(String(8), default="C", nullable=False)
     wind_unit: Mapped[str] = mapped_column(String(16), default="kmh", nullable=False)
     theme: Mapped[str] = mapped_column(String(16), default="system", nullable=False)
+    language: Mapped[str] = mapped_column(String(8), default="tr", nullable=False)
+    avatar_emoji: Mapped[str] = mapped_column(String(16), default="🧑", nullable=False)
+    avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     user = relationship("User")
     primary_location = relationship("Location", foreign_keys=[primary_location_id])

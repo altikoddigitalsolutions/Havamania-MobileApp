@@ -14,6 +14,8 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import {useQuery} from '@tanstack/react-query';
 
+import {useTranslation} from 'react-i18next';
+
 import {getAlerts, getAlertDetail} from '../services/alertsApi';
 import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing} from '../theme';
 import {useThemeStore} from '../store/themeStore';
@@ -39,6 +41,7 @@ const SAFETY_TIPS = [
 ];
 
 export function AlertsScreen(): React.JSX.Element {
+  const {t} = useTranslation();
   const navigation = useNavigation<any>();
   const {theme} = useThemeStore();
   const {isGuest} = useAuthStore();
@@ -78,7 +81,7 @@ export function AlertsScreen(): React.JSX.Element {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Text style={s.backArrow}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Uyarılar</Text>
+        <Text style={s.headerTitle}>{t('alerts.weatherTab')}</Text>
         <View style={{width: 36}} />
       </View>
 
@@ -87,12 +90,12 @@ export function AlertsScreen(): React.JSX.Element {
         <TouchableOpacity
           style={[s.tab, activeTab === 'alerts' && s.tabActive]}
           onPress={() => setActiveTab('alerts')}>
-          <Text style={[s.tabText, activeTab === 'alerts' && s.tabTextActive]}>🔔 Hava Uyarıları</Text>
+          <Text style={[s.tabText, activeTab === 'alerts' && s.tabTextActive]}>🔔 {t('alerts.weatherTab')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.tab, activeTab === 'tips' && s.tabActive]}
           onPress={() => setActiveTab('tips')}>
-          <Text style={[s.tabText, activeTab === 'tips' && s.tabTextActive]}>🛡️ Güvenlik</Text>
+          <Text style={[s.tabText, activeTab === 'tips' && s.tabTextActive]}>{t('alerts.safetyTab')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -103,10 +106,8 @@ export function AlertsScreen(): React.JSX.Element {
             // Misafir modu
             <View style={s.guestState}>
               <Text style={{fontSize: 48}}>🔒</Text>
-              <Text style={[s.emptyTitle, {color: C.text}]}>Giriş Gerekiyor</Text>
-              <Text style={[s.emptyDesc, {color: C.textSecondary}]}>
-                Hava uyarılarını görmek için hesabınıza giriş yapın.
-              </Text>
+              <Text style={[s.emptyTitle, {color: C.text}]}>{t('alerts.loginRequired')}</Text>
+              <Text style={[s.emptyDesc, {color: C.textSecondary}]}>{t('alerts.loginDesc')}</Text>
             </View>
           ) : alertsQuery.isLoading ? (
             <View style={s.center}>
@@ -116,16 +117,13 @@ export function AlertsScreen(): React.JSX.Element {
             // Uyarı yok
             <ScrollView contentContainerStyle={s.emptyState}>
               <Text style={{fontSize: 64}}>✅</Text>
-              <Text style={[s.emptyTitle, {color: C.text}]}>Aktif Uyarı Yok</Text>
-              <Text style={[s.emptyDesc, {color: C.textSecondary}]}>
-                Bölgenizdeki hava koşulları şu an normal seviyelerde. Herhangi bir önemli uyarı bulunmuyor.
-              </Text>
+              <Text style={[s.emptyTitle, {color: C.text}]}>{t('alerts.noAlertsTitle')}</Text>
+              <Text style={[s.emptyDesc, {color: C.textSecondary}]}>{t('alerts.noAlertsDesc')}</Text>
 
-              {/* Son güncelleme */}
               <View style={[s.updateCard, {backgroundColor: C.bgCard, borderColor: C.border}]}>
                 <Text style={{fontSize: 20}}>🕐</Text>
                 <View style={{flex: 1}}>
-                  <Text style={{fontSize: FontSize.sm, fontWeight: '700', color: C.text}}>Son Güncelleme</Text>
+                  <Text style={{fontSize: FontSize.sm, fontWeight: '700', color: C.text}}>{t('alerts.lastUpdate')}</Text>
                   <Text style={{fontSize: FontSize.xs, color: C.textSecondary}}>
                     {new Date().toLocaleString('tr', {weekday: 'long', hour: '2-digit', minute: '2-digit'})}
                   </Text>
