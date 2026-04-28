@@ -8,6 +8,8 @@ import {HourlyScreen} from '../screens/HourlyScreen';
 import {WeatherDetailScreen} from '../screens/WeatherDetailScreen';
 import {AlertsScreen} from '../screens/AlertsScreen';
 import {MapScreen} from '../screens/MapScreen';
+import {TravelCalendarScreen} from '../screens/TravelCalendarScreen';
+import {SettingsScreen} from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -42,6 +44,16 @@ export function MainStack(): React.JSX.Element {
         name="Map"
         component={MapScreen}
         options={{animation: 'slide_from_bottom'}}
+      />
+      <Stack.Screen
+        name="TravelCalendar"
+        component={TravelCalendarScreen}
+        options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{animation: 'slide_from_right'}}
       />
     </Stack.Navigator>
   );

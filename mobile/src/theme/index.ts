@@ -1,6 +1,6 @@
 import {useThemeStore} from '../store/themeStore';
+import i18next from 'i18next';
 
-// ── Renk Arayüzü (her iki tema da bu yapıya uyar) ────────────────────────────
 export type AppColors = {
   bg: string;
   bgSecondary: string;
@@ -28,122 +28,87 @@ export type AppColors = {
   tempGradientLow: string;
 };
 
-// ── Renk Paletleri ──────────────────────────────────────────────────────────
+// --- MODERN PREMIUM PALETTE ---
+const HAVAMANIA_PRIMARY = '#3B82F6'; // Daha canlı bir mavi
+const HAVAMANIA_DARK_BG = '#0B0F1A'; // Daha derin, şık gece mavisi
+const HAVAMANIA_DARK_CARD = '#161E2E';
+
 export const DarkColors: AppColors = {
-  // Arka planlar
-  bg: '#0B1929',
-  bgSecondary: '#112036',
-  bgCard: '#152B40',
-  bgInput: '#1C3250',
-  bgChip: '#1A3050',
-
-  // Metin
-  text: '#FFFFFF',
-  textSecondary: '#7AA3C0',
-  textMuted: '#4A6A85',
+  bg: HAVAMANIA_DARK_BG,
+  bgSecondary: HAVAMANIA_DARK_CARD,
+  bgCard: 'rgba(22, 30, 46, 0.7)',
+  bgInput: '#1F2937',
+  bgChip: '#374151',
+  text: '#F9FAFB',
+  textSecondary: '#9CA3AF',
+  textMuted: '#6B7280',
   textOnAccent: '#FFFFFF',
-
-  // Vurgu
-  accent: '#29B5F6',
-  accentDark: '#0A7AC4',
-  accentBtn: '#1A8EF0',
-  accentBtnPressed: '#1570CC',
-
-  // Sınır / Ayırıcı
-  border: '#1D3251',
-  divider: '#1A2E45',
-
-  // Durum
-  error: '#F44336',
-  success: '#4CAF50',
-  warning: '#FF9800',
-
-  // Tab bar
-  tabBar: '#0B1929',
-  tabActive: '#29B5F6',
-  tabInactive: '#4A6A85',
-
-  // Özel
-  cardHourlyActive: '#0A3A6E',
-  tempGradientHigh: '#FFC837',
-  tempGradientLow: '#29B5F6',
+  accent: HAVAMANIA_PRIMARY,
+  accentDark: '#2563EB',
+  accentBtn: HAVAMANIA_PRIMARY,
+  accentBtnPressed: '#1D4ED8',
+  border: 'rgba(255, 255, 255, 0.08)',
+  divider: 'rgba(255, 255, 255, 0.05)',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  tabBar: 'rgba(11, 15, 26, 0.85)',
+  tabActive: '#60A5FA', // Koyu temada daha parlak mavi
+  tabInactive: '#4B5563',
+  cardHourlyActive: 'rgba(59, 130, 246, 0.15)',
+  tempGradientHigh: '#F97316',
+  tempGradientLow: '#3B82F6',
 };
 
 export const LightColors: AppColors = {
-  // Arka planlar
-  bg: '#EEF3F8',
+  bg: '#F3F4F6',
   bgSecondary: '#FFFFFF',
-  bgCard: '#FFFFFF',
-  bgInput: '#F0F4F8',
-  bgChip: '#E3EEF8',
-
-  // Metin
-  text: '#0B1929',
-  textSecondary: '#5A7089',
-  textMuted: '#8DA0B3',
+  bgCard: 'rgba(255, 255, 255, 0.8)',
+  bgInput: '#F9FAFB',
+  bgChip: '#E5E7EB',
+  text: '#111827',
+  textSecondary: '#4B5563',
+  textMuted: '#9CA3AF',
   textOnAccent: '#FFFFFF',
-
-  // Vurgu
-  accent: '#0288D1',
-  accentDark: '#01579B',
-  accentBtn: '#0288D1',
-  accentBtnPressed: '#0277BD',
-
-  // Sınır / Ayırıcı
-  border: '#D8E6F0',
-  divider: '#E0EAF0',
-
-  // Durum
-  error: '#F44336',
-  success: '#4CAF50',
-  warning: '#FF9800',
-
-  // Tab bar
-  tabBar: '#FFFFFF',
-  tabActive: '#0288D1',
-  tabInactive: '#8DA0B3',
-
-  // Özel
-  cardHourlyActive: '#D1E8F8',
-  tempGradientHigh: '#FF8C00',
-  tempGradientLow: '#0288D1',
+  accent: HAVAMANIA_PRIMARY,
+  accentDark: '#1D4ED8',
+  accentBtn: HAVAMANIA_PRIMARY,
+  accentBtnPressed: '#2563EB',
+  border: 'rgba(0, 0, 0, 0.05)',
+  divider: 'rgba(0, 0, 0, 0.03)',
+  error: '#DC2626',
+  success: '#059669',
+  warning: '#D97706',
+  tabBar: 'rgba(255, 255, 255, 0.9)',
+  tabActive: HAVAMANIA_PRIMARY,
+  tabInactive: '#9CA3AF',
+  cardHourlyActive: 'rgba(59, 130, 246, 0.08)',
+  tempGradientHigh: '#EA580C',
+  tempGradientLow: '#2563EB',
 };
 
-// ── Tema Hook'u ─────────────────────────────────────────────────────────────
+// ... (Mevsimsel renkler ve yardımcı fonksiyonlar aynı kalacak şekilde)
+export const SpringColors: AppColors = { ...DarkColors, bg: '#061a0d', accent: '#34D399' };
+export const SummerColors: AppColors = { ...DarkColors, bg: '#1a1405', accent: '#FBBF24' };
+export const AutumnColors: AppColors = { ...DarkColors, bg: '#1a0b05', accent: '#FB923C' };
+export const WinterColors: AppColors = { ...DarkColors, bg: '#0b1629', accent: '#38BDF8' };
+
 export function useColors(): AppColors {
   const theme = useThemeStore(state => state.theme);
-  return theme === 'dark' ? DarkColors : LightColors;
+  switch (theme) {
+    case 'spring': return SpringColors;
+    case 'summer': return SummerColors;
+    case 'autumn': return AutumnColors;
+    case 'winter': return WinterColors;
+    case 'light': return LightColors;
+    default: return DarkColors;
+  }
 }
 
-// ── Sabit Değerler ───────────────────────────────────────────────────────────
-export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
-} as const;
+export const Spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 } as const;
+export const Radius = { sm: 8, md: 12, lg: 16, xl: 24, full: 9999 } as const;
+export const FontSize = { xs: 11, sm: 13, md: 15, lg: 17, xl: 20, xxl: 24, temp: 72 } as const;
 
-export const Radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  full: 9999,
-} as const;
-
-export const FontSize = {
-  xs: 11,
-  sm: 13,
-  md: 15,
-  lg: 17,
-  xl: 20,
-  xxl: 24,
-  temp: 72,
-} as const;
-
-// ── Hava Durumu Yardımcıları ─────────────────────────────────────────────────
 export function getWeatherEmoji(code: number): string {
   if (code === 0) return '☀️';
   if (code <= 2) return '🌤️';
@@ -155,6 +120,19 @@ export function getWeatherEmoji(code: number): string {
   if (code <= 82) return '🌦️';
   if (code <= 99) return '⛈️';
   return '🌤️';
+}
+
+export function getWeatherIcon(code: number): string {
+  if (code === 0) return 'sunny';
+  if (code <= 2) return 'partly-sunny';
+  if (code === 3) return 'cloudy';
+  if (code <= 48) return 'reorder-three';
+  if (code <= 55) return 'rainy';
+  if (code <= 67) return 'rainy';
+  if (code <= 77) return 'snow';
+  if (code <= 82) return 'thunderstorm';
+  if (code <= 99) return 'thunderstorm';
+  return 'sunny';
 }
 
 export function getWeatherLabel(code: number): string {
@@ -171,30 +149,20 @@ export function getWeatherLabel(code: number): string {
   return 'Parçalı Bulutlu';
 }
 
-export function getWeatherLabelEn(code: number): string {
-  if (code === 0) return 'Clear Sky';
-  if (code === 1) return 'Mainly Clear';
-  if (code === 2) return 'Partly Cloudy';
-  if (code === 3) return 'Overcast';
-  if (code <= 48) return 'Foggy';
-  if (code <= 55) return 'Drizzle';
-  if (code <= 65) return 'Rainy';
-  if (code <= 75) return 'Snowy';
-  if (code <= 82) return 'Rain Showers';
-  if (code <= 99) return 'Thunderstorm';
-  return 'Mostly Cloudy';
-}
-
 export function formatHour(isoTime: string): string {
   const date = new Date(isoTime);
   const h = date.getHours();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12} ${ampm}`;
+  const m = date.getMinutes();
+  return `${h < 10 ? `0${h}` : h}:${m < 10 ? `0${m}` : m}`;
 }
 
 export function formatDayShort(isoDate: string): string {
   const date = new Date(isoDate + 'T12:00:00');
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days[date.getDay()];
+  const lang = i18next.language;
+  if (lang === 'tr') {
+    const daysTr = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+    return daysTr[date.getDay()];
+  }
+  const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return daysEn[date.getDay()];
 }

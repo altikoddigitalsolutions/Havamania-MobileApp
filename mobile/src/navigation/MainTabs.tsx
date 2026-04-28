@@ -1,19 +1,24 @@
 import React from 'react';
-import {GestureResponderEvent, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {StyleSheet, Text, TouchableOpacity, View, Platform} from 'react-native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import Icon from 'react-native-vector-icons/Ionicons';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 import {HomeScreen} from '../screens/HomeScreen';
 import {ChatbotScreen} from '../screens/ChatbotScreen';
 import {ProfileScreen} from '../screens/ProfileScreen';
 import {MainTabParamList} from './types';
-import {AppColors, DarkColors, FontSize, LightColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
+import {useColors, AppColors} from '../theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export function MainTabs(): React.JSX.Element {
   const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const insets = useSafeAreaInsets();
+  const C = useColors();
+
+  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 60 + insets.bottom : 70;
 
   return (
     <Tab.Navigator
@@ -22,52 +27,65 @@ export function MainTabs(): React.JSX.Element {
         tabBarStyle: {
           backgroundColor: C.tabBar,
           borderTopColor: C.border,
-          borderTopWidth: 0.5,
-          height: 60,
-          paddingBottom: 8,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          height: TAB_BAR_HEIGHT,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 0,
+          paddingTop: 8,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          shadowColor: '#000',
+          shadowOffset: {width: 0, height: -8},
+          shadowOpacity: 0.1,
+          shadowRadius: 15,
         },
         tabBarActiveTintColor: C.tabActive,
         tabBarInactiveTintColor: C.tabInactive,
         tabBarLabelStyle: {
-          fontSize: FontSize.xs,
-          fontWeight: '700',
-          letterSpacing: 0.5,
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 8,
         },
       }}>
 
-      {/* Hava Durumu */}
       <Tab.Screen
         name="Weather"
         component={HomeScreen}
         options={{
-          tabBarLabel: 'WEATHER',
-          tabBarIcon: ({color}) => (
-            <Text style={{fontSize: 20, color}}>🌤️</Text>
+          tabBarLabel: 'Hava',
+          tabBarIcon: ({focused}) => (
+            <View style={styles.iconContainer}>
+              <Text style={{fontSize: 22}}>{focused ? "🌤️" : "☁️"}</Text>
+              {focused && <View style={[styles.indicator, {backgroundColor: C.tabActive}]} />}
+            </View>
           ),
         }}
       />
 
-      {/* AI Chat — Orta, yüzen buton */}
       <Tab.Screen
         name="AIChat"
         component={ChatbotScreen}
         options={{
           tabBarLabel: '',
-          // eslint-disable-next-line react/no-unstable-nested-components
           tabBarButton: props => (
-            <FloatingAIButton onPress={() => (props.onPress as any)?.()} C={C} />
+            <AIButton onPress={() => (props.onPress as any)?.()} C={C} />
           ),
         }}
       />
 
-      {/* Profil */}
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarLabel: 'PROFILE',
-          tabBarIcon: ({color}) => (
-            <Text style={{fontSize: 20, color}}>👤</Text>
+          tabBarLabel: 'Profil',
+          tabBarIcon: ({focused}) => (
+            <View style={styles.iconContainer}>
+              <Text style={{fontSize: 22}}>{focused ? "👤" : "👤"}</Text>
+              {focused && <View style={[styles.indicator, {backgroundColor: C.tabActive}]} />}
+            </View>
           ),
         }}
       />
@@ -75,49 +93,62 @@ export function MainTabs(): React.JSX.Element {
   );
 }
 
-// ── Yüzen AI Chat Butonu ─────────────────────────────────────────────────────
-function FloatingAIButton({
-  onPress,
-  C,
-}: {
-  onPress?: () => void;
-  C: AppColors;
-}) {
+function AIButton({onPress, C}: {onPress?: () => void; C: AppColors}) {
   return (
-    <View style={floatStyles.wrapper}>
-      <TouchableOpacity
-        style={[floatStyles.btn, {backgroundColor: C.accentBtn}]}
-        onPress={onPress}
-        activeOpacity={0.85}>
-        <Text style={floatStyles.btnIcon}>🤖</Text>
-      </TouchableOpacity>
-      <Text style={[floatStyles.label, {color: C.tabInactive}]}>AI CHAT</Text>
-    </View>
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={styles.aiButtonWrapper}>
+      <View style={[styles.aiButtonInner, {backgroundColor: C.accent}]}>
+        <Text style={{fontSize: 22}}>🤖</Text>
+        <Text style={styles.aiButtonText}>AI</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
-const floatStyles = StyleSheet.create({
-  wrapper: {
+const styles = StyleSheet.create({
+  iconContainer: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 4,
-    width: 80,
-  },
-  btn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 2,
-    shadowColor: '#1A8EF0',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    // Tab bar dışına taşması için negatif margin
-    marginTop: -20,
+    width: 40,
+    height: 40,
   },
-  btnIcon: {fontSize: 26},
-  label: {fontSize: 9, fontWeight: '700', letterSpacing: 0.5},
+  indicator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 4,
+    position: 'absolute',
+    bottom: -10,
+  },
+  aiButtonWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -12, // Hafif bir yükselti, ama barı koparmıyor
+  },
+  aiButtonInner: {
+    width: 68,
+    height: 44,
+    borderRadius: 16, // Squircle hissi için orta düzey radius
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Premium Glow & Shadow
+    shadowColor: '#3B82F6',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  aiButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 4,
+    letterSpacing: 0.5,
+  },
 });

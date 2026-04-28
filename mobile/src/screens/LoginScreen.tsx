@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -12,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -19,7 +19,7 @@ import {useTranslation} from 'react-i18next';
 
 import {AuthStackParamList} from '../navigation/types';
 import {useAuthStore} from '../store/authStore';
-import {DarkColors, FontSize, LightColors, Radius, Spacing} from '../theme';
+import {DarkColors, FontSize, LightColors, Radius, Spacing, useColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -29,7 +29,7 @@ export function LoginScreen({navigation}: Props): React.JSX.Element {
   const loginWithEmail = useAuthStore(state => state.loginWithEmail);
   const loginAsGuest = useAuthStore(state => state.loginAsGuest);
   const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const C = useColors();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -46,6 +46,7 @@ export function LoginScreen({navigation}: Props): React.JSX.Element {
       Alert.alert(t('common.error'), t('auth.loginBtn'));
       return;
     }
+
     try {
       setLoading(true);
       await loginWithEmail(email.trim(), password);
@@ -73,16 +74,13 @@ export function LoginScreen({navigation}: Props): React.JSX.Element {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
 
-          {/* Geri Butonu */}
-          <TouchableOpacity style={s.backBtn} onPress={() => navigation.canGoBack() && navigation.goBack()}>
-            <Text style={s.backArrow}>‹</Text>
-          </TouchableOpacity>
-
-          {/* Logo */}
+          {/* Logo - Sabitlendi */}
           <View style={s.logoWrapper}>
-            <View style={s.logoCircle}>
-              <Text style={s.logoEmoji}>☁️</Text>
-            </View>
+            <Image
+              source={require('../assets/havamania_logo_clean.png')}
+              style={s.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Başlık */}
@@ -119,10 +117,6 @@ export function LoginScreen({navigation}: Props): React.JSX.Element {
                 <Text style={s.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity style={s.forgotBtn}>
-              <Text style={s.forgotText}>{t('auth.forgotPassword')}</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[s.loginBtn, (!isValid || loading) && s.loginBtnDisabled]}
@@ -166,7 +160,7 @@ export function LoginScreen({navigation}: Props): React.JSX.Element {
   );
 }
 
-const styles = (C: typeof DarkColors) =>
+const styles = (C: any) =>
   StyleSheet.create({
     safe: {
       flex: 1,
@@ -177,34 +171,14 @@ const styles = (C: typeof DarkColors) =>
       paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing.xl,
     },
-    backBtn: {
-      marginTop: Spacing.md,
-      width: 36,
-      height: 36,
-      justifyContent: 'center',
-    },
-    backArrow: {
-      fontSize: 32,
-      color: C.text,
-      lineHeight: 36,
-    },
     logoWrapper: {
       alignItems: 'center',
       marginTop: Spacing.xl,
       marginBottom: Spacing.lg,
     },
-    logoCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      borderWidth: 2,
-      borderColor: C.accent,
-      backgroundColor: C.bgCard,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    logoEmoji: {
-      fontSize: 36,
+    logoImage: {
+      width: 200,
+      height: 60,
     },
     title: {
       fontSize: 32,
@@ -254,15 +228,6 @@ const styles = (C: typeof DarkColors) =>
     },
     eyeText: {
       fontSize: 18,
-    },
-    forgotBtn: {
-      alignSelf: 'flex-end',
-      marginBottom: Spacing.lg,
-    },
-    forgotText: {
-      fontSize: FontSize.sm,
-      color: C.accent,
-      fontWeight: '600',
     },
     loginBtn: {
       backgroundColor: C.accentBtn,

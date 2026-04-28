@@ -8,6 +8,7 @@ Başlamadan önce bilgisayarınızda şunların kurulu olduğundan emin olun:
 1. **Docker Desktop** (veya Docker Engine + Compose)
 2. **Node.js** (v18+ önerilir) - *Mobil uygulama için*
 3. **Git**
+4. **Android SDK & Emulator** (Android Studio üzerinden)
 
 ---
 
@@ -56,19 +57,38 @@ Backend çalıştıktan sonra mobil uygulamayı başlatmak için:
    cd mobile
    ```
 
-2. **Bağımlılıkları yükleyin (İlk sefer için):**
+2. **Bağımlılıkları yükleyin:**
    ```bash
    npm install
    ```
 
-3. **Uygulamayı başlatın:**
+3. **Uygulamayı derleyin ve çalıştırın:**
+   Yeni bir native kütüphane eklendiğinde veya ilk kurulumda sadece `start` değil, full build almanız gerekir:
    ```bash
-   npm run start
+   npx react-native run-android
    ```
 
-*Fiziksel cihazda çalıştırmak için:*
-- Telefonunuzu USB ile bağlayın ve **USB Hata Ayıklama**'yı açın.
-- `npm run android` komutunu çalıştırın.
+---
+
+## 🔍 Cihaz Bağlantısı ve Emülatör
+
+### Tablet/Fiziksel Cihaz (Kablosuz)
+Android 11+ cihazlarda kablosuz hata ayıklama için:
+```bash
+adb pair <IP_ADRESI>:<PORT>
+# Örnek: adb pair 192.168.0.19:35531
+adb connect <IP_ADRESI>:<PORT>
+```
+
+### Emülatör Başlatma (Terminalden)
+**macOS için:**
+```bash
+~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36
+```
+**Windows için:**
+```bash
+%ANDROID_HOME%\emulator\emulator -avd Medium_Phone_API_36
+```
 
 ---
 
@@ -83,9 +103,12 @@ Ana dizindeyken aşağıdaki komutları kullanabilirsiniz:
 | `make dev-down` | Docker servislerini durdurur |
 | `make backend-test` | Backend testlerini çalıştırır |
 | `make mobile-start` | Mobil Metro Bundler'ı başlatır |
+| `make mobile-android` | Uygulamayı Android emülatörde derler ve açar |
+| `make mobile-ios` | Uygulamayı iOS simülatörde derler ve açar |
 
-tablete bağlantı için
-adb pair 192.168.0.19:35531
+---
 
-mac için:
-~/Library/Android/sdk/emulator/emulator -avd Medium_Phone_API_36.1
+## ❓ Sık Karşılaşılan Sorunlar
+
+**Hata:** `Invariant Violation: TurboModuleRegistry.getEnforcing(...): 'RNCImageCropPicker' could not be found.`
+- **Çözüm:** Bu hata native bir modülün binary'de olmadığını gösterir. Metro Bundler'ı kapatın ve `npx react-native run-android` komutu ile uygulamayı tekrar derleyin.

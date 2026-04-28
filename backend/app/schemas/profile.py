@@ -10,6 +10,7 @@ class ProfileResponse(BaseModel):
     language: str = "tr"
     avatar_emoji: str = "🧑"
     avatar_url: str | None = None
+    interest: str | None = None
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -20,6 +21,7 @@ class ProfileUpdateRequest(BaseModel):
     language: str | None = Field(default=None, pattern="^(tr|en)$")
     avatar_emoji: str | None = Field(default=None, max_length=16)
     avatar_url: str | None = Field(default=None, max_length=255)
+    interest: str | None = None
 
 
 class LocationCreateRequest(BaseModel):

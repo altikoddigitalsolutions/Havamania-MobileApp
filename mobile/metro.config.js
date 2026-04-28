@@ -6,6 +6,21 @@ const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
  *
  * @type {import('metro-config').MetroConfig}
  */
-const config = {};
+const defaultConfig = getDefaultConfig(__dirname);
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+const config = {
+  resolver: {
+    // Metro'nun Android derleme dosyalarını izlemesini engelleyerek ENOENT hatalarını çözeriz
+    blacklistRE: /android\/|node_modules\/.*\/android\/.*/,
+    blockList: [
+      /.*\/android\/.*/,
+      /.*\/node_modules\/.*\/android\/.*/,
+      /.*\/build\/.*/,
+      /.*\/\.cxx\/.*/
+    ],
+  },
+  // İzlenmeyecek klasörler
+  watchFolders: [],
+};
+
+module.exports = mergeConfig(defaultConfig, config);

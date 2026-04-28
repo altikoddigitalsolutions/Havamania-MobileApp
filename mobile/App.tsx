@@ -1,5 +1,8 @@
 import React from 'react';
+import {LogBox} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
+
+LogBox.ignoreAllLogs();
 import {NavigationContainer, DefaultTheme, DarkTheme} from '@react-navigation/native';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import './src/i18n';

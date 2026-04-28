@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -19,6 +19,7 @@ class Profile(Base):
     language: Mapped[str] = mapped_column(String(8), default="tr", nullable=False)
     avatar_emoji: Mapped[str] = mapped_column(String(16), default="🧑", nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    interest: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user = relationship("User")
     primary_location = relationship("Location", foreign_keys=[primary_location_id])

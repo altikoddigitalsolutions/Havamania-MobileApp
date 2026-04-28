@@ -6,6 +6,7 @@ buildscript {
         targetSdkVersion = 35
         ndkVersion = "26.1.10909125"
         kotlinVersion = "2.0.21"
+        kspVersion = "2.0.21-1.0.27" // KSP sürümü eklendi
     }
     repositories {
         google()
@@ -15,6 +16,10 @@ buildscript {
         classpath("com.android.tools.build:gradle:8.6.0")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21")
+        classpath("org.jetbrains.kotlin:kotlin-serialization:2.0.21")
+        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.0.21")
+        // KSP Plugin eklendi
+        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:$kspVersion")
     }
 }
 

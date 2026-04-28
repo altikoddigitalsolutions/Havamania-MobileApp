@@ -1,60 +1,44 @@
 import React from 'react';
-import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
+import {StatusBar} from 'react-native';
 
 import {AuthNavigator} from './AuthNavigator';
 import {MainStack} from './MainStack';
 import {useAuthStore} from '../store/authStore';
 import {useLanguageStore} from '../store/languageStore';
-import {DarkColors, LightColors} from '../theme';
-import {useThemeStore} from '../store/themeStore';
+import {TravelInspiredSplash} from '../components/TravelInspiredSplash';
 
 export function RootNavigator(): React.JSX.Element {
   const {isAuthenticated, initializing, initSession} = useAuthStore();
-  const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
   const initLanguage = useLanguageStore(s => s.init);
+  const [showSplash, setShowSplash] = React.useState(true);
 
   React.useEffect(() => {
-    // Dil + auth başlatma paralel çalışır; splash initializing bitince her ikisi de hazır
     void initLanguage();
-    initSession()
-      .catch(err => console.error('[DEBUG] RootNavigator: initSession error', err));
+    initSession().catch(err => console.error('[DEBUG] RootNavigator: initSession error', err));
   }, [initSession, initLanguage]);
 
-  if (initializing) {
+  // Splash ekranı en az 2 saniye görünsün (Premium deneyim için)
+  React.useEffect(() => {
+    if (!initializing) {
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [initializing]);
+
+  if (showSplash) {
     return (
-      <View style={[s.splash, {backgroundColor: C.bg}]}>
-        <Text style={s.splashEmoji}>🌤️</Text>
-        <Text style={[s.splashTitle, {color: C.text}]}>Havamania</Text>
-        <ActivityIndicator
-          size="large"
-          color={C.accent}
-          style={{marginTop: 32}}
+      <>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent
         />
-        <Text style={[s.splashSub, {color: C.textSecondary}]}>
-          Hava durumu yükleniyor...
-        </Text>
-      </View>
+        <TravelInspiredSplash />
+      </>
     );
   }
 
   return isAuthenticated ? <MainStack /> : <AuthNavigator />;
 }
-
-const s = StyleSheet.create({
-  splash: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  splashEmoji: {fontSize: 64, marginBottom: 8},
-  splashTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  splashSub: {
-    marginTop: 12,
-    fontSize: 15,
-  },
-});

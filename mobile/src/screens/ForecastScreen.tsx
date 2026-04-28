@@ -17,7 +17,7 @@ import {useTranslation} from 'react-i18next';
 
 import {getDailyWeather} from '../services/weatherApi';
 import {searchCity, GeoResult, formatSunTime} from '../services/openMeteoApi';
-import {DarkColors, FontSize, LightColors, Radius, Spacing, formatDayShort, getWeatherEmoji, AppColors} from '../theme';
+import {AppColors, FontSize, Radius, Spacing, formatDayShort, getWeatherEmoji, useColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
@@ -28,7 +28,7 @@ type Props = NativeStackScreenProps<MainStackParamList, 'Forecast'>;
 export function ForecastScreen({route, navigation}: Props): React.JSX.Element {
   const {t} = useTranslation();
   const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const C = useColors();
 
   const [lat, setLat] = useState(route.params?.lat ?? 41.0082);
   const [lon, setLon] = useState(route.params?.lon ?? 28.9784);
@@ -77,12 +77,12 @@ export function ForecastScreen({route, navigation}: Props): React.JSX.Element {
   const dailyItems = dailyQuery.data?.items ?? [];
 
   // AI hava özeti
-  const aiInsight = buildAiInsight(dailyItems);
+  const aiInsight = buildAiInsight(dailyItems, t);
 
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar
-        barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
+        barStyle={theme === 'light' ? 'dark-content' : 'light-content'}
         backgroundColor={C.bg}
       />
 
@@ -300,7 +300,7 @@ const rowStyles = (C: AppColors) =>
   });
 
 // ── AI Insight Üretici ───────────────────────────────────────────────────────
-function buildAiInsight(items: any[]): string {
+function buildAiInsight(items: any[], t: any): string {
   if (items.length < 3) return '';
   const maxTemp = Math.max(...items.slice(0, 7).map((i: any) => i.temp_max));
   const minTemp = Math.min(...items.slice(0, 7).map((i: any) => i.temp_min));
@@ -311,17 +311,33 @@ function buildAiInsight(items: any[]): string {
   );
 
   const parts: string[] = [];
-  parts.push(`Expect temperatures between ${minTemp}° and ${maxTemp}° this week.`);
-  if (rainyDay) {
-    parts.push(
-      `Keep an umbrella handy for ${formatDayShort(rainyDay.date)} with ${rainyDay.precipitation_probability}% chance of rain.`,
-    );
+
+  if (i18next.language === 'tr') {
+    parts.push(`Bu hafta sıcaklıklar ${minTemp}° ile ${maxTemp}° arasında seyredecek.`);
+    if (rainyDay) {
+        parts.push(
+            `${formatDayShort(rainyDay.date)} günü %${rainyDay.precipitation_probability} yağış ihtimali var, şemsiyenizi yanınıza alın.`
+        );
+    }
+    if (niceWeekend) {
+        parts.push('Hafta sonu dışarıda vakit geçirmek için harika görünüyor!');
+    }
+  } else {
+    parts.push(`Expect temperatures between ${minTemp}° and ${maxTemp}° this week.`);
+    if (rainyDay) {
+        parts.push(
+        `Keep an umbrella handy for ${formatDayShort(rainyDay.date)} with ${rainyDay.precipitation_probability}% chance of rain.`,
+        );
+    }
+    if (niceWeekend) {
+        parts.push('The weekend looks perfect for outdoor activities!');
+    }
   }
-  if (niceWeekend) {
-    parts.push('The weekend looks perfect for outdoor activities!');
-  }
+
   return parts.join(' ');
 }
+
+import i18next from 'i18next';
 
 // ── Stiller ──────────────────────────────────────────────────────────────────
 const makeStyles = (C: AppColors) =>

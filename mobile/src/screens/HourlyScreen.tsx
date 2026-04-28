@@ -13,7 +13,7 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useQuery} from '@tanstack/react-query';
 
 import {getHourlyWeather} from '../services/weatherApi';
-import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing, formatHour, getWeatherEmoji} from '../theme';
+import {AppColors, FontSize, Radius, Spacing, formatHour, getWeatherEmoji, useColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
@@ -23,7 +23,7 @@ type Props = NativeStackScreenProps<MainStackParamList, 'Hourly'>;
 
 export function HourlyScreen({route, navigation}: Props): React.JSX.Element {
   const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const C = useColors();
   const {lat, lon, city} = route.params;
 
   const {isGuest} = useAuthStore();
@@ -81,7 +81,7 @@ export function HourlyScreen({route, navigation}: Props): React.JSX.Element {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.bg} />
+      <StatusBar barStyle={theme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={C.bg} />
 
       {/* Header */}
       <View style={s.header}>

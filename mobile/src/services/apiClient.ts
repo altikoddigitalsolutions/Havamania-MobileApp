@@ -1,20 +1,26 @@
 import axios from 'axios';
 import {Platform} from 'react-native';
 
-// Android emülatöründe localhost host makinasına ulaşamaz; 10.0.2.2 kullanılmalı
+/**
+ * ÖNEMLİ: Fiziksel cihaz (Tablet) bağlantısı için:
+ * 1. Bilgisayarınızın IPv4 adresini terminalden 'ipconfig' ile bulun.
+ * 2. Aşağıdaki IP adresini kendi adresinizle değiştirin.
+ * 3. Tablet ve Bilgisayarın AYNI WI-FI ağına bağlı olduğundan emin olun.
+ */
+const COMPUTER_IP = '192.168.1.50'; // <--- BURAYI KENDİ IP ADRESİNLE DEĞİŞTİR
+
 export const BASE_URL = Platform.OS === 'android'
-  ? 'http://10.0.2.2:8000'
+  ? `http://${COMPUTER_IP}:8000`
   : 'http://localhost:8000';
 
 const API_BASE_URL = `${BASE_URL}/v1`;
 
-let tokenRefreshHandler: null | (() => Promise<string | null>) = null;
-
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
 });
 
+// Geri kalan interceptor kodları...
 export function setAccessToken(token: string | null): void {
   if (token) {
     apiClient.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -23,6 +29,7 @@ export function setAccessToken(token: string | null): void {
   }
 }
 
+let tokenRefreshHandler: null | (() => Promise<string | null>) = null;
 export function setTokenRefreshHandler(handler: () => Promise<string | null>): void {
   tokenRefreshHandler = handler;
 }
@@ -33,13 +40,9 @@ apiClient.interceptors.response.use(
     if (!error?.response || error.response.status !== 401 || error.config?._retry || !tokenRefreshHandler) {
       return Promise.reject(error);
     }
-
     error.config._retry = true;
     const newAccessToken = await tokenRefreshHandler();
-    if (!newAccessToken) {
-      return Promise.reject(error);
-    }
-
+    if (!newAccessToken) return Promise.reject(error);
     error.config.headers.Authorization = `Bearer ${newAccessToken}`;
     return apiClient.request(error.config);
   },

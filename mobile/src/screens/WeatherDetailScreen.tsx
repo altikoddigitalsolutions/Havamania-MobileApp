@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useQueries, useQuery} from '@tanstack/react-query';
+import {useTranslation} from 'react-i18next';
 
 import {getCurrentWeather, getDailyWeather} from '../services/weatherApi';
 import {getMoonPhase, formatSunTime} from '../services/openMeteoApi';
-import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing, getWeatherEmoji} from '../theme';
+import {AppColors, FontSize, Radius, Spacing, getWeatherEmoji, useColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
@@ -23,8 +24,9 @@ import {MainStackParamList} from '../navigation/types';
 type Props = NativeStackScreenProps<MainStackParamList, 'WeatherDetail'>;
 
 export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Element {
+  const {t} = useTranslation();
   const {theme} = useThemeStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const C = useColors();
   const {lat, lon} = route.params;
 
   const {isGuest} = useAuthStore();
@@ -54,7 +56,7 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
           <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
             <Text style={s.backArrow}>‹</Text>
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Hava Detayları</Text>
+          <Text style={s.headerTitle}>{t('detail.todayForecast')}</Text>
           <View style={{width: 36}} />
         </View>
         <View style={s.center}>
@@ -66,14 +68,14 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={C.bg} />
+      <StatusBar barStyle={theme === 'light' ? 'dark-content' : 'light-content'} backgroundColor={C.bg} />
 
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Text style={s.backArrow}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Hava Detayları</Text>
+        <Text style={s.headerTitle}>{t('detail.todayForecast')}</Text>
         <View style={{width: 36}} />
       </View>
 
@@ -88,7 +90,7 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
               <Text style={s.heroDesc}>{current.description}</Text>
               {today && (
                 <Text style={s.heroRange}>
-                  Hissedilen {current.feels_like}° · H:{today.temp_max}° L:{today.temp_min}°
+                  {t('home.feelsLike')} {current.feels_like}° · {t('home.high')}:{today.temp_max}° {t('home.low')}:{today.temp_min}°
                 </Text>
               )}
             </View>
@@ -96,39 +98,39 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
         )}
 
         {/* Bölüm 1: Temel metrikler */}
-        <SectionTitle title="TEMEL BİLGİLER" C={C} />
+        <SectionTitle title={t('detail.basicInfo').toUpperCase()} C={C} />
         <View style={s.grid}>
-          <MetricTile icon="🌡️" label="Hissedilen" value={`${current?.feels_like ?? '--'}°`} sub="gerçek hava" C={C} />
-          <MetricTile icon="💧" label="Nem" value={`${current?.humidity ?? '--'}%`} sub={`Çiğ noktası ${current?.dew_point ?? '--'}°`} C={C} />
-          <MetricTile icon="💨" label="Rüzgar" value={`${current?.wind_speed ?? '--'} km/h`} sub={`Hamle: ${current?.wind_gusts ?? '--'} km/h`} C={C} />
-          <MetricTile icon="🌬️" label="Çiğ Noktası" value={`${current?.dew_point ?? '--'}°`} sub={current && current.dew_point > current.temperature - 3 ? 'Nemli hava' : 'Konforlu'} C={C} />
+          <MetricTile icon="🌡️" label={t('home.feelsLike')} value={`${current?.feels_like ?? '--'}°`} sub="gerçek hava" C={C} />
+          <MetricTile icon="💧" label={t('home.humidity')} value={`${current?.humidity ?? '--'}%`} sub={`${t('home.dewPoint')} ${current?.dew_point ?? '--'}°`} C={C} />
+          <MetricTile icon="💨" label={t('home.wind')} value={`${current?.wind_speed ?? '--'} km/h`} sub={`Hamle: ${current?.wind_gusts ?? '--'} km/h`} C={C} />
+          <MetricTile icon="🌬️" label={t('home.dewPoint')} value={`${current?.dew_point ?? '--'}°`} sub={current && current.dew_point > current.temperature - 3 ? 'Nemli hava' : 'Konforlu'} C={C} />
         </View>
 
         {/* Bölüm 2: Atmosfer */}
-        <SectionTitle title="ATMOSFERİK KOŞULLAR" C={C} />
+        <SectionTitle title={t('detail.atmospheric').toUpperCase()} C={C} />
         <View style={s.grid}>
-          <MetricTile icon="🌡️" label="Basınç" value={`${current?.pressure ?? '--'}`} sub="hPa" barValue={current ? (current.pressure - 950) / 100 : 0} barColor="#FF9800" C={C} />
-          <MetricTile icon="👁️" label="Görünürlük" value={`${current?.visibility ?? '--'} km`} sub={visibilityLabel(current?.visibility ?? 0)} C={C} />
-          <MetricTile icon="☁️" label="Bulut Örtüsü" value={`${current?.cloud_cover ?? '--'}%`} sub={cloudLabel(current?.cloud_cover ?? 0)} barValue={(current?.cloud_cover ?? 0) / 100} barColor={C.textSecondary} C={C} />
-          <MetricTile icon="🌧️" label="Yağış" value={`${current?.precipitation ?? 0} mm`} sub="son 1 saat" C={C} />
+          <MetricTile icon="🌡️" label={t('home.pressure')} value={`${current?.pressure ?? '--'}`} sub="hPa" barValue={current ? (current.pressure - 950) / 100 : 0} barColor="#FF9800" C={C} />
+          <MetricTile icon="👁️" label={t('home.visibility')} value={`${current?.visibility ?? '--'} km`} sub={visibilityLabel(current?.visibility ?? 0)} C={C} />
+          <MetricTile icon="☁️" label={t('home.cloudCover')} value={`${current?.cloud_cover ?? '--'}%`} sub={cloudLabel(current?.cloud_cover ?? 0)} barValue={(current?.cloud_cover ?? 0) / 100} barColor={C.textSecondary} C={C} />
+          <MetricTile icon="🌧️" label={t('home.precipitation')} value={`${current?.precipitation ?? 0} mm`} sub="son 1 saat" C={C} />
         </View>
 
         {/* Bölüm 3: Güneş Işığı */}
-        <SectionTitle title="GÜNEŞ & AY" C={C} />
+        <SectionTitle title={t('detail.sunMoon').toUpperCase()} C={C} />
         <View style={s.sunCard}>
           {today && (
             <>
-              <SunRow icon="🌅" label="Güneş Doğuşu" time={formatSunTime(today.sunrise)} C={C} />
+              <SunRow icon="🌅" label={t('home.sunrise')} time={formatSunTime(today.sunrise)} C={C} />
               <View style={s.sunDivider} />
-              <SunRow icon="🌇" label="Güneş Batışı" time={formatSunTime(today.sunset)} C={C} />
+              <SunRow icon="🌇" label={t('home.sunset')} time={formatSunTime(today.sunset)} C={C} />
               <View style={s.sunDivider} />
             </>
           )}
-          <SunRow icon={moon.emoji} label={`Ay Fazı · ${moon.label}`} time={`%${moon.illumination} aydınlık`} C={C} />
+          <SunRow icon={moon.emoji} label={`${t('home.moonPhase')} · ${moon.label}`} time={`%${moon.illumination} aydınlık`} C={C} />
         </View>
 
         {/* Bölüm 4: UV */}
-        <SectionTitle title="UV İNDEKSİ" C={C} />
+        <SectionTitle title={t('home.uvIndex').toUpperCase()} C={C} />
         <View style={[s.uvCard, {backgroundColor: C.bgCard, borderColor: C.border}]}>
           <View style={s.uvMain}>
             <View>
@@ -156,12 +158,12 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
         {/* Bölüm 5: Günlük Bilgiler (bugün) */}
         {today && (
           <>
-            <SectionTitle title="BUGÜNÜN TAHMİNİ" C={C} />
+            <SectionTitle title={t('detail.todayForecast').toUpperCase()} C={C} />
             <View style={s.grid}>
-              <MetricTile icon="⬆️" label="Maks. Sıcaklık" value={`${today.temp_max}°`} C={C} />
-              <MetricTile icon="⬇️" label="Min. Sıcaklık" value={`${today.temp_min}°`} C={C} />
-              <MetricTile icon="💧" label="Yağış (Günlük)" value={`${today.precipitation_sum} mm`} sub={`%${today.precipitation_probability} olasılık`} C={C} />
-              <MetricTile icon="🌬️" label="Maks. Rüzgar" value={`${today.wind_speed_max} km/h`} sub={`Hamle: ${today.wind_gusts_max} km/h`} C={C} />
+              <MetricTile icon="⬆️" label={t('home.high')} value={`${today.temp_max}°`} C={C} />
+              <MetricTile icon="⬇️" label={t('home.low')} value={`${today.temp_min}°`} C={C} />
+              <MetricTile icon="💧" label={t('detail.dailyPrecip')} value={`${today.precipitation_sum} mm`} sub={`%${today.precipitation_probability} olasılık`} C={C} />
+              <MetricTile icon="🌬️" label={t('detail.maxWind')} value={`${today.wind_speed_max} km/h`} sub={`Hamle: ${today.wind_gusts_max} km/h`} C={C} />
             </View>
           </>
         )}

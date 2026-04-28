@@ -24,6 +24,7 @@ export interface CurrentWeatherData {
   cloud_cover: number;    // %
   dew_point: number;      // °C
   precipitation: number;  // mm (son 1 saat)
+  is_day: boolean;
 }
 
 export interface HourlyWeatherItem {
@@ -94,6 +95,7 @@ export async function fetchCurrentWeather(
     'cloud_cover',
     'dew_point_2m',
     'precipitation',
+    'is_day',
   ].join(',');
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
@@ -119,6 +121,7 @@ export async function fetchCurrentWeather(
     cloud_cover: Math.round(c.cloud_cover ?? 0),
     dew_point: Math.round(c.dew_point_2m ?? 0),
     precipitation: Math.round((c.precipitation ?? 0) * 10) / 10,
+    is_day: c.is_day === 1,
   };
 }
 

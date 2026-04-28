@@ -21,9 +21,11 @@ app = FastAPI(title=settings.app_name, debug=settings.debug)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(MetricsMiddleware)
+
+# Geliştirme ortamında CORS hatalarını önlemek için tüm originlere izin veriyoruz
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"], # settings.cors_origins yerine "*" kullanıyoruz
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

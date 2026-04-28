@@ -4,7 +4,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   StatusBar,
   StyleSheet,
@@ -37,10 +36,10 @@ const DEFAULT_CITY = 'İstanbul, TR';
 
 // ── Hızlı Chip'ler ───────────────────────────────────────────────────────────
 const QUICK_CHIPS = [
-  'What should I wear?',
-  'UV Index report',
-  'Weekend forecast',
-  'Is it good for hiking?',
+  'Ne giymeliyim?',
+  'UV İndeksi raporu',
+  'Hafta sonu tahmini',
+  'Yürüyüş için uygun mu?',
 ];
 
 export function ChatbotScreen(): React.JSX.Element {
@@ -68,7 +67,7 @@ export function ChatbotScreen(): React.JSX.Element {
       const greeting: Message = {
         id: 'welcome',
         role: 'assistant',
-        content: `Hello! I'm Havamania. I've checked the forecast for ${DEFAULT_CITY} — it's ${getWeatherLabel(wd.weather_code).toLowerCase()} at ${wd.temperature}°C. How can I help you plan your day?`,
+        content: `Merhaba! Ben Havamania. ${DEFAULT_CITY} için tahmini kontrol ettim — şu an hava ${getWeatherLabel(wd.weather_code).toLowerCase()} ve sıcaklık ${wd.temperature}°C. Gününüzü planlamanıza nasıl yardımcı olabilirim?`,
       };
       setMessages([greeting]);
       setInitialized(true);
@@ -79,18 +78,16 @@ export function ChatbotScreen(): React.JSX.Element {
   const askMutation = useMutation({
     mutationFn: (question: string) => {
       if (isGuest) {
-        // Misafir modunda yerel yanıt üret
         return Promise.resolve(buildLocalAnswer(question, weatherQuery.data));
       }
       return askChatbot(question);
     },
     onSuccess: (data: any, question: string) => {
       const answer = data?.answer ?? data?.content ?? String(data);
-      const isWeatherQ = /weather|forecast|temp|rain|sun|wind|uv/i.test(question);
+      const isWeatherQ = /hava|tahmin|sıcaklık|yağmur|güneş|rüzgar|uv/i.test(question);
 
       setMessages(prev => {
         const next = [...prev];
-        // "typing" mesajını kaldır
         const typingIdx = next.findIndex(m => m.id === 'typing');
         if (typingIdx >= 0) next.splice(typingIdx, 1);
 
@@ -100,7 +97,6 @@ export function ChatbotScreen(): React.JSX.Element {
           content: answer,
         });
 
-        // Hava durumu sorusuysa kart ekle
         if (isWeatherQ && weatherQuery.data) {
           next.push({
             id: `${Date.now()}-card`,
@@ -121,7 +117,7 @@ export function ChatbotScreen(): React.JSX.Element {
             id: `${Date.now()}-err`,
             role: 'assistant',
             content:
-              'Şu an bağlanamıyorum. Lütfen backend\'in çalıştığından emin ol veya misafir modunu kullan.',
+              'Şu an bağlanamıyorum. Lütfen internet bağlantınızı kontrol edin veya misafir modunu kullanın.',
           },
         ];
       });
@@ -141,7 +137,6 @@ export function ChatbotScreen(): React.JSX.Element {
     askMutation.mutate(question);
   };
 
-  // FlatList'i otomatik kaydır
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => flatRef.current?.scrollToEnd({animated: true}), 100);
@@ -157,7 +152,6 @@ export function ChatbotScreen(): React.JSX.Element {
         backgroundColor={C.bg}
       />
 
-      {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity
           onPress={() => navigation.canGoBack() && navigation.goBack()}
@@ -168,7 +162,7 @@ export function ChatbotScreen(): React.JSX.Element {
           <Text style={s.headerTitle}>Havamania AI</Text>
           <View style={s.onlineRow}>
             <View style={s.onlineDot} />
-            <Text style={s.onlineText}>ONLINE</Text>
+            <Text style={s.onlineText}>ÇEVRİMİÇİ</Text>
           </View>
         </View>
         <TouchableOpacity style={s.infoBtn}>
@@ -181,7 +175,6 @@ export function ChatbotScreen(): React.JSX.Element {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
 
-        {/* ── Mesajlar ── */}
         <FlatList
           ref={flatRef}
           data={messages}
@@ -209,7 +202,6 @@ export function ChatbotScreen(): React.JSX.Element {
           }
         />
 
-        {/* ── Hızlı Chip'ler ── */}
         <View>
           <FlatList
             horizontal
@@ -228,14 +220,13 @@ export function ChatbotScreen(): React.JSX.Element {
           />
         </View>
 
-        {/* ── Input Bar ── */}
         <View style={s.inputBar}>
           <TouchableOpacity style={s.addBtn}>
             <Text style={s.addBtnText}>+</Text>
           </TouchableOpacity>
           <TextInput
             style={s.input}
-            placeholder="Ask about the weather..."
+            placeholder="Hava durumu hakkında bir şey sor..."
             placeholderTextColor={C.textMuted}
             value={input}
             onChangeText={setInput}
@@ -255,7 +246,6 @@ export function ChatbotScreen(): React.JSX.Element {
   );
 }
 
-// ── MessageBubble ─────────────────────────────────────────────────────────────
 function MessageBubble({
   message,
   C,
@@ -346,7 +336,6 @@ const bubbleStyles = (C: typeof DarkColors) =>
     textUser: {color: '#FFFFFF'},
   });
 
-// ── WeatherCard ──────────────────────────────────────────────────────────────
 function WeatherCard({
   data,
   C,
@@ -360,7 +349,7 @@ function WeatherCard({
     <View style={[cardStyles(C).wrapper]}>
       <View style={cardStyles(C).card}>
         <View style={cardStyles(C).cardHeader}>
-          <Text style={cardStyles(C).cardLabel}>CURRENT WEATHER</Text>
+          <Text style={cardStyles(C).cardLabel}>MEVCUT HAVA DURUMU</Text>
         </View>
         <View style={cardStyles(C).cardBody}>
           <View style={{flex: 1}}>
@@ -373,9 +362,9 @@ function WeatherCard({
           </View>
         </View>
         <View style={cardStyles(C).statsRow}>
-          <StatItem label="Humidity" value={`${data.humidity}%`} C={C} />
-          <StatItem label="Wind" value={`${data.wind_speed}km/h`} C={C} />
-          <StatItem label="Feels" value={`${data.feels_like}°`} C={C} />
+          <StatItem label="Nem" value={`${data.humidity}%`} C={C} />
+          <StatItem label="Rüzgar" value={`${data.wind_speed}km/h`} C={C} />
+          <StatItem label="Hissedilen" value={`${data.feels_like}°`} C={C} />
         </View>
       </View>
     </View>
@@ -395,7 +384,7 @@ const cardStyles = (C: typeof DarkColors) =>
   StyleSheet.create({
     wrapper: {
       paddingHorizontal: Spacing.md,
-      paddingLeft: 36 + Spacing.md + Spacing.sm + Spacing.md, // avatar + gaps + padding
+      paddingLeft: 36 + Spacing.md + Spacing.sm + Spacing.md,
       marginBottom: Spacing.md,
     },
     card: {
@@ -436,7 +425,6 @@ const cardStyles = (C: typeof DarkColors) =>
     },
   });
 
-// ── Yerel Chatbot (Misafir Modu) ─────────────────────────────────────────────
 function buildLocalAnswer(question: string, weather: any): {answer: string} {
   if (!weather) return {answer: 'Hava durumu bilgisi yükleniyor, lütfen bekle.'};
   const q = question.toLowerCase();
@@ -465,23 +453,20 @@ function buildLocalAnswer(question: string, weather: any): {answer: string} {
   if (/uv|güneş/i.test(q)) {
     const uv = weather.uv_index ?? 3;
     const level = uv <= 2 ? 'Düşük' : uv <= 5 ? 'Orta' : uv <= 7 ? 'Yüksek' : 'Çok Yüksek';
-    return {answer: `UV Index şu an ${uv} — ${level}. ${uv > 3 ? '30+ SPF güneş kremi kullan! ☀️' : 'Güvenli bir seviye.'}`};
+    return {answer: `UV İndeksi şu an ${uv} — ${level}. ${uv > 3 ? '30+ SPF güneş kremi kullan! ☀️' : 'Güvenli bir seviye.'}`};
   }
   if (/weekend|hafta sonu/i.test(q)) {
-    return {answer: `Hafta sonu tahminine bakmak için ana sayfadaki "View Full Forecast" bağlantısına tıkla! 📅`};
+    return {answer: `Hafta sonu tahminine bakmak için ana sayfadaki "Tam Tahmini Gör" bağlantısına tıkla! 📅`};
   }
 
   return {
-    answer: `Şu an ${DEFAULT_LAT === 41.0082 ? 'İstanbul' : 'konumunuzda'} ${desc.toLowerCase()}, ${temp}°C. Nem %${humidity}, rüzgar ${wind} km/h. Daha fazlası için giriş yap! 🌤️`,
+    answer: `Şu an ${DEFAULT_LAT === 41.0082 ? 'İstanbul' : 'konumunuzda'} hava ${desc.toLowerCase()}, sıcaklık ${temp}°C. Nem %${humidity}, rüzgar ${wind} km/h. Daha fazlası için giriş yap! 🌤️`,
   };
 }
 
-// ── Ana Stiller ───────────────────────────────────────────────────────────────
 const makeStyles = (C: typeof DarkColors) =>
   StyleSheet.create({
     safe: {flex: 1, backgroundColor: C.bg},
-
-    // Header
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -499,15 +484,11 @@ const makeStyles = (C: typeof DarkColors) =>
     onlineText: {fontSize: FontSize.xs, color: '#4CAF50', fontWeight: '600', letterSpacing: 0.5},
     infoBtn: {width: 36, alignItems: 'flex-end'},
     infoBtnText: {fontSize: 20, color: C.textSecondary},
-
-    // Mesajlar
     messageList: {
       paddingVertical: Spacing.md,
       flexGrow: 1,
     },
     emptyState: {flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40},
-
-    // Chip'ler
     chipsContainer: {
       paddingHorizontal: Spacing.md,
       paddingBottom: Spacing.sm,
@@ -526,8 +507,6 @@ const makeStyles = (C: typeof DarkColors) =>
       color: C.text,
       fontWeight: '500',
     },
-
-    // Input
     inputBar: {
       flexDirection: 'row',
       alignItems: 'center',
