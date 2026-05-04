@@ -101,6 +101,13 @@ export function ProfileScreen(): React.JSX.Element {
           <Text style={s.sectionTitle}>KEŞFET</Text>
           <View style={s.menuCard}>
             <MenuRow
+              icon="airplane-outline"
+              label="Seyahat Planlarım"
+              onPress={() => navigation.navigate('TravelCalendar')}
+              C={C}
+            />
+            <View style={s.divider} />
+            <MenuRow
               icon="heart-outline"
               label="Favori Şehirlerim"
               onPress={() => Alert.alert('Bilgi', 'Favori şehirler özelliği çok yakında!')}

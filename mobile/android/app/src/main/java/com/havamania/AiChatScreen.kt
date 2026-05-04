@@ -18,50 +18,66 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.HavamaniaScreen
+import com.havamania.ui.theme.HavamaniaTopBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+import com.havamania.ui.theme.*
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AiChatScreen(onBack: () -> Unit) {
+fun AiChatScreen(
+    initialRecommendation: HavamaniaRecommendation? = null,
+    onBack: () -> Unit
+) {
     var messageText by remember { mutableStateOf("") }
     val messages = remember { mutableStateListOf<ChatMessage>() }
     val coroutineScope = rememberCoroutineScope()
-    val colorScheme = MaterialTheme.colorScheme
+    val themeColors = HavamaniaTheme.colors
 
     // Başlangıç mesajı
     LaunchedEffect(Unit) {
         if (messages.isEmpty()) {
-            messages.add(ChatMessage(
-                id = UUID.randomUUID().toString(),
-                text = "Merhaba! Ben Havamania Asistanı. Seyahat planların, hava durumu veya tatil hazırlıkların hakkında sana nasıl yardımcı olabilirim?",
-                isUser = false,
-                timestamp = System.currentTimeMillis()
-            ))
+            if (initialRecommendation != null) {
+                messages.add(ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    text = "Havamania Önerisi için detaylı analiz hazırladım: ${initialRecommendation.message}\n\nBu durum senin için neden önemli? Mevcut hava şartlarına göre ${initialRecommendation.highlightedWords.joinToString(", ")} konularında sana özel önerilerim şunlar...",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                ))
+
+                // Simulate detailed AI analysis
+                delay(800)
+                messages.add(ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    text = "Analizime göre; ${initialRecommendation.type} odaklı bu durum yaklaşık 4 saat daha devam edecek. İlgi alanların ve planların göz önüne alındığında, bugün için en verimli strateji esnek kalmak olacaktır. Başka neyi merak ediyorsun?",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                ))
+            } else {
+                messages.add(ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    text = "Merhaba! Ben Havamania Asistanı. Seyahat planların, hava durumu veya tatil hazırlıkların hakkında sana nasıl yardımcı olabilirim?",
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                ))
+            }
         }
     }
 
-    Scaffold(
+    HavamaniaScreen(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.AutoAwesome, null, tint = colorScheme.primary, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Havamania Asistan", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black))
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent,
-                    titleContentColor = colorScheme.onBackground
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, null, tint = colorScheme.onBackground) }
+            HavamaniaTopBar(
+                title = "HAVAMANIA ASİSTAN",
+                onBack = onBack,
+                actions = {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
                 }
             )
-        },
-        containerColor = colorScheme.background
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -84,34 +100,37 @@ fun AiChatScreen(onBack: () -> Unit) {
 
             // Mesaj Giriş Alanı
             Surface(
-                color = colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                color = themeColors.surfaceGlass.copy(alpha = 0.6f),
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, themeColors.border.copy(alpha = 0.1f))
             ) {
                 Row(
                     modifier = Modifier
-                        .padding(16.dp)
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
                         .navigationBarsPadding(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
                         value = messageText,
                         onValueChange = { messageText = it },
-                        placeholder = { Text("Sorunuzu yazın...", color = colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) },
+                        placeholder = { Text("Sorunuzu yazın...", color = themeColors.textSecondary.copy(alpha = 0.6f)) },
                         modifier = Modifier
                             .weight(1f)
                             .padding(end = 12.dp),
                         shape = RoundedCornerShape(28.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = colorScheme.onSurface,
-                            unfocusedTextColor = colorScheme.onSurface,
-                            focusedBorderColor = colorScheme.primary,
-                            unfocusedBorderColor = colorScheme.outline.copy(alpha = 0.2f)
+                            focusedTextColor = themeColors.textPrimary,
+                            unfocusedTextColor = themeColors.textPrimary,
+                            focusedBorderColor = themeColors.accent,
+                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.15f),
+                            unfocusedContainerColor = themeColors.surface.copy(alpha = 0.2f),
+                            focusedContainerColor = themeColors.surface.copy(alpha = 0.3f)
                         ),
                         maxLines = 3
                     )
 
-                    FloatingActionButton(
+                    IconButton(
                         onClick = {
                             if (messageText.isNotBlank()) {
                                 val userMsg = messageText
@@ -141,12 +160,12 @@ fun AiChatScreen(onBack: () -> Unit) {
                                 }
                             }
                         },
-                        containerColor = colorScheme.primary,
-                        contentColor = colorScheme.onPrimary,
-                        shape = CircleShape,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(themeColors.accent)
                     ) {
-                        Icon(Icons.Rounded.Send, null, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Rounded.Send, null, tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -156,31 +175,32 @@ fun AiChatScreen(onBack: () -> Unit) {
 
 @Composable
 fun ChatBubbleGeneral(message: ChatMessage) {
-    val colorScheme = MaterialTheme.colorScheme
+    val themeColors = HavamaniaTheme.colors
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
     ) {
         Surface(
-            color = if (message.isUser) colorScheme.primary.copy(alpha = 0.2f) else colorScheme.surfaceVariant.copy(alpha = 0.8f),
+            color = if (message.isUser) themeColors.accent.copy(alpha = 0.9f) else themeColors.surfaceGlass.copy(alpha = 0.4f),
             shape = RoundedCornerShape(
-                topStart = 20.dp,
-                topEnd = 20.dp,
-                bottomStart = if (message.isUser) 20.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 20.dp
+                topStart = 24.dp,
+                topEnd = 24.dp,
+                bottomStart = if (message.isUser) 24.dp else 4.dp,
+                bottomEnd = if (message.isUser) 4.dp else 24.dp
             ),
             border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (message.isUser) colorScheme.primary.copy(alpha = 0.3f) else colorScheme.outline.copy(alpha = 0.1f)
+                0.5.dp,
+                if (message.isUser) themeColors.accent else themeColors.border.copy(alpha = 0.1f)
             )
         ) {
             Text(
                 text = message.text ?: "",
-                modifier = Modifier.padding(14.dp),
-                color = colorScheme.onSurface,
+                modifier = Modifier.padding(16.dp),
+                color = if (message.isUser) Color.White else themeColors.textPrimary,
                 fontSize = 15.sp,
                 lineHeight = 22.sp
             )
         }
     }
 }
+

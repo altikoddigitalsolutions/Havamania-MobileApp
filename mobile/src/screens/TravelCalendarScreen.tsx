@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,12 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Pressable,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useColors, Spacing, Radius, FontSize } from '../theme';
+import { SeasonalBackground } from '../components/SeasonalBackground';
 
 // Safe import for LinearGradient
 let LinearGradient: any;
@@ -45,7 +48,14 @@ const TRAVEL_TYPES: { type: TravelType; label: string; icon: string }[] = [
   { type: 'Other', label: 'Diğer', icon: 'ellipsis-horizontal-outline' },
 ];
 
+/**
+ * Premium Seyahat Ekranı
+ */
 export function TravelCalendarScreen() {
+  return <TravelScreen />;
+}
+
+function TravelScreen() {
   const C = useColors();
   const { plans, addPlan, removePlan, updatePlan } = useTravelStore();
 
@@ -135,19 +145,27 @@ export function TravelCalendarScreen() {
     setModalVisible(true);
   };
 
-  const renderTravelCard = ({ item }: { item: TravelPlan }) => (
-    <TravelCard plan={item} onEdit={() => handleEdit(item)} onDelete={() => removePlan(item.id)} />
-  );
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Seyahati Sil',
+      'Bu seyahat planını silmek istediğinizden emin misiniz?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Sil', onPress: () => removePlan(id), style: 'destructive' }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={[C.bg, C.bgSecondary]} style={StyleSheet.absoluteFill} />
+      <SeasonalBackground />
 
       <View style={styles.header}>
         <View>
           <Text style={[styles.title, { color: C.text }]}>Seyahatlerim</Text>
-          <Text style={[styles.subtitle, { color: C.textSecondary }]}>Planlarını yönet ve hava durumunu takip et</Text>
+          <Text style={[styles.subtitle, { color: C.textSecondary }]}>Hava durumuna göre akıllı seyahat planlayıcı</Text>
         </View>
       </View>
 
@@ -158,7 +176,7 @@ export function TravelCalendarScreen() {
             onPress={() => setFilter(f)}
             style={[
               styles.filterChip,
-              { backgroundColor: filter === f ? C.accent : C.bgCard },
+              { backgroundColor: filter === f ? C.accent : 'rgba(255,255,255,0.05)' },
               filter === f && styles.activeFilterChip
             ]}
           >
@@ -172,27 +190,20 @@ export function TravelCalendarScreen() {
       <FlatList
         data={displayPlans}
         keyExtractor={(item) => item.id}
-        renderItem={renderTravelCard}
+        renderItem={({ item, index }) => (
+          <TravelCard
+            plan={item}
+            index={index}
+            onEdit={() => handleEdit(item)}
+            onDelete={() => handleDelete(item.id)}
+            onReAnalyze={() => {}} // useQuery automatically handles refetch if needed or we can trigger it
+          />
+        )}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={[styles.emptyIconContainer, { backgroundColor: C.bgCard }]}>
-              <Icon name="airplane-outline" size={60} color={C.accent} />
-            </View>
-            <Text style={[styles.emptyText, { color: C.text }]}>Seyahat Planı Bulunamadı</Text>
-            <Text style={[styles.emptySubText, { color: C.textSecondary }]}>
-              Yeni bir rota çizmek ve hava durumunu takip etmek için alttaki "+" butonuna dokunun.
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={<TravelEmptyState onAdd={() => setModalVisible(true)} />}
       />
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: C.accent }]}
-        onPress={() => setModalVisible(true)}
-      >
-        <Icon name="add" size={32} color="#FFF" />
-      </TouchableOpacity>
+      <PremiumRouteButton onPress={() => setModalVisible(true)} />
 
       <Modal
         animationType="slide"
@@ -204,22 +215,22 @@ export function TravelCalendarScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, { backgroundColor: C.bgCard }]}>
+          <View style={[styles.modalContent, { backgroundColor: C.bgSecondary, borderColor: C.border, borderWidth: 1 }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: C.text }]}>
                 {editingId ? 'Seyahati Düzenle' : 'Yeni Seyahat Planla'}
               </Text>
-              <TouchableOpacity onPress={resetForm}>
+              <TouchableOpacity onPress={resetForm} style={styles.closeBtn}>
                 <Icon name="close" size={24} color={C.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>VARALAN ŞEHİR</Text>
+                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>NEREYE GİDİYORSUN?</Text>
                 {selectedCity ? (
                   <TouchableOpacity
-                    style={[styles.selectedCityBox, { backgroundColor: C.bgInput, borderColor: C.accent }]}
+                    style={[styles.selectedCityBox, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: C.accent }]}
                     onPress={() => setSelectedCity(null)}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -231,14 +242,14 @@ export function TravelCalendarScreen() {
                 ) : (
                   <View>
                     <TextInput
-                      style={[styles.input, { backgroundColor: C.bgInput, color: C.text, borderColor: C.border }]}
-                      placeholder="Şehir ara (örn: bal)"
+                      style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]}
+                      placeholder="Şehir ara (örn: Antalya)"
                       placeholderTextColor={C.textMuted}
                       value={citySearch}
                       onChangeText={setCitySearch}
                     />
                     {citySearch.length > 0 && (
-                      <View style={[styles.searchDropdown, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                      <View style={[styles.searchDropdown, { backgroundColor: C.bgSecondary, borderColor: C.border }]}>
                         {filteredCities.map((item) => (
                           <TouchableOpacity
                             key={item.name}
@@ -258,7 +269,7 @@ export function TravelCalendarScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inputLabel, { color: C.textSecondary }]}>BAŞLANGIÇ</Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: C.bgInput, color: C.text, borderColor: C.border }]}
+                    style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={C.textMuted}
                     value={startDate}
@@ -268,7 +279,7 @@ export function TravelCalendarScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.inputLabel, { color: C.textSecondary }]}>BİTİŞ</Text>
                   <TextInput
-                    style={[styles.input, { backgroundColor: C.bgInput, color: C.text, borderColor: C.border }]}
+                    style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={C.textMuted}
                     value={endDate}
@@ -278,16 +289,15 @@ export function TravelCalendarScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>SEYAHAT TİPİ</Text>
+                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>SEYAHAT KONSEPTİ</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                   {TRAVEL_TYPES.map((t) => (
                     <TouchableOpacity
                       key={t.type}
                       onPress={() => setTravelType(t.type)}
                       style={[
-                        styles.typeChip,
-                        { backgroundColor: travelType === t.type ? C.accent : C.bgInput },
-                        travelType === t.type && { borderColor: C.accent }
+                        styles.typeChipForm,
+                        { backgroundColor: travelType === t.type ? C.accent : 'rgba(255,255,255,0.05)' },
                       ]}
                     >
                       <Icon name={t.icon} size={16} color={travelType === t.type ? '#FFF' : C.textSecondary} />
@@ -300,10 +310,10 @@ export function TravelCalendarScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>NOTLAR</Text>
+                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>ÖZEL NOTLAR</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea, { backgroundColor: C.bgInput, color: C.text, borderColor: C.border }]}
-                  placeholder="Seyahat ile ilgili notların..."
+                  style={[styles.input, styles.textArea, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]}
+                  placeholder="Havalimanı transferi, otel adı vb..."
                   placeholderTextColor={C.textMuted}
                   multiline
                   numberOfLines={3}
@@ -316,7 +326,13 @@ export function TravelCalendarScreen() {
                 style={[styles.saveButton, { backgroundColor: C.accent }]}
                 onPress={handleSavePlan}
               >
-                <Text style={styles.saveButtonText}>{editingId ? 'Güncelle' : 'Seyahati Kaydet'}</Text>
+                <LinearGradient
+                  colors={[C.accent, C.accentDark]}
+                  style={StyleSheet.absoluteFill}
+                  start={{x: 0, y: 0}}
+                  end={{x: 1, y: 0}}
+                />
+                <Text style={styles.saveButtonText}>{editingId ? 'Güncelle' : 'Planı Oluştur'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -327,13 +343,39 @@ export function TravelCalendarScreen() {
 }
 
 /**
- * Seyahat Kartı Bileşeni
+ * Premium Seyahat Kartı
  */
-function TravelCard({ plan, onEdit, onDelete }: { plan: TravelPlan; onEdit: () => void; onDelete: () => void }) {
+function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
+  plan: TravelPlan;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+  onReAnalyze: () => void;
+}) {
   const C = useColors();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const typeInfo = TRAVEL_TYPES.find(t => t.type === plan.type) || TRAVEL_TYPES[5];
 
-  const { data: weatherData } = useQuery({
+  const { data: weatherData, refetch, isFetching } = useQuery({
     queryKey: ['weather', plan.lat, plan.lon, plan.startDate],
     queryFn: () => getDailyWeather(plan.lat, plan.lon, 10),
     staleTime: 10 * 60 * 1000,
@@ -341,172 +383,342 @@ function TravelCard({ plan, onEdit, onDelete }: { plan: TravelPlan; onEdit: () =
 
   const analysis = useMemo(() => {
     if (!weatherData) return null;
-    const today = new Date().toISOString().split('T')[0];
     const targetDate = plan.startDate;
     const dayData = weatherData.items.find(i => i.date === targetDate);
 
-    if (!dayData) return { msg: 'Hava tahmini seyahat tarihinize yaklaştığında burada detaylandırılacaktır.', icon: 'time-outline', color: C.textMuted };
+    if (!dayData) return {
+      status: 'pending',
+      msg: 'Hava tahmini seyahat tarihinize yaklaştığında burada detaylandırılacaktır.',
+      icon: 'time-outline',
+      color: C.textMuted
+    };
 
     let advice = "";
     let packing = ["Rahat ayakkabı"];
     let color = C.accent;
+    let icon = 'sunny-outline';
 
     if (dayData.weather_code >= 51) {
       advice = "Yağmurlu bir gün bekleniyor, şemsiye ve yağmurluk almayı unutma.";
       packing.push("Şemsiye", "Yağmurluk");
       color = "#3B82F6";
+      icon = 'rainy-outline';
     } else if (dayData.temp_max > 28) {
       advice = "Hava oldukça sıcak olacak. İnce kıyafetler ve güneş kremi tercih et.";
       packing.push("Güneş kremi", "Gözlük", "İnce kıyafetler");
       color = "#F59E0B";
+      icon = 'thermometer-outline';
     } else if (dayData.temp_min < 10) {
       advice = "Hava serin olabilir, yanına kalın bir mont veya hırka almalısın.";
       packing.push("Mont", "Atkı");
       color = "#10B981";
+      icon = 'snow-outline';
     } else {
       advice = "Hava seyahat için oldukça ideal görünüyor.";
       packing.push("Hafif ceket");
     }
 
-    if (dayData.wind_speed_max > 25) {
-      advice += " Ayrıca rüzgarlı bir gün, dış mekan aktivitelerinde dikkatli ol.";
-    }
-
     return {
+      status: 'ready',
       msg: advice,
-      packing: packing.join(", "),
+      packing: packing,
       temp: `${dayData.temp_min}° / ${dayData.temp_max}°`,
       summary: dayData.precipitation_probability > 30 ? 'Yağış İhtimali' : 'Açık/Az Bulutlu',
-      color
+      color,
+      icon
     };
   }, [weatherData, plan.startDate, C]);
 
   const startDate = new Date(plan.startDate);
   const endDate = new Date(plan.endDate);
-  const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const diffDays = Math.ceil(Math.abs(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
   return (
-    <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+    <Animated.View style={[
+      styles.card,
+      {
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        borderColor: 'rgba(255,255,255,0.08)',
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }]
+      }
+    ]}>
       <LinearGradient
         colors={['rgba(255,255,255,0.05)', 'transparent']}
         start={{x:0, y:0}} end={{x:1, y:1}}
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={styles.cardTop}>
-        <View style={styles.cardHeaderInfo}>
-          <View style={[styles.typeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-            <Icon name={typeInfo.icon} size={20} color={C.accent} />
+      <View style={styles.cardHeader}>
+        <View style={styles.cardHeaderLeft}>
+          <View style={[styles.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '20' }]}>
+            <Icon name="navigate-outline" size={20} color={analysis?.color || C.accent} />
           </View>
           <View>
             <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
-            <Text style={[styles.cardTypeLabel, { color: C.textSecondary }]}>{typeInfo.label} • {diffDays} Gün</Text>
+            <Text style={[styles.cardDates, { color: C.textSecondary }]}>
+              {plan.startDate} • {diffDays} Gün
+            </Text>
           </View>
         </View>
-        <View style={styles.actionBtns}>
-          <TouchableOpacity onPress={onEdit} style={styles.iconButton}>
-            <Icon name="create-outline" size={20} color={C.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => Alert.alert('Sil', 'Bu seyahati silmek istediğine emin misin?', [{text: 'İptal'}, {text: 'Sil', onPress: onDelete, style: 'destructive'}])}>
-            <Icon name="trash-outline" size={20} color={C.error} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.dateInfoRow}>
-        <View style={styles.dateItem}>
-          <Text style={[styles.dateLabel, { color: C.textMuted }]}>GİDİŞ</Text>
-          <Text style={[styles.dateValue, { color: C.text }]}>{plan.startDate}</Text>
-        </View>
-        <Icon name="arrow-forward" size={16} color={C.textMuted} style={{ marginTop: 12 }} />
-        <View style={styles.dateItem}>
-          <Text style={[styles.dateLabel, { color: C.textMuted }]}>DÖNÜŞ</Text>
-          <Text style={[styles.dateValue, { color: C.text }]}>{plan.endDate}</Text>
-        </View>
-      </View>
-
-      {analysis ? (
-        <View style={[styles.analysisBox, { backgroundColor: 'rgba(255,255,255,0.03)', borderLeftColor: analysis.color }]}>
-          <View style={styles.analysisHeader}>
-            <Text style={[styles.analysisTitle, { color: analysis.color }]}>Hava Analizi & Öneriler</Text>
-            {analysis.temp && <Text style={[styles.analysisTemp, { color: C.text }]}>{analysis.temp}</Text>}
-          </View>
-          <Text style={[styles.analysisMsg, { color: C.text }]}>{analysis.msg}</Text>
-          {analysis.packing && (
-            <View style={styles.packingRow}>
-              <Icon name="briefcase" size={14} color={C.accent} />
-              <Text style={[styles.packingText, { color: C.textSecondary }]}>Valiz: {analysis.packing}</Text>
-            </View>
+        <View style={styles.weatherSummary}>
+          {analysis?.temp && (
+            <>
+              <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.temp}</Text>
+              <Icon name={analysis.icon as any} size={18} color={analysis.color} />
+            </>
           )}
         </View>
-      ) : (
-        <View style={styles.loadingAnalysis}>
-          <Text style={{ color: C.textMuted, fontSize: 12 }}>Hava durumu verileri yükleniyor...</Text>
-        </View>
-      )}
+      </View>
 
-      {plan.note && (
-        <View style={styles.noteSection}>
-          <Icon name="document-text-outline" size={14} color={C.textMuted} />
-          <Text style={[styles.noteText, { color: C.textMuted }]} numberOfLines={2}>{plan.note}</Text>
+      <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} />
+
+      <View style={styles.cardFooter}>
+        <View style={styles.footerLeft}>
+          <Icon name={typeInfo.icon} size={14} color={C.textMuted} />
+          <Text style={[styles.footerTypeText, { color: C.textMuted }]}>{typeInfo.label}</Text>
         </View>
-      )}
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={onEdit}>
+            <Icon name="pencil" size={16} color={C.textSecondary} />
+            <Text style={[styles.actionBtnText, { color: C.textSecondary }]}>Düzenle</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => {
+              refetch();
+              onReAnalyze();
+            }}
+          >
+            <Icon name="sparkles" size={16} color={C.accent} />
+            <Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionBtn} onPress={onDelete}>
+            <Icon name="trash" size={16} color="#EF444499" />
+            <Text style={[styles.actionBtnText, { color: '#EF444499' }]}>Sil</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * AI Önerileri Bölümü
+ */
+function TravelAiRecommendationSection({ analysis, isFetching }: { analysis: any; isFetching: boolean }) {
+  const C = useColors();
+
+  if (isFetching) {
+    return (
+      <View style={styles.aiSectionLoading}>
+        <Text style={{ color: C.textMuted, fontSize: 12 }}>Yapay zeka rotayı analiz ediyor...</Text>
+      </View>
+    );
+  }
+
+  if (!analysis) return null;
+
+  return (
+    <View style={styles.aiSection}>
+      <View style={styles.aiTitleRow}>
+        <Icon name="sparkles-outline" size={14} color={C.accent} />
+        <Text style={[styles.aiTitle, { color: C.accent }]}>HAVAMANIA AI ÖNERİLERİ</Text>
+      </View>
+
+      <View style={styles.aiGrid}>
+        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
+          <View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}>
+            <Icon name="airplane-outline" size={12} color="#3B82F6" />
+          </View>
+          <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
+            {analysis.status === 'ready' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}
+          </Text>
+        </View>
+
+        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
+          <View style={[styles.aiMiniIcon, { backgroundColor: '#10B98120' }]}>
+            <Icon name="briefcase-outline" size={12} color="#10B981" />
+          </View>
+          <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
+            Valiz: {analysis.packing ? (Array.isArray(analysis.packing) ? analysis.packing.slice(0, 2).join(', ') : analysis.packing) : 'Standart'}
+          </Text>
+        </View>
+
+        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)', flexBasis: '100%' }]}>
+          <View style={[styles.aiMiniIcon, { backgroundColor: analysis.color + '20' }]}>
+            <Icon name="bulb-outline" size={12} color={analysis.color} />
+          </View>
+          <Text style={[styles.aiMiniText, { color: C.text }]}>{analysis.msg}</Text>
+        </View>
+      </View>
     </View>
+  );
+}
+
+/**
+ * Boş Durum Bileşeni
+ */
+function TravelEmptyState({ onAdd }: { onAdd: () => void }) {
+  const C = useColors();
+  return (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIllustration}>
+        <View style={[styles.glowCircle, { backgroundColor: C.accent }]} />
+        <Icon name="map-outline" size={80} color={C.textSecondary} style={{ opacity: 0.5 }} />
+      </View>
+      <Text style={[styles.emptyText, { color: C.text }]}>Henüz seyahat planın yok</Text>
+      <Text style={[styles.emptySubText, { color: C.textSecondary }]}>
+        Yeni bir rota oluşturarak hava durumuna göre akıllı öneriler alabilirsin.
+      </Text>
+      <TouchableOpacity
+        style={[styles.emptyBtn, { backgroundColor: C.accent }]}
+        onPress={onAdd}
+      >
+        <Text style={styles.emptyBtnText}>Yeni Rota Oluştur</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/**
+ * Premium Floating Action Button
+ */
+function PremiumRouteButton({ onPress }: { onPress: () => void }) {
+  const C = useColors();
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, { toValue: 0.9, useNativeDriver: true }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={styles.fabWrapper}
+    >
+      <Animated.View style={[styles.fab, { transform: [{ scale }] }]}>
+        <LinearGradient
+          colors={[C.accent, C.accentDark]}
+          style={StyleSheet.absoluteFill}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+        />
+        <View style={styles.fabContent}>
+          <Icon name="add" size={24} color="#FFF" />
+          <Text style={styles.fabText}>YENİ ROTA</Text>
+        </View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { padding: Spacing.xl, paddingTop: 20 },
-  title: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, marginTop: 4, opacity: 0.8 },
+  title: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
+  subtitle: { fontSize: 14, marginTop: 4, opacity: 0.7 },
   filterContainer: { flexDirection: 'row', paddingHorizontal: Spacing.xl, gap: 10, marginBottom: Spacing.lg },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full, borderWidth: 1, borderColor: 'transparent' },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full },
   activeFilterChip: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   filterText: { fontSize: 13, fontWeight: '700' },
-  listContent: { padding: Spacing.xl, paddingBottom: 100 },
-  card: { padding: Spacing.lg, borderRadius: 28, borderWidth: 1, marginBottom: Spacing.xl, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  cardHeaderInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  typeIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  cardCity: { fontSize: 20, fontWeight: '800' },
-  cardTypeLabel: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  actionBtns: { flexDirection: 'row', gap: 8 },
-  iconButton: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
-  dateInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 20, paddingHorizontal: 4 },
-  dateItem: { flex: 1 },
-  dateLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  dateValue: { fontSize: 15, fontWeight: '700', marginTop: 4 },
-  analysisBox: { padding: 16, borderRadius: 20, borderLeftWidth: 4, marginTop: 4 },
-  analysisHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  analysisTitle: { fontSize: 13, fontWeight: '800' },
-  analysisTemp: { fontSize: 13, fontWeight: '700' },
-  analysisMsg: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  packingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-  packingText: { fontSize: 12, fontWeight: '600' },
-  noteSection: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
-  noteText: { fontSize: 13, fontStyle: 'italic', flex: 1 },
-  loadingAnalysis: { padding: 16, alignItems: 'center' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80 },
-  emptyIconContainer: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  emptyText: { fontSize: 20, fontWeight: '800', marginBottom: 8 },
-  emptySubText: { fontSize: 14, textAlign: 'center', paddingHorizontal: 40, lineHeight: 22 },
-  fab: { position: 'absolute', bottom: 30, right: 30, width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '90%' },
+  listContent: { padding: Spacing.xl, paddingBottom: 120 },
+
+  // Card Styles
+  card: {
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 20,
+    overflow: 'hidden',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 4,
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  routeIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  cardCity: { fontSize: 22, fontWeight: '800' },
+  cardDates: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  weatherSummary: { alignItems: 'flex-end', gap: 4 },
+  cardTemp: { fontSize: 18, fontWeight: '800' },
+
+  // AI Section
+  aiSection: { marginTop: 4, marginBottom: 20 },
+  aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  aiTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  aiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  aiMiniCard: { flex: 1, minWidth: '45%', padding: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aiMiniIcon: { width: 24, height: 24, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  aiMiniText: { fontSize: 11, fontWeight: '600', flex: 1, lineHeight: 15 },
+  aiSectionLoading: { paddingVertical: 20, alignItems: 'center' },
+
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)'
+  },
+  footerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  footerTypeText: { fontSize: 12, fontWeight: '600' },
+  cardActions: { flexDirection: 'row', gap: 12 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  actionBtnText: { fontSize: 11, fontWeight: '700' },
+
+  // Empty State
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 40 },
+  emptyIllustration: { width: 160, height: 160, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  glowCircle: { position: 'absolute', width: 100, height: 100, borderRadius: 50, opacity: 0.1, transform: [{ scale: 1.5 }] },
+  emptyText: { fontSize: 20, fontWeight: '800', marginBottom: 12, textAlign: 'center' },
+  emptySubText: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  emptyBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, elevation: 4 },
+  emptyBtnText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+
+  // FAB
+  fabWrapper: { position: 'absolute', bottom: 30, left: 20, right: 20, alignItems: 'center' },
+  fab: {
+    height: 56,
+    borderRadius: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: 'hidden'
+  },
+  fabContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  fabText: { color: '#FFF', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '92%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 22, fontWeight: '800' },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
   inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 10, marginLeft: 4 },
+  inputLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 10, marginLeft: 4 },
   input: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, fontSize: 16, fontWeight: '600' },
   textArea: { height: 100, paddingTop: 16, textAlignVertical: 'top' },
   dateRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   selectedCityBox: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  searchDropdown: { position: 'absolute', top: 90, left: 0, right: 0, borderRadius: 16, borderWidth: 1, zIndex: 1000, elevation: 5, padding: 8 },
+  searchDropdown: { position: 'absolute', top: 90, left: 0, right: 0, borderRadius: 16, borderWidth: 1, zIndex: 1000, elevation: 10, padding: 8 },
   searchItem: { padding: 14, borderRadius: 10 },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+  typeChipForm: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14 },
   typeText: { fontSize: 14, fontWeight: '700' },
-  saveButton: { height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginTop: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  saveButtonText: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  saveButton: { height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginTop: 20, overflow: 'hidden' },
+  saveButtonText: { color: '#FFF', fontSize: 18, fontWeight: '800', zIndex: 1 },
 });

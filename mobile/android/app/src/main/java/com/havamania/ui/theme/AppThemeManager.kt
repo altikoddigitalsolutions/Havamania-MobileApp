@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -17,6 +18,10 @@ import kotlinx.coroutines.flow.map
 
 enum class AppTheme(val title: String) {
     AUTO("Otomatik"), LIGHT("Açık Tema"), DARK("Koyu Tema"), SPRING("İlkbahar"), SUMMER("Yaz"), AUTUMN("Sonbahar"), WINTER("Kış")
+}
+
+enum class TemperatureUnit(val symbol: String, val title: String) {
+    CELSIUS("°C", "Celsius"), FAHRENHEIT("°F", "Fahrenheit")
 }
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -60,20 +65,113 @@ object WeatherDataColors {
     }
 }
 
-data class ThemeVisuals(
-    val heroGradient: Brush,
-    val aiAccent: Color,
-    val progressGradient: Brush,
-    val selectionAlpha: Float = 0.15f
-)
-
 object ThemeManager {
     private val THEME_KEY = stringPreferencesKey("app_theme")
+    private val LIVE_EFFECTS_KEY = booleanPreferencesKey("live_effects")
+    private val ANIMATIONS_KEY = booleanPreferencesKey("animations_enabled")
+    private val TILT_EFFECT_KEY = booleanPreferencesKey("tilt_effect_enabled")
+    private val EFFECT_INTENSITY_KEY = stringPreferencesKey("effect_intensity")
+
+    // Yeni Ayarlar
+    private val TEMP_UNIT_KEY = stringPreferencesKey("temp_unit")
+    private val LANGUAGE_KEY = stringPreferencesKey("language")
+    private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
+
+    // Profil Ayarları
+    private val USER_NAME_KEY = stringPreferencesKey("user_name")
+    private val USER_BIO_KEY = stringPreferencesKey("user_bio")
+    private val USER_IMAGE_URI_KEY = stringPreferencesKey("user_image_uri")
+    private val USER_INTERESTS_KEY = stringPreferencesKey("user_interests")
+
+    // Şehir Ayarları
+    private val REGISTERED_CITIES_KEY = stringPreferencesKey("registered_cities")
+    private val DEFAULT_CITY_KEY = stringPreferencesKey("default_city")
 
     suspend fun saveTheme(context: Context, theme: AppTheme) = context.dataStore.edit { it[THEME_KEY] = theme.name }
 
     fun getTheme(context: Context): Flow<AppTheme> = context.dataStore.data.map {
         AppTheme.valueOf(it[THEME_KEY] ?: AppTheme.DARK.name)
+    }
+
+    suspend fun saveTempUnit(context: Context, unit: TemperatureUnit) = context.dataStore.edit { it[TEMP_UNIT_KEY] = unit.name }
+
+    fun getTempUnit(context: Context): Flow<TemperatureUnit> = context.dataStore.data.map {
+        TemperatureUnit.valueOf(it[TEMP_UNIT_KEY] ?: TemperatureUnit.CELSIUS.name)
+    }
+
+    suspend fun saveLanguage(context: Context, lang: String) = context.dataStore.edit { it[LANGUAGE_KEY] = lang }
+
+    fun getLanguage(context: Context): Flow<String> = context.dataStore.data.map {
+        it[LANGUAGE_KEY] ?: "TR"
+    }
+
+    suspend fun saveNotificationsEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[NOTIFICATIONS_KEY] = enabled }
+
+    fun getNotificationsEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
+        it[NOTIFICATIONS_KEY] ?: true
+    }
+
+    suspend fun saveUserName(context: Context, name: String) = context.dataStore.edit { it[USER_NAME_KEY] = name }
+    fun getUserName(context: Context): Flow<String> = context.dataStore.data.map { it[USER_NAME_KEY] ?: "Gezgin" }
+
+    suspend fun saveUserBio(context: Context, bio: String) = context.dataStore.edit { it[USER_BIO_KEY] = bio }
+    fun getUserBio(context: Context): Flow<String> = context.dataStore.data.map { it[USER_BIO_KEY] ?: "Hava durumu meraklısı 🌤️" }
+
+    suspend fun saveUserImageUri(context: Context, uri: String?) = context.dataStore.edit {
+        if (uri == null) it.remove(USER_IMAGE_URI_KEY) else it[USER_IMAGE_URI_KEY] = uri
+    }
+    fun getUserImageUri(context: Context): Flow<String?> = context.dataStore.data.map { it[USER_IMAGE_URI_KEY] }
+
+    suspend fun saveUserInterests(context: Context, interests: Set<String>) = context.dataStore.edit {
+        it[USER_INTERESTS_KEY] = interests.joinToString(",")
+    }
+    fun getUserInterests(context: Context): Flow<Set<String>> = context.dataStore.data.map {
+        val str = it[USER_INTERESTS_KEY] ?: "Kamp,Yürüyüş,Seyahat"
+        if (str.isEmpty()) emptySet() else str.split(",").toSet()
+    }
+
+    suspend fun saveRegisteredCities(context: Context, cities: List<String>) = context.dataStore.edit {
+        it[REGISTERED_CITIES_KEY] = cities.joinToString(",")
+    }
+    fun getRegisteredCities(context: Context): Flow<List<String>> = context.dataStore.data.map {
+        val str = it[REGISTERED_CITIES_KEY] ?: "İstanbul,Ankara,İzmir"
+        if (str.isEmpty()) emptyList() else str.split(",")
+    }
+
+    suspend fun saveDefaultCity(context: Context, city: String) = context.dataStore.edit { it[DEFAULT_CITY_KEY] = city }
+    fun getDefaultCity(context: Context): Flow<String> = context.dataStore.data.map { it[DEFAULT_CITY_KEY] ?: "İstanbul" }
+
+    suspend fun saveLiveEffects(context: Context, enabled: Boolean) = context.dataStore.edit { it[LIVE_EFFECTS_KEY] = enabled }
+
+    fun getLiveEffects(context: Context): Flow<Boolean> = context.dataStore.data.map {
+        it[LIVE_EFFECTS_KEY] ?: true
+    }
+
+    suspend fun saveAnimationsEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[ANIMATIONS_KEY] = enabled }
+
+    fun getAnimationsEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
+        it[ANIMATIONS_KEY] ?: true
+    }
+
+    suspend fun saveTiltEffectEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[TILT_EFFECT_KEY] = enabled }
+
+    fun getTiltEffectEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
+        it[TILT_EFFECT_KEY] ?: true
+    }
+
+    suspend fun saveEffectIntensity(context: Context, intensity: String) = context.dataStore.edit { it[EFFECT_INTENSITY_KEY] = intensity }
+
+    fun getEffectIntensity(context: Context): Flow<String> = context.dataStore.data.map {
+        it[EFFECT_INTENSITY_KEY] ?: "MEDIUM"
+    }
+
+    suspend fun clearRegisteredCities(context: Context) = context.dataStore.edit {
+        it[REGISTERED_CITIES_KEY] = "İstanbul"
+        it[DEFAULT_CITY_KEY] = "İstanbul"
+    }
+
+    suspend fun resetAll(context: Context) = context.dataStore.edit {
+        it.clear()
     }
 
     fun getAutoTheme(weatherData: WeatherData?): AppTheme {
@@ -153,42 +251,6 @@ object ThemeManager {
                 onSurfaceVariant = Color(0xFF64748B)
             )
             AppTheme.AUTO -> getColorScheme(AppTheme.DARK)
-        }
-    }
-
-    fun getVisuals(theme: AppTheme): ThemeVisuals {
-        return when (theme) {
-            AppTheme.DARK -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFF00C2FF).copy(0.15f), Color(0xFF0B0F14))),
-                aiAccent = Color(0xFFA78BFA),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFF00C2FF), Color(0xFFA78BFA)))
-            )
-            AppTheme.LIGHT -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFF0077FF).copy(0.1f), Color(0xFFF5F7FA))),
-                aiAccent = Color(0xFF0077FF),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFF0077FF), Color(0xFF38BDF8)))
-            )
-            AppTheme.SPRING -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFF4ADE80).copy(0.15f), Color(0xFFF0FFF4))),
-                aiAccent = Color(0xFFF472B6),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFF4ADE80), Color(0xFFF472B6)))
-            )
-            AppTheme.SUMMER -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFF00B4D8).copy(0.15f), Color(0xFFE0F7FF))),
-                aiAccent = Color(0xFFFFD60A),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFF00B4D8), Color(0xFFFFD60A)))
-            )
-            AppTheme.AUTUMN -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFFF97316).copy(0.15f), Color(0xFFFFF7ED))),
-                aiAccent = Color(0xFFA16207),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFFF97316), Color(0xFFA16207)))
-            )
-            AppTheme.WINTER -> ThemeVisuals(
-                heroGradient = Brush.verticalGradient(listOf(Color(0xFF60A5FA).copy(0.15f), Color(0xFFF1F5F9))),
-                aiAccent = Color(0xFF1E3A8A),
-                progressGradient = Brush.horizontalGradient(listOf(Color(0xFF60A5FA), Color(0xFF1E3A8A)))
-            )
-            AppTheme.AUTO -> getVisuals(AppTheme.DARK)
         }
     }
 }

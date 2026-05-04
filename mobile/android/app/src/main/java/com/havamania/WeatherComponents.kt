@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.havamania.ui.theme.HavamaniaDesign
+import com.havamania.ui.theme.HavamaniaTheme
 
 /**
  * Küçük Bilgi Kartı (Ay Fazı, Gün Doğumu vb.)
@@ -32,14 +32,15 @@ fun DetailSmallCard(
     emoji: String,
     modifier: Modifier = Modifier
 ) {
-    val colorScheme = MaterialTheme.colorScheme
+    val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(HavamaniaDesign.SmallCardCornerRadius),
+        shape = RoundedCornerShape(16.dp), // Small radius
         colors = CardDefaults.cardColors(
-            containerColor = colorScheme.surfaceVariant.copy(alpha = 0.8f)
+            containerColor = themeColors.surfaceGlass.copy(alpha = 0.5f)
         ),
-        border = BorderStroke(HavamaniaDesign.CardBorderWidth, colorScheme.outline.copy(alpha = 0.1f))
+        border = BorderStroke(themeStyles.cardBorderWidth, themeColors.border)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(emoji, fontSize = 22.sp)
@@ -49,14 +50,14 @@ fun DetailSmallCard(
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = themeColors.textSecondary.copy(alpha = 0.6f)
                 )
             )
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.ExtraBold,
-                    color = colorScheme.onSurface
+                    color = themeColors.textPrimary
                 )
             )
         }
@@ -74,7 +75,7 @@ fun SectionLabel(
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+        color = HavamaniaTheme.colors.accent.copy(alpha = 0.8f),
         modifier = modifier.padding(bottom = 10.dp)
     )
 }

@@ -13,17 +13,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.havamania.ui.theme.HavamaniaDesign
+import com.havamania.ui.theme.HavamaniaTheme
 
 /**
  * Shimmer efektini oluşturan temel Brush
  */
 @Composable
 fun rememberShimmerBrush(): Brush {
+    val themeColors = HavamaniaTheme.colors
     val shimmerColors = listOf(
-        Color.White.copy(alpha = 0.05f),
-        Color.White.copy(alpha = 0.12f),
-        Color.White.copy(alpha = 0.05f),
+        themeColors.textPrimary.copy(alpha = 0.05f),
+        themeColors.textPrimary.copy(alpha = 0.12f),
+        themeColors.textPrimary.copy(alpha = 0.05f),
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")

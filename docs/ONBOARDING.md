@@ -22,8 +22,13 @@ Başlamadan önce bilgisayarınızda şunların kurulu olduğundan emin olun:
 
 2. **Tek tuşla kurulum scriptini çalıştırın:**
    ```bash
+   # macOS / Linux / Git Bash için:
    bash setup.sh
-   # Veya Makefile kullanıyorsanız:
+
+   # Windows PowerShell için:
+   .\setup.ps1
+
+   # Veya Makefile kullanıyorsanız (Otomatik algılar):
    make dev-setup
    ```
 

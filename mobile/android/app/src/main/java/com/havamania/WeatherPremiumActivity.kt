@@ -13,19 +13,37 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.havamania.ui.theme.HavamaniaTheme
+
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 
 class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            HavamaniaTheme {
+            // We use the full path to ensure we call the @Composable function
+            com.havamania.ui.theme.HavamaniaTheme {
+                val navController = rememberNavController()
                 var appState by remember { mutableStateOf("splash") }
-                var currentRoute by remember { mutableStateOf("weather") }
 
-                val atmosphereGradient = Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A), Color(0xFF020617))
-                )
+                // Track current route to show/hide bottom bar
+                val currentRoute = remember(navController) {
+                    mutableStateOf("weather")
+                }
+
+                LaunchedEffect(navController) {
+                    navController.currentBackStackEntryFlow.collect { entry ->
+                        currentRoute.value = entry.destination.route ?: "weather"
+                    }
+                }
+
+                val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
+                val backgroundGradient = Brush.verticalGradient(themeColors.gradientPrimary)
+
+                var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
 
                 if (appState == "splash") {
                     TravelInspiredSplashScreen(onNavigateToHome = {
@@ -33,33 +51,79 @@ class WeatherPremiumActivity : ComponentActivity() {
                     })
                 } else {
                     Scaffold(
-                        containerColor = Color.Transparent,
+                        containerColor = themeColors.background,
                         bottomBar = {
-                            if (currentRoute != "settings") {
+                            if (currentRoute.value != "settings") {
                                 WeatherBottomBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { currentRoute = it }
+                                    currentRoute = currentRoute.value,
+                                    onNavigate = { route ->
+                                        navController.navigate(route) {
+                                            popUpTo("weather") { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
                                 )
                             }
                         }
                     ) { innerPadding ->
                         Box(modifier = Modifier
                             .fillMaxSize()
-                            .background(atmosphereGradient)
-                            .padding(bottom = innerPadding.calculateBottomPadding())
+                            .background(backgroundGradient)
+                            .padding(bottom = if (currentRoute.value != "settings") innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
-                            Crossfade(targetState = currentRoute, label = "main_nav") { target ->
-                                when (target) {
-                                    "weather" -> HomeScreen(
-                                        onNavigateToAi = { currentRoute = "ai" }
+                            NavHost(navController = navController, startDestination = "weather") {
+                                composable("weather") {
+                                    HomeScreen(onNavigateToAi = { rec ->
+                                        pendingRecommendation = rec
+                                        navController.navigate("ai")
+                                    })
+                                }
+                                composable("calendar") {
+                                    TravelPlannerScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable("ai") {
+                                    AiChatScreen(
+                                        initialRecommendation = pendingRecommendation,
+                                        onBack = {
+                                            pendingRecommendation = null
+                                            navController.popBackStack()
+                                        }
                                     )
-                                    "calendar" -> TravelPlannerScreen(onBack = { currentRoute = "weather" })
-                                    "ai" -> AiChatScreen(onBack = { currentRoute = "weather" })
-                                    "profile" -> ProfileScreen(onBack = { currentRoute = "weather" }, onNavigateToSettings = { currentRoute = "settings" })
-                                    "settings" -> SettingsScreen(onBack = { currentRoute = "profile" })
-                                    else -> HomeScreen(
-                                        onNavigateToAi = { currentRoute = "ai" }
+                                }
+                                composable("profile") {
+                                    ProfileScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToSettings = { navController.navigate("settings") },
+                                        onNavigateToCities = { navController.navigate("cities") },
+                                        onNavigateToAiHistory = { navController.navigate("ai_history") },
+                                        onNavigateToEditProfile = { navController.navigate("edit_profile") },
+                                        onNavigateToTravels = { navController.navigate("calendar") }
                                     )
+                                }
+                                composable("cities") {
+                                    CitiesManagementScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable("ai_history") {
+                                    AiHistoryScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToDetail = { id ->
+                                            navController.navigate("ai_history_detail/$id")
+                                        }
+                                    )
+                                }
+                                composable("ai_history_detail/{itemId}") { backStackEntry ->
+                                    val itemId = backStackEntry.arguments?.getString("itemId") ?: ""
+                                    AiHistoryDetailScreen(
+                                        itemId = itemId,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
+                                composable("edit_profile") {
+                                    EditProfileScreen(onBack = { navController.popBackStack() })
+                                }
+                                composable("settings") {
+                                    SettingsScreen(onBack = { navController.popBackStack() })
                                 }
                             }
                         }

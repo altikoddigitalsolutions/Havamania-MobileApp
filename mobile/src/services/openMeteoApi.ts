@@ -53,6 +53,7 @@ export interface DailyWeatherItem {
   wind_gusts_max: number;        // km/h
   sunrise: string;               // ISO datetime
   sunset: string;                // ISO datetime
+  solar_noon: string;            // ISO datetime
   uv_index_max: number;
 }
 
@@ -187,6 +188,7 @@ export async function fetchDailyWeather(
     'wind_gusts_10m_max',
     'sunrise',
     'sunset',
+    'solar_noon',
     'uv_index_max',
   ].join(',');
 
@@ -209,6 +211,7 @@ export async function fetchDailyWeather(
       wind_gusts_max: Math.round(d.wind_gusts_10m_max[i] ?? 0),
       sunrise: d.sunrise[i] ?? '',
       sunset: d.sunset[i] ?? '',
+      solar_noon: d.solar_noon[i] ?? '',
       uv_index_max: Math.round((d.uv_index_max[i] ?? 0) * 10) / 10,
     }),
   );

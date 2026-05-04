@@ -24,7 +24,11 @@ mobile-test:
 	cd mobile && npm test
 
 dev-setup:
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File setup.ps1
+else
 	bash setup.sh
+endif
 
 dev-up:
 	docker compose up -d

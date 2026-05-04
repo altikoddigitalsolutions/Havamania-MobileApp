@@ -3,13 +3,9 @@ package com.havamania.ui.theme
 import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
@@ -21,23 +17,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.WeatherViewModel
-
-/**
- * Tasarım Sistemi Sabitleri
- */
-object HavamaniaDesign {
-    val CardCornerRadius = 28.dp
-    val SmallCardCornerRadius = 20.dp
-    val SpacingMedium = 16.dp
-    val SpacingLarge = 24.dp
-    val CardBorderWidth = 1.dp
-    val CardAlpha = 0.6f
-}
+import com.havamania.WeatherUiState
 
 val AppTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Light,
+        fontWeight = FontWeight.W200,
         fontSize = 96.sp,
         letterSpacing = (-4).sp
     ),
@@ -66,12 +51,6 @@ val AppTypography = Typography(
         fontSize = 13.sp,
         lineHeight = 18.sp,
         letterSpacing = 1.5.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp
     )
 )
 
@@ -85,64 +64,91 @@ fun HavamaniaTheme(
     val weatherUiState by weatherViewModel.uiState.collectAsState()
 
     val finalTheme = if (currentThemeSelection == AppTheme.AUTO) {
-        val weatherData = (weatherUiState as? com.havamania.WeatherUiState.Success)?.data
+        val weatherData = (weatherUiState as? WeatherUiState.Success)?.data
         ThemeManager.getAutoTheme(weatherData)
     } else {
         currentThemeSelection
     }
 
-    val targetColorScheme = ThemeManager.getColorScheme(finalTheme)
+    // Get base colors from factory
+    val targetColors = ThemeFactory.createColors(finalTheme)
 
-    // PREMIUM GEÇİŞ ANİMASYONU
-    val animatedColorScheme = targetColorScheme.copy(
-        primary = animateColor(targetColorScheme.primary),
-        onPrimary = animateColor(targetColorScheme.onPrimary),
-        primaryContainer = animateColor(targetColorScheme.primaryContainer),
-        onPrimaryContainer = animateColor(targetColorScheme.onPrimaryContainer),
-        secondary = animateColor(targetColorScheme.secondary),
-        onSecondary = animateColor(targetColorScheme.onSecondary),
-        secondaryContainer = animateColor(targetColorScheme.secondaryContainer),
-        onSecondaryContainer = animateColor(targetColorScheme.onSecondaryContainer),
-        tertiary = animateColor(targetColorScheme.tertiary),
-        onTertiary = animateColor(targetColorScheme.onTertiary),
-        tertiaryContainer = animateColor(targetColorScheme.tertiaryContainer),
-        onTertiaryContainer = animateColor(targetColorScheme.onTertiaryContainer),
-        background = animateColor(targetColorScheme.background),
-        onBackground = animateColor(targetColorScheme.onBackground),
-        surface = animateColor(targetColorScheme.surface),
-        onSurface = animateColor(targetColorScheme.onSurface),
-        surfaceVariant = animateColor(targetColorScheme.surfaceVariant),
-        onSurfaceVariant = animateColor(targetColorScheme.onSurfaceVariant),
-        outline = animateColor(targetColorScheme.outline),
-        error = animateColor(targetColorScheme.error),
-        onError = animateColor(targetColorScheme.onError)
+    // Premium Color Animations
+    val animatedAccent = animateThemeColor(targetColors.accent)
+    val animatedOnAccent = animateThemeColor(targetColors.onAccent)
+    val animatedBackground = animateThemeColor(targetColors.background)
+    val animatedSurface = animateThemeColor(targetColors.surface)
+    val animatedSurfaceGlass = animateThemeColor(targetColors.surfaceGlass)
+    val animatedTextPrimary = animateThemeColor(targetColors.textPrimary)
+    val animatedTextSecondary = animateThemeColor(targetColors.textSecondary)
+    val animatedTextMuted = animateThemeColor(targetColors.textMuted)
+    val animatedBorder = animateThemeColor(targetColors.border)
+    val animatedDivider = animateThemeColor(targetColors.divider)
+    val animatedGlow = animateThemeColor(targetColors.glow)
+    val animatedError = animateThemeColor(targetColors.error)
+    val animatedSuccess = animateThemeColor(targetColors.success)
+    val animatedWarning = animateThemeColor(targetColors.warning)
+
+    // Manual animation for lists to avoid Composable in map issues
+    val animatedGradientPrimary = listOf(
+        animateThemeColor(targetColors.gradientPrimary[0]),
+        animateThemeColor(targetColors.gradientPrimary.last())
+    )
+    val animatedGradientSecondary = listOf(
+        animateThemeColor(targetColors.gradientSecondary[0]),
+        animateThemeColor(targetColors.gradientSecondary.last())
+    )
+
+    val animatedColors = HavamaniaColors(
+        gradientPrimary = animatedGradientPrimary,
+        gradientSecondary = animatedGradientSecondary,
+        accent = animatedAccent,
+        onAccent = animatedOnAccent,
+        background = animatedBackground,
+        surface = animatedSurface,
+        surfaceGlass = animatedSurfaceGlass,
+        textPrimary = animatedTextPrimary,
+        textSecondary = animatedTextSecondary,
+        textMuted = animatedTextMuted,
+        border = animatedBorder,
+        divider = animatedDivider,
+        glow = animatedGlow,
+        error = animatedError,
+        success = animatedSuccess,
+        warning = animatedWarning,
+        isDark = targetColors.isDark
     )
 
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = animatedColorScheme.background.toArgb()
-            window.navigationBarColor = animatedColorScheme.background.toArgb()
+            window.statusBarColor = animatedColors.gradientPrimary[0].toArgb()
+            window.navigationBarColor = animatedColors.gradientPrimary.last().toArgb()
 
-            val isDark = finalTheme == AppTheme.DARK
             val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = !isDark
-            insetsController.isAppearanceLightNavigationBars = !isDark
+            insetsController.isAppearanceLightStatusBars = !animatedColors.isDark
+            insetsController.isAppearanceLightNavigationBars = !animatedColors.isDark
         }
     }
 
-    MaterialTheme(
-        colorScheme = animatedColorScheme,
-        typography = AppTypography,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalHavamaniaColors provides animatedColors,
+        LocalHavamaniaStyles provides HavamaniaStyles()
+    ) {
+        MaterialTheme(
+            colorScheme = ThemeManager.getColorScheme(finalTheme),
+            typography = AppTypography,
+            content = content
+        )
+    }
 }
 
 @Composable
-private fun animateColor(targetColor: Color) =
-    animateColorAsState(
-        targetValue = targetColor,
-        animationSpec = tween(durationMillis = 600),
-        label = "color_transition"
+private fun animateThemeColor(target: Color): Color {
+    return animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(durationMillis = 800),
+        label = "theme_color"
     ).value
+}

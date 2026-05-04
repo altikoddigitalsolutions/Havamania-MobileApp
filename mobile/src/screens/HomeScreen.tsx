@@ -42,7 +42,7 @@ import {
 import {useThemeStore} from '../store/themeStore';
 import {WeatherAnimBox} from '../components/WeatherAnimBox';
 import {AtmosphericWeatherCard} from '../components/AtmosphericWeatherCard';
-import {WeatherDetailsGrid} from '../components/WeatherDetailsGrid';
+import {WeatherDetailsPanel} from '../components/WeatherDetailsPanel';
 
 // ── Varsayılan konum ──────────────────────────────────────────────────────────
 const DEFAULT_LAT = 41.0082;
@@ -208,13 +208,7 @@ export function HomeScreen(): React.JSX.Element {
           C={C}
         />
 
-        {/* ── AI Önerileri ── */}
-        <AiSuggestionCard
-          onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
-          C={C}
-        />
-
-        {/* ── 24 Saatlik Tahmin ── */}
+        {/* ── 24 Saatlik Tahmin (Saatlik Tahmin) ── */}
         <View style={s.sectionCard}>
           <TouchableOpacity
             style={s.sectionHeader}
@@ -244,7 +238,13 @@ export function HomeScreen(): React.JSX.Element {
           />
         </View>
 
-        {/* ── 10 Günlük Özet ── */}
+        {/* ── AI Önerileri (Havamania Önerisi) ── */}
+        <AiSuggestionCard
+          onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
+          C={C}
+        />
+
+        {/* ── 10 Günlük Özet (7/10 Günlük Tahmin) ── */}
         <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
@@ -263,10 +263,7 @@ export function HomeScreen(): React.JSX.Element {
         </View>
 
         {/* ── Premium Hava Detayları ── */}
-        <View style={{paddingHorizontal: Spacing.md, marginBottom: Spacing.sm}}>
-          <Text style={[s.sectionTitle, {marginLeft: 4, marginBottom: 12}]}>HAVA DETAYLARI</Text>
-        </View>
-        <WeatherDetailsGrid
+        <WeatherDetailsPanel
           current={current}
           todayDaily={todayDaily}
           C={C}
@@ -474,12 +471,12 @@ const makeStyles = (C: AppColors, insets: any) => StyleSheet.create({
   sectionHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm},
   sectionTitle: {fontSize: FontSize.xs, fontWeight: '700', color: C.textSecondary, letterSpacing: 1},
   sectionIcon: {fontSize: 13, color: C.textMuted},
-  hourCard: {alignItems: 'center', backgroundColor: C.bgSecondary, borderRadius: Radius.md, padding: Spacing.sm, minWidth: 62, gap: 2, borderWidth: 1, borderColor: C.border},
+  hourCard: {alignItems: 'center', backgroundColor: C.bgSecondary, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minWidth: 72, gap: 2, borderWidth: 1, borderColor: C.border},
   hourCardActive: {backgroundColor: C.cardHourlyActive, borderColor: C.accent},
   hourLabel: {fontSize: FontSize.xs, color: C.textSecondary, fontWeight: '600'},
   hourEmoji: {fontSize: 22},
   hourTemp: {fontSize: FontSize.md, fontWeight: '700', color: C.text},
-  hourPrecip: {fontSize: 9, color: C.accent},
+  hourPrecip: {fontSize: 12, fontWeight: '800', color: C.accent},
   viewMoreBtn: {alignItems: 'center', paddingTop: Spacing.md},
   viewMoreText: {fontSize: FontSize.sm, color: C.accent, fontWeight: '700'},
   metricsRow: {flexDirection: 'row', marginHorizontal: Spacing.md, marginBottom: Spacing.md, gap: Spacing.sm},

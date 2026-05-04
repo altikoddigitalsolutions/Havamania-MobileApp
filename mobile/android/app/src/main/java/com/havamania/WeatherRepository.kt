@@ -14,16 +14,29 @@ class WeatherRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    suspend fun clearCache(cityName: String) {
+        try {
+            weatherDao.deleteWeather(cityName)
+        } catch (e: Exception) {
+            // Log or ignore
+        }
+    }
+
     /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker
      */
     fun getWeatherData(lat: Double, lon: Double, cityName: String): Flow<WeatherData> = flow {
+        var hasEmitted = false
         // 1. Cache'den oku
         val cachedEntity = weatherDao.getCachedWeather(cityName)
         if (cachedEntity != null) {
             try {
                 val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
-                emit(cachedData)
+                // Eğer kritik veriler null değilse cache'i dön
+                if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
+                    emit(cachedData)
+                    hasEmitted = true
+                }
             } catch (e: Exception) {
                 // Cache bozuksa görmezden gel
             }
@@ -31,7 +44,15 @@ class WeatherRepository(
 
         // 2. Network'ten çek
         try {
-            val response = apiService.getFullWeather(lat, lon)
+            val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover"
+            val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
+
+            val response = apiService.getFullWeather(
+                lat = lat,
+                lon = lon,
+                current = currentFields,
+                daily = dailyFields
+            )
             val domainData = WeatherMapper.mapToDomain(response, cityName)
 
             // 3. Cache'i güncelle
@@ -40,9 +61,10 @@ class WeatherRepository(
 
             // 4. Güncel veriyi dön
             emit(domainData)
+            hasEmitted = true
         } catch (e: Exception) {
-            // Eğer cache yoksa ve network hatası varsa hata fırlatılır (catch bloklarında yakalanır)
-            if (cachedEntity == null) throw e
+            // Eğer hiçbir veri dönemediysek hata fırlat
+            if (!hasEmitted) throw e
         }
     }
 }

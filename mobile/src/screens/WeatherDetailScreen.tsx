@@ -20,6 +20,7 @@ import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
+import {WeatherDetailsPanel} from '../components/WeatherDetailsPanel';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'WeatherDetail'>;
 
@@ -97,76 +98,25 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
           </View>
         )}
 
-        {/* Bölüm 1: Temel metrikler */}
-        <SectionTitle title={t('detail.basicInfo').toUpperCase()} C={C} />
-        <View style={s.grid}>
-          <MetricTile icon="🌡️" label={t('home.feelsLike')} value={`${current?.feels_like ?? '--'}°`} sub="gerçek hava" C={C} />
-          <MetricTile icon="💧" label={t('home.humidity')} value={`${current?.humidity ?? '--'}%`} sub={`${t('home.dewPoint')} ${current?.dew_point ?? '--'}°`} C={C} />
-          <MetricTile icon="💨" label={t('home.wind')} value={`${current?.wind_speed ?? '--'} km/h`} sub={`Hamle: ${current?.wind_gusts ?? '--'} km/h`} C={C} />
-          <MetricTile icon="🌬️" label={t('home.dewPoint')} value={`${current?.dew_point ?? '--'}°`} sub={current && current.dew_point > current.temperature - 3 ? 'Nemli hava' : 'Konforlu'} C={C} />
-        </View>
-
-        {/* Bölüm 2: Atmosfer */}
-        <SectionTitle title={t('detail.atmospheric').toUpperCase()} C={C} />
-        <View style={s.grid}>
-          <MetricTile icon="🌡️" label={t('home.pressure')} value={`${current?.pressure ?? '--'}`} sub="hPa" barValue={current ? (current.pressure - 950) / 100 : 0} barColor="#FF9800" C={C} />
-          <MetricTile icon="👁️" label={t('home.visibility')} value={`${current?.visibility ?? '--'} km`} sub={visibilityLabel(current?.visibility ?? 0)} C={C} />
-          <MetricTile icon="☁️" label={t('home.cloudCover')} value={`${current?.cloud_cover ?? '--'}%`} sub={cloudLabel(current?.cloud_cover ?? 0)} barValue={(current?.cloud_cover ?? 0) / 100} barColor={C.textSecondary} C={C} />
-          <MetricTile icon="🌧️" label={t('home.precipitation')} value={`${current?.precipitation ?? 0} mm`} sub="son 1 saat" C={C} />
-        </View>
-
-        {/* Bölüm 3: Güneş Işığı */}
-        <SectionTitle title={t('detail.sunMoon').toUpperCase()} C={C} />
-        <View style={s.sunCard}>
-          {today && (
-            <>
-              <SunRow icon="🌅" label={t('home.sunrise')} time={formatSunTime(today.sunrise)} C={C} />
-              <View style={s.sunDivider} />
-              <SunRow icon="🌇" label={t('home.sunset')} time={formatSunTime(today.sunset)} C={C} />
-              <View style={s.sunDivider} />
-            </>
-          )}
-          <SunRow icon={moon.emoji} label={`${t('home.moonPhase')} · ${moon.label}`} time={`%${moon.illumination} aydınlık`} C={C} />
-        </View>
-
-        {/* Bölüm 4: UV */}
-        <SectionTitle title={t('home.uvIndex').toUpperCase()} C={C} />
-        <View style={[s.uvCard, {backgroundColor: C.bgCard, borderColor: C.border}]}>
-          <View style={s.uvMain}>
-            <View>
-              <Text style={[s.uvValue, {color: uvColor(current?.uv_index ?? 0)}]}>{current?.uv_index ?? '--'}</Text>
-              <Text style={[s.uvLabel, {color: C.text}]}>{uvLabel(current?.uv_index ?? 0)}</Text>
-            </View>
-            <Text style={{fontSize: 48}}>{uvEmoji(current?.uv_index ?? 0)}</Text>
-          </View>
-          <View style={s.uvBarTrack}>
-            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-              <View
-                key={i}
-                style={[
-                  s.uvBarSeg,
-                  {backgroundColor: uvSegColor(i)},
-                  i < Math.round(current?.uv_index ?? 0) && {opacity: 1},
-                  i >= Math.round(current?.uv_index ?? 0) && {opacity: 0.25},
-                ]}
-              />
-            ))}
-          </View>
-          <Text style={[s.uvDesc, {color: C.textSecondary}]}>{uvAdvice(current?.uv_index ?? 0)}</Text>
-        </View>
-
-        {/* Bölüm 5: Günlük Bilgiler (bugün) */}
-        {today && (
-          <>
-            <SectionTitle title={t('detail.todayForecast').toUpperCase()} C={C} />
-            <View style={s.grid}>
-              <MetricTile icon="⬆️" label={t('home.high')} value={`${today.temp_max}°`} C={C} />
-              <MetricTile icon="⬇️" label={t('home.low')} value={`${today.temp_min}°`} C={C} />
-              <MetricTile icon="💧" label={t('detail.dailyPrecip')} value={`${today.precipitation_sum} mm`} sub={`%${today.precipitation_probability} olasılık`} C={C} />
-              <MetricTile icon="🌬️" label={t('detail.maxWind')} value={`${today.wind_speed_max} km/h`} sub={`Hamle: ${today.wind_gusts_max} km/h`} C={C} />
-            </View>
-          </>
+        {current && (
+          <WeatherDetailsPanel
+            current={current}
+            todayDaily={today}
+            C={C}
+          />
         )}
+
+        {/* Ay Fazı (HavaDetaylarıPanel'de yok, burada tutalım) */}
+        <SectionTitle title={t('home.moonPhase').toUpperCase()} C={C} />
+        <View style={s.sunCard}>
+          <SunRow icon={moon.emoji} label={`${moon.label}`} time={`%${moon.illumination} aydınlık`} C={C} />
+        </View>
+
+        <View style={{height: Spacing.xxl}} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
         <View style={{height: Spacing.xxl}} />
       </ScrollView>

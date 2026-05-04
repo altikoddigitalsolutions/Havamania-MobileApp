@@ -211,17 +211,17 @@ const makeStyles = (C: AppColors) =>
 
     // Grafik
     chartRow: {flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: Spacing.md, paddingTop: Spacing.md, gap: 2},
-    chartCol: {width: 64, alignItems: 'center', gap: 2},
+    chartCol: {width: 72, alignItems: 'center', gap: 2},
     chartTemp: {fontSize: FontSize.xs, color: C.text, fontWeight: '700'},
     chartBarTrack: {width: 6, height: 70, backgroundColor: C.bgInput, borderRadius: 3, justifyContent: 'flex-end', overflow: 'hidden'},
     chartBarFill: {width: '100%', backgroundColor: C.accent, borderRadius: 3},
 
     // Saat kartları
     hourRow: {flexDirection: 'row', paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, gap: 2},
-    hourCard: {width: 64, alignItems: 'center', paddingVertical: Spacing.sm, gap: 2, backgroundColor: C.bgCard, borderRadius: Radius.md, borderWidth: 0.5, borderColor: C.border},
+    hourCard: {width: 72, alignItems: 'center', paddingVertical: Spacing.sm, gap: 2, backgroundColor: C.bgCard, borderRadius: Radius.md, borderWidth: 0.5, borderColor: C.border},
     hourTime: {fontSize: FontSize.xs, color: C.textSecondary, fontWeight: '700'},
     hourEmoji: {fontSize: 20},
-    hourPrecip: {fontSize: 9, color: C.accent},
+    hourPrecip: {fontSize: 12, fontWeight: '800', color: C.accent},
     hourWind: {fontSize: 9, color: C.textMuted},
     hourRain: {fontSize: 9, color: '#29B5F6'},
 

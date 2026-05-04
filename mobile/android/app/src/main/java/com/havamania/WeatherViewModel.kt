@@ -36,6 +36,9 @@ class WeatherViewModel(
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
 
+    private val _selectedHour = MutableStateFlow<HourlyForecastData?>(null)
+    val selectedHour: StateFlow<HourlyForecastData?> = _selectedHour.asStateFlow()
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -69,20 +72,27 @@ class WeatherViewModel(
 
     fun refreshWeather() {
         if (!isOnline.value) {
-            // İnternet yoksa yenileme yapma, belki bir mesaj gösterilebilir
             return
         }
 
         viewModelScope.launch {
             _isRefreshing.value = true
+            // Önbelleği temizle ki yeni veriler zorunlu gelsin
+            repository.clearCache(lastCity)
+
             repository.getWeatherData(lastLat, lastLon, lastCity)
                 .catch { e ->
                     _isRefreshing.value = false
                 }
                 .collect { data ->
                     _uiState.value = WeatherUiState.Success(data)
+                    _selectedHour.value = null // Reset selection on refresh
                     _isRefreshing.value = false
                 }
         }
+    }
+
+    fun selectHour(hour: HourlyForecastData?) {
+        _selectedHour.value = hour
     }
 }

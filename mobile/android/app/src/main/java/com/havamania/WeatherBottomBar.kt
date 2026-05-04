@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.havamania.ui.theme.HavamaniaTheme
 
 sealed class BottomNavItem(
     val route: String,
@@ -39,7 +40,7 @@ fun WeatherBottomBar(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorScheme = MaterialTheme.colorScheme
+    val themeColors = HavamaniaTheme.colors
     val items = listOf(
         BottomNavItem.Weather,
         BottomNavItem.Calendar,
@@ -48,7 +49,7 @@ fun WeatherBottomBar(
     )
 
     Surface(
-        color = colorScheme.surface.copy(alpha = 0.96f),
+        color = themeColors.surfaceGlass,
         modifier = modifier.fillMaxWidth(),
         tonalElevation = 8.dp
     ) {
@@ -59,7 +60,7 @@ fun WeatherBottomBar(
                     .height(1.dp)
                     .background(
                         Brush.horizontalGradient(
-                            listOf(Color.Transparent, colorScheme.outline.copy(alpha = 0.2f), Color.Transparent)
+                            listOf(Color.Transparent, themeColors.border.copy(alpha = 0.3f), Color.Transparent)
                         )
                     )
             )
@@ -86,7 +87,7 @@ fun WeatherBottomBar(
                                     fontSize = 11.sp
                                 ),
                                 modifier = Modifier.graphicsLayer { alpha = labelAlpha },
-                                color = if (isSelected) colorScheme.primary else colorScheme.onSurfaceVariant
+                                color = if (isSelected) themeColors.accent else themeColors.textSecondary
                             )
                         },
                         icon = {
@@ -97,7 +98,7 @@ fun WeatherBottomBar(
                                             .offset(y = (-18).dp)
                                             .size(4.dp)
                                             .clip(CircleShape)
-                                            .background(colorScheme.primary)
+                                            .background(themeColors.accent)
                                     )
                                 }
 
@@ -105,7 +106,7 @@ fun WeatherBottomBar(
                                     imageVector = item.icon,
                                     contentDescription = item.title,
                                     modifier = Modifier.size(iconSize),
-                                    tint = if (isSelected) colorScheme.primary else colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    tint = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.6f)
                                 )
                             }
                         },

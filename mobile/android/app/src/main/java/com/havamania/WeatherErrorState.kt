@@ -18,8 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.havamania.ui.theme.HavamaniaDesign
-import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.*
 
 /**
  * Modern ve Premium Hata Durumu Ekranı
@@ -32,6 +31,10 @@ fun WeatherErrorState(
     icon: ImageVector = Icons.Rounded.WifiOff,
     onRetry: () -> Unit
 ) {
+    val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+    val errorColor = Color(0xFFEF4444)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -50,7 +53,7 @@ fun WeatherErrorState(
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFFEF4444).copy(alpha = 0.15f),
+                                    errorColor.copy(alpha = 0.15f),
                                     Color.Transparent
                                 )
                             )
@@ -60,7 +63,7 @@ fun WeatherErrorState(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(64.dp),
-                    tint = Color(0xFFEF4444).copy(alpha = 0.8f)
+                    tint = errorColor.copy(alpha = 0.8f)
                 )
             }
 
@@ -73,7 +76,7 @@ fun WeatherErrorState(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-0.5).sp
                 ),
-                color = Color.White,
+                color = themeColors.textPrimary,
                 textAlign = TextAlign.Center
             )
 
@@ -84,46 +87,19 @@ fun WeatherErrorState(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     lineHeight = 22.sp
                 ),
-                color = Color.White.copy(alpha = 0.5f),
+                color = themeColors.textSecondary.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(40.dp))
 
             // Tekrar Dene Butonu (Premium Tasarım)
-            Button(
+            HavamaniaPrimaryButton(
+                text = "TEKRAR DENE",
                 onClick = onRetry,
-                modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(56.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.05f),
-                    contentColor = Color.White
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Color.White.copy(alpha = 0.1f)
-                )
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "TEKRAR DENE",
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.2.sp
-                        )
-                    )
-                }
-            }
+                modifier = Modifier.fillMaxWidth(0.7f),
+                icon = Icons.Rounded.Refresh
+            )
         }
     }
 }

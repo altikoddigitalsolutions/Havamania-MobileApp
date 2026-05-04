@@ -15,6 +15,34 @@ data class WeatherCacheEntity(
 )
 
 /**
+ * Seyahat Planlarını saklamak için Entity
+ */
+@Entity(tableName = "travel_plans")
+data class TravelPlanEntity(
+    @PrimaryKey val id: String,
+    val city: String,
+    val tripType: String,
+    val startDate: Long,
+    val endDate: Long,
+    val createdAt: Long = System.currentTimeMillis(),
+    val weatherSummary: String? = null,
+    val aiSuggestion: String? = null
+)
+
+/**
+ * AI Analiz Geçmişini saklamak için Entity
+ */
+@Entity(tableName = "ai_history")
+data class AiHistoryEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val summary: String,
+    val fullText: String,
+    val cityName: String?,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+/**
  * Veritabanı Erişim Nesnesi (DAO)
  */
 @Dao
@@ -27,12 +55,38 @@ interface WeatherDao {
 
     @Query("DELETE FROM weather_cache WHERE cityName = :city")
     suspend fun deleteWeather(city: String)
+
+    // Travel Plans
+    @Query("SELECT * FROM travel_plans ORDER BY startDate ASC")
+    suspend fun getAllTravelPlans(): List<TravelPlanEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTravelPlan(plan: TravelPlanEntity)
+
+    @Query("DELETE FROM travel_plans WHERE id = :id")
+    suspend fun deleteTravelPlan(id: String)
+
+    @Query("DELETE FROM travel_plans")
+    suspend fun clearAllTravelPlans()
+
+    // AI History
+    @Query("SELECT * FROM ai_history ORDER BY timestamp DESC")
+    suspend fun getAllAiHistory(): List<AiHistoryEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAiHistory(item: AiHistoryEntity)
+
+    @Query("DELETE FROM ai_history WHERE id = :id")
+    suspend fun deleteAiHistory(id: String)
+
+    @Query("DELETE FROM ai_history")
+    suspend fun clearAllAiHistory()
 }
 
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class], version = 1, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 3, exportSchema = false)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
 
@@ -46,7 +100,9 @@ abstract class WeatherDatabase : RoomDatabase() {
                     context.applicationContext,
                     WeatherDatabase::class.java,
                     "weather_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // Şimdilik geliştirme için kolaylık
+                .build()
                 INSTANCE = instance
                 instance
             }

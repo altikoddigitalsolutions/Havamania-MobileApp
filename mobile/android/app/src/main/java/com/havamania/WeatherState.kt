@@ -11,9 +11,30 @@ data class WeatherData(
     val cityName: String = "İstanbul",
     val temperature: String = "12°",
     val condition: String = "Parçalı Bulutlu",
+    val weatherCode: Int = 0,
+    val isDay: Boolean = true,
     val high: String = "17°",
     val low: String = "3°",
     val feelsLike: String = "8°",
+    val sunriseTime: String? = null,
+    val sunsetTime: String? = null,
+    val solarNoon: String? = null,
+    val windSpeed: Double? = null,
+    val windGust: Double? = null,
+    val windDirectionDegrees: Int? = null,
+    val windDirectionLabel: String? = null,
+    val windChill: Double? = null,
+    val dewPoint: Double? = null,
+    val precipitationProbability: Int? = null,
+    val precipitationAmount: Double? = null,
+    val cloudCover: Int? = null,
+    val visibilityKm: Double? = null,
+    val humidity: Int? = null,
+    val pressure: Int? = null,
+    val uvIndex: Int? = null,
+    val weatherSuitabilityScore: Int = 100,
+    val weatherSuitabilityText: String = "",
+    val weatherSuitabilityDesc: String = "",
     val hourlyForecast: List<HourlyForecastData> = emptyList(),
     val dailyForecast: List<DailyForecastData> = emptyList(),
     val details: List<WeatherDetailData> = emptyList()
@@ -23,6 +44,9 @@ data class WeatherData(
 data class HourlyForecastData(
     val time: String,
     val temp: String,
+    val condition: String = "Bulutlu",
+    val weatherCode: Int = 0,
+    val isDay: Boolean = true,
     val precipProb: String? = null,
     val iconName: String = "Cloud",
     val isSelected: Boolean = false
@@ -34,6 +58,7 @@ data class DailyForecastData(
     val minTemp: Int,
     val maxTemp: Int,
     val iconName: String = "WbSunny",
+    val weatherCode: Int = 0,
     val isToday: Boolean = false
 )
 
