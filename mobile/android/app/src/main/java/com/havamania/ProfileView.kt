@@ -125,7 +125,7 @@ fun ProfileScreen(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val favTrip = travelPlans.groupBy { it.tripType }.maxByOrNull { it.value.size }?.key?.label ?: "Belirsiz"
                 StatCardPremium(label = "Favori Tip", value = favTrip, icon = Icons.Rounded.Star, modifier = Modifier.weight(1.5f))
-                StatCardPremium(label = "En Çok", value = defaultCity, icon = Icons.Rounded.TrendingUp, modifier = Modifier.weight(1f))
+                StatCardPremium(label = "En Çok", value = defaultCity.name, icon = Icons.Rounded.TrendingUp, modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -135,7 +135,7 @@ fun ProfileScreen(
             HavamaniaGlassCard(alpha = 0.4f) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
                     PreferenceSummaryRow("Sıcaklık Birimi", tempUnit.symbol, Icons.Rounded.Thermostat)
-                    PreferenceSummaryRow("Varsayılan Şehir", defaultCity, Icons.Rounded.LocationCity)
+                    PreferenceSummaryRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity)
                     PreferenceSummaryRow("Uyarılar", if (notificationsEnabled) "Açık" else "Kapalı", Icons.Rounded.NotificationsActive)
                 }
             }

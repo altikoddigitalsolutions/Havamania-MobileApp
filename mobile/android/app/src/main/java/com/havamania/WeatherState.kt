@@ -9,6 +9,7 @@ import java.util.UUID
 @Serializable
 data class WeatherData(
     val cityName: String = "İstanbul",
+    val districtName: String? = null,
     val temperature: String = "12°",
     val condition: String = "Parçalı Bulutlu",
     val weatherCode: Int = 0,

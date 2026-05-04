@@ -25,10 +25,13 @@ class WeatherRepository(
     /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker
      */
-    fun getWeatherData(lat: Double, lon: Double, cityName: String): Flow<WeatherData> = flow {
+    fun getWeatherData(lat: Double, lon: Double, cityName: String, districtName: String? = null): Flow<WeatherData> = flow {
         var hasEmitted = false
+        // unique key for cache
+        val cacheKey = if (districtName != null) "$cityName-$districtName" else cityName
+
         // 1. Cache'den oku
-        val cachedEntity = weatherDao.getCachedWeather(cityName)
+        val cachedEntity = weatherDao.getCachedWeather(cacheKey)
         if (cachedEntity != null) {
             try {
                 val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
@@ -53,11 +56,11 @@ class WeatherRepository(
                 current = currentFields,
                 daily = dailyFields
             )
-            val domainData = WeatherMapper.mapToDomain(response, cityName)
+            val domainData = WeatherMapper.mapToDomain(response, cityName, districtName)
 
             // 3. Cache'i güncelle
             val jsonString = json.encodeToString(domainData)
-            weatherDao.insertWeather(WeatherCacheEntity(cityName, jsonString))
+            weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString))
 
             // 4. Güncel veriyi dön
             emit(domainData)

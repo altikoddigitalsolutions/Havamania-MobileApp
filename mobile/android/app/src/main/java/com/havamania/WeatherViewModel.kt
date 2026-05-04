@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -42,22 +43,31 @@ class WeatherViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
+    val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
+
     private var lastCity = "İstanbul"
+    private var lastDistrict: String? = null
     private var lastLat = 41.0082
     private var lastLon = 28.9784
 
     init {
-        fetchWeather(lastLat, lastLon, lastCity)
+        viewModelScope.launch {
+            com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).collect { defaultCity ->
+                fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+            }
+        }
     }
 
-    fun fetchWeather(lat: Double, lon: Double, cityName: String) {
+    fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
         lastLat = lat
         lastLon = lon
         lastCity = cityName
+        lastDistrict = districtName
 
         viewModelScope.launch {
             _uiState.value = WeatherUiState.Loading
-            repository.getWeatherData(lat, lon, cityName)
+            repository.getWeatherData(lat, lon, cityName, districtName)
                 .catch { e ->
                     _uiState.value = WeatherUiState.Error(
                         if (!isOnline.value) "İnternet bağlantınız yok. Lütfen kontrol edin."
@@ -77,10 +87,11 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             _isRefreshing.value = true
-            // Önbelleği temizle ki yeni veriler zorunlu gelsin
-            repository.clearCache(lastCity)
+            // unique key for cache
+            val cacheKey = if (lastDistrict != null) "$lastCity-$lastDistrict" else lastCity
+            repository.clearCache(cacheKey)
 
-            repository.getWeatherData(lastLat, lastLon, lastCity)
+            repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict)
                 .catch { e ->
                     _isRefreshing.value = false
                 }
@@ -94,5 +105,20 @@ class WeatherViewModel(
 
     fun selectHour(hour: HourlyForecastData?) {
         _selectedHour.value = hour
+    }
+
+    fun searchCity(query: String) {
+        if (query.length < 2) {
+            _citySuggestions.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val response = NetworkModule.apiService.searchCity(cityName = query)
+                _citySuggestions.value = response.results ?: emptyList()
+            } catch (e: Exception) {
+                _citySuggestions.value = emptyList()
+            }
+        }
     }
 }

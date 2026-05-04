@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,7 +77,7 @@ fun SettingsScreen(
                 SettingsDivider()
                 SettingsNavRow("Sıcaklık Birimi", tempUnit.title + " (" + tempUnit.symbol + ")", Icons.Rounded.Thermostat) { showUnitDialog = true }
                 SettingsDivider()
-                SettingsNavRow("Varsayılan Şehir", defaultCity, Icons.Rounded.LocationCity) { /* Manage via Profile/Cities */ }
+                SettingsNavRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity) { /* Manage via Profile/Cities */ }
             }
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -298,13 +300,42 @@ fun PremiumThemeRow(selectedTheme: AppTheme, onClick: () -> Unit) {
 @Composable
 fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
-        Text("Tema Seçin", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-        Text("Havamania deneyiminizi kişiselleştirin", style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 16.dp)
+    ) {
+        Text(
+            "TEMA SEÇİN",
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            ),
+            color = themeColors.textPrimary
+        )
+        Text(
+            "Havamania deneyiminizi ruh halinize göre kişiselleştirin",
+            style = MaterialTheme.typography.bodyMedium,
+            color = themeColors.textSecondary
+        )
         Spacer(modifier = Modifier.height(24.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppTheme.values().toList().forEach { theme ->
-                ThemeCardPremium(theme = theme, isSelected = selectedTheme == theme, onClick = { onThemeSelected(theme) })
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            items(AppTheme.values()) { theme ->
+                ThemeCardPremium(
+                    theme = theme,
+                    isSelected = selectedTheme == theme,
+                    onClick = { onThemeSelected(theme) }
+                )
             }
         }
     }
@@ -315,18 +346,76 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
     val themeColors = HavamaniaTheme.colors
     val themeStyleColors = ThemeFactory.createColors(theme)
 
-    HavamaniaGlassCard(modifier = Modifier.fillMaxWidth().height(100.dp), cornerRadius = 24.dp, alpha = if (isSelected) 0.9f else 0.4f, onClick = onClick) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text(theme.title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black, fontSize = 16.sp), color = if (isSelected) themeColors.accent else themeColors.textPrimary)
-                    Text(getThemeDesc(theme), style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary)
+    HavamaniaGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 24.dp,
+        alpha = if (isSelected) 0.95f else 0.45f,
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        theme.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 18.sp
+                        ),
+                        color = if (isSelected) themeColors.accent else themeColors.textPrimary
+                    )
+                    Text(
+                        getThemeDesc(theme),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        ),
+                        color = themeColors.textSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
-                if (isSelected) { Icon(Icons.Rounded.CheckCircle, null, tint = themeColors.accent, modifier = Modifier.size(24.dp)) }
+
+                Box(contentAlignment = Alignment.Center) {
+                    if (isSelected) {
+                        Icon(
+                            Icons.Rounded.CheckCircle,
+                            null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .border(1.5.dp, themeColors.textMuted.copy(0.3f), CircleShape)
+                        )
+                    }
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                themeStyleColors.gradientPrimary.forEach { color ->
-                    Box(modifier = Modifier.size(width = 36.dp, height = 12.dp).clip(RoundedCornerShape(6.dp)).background(color).border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(6.dp)))
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Gradient Preview
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val previewColors = themeStyleColors.gradientPrimary
+                previewColors.forEach { color ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(10.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
                 }
             }
         }

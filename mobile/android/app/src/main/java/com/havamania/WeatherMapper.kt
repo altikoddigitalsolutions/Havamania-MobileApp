@@ -15,7 +15,7 @@ import kotlin.math.roundToInt
 
 object WeatherMapper {
 
-    fun mapToDomain(response: OpenMeteoResponse, cityName: String): WeatherData {
+    fun mapToDomain(response: OpenMeteoResponse, cityName: String, districtName: String? = null): WeatherData {
         val current = response.current
         val daily = response.daily
         val hourly = response.hourly
@@ -45,6 +45,7 @@ object WeatherMapper {
 
         return WeatherData(
             cityName = cityName,
+            districtName = districtName,
             temperature = "${current?.temperature?.roundToInt() ?: 0}°",
             condition = getWeatherCondition(current?.weatherCode ?: 0),
             weatherCode = current?.weatherCode ?: 0,

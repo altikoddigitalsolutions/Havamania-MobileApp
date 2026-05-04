@@ -48,7 +48,7 @@ sealed class WeatherCondition {
     object NightClear : WeatherCondition()
 }
 
-enum class WeatherEffectType { NONE, SUNNY, CLOUDY, RAINY, NIGHT, SNOW, FOG }
+enum class WeatherEffectType { NONE, SUNNY, CLOUDY, RAINY, NIGHT, SNOW, FOG, THUNDER }
 
 data class WeatherCardStyle(
     val gradientColors: List<Color>,
@@ -98,7 +98,8 @@ object WeatherStyleResolver {
             is WeatherCondition.Clear, is WeatherCondition.NightClear -> resolveSunnyStyle(timeOfDay, theme)
             is WeatherCondition.PartlyCloudy -> resolvePartlyCloudyStyle(timeOfDay, theme)
             is WeatherCondition.Cloudy -> resolveCloudyStyle(timeOfDay, theme)
-            is WeatherCondition.Rain, is WeatherCondition.Thunderstorm -> resolveRainStyle(condition, timeOfDay, theme)
+            is WeatherCondition.Thunderstorm -> resolveThunderStyle(timeOfDay, theme)
+            is WeatherCondition.Rain -> resolveRainStyle(timeOfDay, theme)
             is WeatherCondition.Snow -> resolveSnowStyle(timeOfDay, theme)
             is WeatherCondition.Fog -> resolveFogStyle(timeOfDay, theme)
             else -> resolveDefaultStyle(theme)
@@ -153,9 +154,9 @@ object WeatherStyleResolver {
 
     private fun resolvePartlyCloudyStyle(time: TimeOfDay, theme: AppTheme): WeatherCardStyle {
         val baseColors = when (time) {
-            TimeOfDay.MORNING -> listOf(Color(0xFFE0F2FE), Color(0xFFBAE6FD), Color(0xFF7DD3FC))
-            TimeOfDay.DAY -> listOf(Color(0xFF38BDF8), Color(0xFF7DD3FC), Color(0xFFBAE6FD))
-            TimeOfDay.EVENING -> listOf(Color(0xFF8B5CF6), Color(0xFFA78BFA), Color(0xFFF472B6))
+            TimeOfDay.MORNING -> listOf(Color(0xFFD8E6F2), Color(0xFFBAE6FD), Color(0xFF7DD3FC))
+            TimeOfDay.DAY -> listOf(Color(0xFF7DD3FC), Color(0xFFBAE6FD), Color(0xFFE0F2FE))
+            TimeOfDay.EVENING -> listOf(Color(0xFFB7AFC8), Color(0xFFA78BFA), Color(0xFFF472B6))
             TimeOfDay.NIGHT -> listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569))
         }
 
@@ -164,7 +165,7 @@ object WeatherStyleResolver {
 
         return WeatherCardStyle(
             gradientColors = colors,
-            accentColor = Color(0xFFF1F5F9),
+            accentColor = if (isDark) Color(0xFFE2E8F0) else Color(0xFFFFD600).copy(alpha = 0.8f),
             icon = if (time == TimeOfDay.NIGHT) Icons.Rounded.CloudQueue else Icons.Rounded.WbCloudy,
             effectType = WeatherEffectType.CLOUDY,
             isDark = isDark,
@@ -172,7 +173,7 @@ object WeatherStyleResolver {
         )
     }
 
-    private fun resolveRainStyle(cond: WeatherCondition, time: TimeOfDay, theme: AppTheme): WeatherCardStyle {
+    private fun resolveRainStyle(time: TimeOfDay, theme: AppTheme): WeatherCardStyle {
         val isNight = time == TimeOfDay.NIGHT
         val baseColors = if (isNight) {
             listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF1E293B))
@@ -185,26 +186,40 @@ object WeatherStyleResolver {
         return WeatherCardStyle(
             gradientColors = colors,
             accentColor = Color(0xFF60A5FA),
-            icon = if (cond is WeatherCondition.Thunderstorm) Icons.Rounded.Thunderstorm else Icons.Rounded.WaterDrop,
+            icon = Icons.Rounded.WaterDrop,
             effectType = WeatherEffectType.RAINY,
             isDark = true,
             styleName = "RAIN_$time"
         )
     }
 
+    private fun resolveThunderStyle(time: TimeOfDay, theme: AppTheme): WeatherCardStyle {
+        val baseColors = listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF1E293B))
+        val colors = applyThemeAtmosphere(baseColors, theme, time)
+
+        return WeatherCardStyle(
+            gradientColors = colors,
+            accentColor = Color(0xFFC084FC),
+            icon = Icons.Rounded.Thunderstorm,
+            effectType = WeatherEffectType.THUNDER,
+            isDark = true,
+            styleName = "THUNDER_$time"
+        )
+    }
+
     private fun resolveSnowStyle(time: TimeOfDay, theme: AppTheme): WeatherCardStyle {
         val isNight = time == TimeOfDay.NIGHT
         val baseColors = if (isNight) {
-            listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569))
+            listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF33485F))
         } else {
-            listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFFCBD5E1))
+            listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFFFFFFF))
         }
 
         val colors = applyThemeAtmosphere(baseColors, theme, time)
 
         return WeatherCardStyle(
             gradientColors = colors,
-            accentColor = if (isNight) Color(0xFF94A3B8) else Color(0xFF475569),
+            accentColor = if (isNight) Color(0xFF94A3B8) else Color(0xFF0EA5E9),
             icon = Icons.Rounded.AcUnit,
             effectType = WeatherEffectType.SNOW,
             isDark = isNight,
@@ -282,6 +297,7 @@ fun WeatherHeroCard(
     uvIndex: String,
     onCityClick: () -> Unit,
     modifier: Modifier = Modifier,
+    districtName: String? = null,
     time: LocalTime = LocalTime.now(),
     parallaxOffset: Float = 0f,
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -340,6 +356,7 @@ fun WeatherHeroCard(
         // Layer 4: Content
         WeatherHeroContent(
             cityName = cityName,
+            districtName = districtName,
             temperature = temperature,
             conditionLabel = conditionLabel,
             high = high,
@@ -386,6 +403,7 @@ fun WeatherEffectLayer(type: WeatherEffectType, accent: Color, isReducedMotion: 
         WeatherEffectType.NIGHT -> StarFieldEffect(isReducedMotion)
         WeatherEffectType.SNOW -> SnowEffect(isReducedMotion)
         WeatherEffectType.FOG -> FogHazeEffect(isReducedMotion)
+        WeatherEffectType.THUNDER -> ThunderEffect(accent, isReducedMotion)
         else -> Unit
     }
 }
@@ -533,6 +551,37 @@ fun FogHazeEffect(isReducedMotion: Boolean) {
 }
 
 @Composable
+fun ThunderEffect(accent: Color, isReducedMotion: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "thunder")
+    val flash by if (isReducedMotion) remember { mutableStateOf(0f) } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = keyframes {
+                    durationMillis = 10000
+                    0f at 0
+                    0.4f at 8000
+                    0f at 8100
+                    0.2f at 8500
+                    0f at 8600
+                    0f at 10000
+                },
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "flash"
+        )
+    }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        if (flash > 0) {
+            drawRect(
+                color = accent.copy(alpha = flash * 0.15f)
+            )
+        }
+    }
+}
+
+@Composable
 fun WeatherHeroContent(
     cityName: String,
     temperature: String,
@@ -545,7 +594,8 @@ fun WeatherHeroContent(
     uvIndex: String,
     style: WeatherCardStyle,
     onCityClick: () -> Unit,
-    isReducedMotion: Boolean
+    isReducedMotion: Boolean,
+    districtName: String? = null
 ) {
     val textColor = if (style.isDark) Color.White else Color(0xFF0F172A)
     val secondaryColor = textColor.copy(alpha = 0.7f)
@@ -562,8 +612,30 @@ fun WeatherHeroContent(
     Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.clickable { onCityClick() }) {
-                Text(cityName.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp, color = secondaryColor))
-                Text(conditionLabel, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = textColor))
+                Text(
+                    text = (districtName ?: cityName).uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        color = secondaryColor
+                    )
+                )
+                if (districtName != null) {
+                    Text(
+                        text = cityName,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = secondaryColor.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+                Text(
+                    conditionLabel,
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                )
             }
             Box(modifier = Modifier.offset(y = floatOffset.dp), contentAlignment = Alignment.Center) {
                 Box(modifier = Modifier.size(36.dp).blur(12.dp).background(style.accentColor.copy(alpha = 0.15f), CircleShape))

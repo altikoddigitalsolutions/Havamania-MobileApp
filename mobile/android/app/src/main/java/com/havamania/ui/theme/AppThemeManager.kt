@@ -13,6 +13,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.havamania.WeatherData
+import com.havamania.GeocodingResultDto
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -130,16 +134,33 @@ object ThemeManager {
         if (str.isEmpty()) emptySet() else str.split(",").toSet()
     }
 
-    suspend fun saveRegisteredCities(context: Context, cities: List<String>) = context.dataStore.edit {
-        it[REGISTERED_CITIES_KEY] = cities.joinToString(",")
+    suspend fun saveRegisteredCities(context: Context, cities: List<GeocodingResultDto>) = context.dataStore.edit {
+        it[REGISTERED_CITIES_KEY] = Json.encodeToString(cities)
     }
-    fun getRegisteredCities(context: Context): Flow<List<String>> = context.dataStore.data.map {
-        val str = it[REGISTERED_CITIES_KEY] ?: "İstanbul,Ankara,İzmir"
-        if (str.isEmpty()) emptyList() else str.split(",")
+    fun getRegisteredCities(context: Context): Flow<List<GeocodingResultDto>> = context.dataStore.data.map {
+        val str = it[REGISTERED_CITIES_KEY] ?: ""
+        if (str.isEmpty()) {
+            listOf(
+                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+            )
+        } else {
+            try { Json.decodeFromString(str) } catch(e: Exception) { emptyList() }
+        }
     }
 
-    suspend fun saveDefaultCity(context: Context, city: String) = context.dataStore.edit { it[DEFAULT_CITY_KEY] = city }
-    fun getDefaultCity(context: Context): Flow<String> = context.dataStore.data.map { it[DEFAULT_CITY_KEY] ?: "İstanbul" }
+    suspend fun saveDefaultCity(context: Context, city: GeocodingResultDto) = context.dataStore.edit {
+        it[DEFAULT_CITY_KEY] = Json.encodeToString(city)
+    }
+    fun getDefaultCity(context: Context): Flow<GeocodingResultDto> = context.dataStore.data.map {
+        val str = it[DEFAULT_CITY_KEY] ?: ""
+        if (str.isEmpty()) {
+            GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+        } else {
+            try { Json.decodeFromString(str) } catch(e: Exception) {
+                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+            }
+        }
+    }
 
     suspend fun saveLiveEffects(context: Context, enabled: Boolean) = context.dataStore.edit { it[LIVE_EFFECTS_KEY] = enabled }
 
@@ -166,8 +187,10 @@ object ThemeManager {
     }
 
     suspend fun clearRegisteredCities(context: Context) = context.dataStore.edit {
-        it[REGISTERED_CITIES_KEY] = "İstanbul"
-        it[DEFAULT_CITY_KEY] = "İstanbul"
+        val default = GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+        val jsonStr = Json.encodeToString(listOf(default))
+        it[REGISTERED_CITIES_KEY] = jsonStr
+        it[DEFAULT_CITY_KEY] = Json.encodeToString(default)
     }
 
     suspend fun resetAll(context: Context) = context.dataStore.edit {

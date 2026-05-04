@@ -71,6 +71,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val selectedHour by viewModel.selectedHour.collectAsState()
+    val citySuggestions by viewModel.citySuggestions.collectAsState()
     val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
     val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
@@ -89,11 +90,9 @@ fun HomeScreen(
     var showCitySwitcher by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    val filteredCities = remember(searchText) {
-        if (searchText.isEmpty()) emptyList()
-        else {
-            val normalizedSearch = searchText.lowercase(Locale("tr"))
-            cities.filter { it.lowercase(Locale("tr")).contains(normalizedSearch) }
+    LaunchedEffect(searchText) {
+        if (searchText.length >= 2) {
+            viewModel.searchCity(searchText)
         }
     }
 
@@ -203,9 +202,9 @@ fun HomeScreen(
 
                     // Şehir Listesi
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                        items(filteredCities) { cityName ->
+                        items(citySuggestions) { suggestion ->
                             val currentCity = (uiState as? WeatherUiState.Success)?.data?.cityName ?: ""
-                            val isSelected = currentCity.contains(cityName, ignoreCase = true)
+                            val isSelected = currentCity == suggestion.name
 
                             Row(
                                 modifier = Modifier
@@ -213,7 +212,12 @@ fun HomeScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (isSelected) colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
                                     .clickable {
-                                        viewModel.fetchWeather(41.0, 28.0, cityName) // Örnek koordinat, API şehirden bulacaktır
+                                        viewModel.fetchWeather(
+                                            suggestion.latitude,
+                                            suggestion.longitude,
+                                            suggestion.city,
+                                            suggestion.district
+                                        )
                                         showCitySwitcher = false
                                         searchText = ""
                                     }
@@ -221,7 +225,12 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(cityName, style = MaterialTheme.typography.bodyLarge)
+                                Column {
+                                    Text(suggestion.name, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
+                                    if (suggestion.admin1 != null && suggestion.admin1 != suggestion.name) {
+                                        Text(suggestion.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                                    }
+                                }
                                 if (isSelected) {
                                     Icon(Icons.Rounded.Check, null, tint = colorScheme.primary)
                                 }
@@ -296,6 +305,7 @@ fun WeatherSuccessContent(
         EntranceAnimation(delayMillis = 50) {
             WeatherHeroCard(
                 cityName = data.cityName,
+                districtName = data.districtName,
                 temperature = displayTemp,
                 conditionLabel = displayCondition,
                 weatherCode = displayWeatherCode,

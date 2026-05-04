@@ -25,18 +25,20 @@ import java.util.Locale
 @Composable
 fun CitiesManagementScreen(
     onBack: () -> Unit,
-    themeViewModel: ThemeViewModel = viewModel()
+    themeViewModel: ThemeViewModel = viewModel(),
+    weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val registeredCities by themeViewModel.registeredCities.collectAsState()
     val defaultCity by themeViewModel.defaultCity.collectAsState()
+    val citySuggestions by weatherViewModel.citySuggestions.collectAsState()
     val themeColors = HavamaniaTheme.colors
 
     var searchText by remember { mutableStateOf("") }
-    val filteredSuggestions = remember(searchText) {
-        if (searchText.length < 2) emptyList()
-        else cities.filter { it.contains(searchText, ignoreCase = true) }
-            .filter { it !in registeredCities }
-            .take(5)
+
+    LaunchedEffect(searchText) {
+        if (searchText.length >= 2) {
+            weatherViewModel.searchCity(searchText)
+        }
     }
 
     HavamaniaScreen(
@@ -57,7 +59,7 @@ fun CitiesManagementScreen(
 
             // Şehir Ekleme Alanı
             Text(
-                "YENİ ŞEHİR EKLE",
+                "YENİ ŞEHİR/İLÇE EKLE",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
                 color = themeColors.accent.copy(alpha = 0.8f)
             )
@@ -67,7 +69,7 @@ fun CitiesManagementScreen(
                 value = searchText,
                 onValueChange = { searchText = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Şehir ismi girin...", color = themeColors.textMuted) },
+                placeholder = { Text("İl veya ilçe ismi girin...", color = themeColors.textMuted) },
                 leadingIcon = { Icon(Icons.Rounded.Search, null, tint = themeColors.accent) },
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -83,25 +85,31 @@ fun CitiesManagementScreen(
             )
 
             // Autocomplete Suggestions
-            if (filteredSuggestions.isNotEmpty()) {
+            if (citySuggestions.isNotEmpty() && searchText.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 HavamaniaGlassCard(alpha = 0.9f) {
                     Column {
-                        filteredSuggestions.forEach { city ->
+                        citySuggestions.take(5).forEach { suggestion ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        themeViewModel.addCity(city)
+                                        themeViewModel.addCity(suggestion)
                                         searchText = ""
                                     }
                                     .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(city, color = themeColors.textPrimary)
+                                Column {
+                                    Text(suggestion.name, color = themeColors.textPrimary, fontWeight = FontWeight.Bold)
+                                    if (suggestion.admin1 != null && suggestion.admin1 != suggestion.name) {
+                                        Text(suggestion.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                                    }
+                                }
                                 Icon(Icons.Rounded.Add, null, tint = themeColors.accent)
                             }
-                            if (city != filteredSuggestions.last()) {
+                            if (suggestion != citySuggestions.take(5).last()) {
                                 HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
                             }
                         }
@@ -113,7 +121,7 @@ fun CitiesManagementScreen(
 
             // Kayıtlı Şehirler Listesi
             Text(
-                "KAYITLI ŞEHİRLER",
+                "KAYITLI LOKASYONLAR",
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
                 color = themeColors.accent.copy(alpha = 0.8f)
             )
@@ -124,9 +132,9 @@ fun CitiesManagementScreen(
                 modifier = Modifier.weight(1f)
             ) {
                 items(registeredCities) { city ->
-                    val isDefault = city == defaultCity
+                    val isDefault = city.id == defaultCity.id
                     CityListItem(
-                        name = city,
+                        city = city,
                         isDefault = isDefault,
                         onDelete = {
                             if (registeredCities.size > 1) {
@@ -140,7 +148,7 @@ fun CitiesManagementScreen(
 
             if (registeredCities.size <= 1) {
                 Text(
-                    "En az bir şehir kayıtlı kalmalıdır.",
+                    "En az bir konum kayıtlı kalmalıdır.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Red.copy(alpha = 0.6f),
                     modifier = Modifier.padding(vertical = 12.dp).align(Alignment.CenterHorizontally)
@@ -154,7 +162,7 @@ fun CitiesManagementScreen(
 
 @Composable
 fun CityListItem(
-    name: String,
+    city: GeocodingResultDto,
     isDefault: Boolean,
     onDelete: () -> Unit,
     onSetDefault: () -> Unit
@@ -173,7 +181,7 @@ fun CityListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        name,
+                        city.name,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                         color = themeColors.textPrimary
                     )
@@ -191,6 +199,9 @@ fun CityListItem(
                             )
                         }
                     }
+                }
+                if (city.admin1 != null && city.admin1 != city.name) {
+                    Text(city.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
                 }
             }
 

@@ -17,5 +17,19 @@ data class GeocodingResultDto(
     val country: String,
     @SerialName("country_code")
     val countryCode: String? = null,
-    val admin1: String? = null
-)
+    val admin1: String? = null,
+    val admin2: String? = null,
+    val admin3: String? = null
+) {
+    /**
+     * TR: İlçe ve il bilgisini birleştirerek anlamlı bir isim döner.
+     */
+    val displayName: String
+        get() = if (admin1 != null && admin1 != name) "$name, $admin1" else name
+
+    val city: String
+        get() = admin1 ?: name
+
+    val district: String?
+        get() = if (admin1 != null && admin1 != name) name else null
+}

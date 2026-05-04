@@ -36,11 +36,11 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _userInterests = MutableStateFlow<Set<String>>(emptySet())
     val userInterests: StateFlow<Set<String>> = _userInterests.asStateFlow()
 
-    private val _registeredCities = MutableStateFlow<List<String>>(emptyList())
-    val registeredCities: StateFlow<List<String>> = _registeredCities.asStateFlow()
+    private val _registeredCities = MutableStateFlow<List<com.havamania.GeocodingResultDto>>(emptyList())
+    val registeredCities: StateFlow<List<com.havamania.GeocodingResultDto>> = _registeredCities.asStateFlow()
 
-    private val _defaultCity = MutableStateFlow("İstanbul")
-    val defaultCity: StateFlow<String> = _defaultCity.asStateFlow()
+    private val _defaultCity = MutableStateFlow(com.havamania.GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul"))
+    val defaultCity: StateFlow<com.havamania.GeocodingResultDto> = _defaultCity.asStateFlow()
 
     private val _tiltEffectEnabled = MutableStateFlow(true)
     val tiltEffectEnabled: StateFlow<Boolean> = _tiltEffectEnabled.asStateFlow()
@@ -167,10 +167,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addCity(city: String) {
+    fun addCity(city: com.havamania.GeocodingResultDto) {
         viewModelScope.launch {
             val current = _registeredCities.value.toMutableList()
-            if (!current.contains(city)) {
+            if (current.none { it.id == city.id || (it.name == city.name && it.admin1 == city.admin1) }) {
                 current.add(city)
                 ThemeManager.saveRegisteredCities(getApplication(), current)
                 _registeredCities.value = current
@@ -178,22 +178,22 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun removeCity(city: String) {
+    fun removeCity(city: com.havamania.GeocodingResultDto) {
         viewModelScope.launch {
             val current = _registeredCities.value.toMutableList()
-            if (current.size > 1 && current.contains(city)) {
-                current.remove(city)
+            if (current.size > 1 && current.any { it.id == city.id }) {
+                current.removeAll { it.id == city.id }
                 ThemeManager.saveRegisteredCities(getApplication(), current)
                 _registeredCities.value = current
 
-                if (_defaultCity.value == city) {
+                if (_defaultCity.value.id == city.id) {
                     setDefaultCity(current.first())
                 }
             }
         }
     }
 
-    fun setDefaultCity(city: String) {
+    fun setDefaultCity(city: com.havamania.GeocodingResultDto) {
         viewModelScope.launch {
             ThemeManager.saveDefaultCity(getApplication(), city)
             _defaultCity.value = city
@@ -224,8 +224,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun resetCities() {
         viewModelScope.launch {
             ThemeManager.clearRegisteredCities(getApplication())
-            _registeredCities.value = listOf("İstanbul")
-            _defaultCity.value = "İstanbul"
+            val default = com.havamania.GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+            _registeredCities.value = listOf(default)
+            _defaultCity.value = default
+            ThemeManager.saveDefaultCity(getApplication(), default)
         }
     }
 
