@@ -23,6 +23,18 @@ class WeatherRepository(
     }
 
     /**
+     * Şehir arama fonksiyonu
+     */
+    suspend fun searchCity(query: String): List<GeocodingResultDto> {
+        return try {
+            val response = apiService.searchCity(cityName = query)
+            response.results ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker
      */
     fun getWeatherData(lat: Double, lon: Double, cityName: String, districtName: String? = null): Flow<WeatherData> = flow {

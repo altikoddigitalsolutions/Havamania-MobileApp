@@ -207,25 +207,27 @@ object WeatherMapper {
         val uv = daily?.uvIndexMax?.firstOrNull() ?: 0.0
         val visibility = current?.visibility ?: 10000.0
         val cloudCover = current?.cloudCover ?: 0
+        val windGust = current?.windGusts ?: 0.0
+        val airTemp = current?.temperature ?: 0.0
+        val windSpd = current?.windSpeed ?: 0.0
+        val windChill = calculateWindChill(airTemp, windSpd)
 
-        val isRain = (current?.weatherCode ?: 0) in 51..67 || (current?.weatherCode ?: 0) in 80..82
         val isSnow = (current?.weatherCode ?: 0) in 71..77 || (current?.weatherCode ?: 0) in 85..86
-        val precipLabel = when {
-            isSnow -> "Kar olasılığı: %$precipProb"
-            else -> "Yağmur olasılığı: %$precipProb"
-        }
+        val precipLabel = if (isSnow) "Kar olasılığı: %$precipProb" else "Yağmur olasılığı: %$precipProb"
 
-        val details = mutableListOf(
-            WeatherDetailData("Hissedilen", "${current?.apparentTemperature?.toInt() ?: 0}°", "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
-            WeatherDetailData("Nem", "%$humidity", "Bağıl nem oranı", "WaterDrop", "#38BDF8", humidity / 100f),
-            WeatherDetailData("Yağış", "${current?.precipitation ?: 0.0} mm", precipLabel, "Cloudy", "#60A5FA"),
-            WeatherDetailData("Rüzgar", "${current?.windSpeed?.toInt() ?: 0} km/s", "Anlık hız", "Air", "#34D399"),
+        return listOf(
+            WeatherDetailData("Hissedilen", "${current?.apparentTemperature?.roundToInt() ?: 0}°", "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
+            WeatherDetailData("Rüzgar Soğutma", if (windChill != null) "${windChill.roundToInt()}°" else "Düşük", if (windChill != null) "Rüzgar etkisi dahil" else "Rüzgar etkisi düşük", "AcUnit", "#38BDF8"),
+            WeatherDetailData("Yağış Olasılığı", "%$precipProb", precipLabel, "WaterDrop", "#60A5FA"),
+            WeatherDetailData("Yağış Miktarı", "${current?.precipitation ?: 0.0} mm", "Son 1 saat", "Umbrella", "#0EA5E9"),
+            WeatherDetailData("Rüzgar", "${windSpd.roundToInt()} km/s", "Anlık hız", "Air", "#34D399"),
+            WeatherDetailData("Rüzgar Hamlesi", "${windGust.roundToInt()} km/s", "Maksimum hız", "Cyclone", "#10B981"),
             WeatherDetailData("UV İndeksi", "${uv.toInt()}", getUVDescription(uv), "Sun", "#FBBF24", uv.toFloat() / 12f),
+            WeatherDetailData("Bulutluluk", "%$cloudCover", "Gökyüzü kapalılığı", "Cloud", "#64748B"),
             WeatherDetailData("Görüş", "${(visibility / 1000).toInt()} km", getVisibilityDescription(visibility), "Visibility", "#10B981"),
             WeatherDetailData("Basınç", "${current?.pressure?.toInt() ?: 1013} hPa", "Yüzey basıncı", "Compress", "#A78BFA"),
-            WeatherDetailData("Bulutluluk", "%$cloudCover", "Gökyüzü kapalılığı", "Cloud", "#64748B")
+            WeatherDetailData("Nem", "%$humidity", "Bağıl nem oranı", "Opacity", "#06B6D4")
         )
-        return details
     }
 
     private fun getUVDescription(uv: Double): String = when {
@@ -312,5 +314,27 @@ object WeatherMapper {
         3 -> "Bulutlu"; 45, 48 -> "Sisli"; 51, 53, 55 -> "Hafif Yağmurlu"
         61, 63, 65 -> "Yağmurlu"; 71, 73, 75 -> "Karlı"
         80, 81, 82 -> "Sağanak Yağış"; 95, 96, 99 -> "Fırtınalı"; else -> "Bulutlu"
+    }
+
+    fun resolveTimeOfDay(hour: Int): TimeOfDay {
+        return when (hour) {
+            in 6..10 -> TimeOfDay.MORNING
+            in 11..16 -> TimeOfDay.DAY
+            in 17..18 -> TimeOfDay.EVENING
+            else -> TimeOfDay.NIGHT
+        }
+    }
+
+    fun mapWeatherCodeToCondition(code: Int, isDay: Boolean): WeatherCondition {
+        return when (code) {
+            0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
+            1, 2 -> WeatherCondition.PartlyCloudy
+            3 -> WeatherCondition.Cloudy
+            45, 48 -> WeatherCondition.Fog
+            51, 53, 55, 61, 63, 65, 80, 81, 82 -> WeatherCondition.Rain
+            71, 73, 75, 77, 85, 86 -> WeatherCondition.Snow
+            95, 96, 99 -> WeatherCondition.Thunderstorm
+            else -> WeatherCondition.Cloudy
+        }
     }
 }

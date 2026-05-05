@@ -40,11 +40,13 @@ private const val TAG = "HourlyForecast"
 fun HourlyForecastRow(
     modifier: Modifier = Modifier,
     items: List<HourlyForecastData>,
-    onItemSelect: (Int) -> Unit = {}
+    onItemSelect: (Int) -> Unit = {},
+    themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val listState = rememberLazyListState()
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val themeColors = HavamaniaTheme.colors
+    val currentTheme by themeViewModel.currentTheme.collectAsState()
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -71,6 +73,7 @@ fun HourlyForecastRow(
             ) { index, item ->
                 HourlyForecastItem(
                     data = item,
+                    currentTheme = currentTheme,
                     onClick = {
                         if (!item.isSelected) {
                             onItemSelect(index)
@@ -85,12 +88,11 @@ fun HourlyForecastRow(
 @Composable
 fun HourlyForecastItem(
     data: HourlyForecastData,
-    onClick: () -> Unit,
-    themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    currentTheme: AppTheme,
+    onClick: () -> Unit
 ) {
     val isSelected = data.isSelected
     val themeColors = HavamaniaTheme.colors
-    val currentTheme by themeViewModel.currentTheme.collectAsState()
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -102,21 +104,15 @@ fun HourlyForecastItem(
     )
 
     val timeOfDay = remember(data.time) {
-        try {
-            val hour = data.time.split(":")[0].toInt()
-            when (hour) {
-                in 6..10 -> TimeOfDay.MORNING
-                in 11..16 -> TimeOfDay.DAY
-                in 17..21 -> TimeOfDay.EVENING
-                else -> TimeOfDay.NIGHT
-            }
+        WeatherMapper.resolveTimeOfDay(try {
+            data.time.split(":")[0].toInt()
         } catch (e: Exception) {
-            if (data.isDay) TimeOfDay.DAY else TimeOfDay.NIGHT
-        }
+            if (data.isDay) 12 else 0
+        })
     }
 
     val condition = remember(data.weatherCode, data.isDay) {
-        WeatherStyleMapper.getCondition(data.weatherCode, data.isDay)
+        WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, data.isDay)
     }
 
     val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)

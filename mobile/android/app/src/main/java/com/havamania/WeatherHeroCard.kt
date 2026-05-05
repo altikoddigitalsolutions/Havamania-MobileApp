@@ -37,19 +37,6 @@ private const val TAG = "WeatherHeroCard"
 
 // ── Models & Styles ──────────────────────────────────────────────────────────
 
-enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
-
-sealed class WeatherCondition {
-    object Clear : WeatherCondition()
-    object PartlyCloudy : WeatherCondition()
-    object Cloudy : WeatherCondition()
-    object Rain : WeatherCondition()
-    object Thunderstorm : WeatherCondition()
-    object Snow : WeatherCondition()
-    object Fog : WeatherCondition()
-    object NightClear : WeatherCondition()
-}
-
 enum class WeatherEffectType { NONE, SUNNY, CLOUDY, RAINY, NIGHT, SNOW, FOG, THUNDER }
 
 data class WeatherCardStyle(
@@ -278,8 +265,8 @@ fun WeatherHeroCard(
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val currentTheme by themeViewModel.currentTheme.collectAsState()
-    val timeOfDay = remember(time) { resolveTimeOfDay(time.hour) }
-    val condition = remember(weatherCode, isDay) { WeatherStyleMapper.getCondition(weatherCode, isDay) }
+    val timeOfDay = remember(time) { WeatherMapper.resolveTimeOfDay(time.hour) }
+    val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
 
     val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)
 
@@ -629,32 +616,6 @@ fun GlassBottomBar(
 }
 
 data class WeatherDetail(val icon: ImageVector, val value: String)
-
-// ── Shared Helpers ───────────────────────────────────────────────────────────
-
-fun resolveTimeOfDay(hour: Int): TimeOfDay {
-    return when (hour) {
-        in 6..10 -> TimeOfDay.MORNING
-        in 11..16 -> TimeOfDay.DAY
-        in 17..18 -> TimeOfDay.EVENING
-        else -> TimeOfDay.NIGHT
-    }
-}
-
-object WeatherStyleMapper {
-    fun getCondition(code: Int, isDay: Boolean): WeatherCondition {
-        return when (code) {
-            0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
-            1, 2 -> WeatherCondition.PartlyCloudy
-            3 -> WeatherCondition.Cloudy
-            45, 48 -> WeatherCondition.Fog
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> WeatherCondition.Rain
-            71, 73, 75, 77, 85, 86 -> WeatherCondition.Snow
-            95, 96, 99 -> WeatherCondition.Thunderstorm
-            else -> WeatherCondition.Cloudy
-        }
-    }
-}
 
 val SineEaseInOut = Easing { fraction ->
     (-(Math.cos(Math.PI * fraction) - 1) / 2).toFloat()

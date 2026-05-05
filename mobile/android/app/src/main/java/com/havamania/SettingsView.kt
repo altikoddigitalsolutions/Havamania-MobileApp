@@ -31,6 +31,7 @@ import com.havamania.ui.theme.*
 fun SettingsScreen(
     onBack: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
+    onNavigateToCities: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel(),
     aiHistoryViewModel: AiHistoryViewModel = viewModel()
@@ -77,7 +78,7 @@ fun SettingsScreen(
                 SettingsDivider()
                 SettingsNavRow("Sıcaklık Birimi", tempUnit.title + " (" + tempUnit.symbol + ")", Icons.Rounded.Thermostat) { showUnitDialog = true }
                 SettingsDivider()
-                SettingsNavRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity) { /* Manage via Profile/Cities */ }
+                SettingsNavRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity) { onNavigateToCities() }
             }
 
             Spacer(modifier = Modifier.height(28.dp))

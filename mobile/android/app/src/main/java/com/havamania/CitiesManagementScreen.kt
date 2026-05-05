@@ -212,7 +212,7 @@ fun CityListItem(
             }
 
             IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.DeleteOutline, null, tint = Color(0xFFEF4444).copy(alpha = 0.7f))
+                Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.error.copy(alpha = 0.7f))
             }
         }
     }

@@ -3,10 +3,12 @@ package com.havamania
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,9 +24,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -112,10 +116,12 @@ fun AiChatScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
 
-    val bgColors = if (isDark) {
-        listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A))
-    } else {
-        listOf(Color(0xFFEAF7F0), Color(0xFFD8F0E4), Color(0xFFCBE9DB))
+    val bgColors = remember(isDark) {
+        if (isDark) {
+            listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A))
+        } else {
+            listOf(Color(0xFFEAF7F0), Color(0xFFD8F0E4), Color(0xFFCBE9DB))
+        }
     }
 
     val listState = rememberLazyListState()
@@ -129,7 +135,7 @@ fun AiChatScreen(
     // İlk girdi (initialRecommendation) varsa gönder
     LaunchedEffect(initialRecommendation) {
         initialRecommendation?.let {
-            viewModel.sendMessage("Hava durumu tahmini hakkında bilgi verir misin?")
+            viewModel.sendMessage(it.message)
         }
     }
 
@@ -137,7 +143,24 @@ fun AiChatScreen(
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(bgColors)))
 
         Column(modifier = Modifier.fillMaxSize()) {
-            PremiumAiHeader(onBack = onBack, title = config?.name ?: "HAVAMANIA ASİSTAN")
+            HavamaniaTopBar(
+                title = config?.name ?: "HAVAMANIA ASİSTAN",
+                onBack = onBack,
+                actions = {
+                    val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
+                    val sparkleAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.4f, targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+                        label = "alpha"
+                    )
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(24.dp).alpha(sparkleAlpha).padding(end = 12.dp)
+                    )
+                }
+            )
 
             LazyColumn(
                 state = listState,
@@ -155,12 +178,120 @@ fun AiChatScreen(
                 }
             }
 
+            // Feature Cards
+            if (messages.size <= 1 && !isLoading) {
+                FeatureCards(themeColors = themeColors)
+
+                QuickSuggestions(
+                    suggestions = config?.example_questions ?: listOf(
+                        "Bugün ne giymeliyim?",
+                        "Hafta sonu hava nasıl?",
+                        "Dışarı çıkmak için uygun mu?",
+                        "Yağmur yağacak mı?"
+                    ),
+                    onSuggestionClick = { viewModel.sendMessage(it) },
+                    themeColors = themeColors
+                )
+            }
+
             ChatInput(
                 onSend = { viewModel.sendMessage(it) },
                 isLoading = isLoading,
                 themeColors = themeColors
             )
         }
+    }
+}
+
+@Composable
+fun FeatureCards(themeColors: HavamaniaColors) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        FeatureCard(
+            title = "Akıllı Giysi Önerisi",
+            desc = "Hava durumuna göre ne giyeceğinizi söyler.",
+            icon = Icons.Rounded.Checkroom,
+            themeColors = themeColors
+        )
+        FeatureCard(
+            title = "Aktivite Analizi",
+            desc = "Dışarı çıkmak için en iyi zamanı belirler.",
+            icon = Icons.Rounded.DirectionsRun,
+            themeColors = themeColors
+        )
+        FeatureCard(
+            title = "Seyahat Planlama",
+            desc = "Rotalarınız için özel hava tavsiyeleri verir.",
+            icon = Icons.Rounded.Route,
+            themeColors = themeColors
+        )
+    }
+}
+
+@Composable
+fun FeatureCard(title: String, desc: String, icon: ImageVector, themeColors: HavamaniaColors) {
+    Surface(
+        color = themeColors.surfaceGlass.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f)),
+        modifier = Modifier.width(160.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.height(12.dp))
+            Text(title, style = MaterialTheme.typography.labelLarge, color = themeColors.textPrimary)
+            Spacer(Modifier.height(4.dp))
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+fun QuickSuggestions(
+    suggestions: List<String>,
+    onSuggestionClick: (String) -> Unit,
+    themeColors: HavamaniaColors
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            "Öneriler",
+            style = MaterialTheme.typography.labelSmall,
+            color = themeColors.textSecondary.copy(alpha = 0.6f),
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            suggestions.forEach { suggestion ->
+                Surface(
+                    onClick = { onSuggestionClick(suggestion) },
+                    color = themeColors.surfaceGlass.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+                ) {
+                    Text(
+                        text = suggestion,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = themeColors.textPrimary
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -195,6 +326,7 @@ fun ChatBubble(message: AltikodChatMessage, themeColors: HavamaniaColors) {
 @Composable
 fun ChatInput(onSend: (String) -> Unit, isLoading: Boolean, themeColors: HavamaniaColors) {
     var text by remember { mutableStateOf("") }
+    var showMicSoon by remember { mutableStateOf(false) }
 
     Surface(
         color = themeColors.surfaceGlass.copy(alpha = 0.9f),
@@ -206,6 +338,13 @@ fun ChatInput(onSend: (String) -> Unit, isLoading: Boolean, themeColors: Havaman
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            IconButton(
+                onClick = { showMicSoon = true },
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Rounded.Mic, contentDescription = "Sesli Yaz", tint = themeColors.textSecondary)
+            }
+
             TextField(
                 value = text,
                 onValueChange = { text = it },
@@ -242,6 +381,20 @@ fun ChatInput(onSend: (String) -> Unit, isLoading: Boolean, themeColors: Havaman
             }
         }
     }
+
+    if (showMicSoon) {
+        AlertDialog(
+            onDismissRequest = { showMicSoon = false },
+            containerColor = themeColors.surface,
+            title = { Text("YAKINDA", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
+            text = { Text("Sesli asistan özelliği çok yakında Havamania'ya eklenecek!", color = themeColors.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { showMicSoon = false }) {
+                    Text("TAMAM", fontWeight = FontWeight.Black, color = themeColors.accent)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -272,44 +425,3 @@ fun TypingIndicator(themeColors: HavamaniaColors) {
     }
 }
 
-@Composable
-fun PremiumAiHeader(onBack: () -> Unit, title: String) {
-    val themeColors = HavamaniaTheme.colors
-    val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
-    val sparkleAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-        label = "alpha"
-    )
-
-    Surface(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding(),
-        color = themeColors.surfaceGlass.copy(alpha = 0.85f),
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier.height(64.dp).padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = themeColors.textPrimary)
-            }
-            Text(
-                text = title.uppercase(),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                ),
-                color = themeColors.textPrimary
-            )
-            Icon(
-                Icons.Rounded.AutoAwesome,
-                contentDescription = null,
-                tint = themeColors.accent,
-                modifier = Modifier.size(24.dp).alpha(sparkleAlpha).padding(end = 12.dp)
-            )
-        }
-    }
-}

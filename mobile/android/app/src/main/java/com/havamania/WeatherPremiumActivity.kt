@@ -16,8 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.havamania.ui.theme.HavamaniaTheme
 
+import androidx.navigation.NavDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
 class WeatherPremiumActivity : ComponentActivity() {
@@ -27,21 +29,14 @@ class WeatherPremiumActivity : ComponentActivity() {
             // We use the full path to ensure we call the @Composable function
             com.havamania.ui.theme.HavamaniaTheme {
                 val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route ?: "weather"
+
                 var appState by remember { mutableStateOf("splash") }
-
-                // Track current route to show/hide bottom bar
-                val currentRoute = remember(navController) {
-                    mutableStateOf("weather")
-                }
-
-                LaunchedEffect(navController) {
-                    navController.currentBackStackEntryFlow.collect { entry ->
-                        currentRoute.value = entry.destination.route ?: "weather"
-                    }
-                }
-
                 val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
-                val backgroundGradient = Brush.verticalGradient(themeColors.gradientPrimary)
+                val backgroundGradient = remember(themeColors) {
+                    Brush.verticalGradient(themeColors.gradientPrimary)
+                }
 
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
 
@@ -53,9 +48,12 @@ class WeatherPremiumActivity : ComponentActivity() {
                     Scaffold(
                         containerColor = themeColors.background,
                         bottomBar = {
-                            if (currentRoute.value != "settings") {
+                            val hideBottomBarRoutes = listOf("settings", "edit_profile", "cities", "ai_history_detail")
+                            val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("ai_history_detail")
+
+                            if (shouldShowBottomBar) {
                                 WeatherBottomBar(
-                                    currentRoute = currentRoute.value,
+                                    currentRoute = currentRoute,
                                     onNavigate = { route ->
                                         navController.navigate(route) {
                                             popUpTo("weather") { saveState = true }
@@ -70,7 +68,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                         Box(modifier = Modifier
                             .fillMaxSize()
                             .background(backgroundGradient)
-                            .padding(bottom = if (currentRoute.value != "settings") innerPadding.calculateBottomPadding() else 0.dp)
+                            .padding(bottom = if (currentRoute !in listOf("settings", "cities", "edit_profile") && !currentRoute.startsWith("ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
                             NavHost(navController = navController, startDestination = "weather") {
                                 composable("weather") {
@@ -123,7 +121,11 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     EditProfileScreen(onBack = { navController.popBackStack() })
                                 }
                                 composable("settings") {
-                                    SettingsScreen(onBack = { navController.popBackStack() })
+                                    SettingsScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToEditProfile = { navController.navigate("edit_profile") },
+                                        onNavigateToCities = { navController.navigate("cities") }
+                                    )
                                 }
                             }
                         }

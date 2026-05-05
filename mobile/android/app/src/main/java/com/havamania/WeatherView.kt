@@ -48,19 +48,8 @@ import com.havamania.WeatherErrorState
 import com.havamania.SectionLabel
 import com.havamania.WeatherDetailsGrid
 
-// Şehir Listesi Data
-val cities = listOf(
-    "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin",
-    "Aydın", "Balıkesir", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa",
-    "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Edirne", "Elazığ", "Erzincan",
-    "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Isparta",
-    "Mersin", "İstanbul", "İzmir", "Kars", "Kastamonu", "Kayseri", "Kırklareli", "Kırşehir",
-    "Kocaeli", "Konya", "Kütahya", "Malatya", "Manisa", "Kahramanmaraş", "Mardin", "Muğla",
-    "Muş", "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya", "Samsun", "Siirt",
-    "Sinop", "Sivas", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Şanlıurfa", "Uşak",
-    "Van", "Yozgat", "Zonguldak", "Aksaray", "Bayburt", "Karaman", "Kırıkkale", "Batman",
-    "Şırnak", "Bartın", "Ardahan", "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
-)
+// Şehir Listesi Data - Redundant, using API search
+// val cities = listOf(...)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
@@ -80,7 +69,7 @@ fun HomeScreen(
     val condition = remember(currentData, selectedHour) {
         val code = selectedHour?.weatherCode ?: currentData?.weatherCode ?: 0
         val isDay = selectedHour?.isDay ?: currentData?.isDay ?: true
-        WeatherStyleMapper.getCondition(code, isDay)
+        WeatherMapper.mapWeatherCodeToCondition(code, isDay)
     }
 
     // Dynamic theme-aware background base colors
@@ -130,13 +119,18 @@ fun HomeScreen(
         }
 
         // Global Noise/Grain Overlay
+        val noisePoints = remember {
+            List(1000) {
+                Offset(kotlin.random.Random.nextFloat(), kotlin.random.Random.nextFloat())
+            }
+        }
         Box(modifier = Modifier.fillMaxSize().zIndex(10f).alpha(0.04f)) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                repeat(1000) {
+                noisePoints.forEach { point ->
                     drawCircle(
                         color = Color.White.copy(alpha = 0.3f),
                         radius = 1f,
-                        center = Offset(kotlin.random.Random.nextFloat() * size.width, kotlin.random.Random.nextFloat() * size.height)
+                        center = Offset(point.x * size.width, point.y * size.height)
                     )
                 }
             }
@@ -360,7 +354,7 @@ fun WeatherSuccessContent(
                 EntranceAnimation(delayMillis = 250) {
                     AiSuggestionCard(
                         weather = data,
-                        timeOfDay = displayTime.hour.let { resolveTimeOfDay(it) },
+                        timeOfDay = displayTime.hour.let { WeatherMapper.resolveTimeOfDay(it) },
                         userInterests = listOf(UserInterest.SPORT, UserInterest.TRAVEL), // Mock interests
                         travelPlans = emptyList(), // Mock or pass from state
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -370,7 +364,17 @@ fun WeatherSuccessContent(
 
                 Spacer(modifier = Modifier.height(20.dp))
                 EntranceAnimation(delayMillis = 350) {
-                    DailyForecastSection(forecasts = data.dailyForecast)
+                    DailyForecastSection(
+                        forecasts = data.dailyForecast,
+                        onDayClick = { forecast ->
+                            onAskAiClick(HavamaniaRecommendation(
+                                message = "${forecast.day} günü için detaylı hava analizi ve aktivite önerisi yapabilir misin?",
+                                type = RecommendationType.GENERAL,
+                                highlightedWords = listOf(forecast.day, "analizi"),
+                                priority = RecommendationPriority.MEDIUM
+                            ))
+                        }
+                    )
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 EntranceAnimation(delayMillis = 450) {

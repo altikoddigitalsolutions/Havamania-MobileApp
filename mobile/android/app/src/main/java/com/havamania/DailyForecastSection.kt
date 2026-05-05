@@ -77,7 +77,8 @@ object DailyForecastStyleMapper {
 @Composable
 fun DailyForecastSection(
     modifier: Modifier = Modifier,
-    forecasts: List<DailyForecastData>
+    forecasts: List<DailyForecastData>,
+    onDayClick: (DailyForecastData) -> Unit = {}
 ) {
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -90,12 +91,15 @@ fun DailyForecastSection(
         enter = fadeIn(tween(1000)) + slideInVertically(initialOffsetY = { 40 }, animationSpec = tween(1000)),
         modifier = modifier.padding(horizontal = 16.dp)
     ) {
-        DailyForecastPanel(forecasts = forecasts)
+        DailyForecastPanel(forecasts = forecasts, onDayClick = onDayClick)
     }
 }
 
 @Composable
-fun DailyForecastPanel(forecasts: List<DailyForecastData>) {
+fun DailyForecastPanel(
+    forecasts: List<DailyForecastData>,
+    onDayClick: (DailyForecastData) -> Unit
+) {
     var expandedForecast by remember { mutableStateOf(false) }
     val visibleForecast = if (expandedForecast) forecasts.take(10) else forecasts.take(7)
 
@@ -171,7 +175,7 @@ fun DailyForecastPanel(forecasts: List<DailyForecastData>) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 visibleForecast.forEachIndexed { index, forecast ->
                     key(forecast.day) {
-                        DailyForecastRow(forecast)
+                        DailyForecastRow(forecast, onClick = { onDayClick(forecast) })
                         if (index < visibleForecast.size - 1) {
                             Spacer(
                                 modifier = Modifier
@@ -258,7 +262,7 @@ fun ForecastExpandButton(
 
 
 @Composable
-fun DailyForecastRow(data: DailyForecastData) {
+fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -282,7 +286,7 @@ fun DailyForecastRow(data: DailyForecastData) {
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = { }
+                onClick = onClick
             )
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically

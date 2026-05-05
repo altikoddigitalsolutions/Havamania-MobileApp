@@ -14,7 +14,10 @@ import java.time.ZoneId
 class TravelViewModel(application: Application) : AndroidViewModel(application) {
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
-    private val apiService = NetworkModule.apiService
+
+    private val repository: WeatherRepository by lazy {
+        WeatherRepository(weatherDao = dao)
+    }
 
     private val _plans = MutableStateFlow<List<TravelPlan>>(emptyList())
     val plans: StateFlow<List<TravelPlan>> = _plans.asStateFlow()
@@ -65,12 +68,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         viewModelScope.launch {
-            try {
-                val response = apiService.searchCity(cityName = query)
-                _citySuggestions.value = response.results ?: emptyList()
-            } catch (e: Exception) {
-                _citySuggestions.value = emptyList()
-            }
+            _citySuggestions.value = repository.searchCity(query)
         }
     }
 

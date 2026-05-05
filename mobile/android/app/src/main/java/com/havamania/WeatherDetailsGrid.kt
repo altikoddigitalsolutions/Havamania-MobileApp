@@ -62,49 +62,12 @@ fun WeatherDetailsPanel(
 
 @Composable
 fun DetailMetricGrid(data: WeatherData) {
-    val themeColors = HavamaniaTheme.colors
+    val items = data.details
 
-    // Değer yardımcı fonksiyonu
-    fun formatValue(value: Any?, unit: String = "", fallback: String = "Veri yok"): String {
-        return when (value) {
-            null -> fallback
-            is Double -> "${value.roundToInt()}$unit"
-            is Float -> "${value.roundToInt()}$unit"
-            is Int -> "$value$unit"
-            is Long -> "$value$unit"
-            is String -> if (value.isEmpty() || value == "null") fallback else "$value$unit"
-            else -> value.toString().ifEmpty { fallback }
-        }
-    }
-
-    // Rüzgar Soğutma Hesaplama (Wind Chill)
-    val feelsLikeVal = data.feelsLike?.toDoubleOrNull() ?: data.temperature.replace("°", "").toDoubleOrNull() ?: 0.0
-    val windSpeedVal = data.windSpeed ?: 0.0
-    val windChillValue = if (data.windChill != null) {
-        formatValue(data.windChill, "°")
-    } else if (feelsLikeVal <= 10.0 && windSpeedVal > 4.8) {
-        // Basit wind chill yaklaşımı veya doğrudan hissedilen
-        "${feelsLikeVal.roundToInt()}°"
-    } else {
-        "Düşük"
-    }
-
-    val items = listOf(
-        WeatherDetailData("Hissedilen", data.feelsLike, "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
-        WeatherDetailData("Rüzgar Soğutma", windChillValue, if (windChillValue == "Düşük") "Rüzgar etkisi düşük" else "Rüzgar etkisi dahil", "Snow", "#38BDF8"),
-        WeatherDetailData("Yağış Olasılığı", formatValue(data.precipitationProbability, "%"), "Yağış ihtimali", "Rain", "#60A5FA"),
-        WeatherDetailData("Yağış Miktarı", formatValue(data.precipitationAmount, " mm"), "Son 1 saat", "Rain", "#0EA5E9"),
-        WeatherDetailData("Rüzgar", formatValue(data.windSpeed, " km/s"), "Anlık rüzgar hızı", "Air", "#34D399"),
-        WeatherDetailData("Rüzgar Hamlesi", formatValue(data.windGust, " km/s"), "Maksimum rüzgar hızı", "Air", "#10B981"),
-        WeatherDetailData("UV İndeksi", formatValue(data.uvIndex), getUVLabel(data.uvIndex), "Sun", "#FBBF24"),
-        WeatherDetailData("Bulutluluk", formatValue(data.cloudCover, "%"), "Gökyüzü kapalılığı", "Cloudy", "#64748B"),
-        WeatherDetailData("Görüş", formatValue(data.visibilityKm, " km"), getVisibilityLabel(data.visibilityKm), "Visibility", "#10B981"),
-        WeatherDetailData("Basınç", formatValue(data.pressure, " hPa"), "Yüzey basıncı", "Compress", "#A78BFA"),
-        WeatherDetailData("Nem", formatValue(data.humidity, "%"), "Bağıl nem oranı", "Rain", "#06B6D4")
-    )
+    if (items.isEmpty()) return
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // İlk 4 öğe
+        // İlk 4 öğe (Hissedilen, Rüzgar Soğutma, Yağış Olasılığı, Yağış Miktarı)
         items.take(4).chunked(2).forEach { rowItems ->
             MetricRow(rowItems)
         }
@@ -176,10 +139,12 @@ fun WeatherDetailCard(
         label = "scale"
     )
 
-    val accentColor = try {
-        Color(android.graphics.Color.parseColor(data.accentColorHex))
-    } catch (e: Exception) {
-        themeColors.accent
+    val accentColor = remember(data.accentColorHex, themeColors.accent) {
+        try {
+            Color(android.graphics.Color.parseColor(data.accentColorHex))
+        } catch (e: Exception) {
+            themeColors.accent
+        }
     }
 
     Card(

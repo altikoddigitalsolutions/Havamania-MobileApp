@@ -174,7 +174,15 @@ fun ProfileScreen(
                 onAiHistory = onNavigateToAiHistory,
                 onMyTravels = onNavigateToTravels,
                 onChooseTheme = onNavigateToSettings,
-                onEditProfile = onNavigateToEditProfile
+                onEditProfile = onNavigateToEditProfile,
+                onNotifications = {
+                    comingSoonTitle = "Bildirim tercihleri yakında eklenecek."
+                    showComingSoonDialog = true
+                },
+                onPremium = {
+                    comingSoonTitle = "Havamania Premium yakında hizmetinizde olacak."
+                    showComingSoonDialog = true
+                }
             )
 
             Spacer(modifier = Modifier.height(100.dp))
@@ -350,7 +358,9 @@ fun QuickActionsGrid(
     onAiHistory: () -> Unit,
     onMyTravels: () -> Unit,
     onChooseTheme: () -> Unit,
-    onEditProfile: () -> Unit
+    onEditProfile: () -> Unit,
+    onNotifications: () -> Unit,
+    onPremium: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -360,6 +370,10 @@ fun QuickActionsGrid(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Seyahatlerim", Icons.Rounded.Route, Modifier.weight(1f), onMyTravels)
             QuickActionItem("Tema Seç", Icons.Rounded.Palette, Modifier.weight(1f), onChooseTheme)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            QuickActionItem("Bildirimler", Icons.Rounded.Notifications, Modifier.weight(1f), onNotifications)
+            QuickActionItem("Premium", Icons.Rounded.WorkspacePremium, Modifier.weight(1f), onPremium)
         }
         QuickActionItem("Profili Düzenle", Icons.Rounded.AccountCircle, Modifier.fillMaxWidth(), onEditProfile)
     }

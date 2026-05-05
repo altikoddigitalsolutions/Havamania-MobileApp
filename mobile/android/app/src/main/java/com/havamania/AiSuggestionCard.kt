@@ -85,8 +85,8 @@ fun RecommendationCard(
 ) {
     val style = RecommendationMapper.getStyle(recommendation.type)
     val themeColors = HavamaniaTheme.colors
-    val accentColor = Color(0xFF3B82F6) // ALWAYS PREMIUM BLUE
-    val secondaryAccent = Color(0xFF06B6D4) // Cyan for gradient
+    val accentColor = themeColors.accent
+    val secondaryAccent = themeColors.gradientSecondary.firstOrNull() ?: themeColors.accent.copy(alpha = 0.8f)
 
     var isVisible by remember { mutableStateOf(false) }
 

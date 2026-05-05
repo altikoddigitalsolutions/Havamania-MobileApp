@@ -113,12 +113,7 @@ class WeatherViewModel(
             return
         }
         viewModelScope.launch {
-            try {
-                val response = NetworkModule.apiService.searchCity(cityName = query)
-                _citySuggestions.value = response.results ?: emptyList()
-            } catch (e: Exception) {
-                _citySuggestions.value = emptyList()
-            }
+            _citySuggestions.value = repository.searchCity(query)
         }
     }
 }

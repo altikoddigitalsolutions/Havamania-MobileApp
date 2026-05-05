@@ -74,6 +74,19 @@ data class WeatherDetailData(
     val isSelected: Boolean = false
 )
 
+enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
+
+sealed class WeatherCondition {
+    object Clear : WeatherCondition()
+    object PartlyCloudy : WeatherCondition()
+    object Cloudy : WeatherCondition()
+    object Rain : WeatherCondition()
+    object Thunderstorm : WeatherCondition()
+    object Snow : WeatherCondition()
+    object Fog : WeatherCondition()
+    object NightClear : WeatherCondition()
+}
+
 /**
  * AI Mesaj Modelleri - Merkezi ve Serileştirilebilir
  * Not: Java UUID serileştirme sorunları çıkarabildiği için id string olarak yönetilir.
