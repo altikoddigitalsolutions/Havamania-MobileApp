@@ -42,6 +42,15 @@ data class AltikodChatResponse(
     val session_id: String
 )
 
+@Serializable
+data class AiHistoryItem(
+    val id: String,
+    val title: String,
+    val summary: String,
+    val messages: List<AltikodChatMessage>,
+    val createdAt: Long
+)
+
 interface AltikodChatService {
     @GET("api/widget/{bot_id}/config")
     suspend fun getConfig(@Path("bot_id") botId: String): AltikodBotConfig

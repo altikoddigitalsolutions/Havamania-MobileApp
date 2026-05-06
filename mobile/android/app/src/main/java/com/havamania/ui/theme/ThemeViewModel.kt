@@ -36,6 +36,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _userInterests = MutableStateFlow<Set<String>>(emptySet())
     val userInterests: StateFlow<Set<String>> = _userInterests.asStateFlow()
 
+    private val _userAboutMe = MutableStateFlow("")
+    val userAboutMe: StateFlow<String> = _userAboutMe.asStateFlow()
+
     private val _registeredCities = MutableStateFlow<List<com.havamania.GeocodingResultDto>>(emptyList())
     val registeredCities: StateFlow<List<com.havamania.GeocodingResultDto>> = _registeredCities.asStateFlow()
 
@@ -82,6 +85,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             ThemeManager.getUserInterests(getApplication()).collect { _userInterests.value = it }
+        }
+        viewModelScope.launch {
+            ThemeManager.getUserAboutMe(getApplication()).collect { _userAboutMe.value = it }
         }
         viewModelScope.launch {
             ThemeManager.getRegisteredCities(getApplication()).collect { _registeredCities.value = it }
@@ -147,6 +153,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
             ThemeManager.saveUserBio(getApplication(), bio)
             _userName.value = name
             _userBio.value = bio
+        }
+    }
+
+    fun setUserAboutMe(aboutMe: String) {
+        viewModelScope.launch {
+            ThemeManager.saveUserAboutMe(getApplication(), aboutMe)
+            _userAboutMe.value = aboutMe
         }
     }
 

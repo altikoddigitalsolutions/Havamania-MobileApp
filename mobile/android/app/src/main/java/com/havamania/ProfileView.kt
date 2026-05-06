@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -27,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,12 +61,14 @@ fun ProfileScreen(
     val tempUnit by themeViewModel.tempUnit.collectAsState()
     val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
     val currentTheme by themeViewModel.currentTheme.collectAsState()
+    val aboutMe by themeViewModel.userAboutMe.collectAsState()
 
     val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsState()
     val travelPlans by travelViewModel.plans.collectAsState()
 
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
+    var showAboutMeSheet by remember { mutableStateOf(false) }
 
     val availableInterests = listOf(
         "Kamp", "Yürüyüş", "Deniz", "Kayak", "Fotoğrafçılık",
@@ -161,13 +166,22 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 5. Selected Theme Card Preview
+            // 5. Kendinden Bahset
+            SectionHeader("KENDİNDEN BAHSET")
+            AboutMeCard(
+                text = aboutMe,
+                onClick = { showAboutMeSheet = true }
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 6. Selected Theme Card Preview
             SectionHeader("AKTİF TEMA")
             ThemePreviewCard(theme = currentTheme, onClick = onNavigateToSettings)
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 6. Quick Actions
+            // 7. Quick Actions
             SectionHeader("HIZLI İŞLEMLER")
             QuickActionsGrid(
                 onManageCities = onNavigateToCities,
@@ -188,18 +202,260 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(100.dp))
         }
 
-        if (showComingSoonDialog) {
-            AlertDialog(
-                onDismissRequest = { showComingSoonDialog = false },
+        if (showAboutMeSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showAboutMeSheet = false },
                 containerColor = themeColors.surface,
-                title = { Text("YAKINDA", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
-                text = { Text(comingSoonTitle, color = themeColors.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = { showComingSoonDialog = false }) {
-                        Text("TAMAM", fontWeight = FontWeight.Black, color = themeColors.accent)
+                dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
+            ) {
+                AboutMeContent(
+                    initialText = aboutMe,
+                    onSave = {
+                        themeViewModel.setUserAboutMe(it)
+                        showAboutMeSheet = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AboutMeCard(text: String, onClick: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    val hasContent = text.isNotBlank()
+
+    HavamaniaGlassCard(
+        onClick = onClick,
+        alpha = 0.5f,
+        cornerRadius = 24.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(themeColors.accent.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Kendinden Bahset",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                        color = themeColors.textPrimary
+                    )
+                }
+                Icon(Icons.Rounded.Edit, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (hasContent) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                    color = themeColors.textSecondary,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // AI Badge Mockup (Bonus Özellik)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val badges = remember(text) { generateBadges(text) }
+                    badges.forEach { badge ->
+                        Surface(
+                            color = themeColors.accent.copy(alpha = 0.1f),
+                            shape = CircleShape,
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, themeColors.accent.copy(alpha = 0.2f))
+                        ) {
+                            Text(
+                                badge,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = themeColors.accent
+                            )
+                        }
                     }
                 }
+            } else {
+                Text(
+                    "Havamania deneyimini sana özel hale getirelim.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = themeColors.textMuted
+                )
+            }
+        }
+    }
+}
+
+fun generateBadges(text: String): List<String> {
+    val badges = mutableListOf<String>()
+    val t = text.lowercase()
+    if (t.contains("kamp") || t.contains("doğa") || t.contains("yürüyüş")) badges.add("Doğa Sever")
+    if (t.contains("çocuk") || t.contains("aile")) badges.add("Aile Odaklı")
+    if (t.contains("seyahat") || t.contains("rota")) badges.add("Gezgin")
+    if (t.contains("bisiklet") || t.contains("spor") || t.contains("koşu")) badges.add("Aktif Yaşam")
+    if (t.contains("yağmur") || t.contains("kar") || t.contains("kış")) badges.add("Kış Tutkunu")
+    if (badges.isEmpty() && text.isNotBlank()) badges.add("Hava Meraklısı")
+    return badges.take(3)
+}
+
+@Composable
+fun AboutMeContent(initialText: String, onSave: (String) -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    var text by remember { mutableStateOf(initialText) }
+
+    val sampleTexts = listOf(
+        "Hafta sonları doğa yürüyüşü yapmayı seviyorum. Genelde çocuklarımla dışarı çıkıyorum, bu yüzden yağmur ve rüzgar durumunu önceden bilmek benim için önemli. Yazın deniz tatillerini, kışın ise kısa şehir gezilerini tercih ederim. Çok sıcak havaları sevmem. Kamp, fotoğrafçılık ve sahil yürüyüşleri ilgimi çeker.",
+        "İş için sık seyahat ediyorum. Toplantı günlerinde yağmur, rüzgar ve trafik etkilerini önceden bilmek istiyorum. Genelde hafif ama şık giyinmeyi tercih ederim.",
+        "Çocuklarım için hava durumunu takip ediyorum. Hafta sonları park, yürüyüş ve açık hava aktiviteleri planlıyoruz. Yağmur, UV ve rüzgar uyarıları benim için önemli.",
+        "Kamp ve doğa aktiviteleriyle ilgileniyorum. Rüzgar, gece sıcaklığı, yağış ihtimali ve görüş mesafesi benim için önemli. Hava uygunsa hafta sonu rota planlamayı severim."
+    )
+
+    var currentSampleIndex by remember { mutableIntStateOf(0) }
+
+    val suggestions = listOf(
+        "Kamp seviyorum",
+        "Çocuklar için kullanıyorum",
+        "Seyahat etmeyi seviyorum",
+        "Bisiklet sürüyorum",
+        "Yağmuru seviyorum",
+        "Kış sporlarıyla ilgileniyorum",
+        "Hafta sonu planları yapıyorum",
+        "Sıcak havaları sevmiyorum"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .padding(bottom = 32.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text(
+            "KENDİNDEN BAHSET",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+            color = themeColors.textPrimary
+        )
+        Text(
+            "Ne kadar çok bilgi verirsen, Havamania sana o kadar iyi öneriler sunar.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = themeColors.textSecondary
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        // Örnek Metin Kartı
+        HavamaniaGlassCard(
+            alpha = 0.3f,
+            cornerRadius = 20.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column {
+                Text(
+                    "ÖRNEK METİN",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
+                    color = themeColors.accent
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = sampleTexts[currentSampleIndex],
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = themeColors.textPrimary.copy(alpha = 0.8f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { text = sampleTexts[currentSampleIndex] },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent.copy(alpha = 0.2f), contentColor = themeColors.accent)
+                    ) {
+                        Text("Örneği Kullan", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
+                    }
+                    OutlinedButton(
+                        onClick = { currentSampleIndex = (currentSampleIndex + 1) % sampleTexts.size },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f))
+                    ) {
+                        Text("Başka Örnek", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp),
+            placeholder = {
+                Text(
+                    "Kendinden bahset... İlgi alanların, seyahat alışkanlıkların, hava hassasiyetlerin veya kimin için hava durumunu takip ettiğini yazabilirsin.",
+                    color = themeColors.textMuted.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            shape = RoundedCornerShape(20.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = themeColors.accent,
+                unfocusedBorderColor = themeColors.border.copy(alpha = 0.3f),
+                cursorColor = themeColors.accent,
+                focusedTextColor = themeColors.textPrimary,
+                unfocusedTextColor = themeColors.textPrimary
             )
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 24.dp)
+        ) {
+            items(suggestions) { suggestion ->
+                Surface(
+                    onClick = {
+                        val separator = if (text.isNotBlank() && !text.endsWith(" ")) " " else ""
+                        text += separator + suggestion + "."
+                    },
+                    color = themeColors.accent.copy(alpha = 0.05f),
+                    shape = CircleShape,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.1f))
+                ) {
+                    Text(
+                        suggestion,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = themeColors.textPrimary
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        Button(
+            onClick = { onSave(text) },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            enabled = text.isNotBlank(),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
+        ) {
+            Text("KAYDET", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = Color.White)
         }
     }
 }

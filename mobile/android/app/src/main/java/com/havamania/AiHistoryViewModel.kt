@@ -25,13 +25,13 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun addHistoryItem(title: String, summary: String, fullText: String, cityName: String?) {
+    fun addHistoryItem(title: String, summary: String, messages: List<AltikodChatMessage>, cityName: String?) {
         viewModelScope.launch {
             val item = AiHistoryEntity(
-                id = UUID.randomUUID().toString(),
+                id = java.util.UUID.randomUUID().toString(),
                 title = title,
                 summary = summary,
-                fullText = fullText,
+                messages = messages,
                 cityName = cityName
             )
             dao.insertAiHistory(item)

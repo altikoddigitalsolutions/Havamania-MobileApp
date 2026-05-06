@@ -9,9 +9,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -39,13 +41,15 @@ import com.havamania.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.util.*
 
 // --- VIEWMODEL ---
 class AiChatViewModel : ViewModel() {
     private val api = AltikodChatFactory.create()
     private val botId = "1"
-    private val sessionId = UUID.randomUUID().toString()
+    private var sessionId = UUID.randomUUID().toString()
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -65,18 +69,8 @@ class AiChatViewModel : ViewModel() {
             try {
                 val cfg = api.getConfig(botId)
                 _config.value = cfg
-                if (_messages.value.isEmpty()) {
-                    _messages.value = listOf(
-                        AltikodChatMessage(
-                            text = cfg.welcome_message ?: "Merhaba! Size nasıl yardımcı olabilirim?",
-                            isUser = false
-                        )
-                    )
-                }
             } catch (e: Exception) {
-                if (_messages.value.isEmpty()) {
-                    _messages.value = listOf(AltikodChatMessage(text = "Merhaba! Bağlantı kurulurken bir sorun oluştu ama size yardımcı olmaya hazırım.", isUser = false))
-                }
+                // Hata durumunda varsayılan config veya sessiz hata
             }
         }
     }
@@ -99,6 +93,19 @@ class AiChatViewModel : ViewModel() {
             }
         }
     }
+
+    fun finishChat(onFinished: (List<AltikodChatMessage>) -> Unit) {
+        val currentMessages = _messages.value
+        if (currentMessages.isEmpty()) return
+
+        onFinished(currentMessages)
+        resetChat()
+    }
+
+    fun resetChat() {
+        _messages.value = emptyList()
+        sessionId = UUID.randomUUID().toString()
+    }
 }
 
 // --- UI BILESENLERI ---
@@ -108,13 +115,18 @@ class AiChatViewModel : ViewModel() {
 fun AiChatScreen(
     initialRecommendation: HavamaniaRecommendation? = null,
     onBack: () -> Unit,
-    viewModel: AiChatViewModel = viewModel()
+    viewModel: AiChatViewModel = viewModel(),
+    historyViewModel: AiHistoryViewModel = viewModel(),
+    themeViewModel: ThemeViewModel = viewModel()
 ) {
     val themeColors = HavamaniaTheme.colors
     val isDark = themeColors.isDark
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
+    val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
+
+    var showEndChatDialog by remember { mutableStateOf(false) }
 
     val bgColors = remember(isDark) {
         if (isDark) {
@@ -147,64 +159,212 @@ fun AiChatScreen(
                 title = config?.name ?: "HAVAMANIA ASİSTAN",
                 onBack = onBack,
                 actions = {
-                    val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
-                    val sparkleAlpha by infiniteTransition.animateFloat(
-                        initialValue = 0.4f, targetValue = 1f,
-                        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-                        label = "alpha"
-                    )
-                    Icon(
-                        Icons.Rounded.AutoAwesome,
-                        contentDescription = null,
-                        tint = themeColors.accent,
-                        modifier = Modifier.size(24.dp).alpha(sparkleAlpha).padding(end = 12.dp)
-                    )
+                    if (messages.isNotEmpty()) {
+                        Surface(
+                            onClick = { showEndChatDialog = true },
+                            color = themeColors.accent.copy(alpha = 0.15f),
+                            shape = CircleShape,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f)),
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.StopCircle,
+                                    contentDescription = null,
+                                    tint = themeColors.accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Sohbeti Bitir",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = themeColors.accent
+                                )
+                            }
+                        }
+                    } else {
+                        val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
+                        val sparkleAlpha by infiniteTransition.animateFloat(
+                            initialValue = 0.4f, targetValue = 1f,
+                            animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+                            label = "alpha"
+                        )
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(24.dp).alpha(sparkleAlpha).padding(end = 12.dp)
+                        )
+                    }
                 }
             )
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(messages, key = { it.id }) { message ->
-                    ChatBubble(message, themeColors)
+            if (messages.isEmpty()) {
+                // Başlangıç Ekranı (Empty State)
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    WelcomeCard(config?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?", themeColors)
+
+                    if (aboutMe.isNotBlank()) {
+                        PersonalizedContextCard(aboutMe, themeColors)
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    FeatureCards(
+                        themeColors = themeColors,
+                        onCardClick = { prompt ->
+                            val fullPrompt = if (aboutMe.isNotBlank()) {
+                                "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $prompt"
+                            } else prompt
+                            viewModel.sendMessage(fullPrompt)
+                        }
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    QuickSuggestions(
+                        suggestions = config?.example_questions ?: listOf(
+                            "Bugün ne giymeliyim?",
+                            "Hafta sonu hava nasıl?",
+                            "Dışarı çıkmak için uygun mu?",
+                            "Yağmur yağacak mı?"
+                        ),
+                        onSuggestionClick = { suggestion ->
+                            val fullPrompt = if (aboutMe.isNotBlank()) {
+                                "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $suggestion"
+                            } else suggestion
+                            viewModel.sendMessage(fullPrompt)
+                        },
+                        themeColors = themeColors
+                    )
                 }
-                if (isLoading) {
-                    item {
-                        TypingIndicator(themeColors)
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(messages, key = { it.id }) { message ->
+                        ChatBubble(message, themeColors)
+                    }
+                    if (isLoading) {
+                        item {
+                            TypingIndicator(themeColors)
+                        }
                     }
                 }
             }
 
-            // Feature Cards
-            if (messages.size <= 1 && !isLoading) {
-                FeatureCards(themeColors = themeColors)
-
-                QuickSuggestions(
-                    suggestions = config?.example_questions ?: listOf(
-                        "Bugün ne giymeliyim?",
-                        "Hafta sonu hava nasıl?",
-                        "Dışarı çıkmak için uygun mu?",
-                        "Yağmur yağacak mı?"
-                    ),
-                    onSuggestionClick = { viewModel.sendMessage(it) },
-                    themeColors = themeColors
-                )
-            }
-
             ChatInput(
-                onSend = { viewModel.sendMessage(it) },
+                onSend = { prompt ->
+                    val fullPrompt = if (messages.isEmpty() && aboutMe.isNotBlank()) {
+                        "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $prompt"
+                    } else prompt
+                    viewModel.sendMessage(fullPrompt)
+                },
                 isLoading = isLoading,
                 themeColors = themeColors
+            )
+        }
+    }
+
+    if (showEndChatDialog) {
+        AlertDialog(
+            onDismissRequest = { showEndChatDialog = false },
+            containerColor = themeColors.surface,
+            title = { Text("Sohbeti sonlandırmak istiyor musun?", style = MaterialTheme.typography.titleLarge, color = themeColors.textPrimary) },
+            text = { Text("Bu sohbet AI geçmişine kaydedilecek.", color = themeColors.textSecondary) },
+            dismissButton = {
+                TextButton(onClick = { showEndChatDialog = false }) {
+                    Text("Vazgeç", color = themeColors.textSecondary)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showEndChatDialog = false
+                        viewModel.finishChat { msgs ->
+                            val firstUserMsg = msgs.firstOrNull { it.isUser }?.text ?: "AI Sohbet"
+                            val firstAiMsg = msgs.firstOrNull { !it.isUser }?.text ?: "Hava durumu analizi"
+                            historyViewModel.addHistoryItem(
+                                title = firstUserMsg,
+                                summary = firstAiMsg,
+                                messages = msgs,
+                                cityName = null
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
+                ) {
+                    Text("Sohbeti Bitir", color = Color.White)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PersonalizedContextCard(aboutMe: String, themeColors: HavamaniaColors) {
+    Surface(
+        modifier = Modifier.padding(horizontal = 24.dp).padding(top = 16.dp).fillMaxWidth(),
+        color = themeColors.accent.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.1f))
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "Kişiselleştirilmiş mod aktif: AI seni tanıyor.",
+                style = MaterialTheme.typography.labelSmall,
+                color = themeColors.accent
             )
         }
     }
 }
 
 @Composable
-fun FeatureCards(themeColors: HavamaniaColors) {
+fun WelcomeCard(message: String, themeColors: HavamaniaColors) {
+    Surface(
+        modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+        color = themeColors.surfaceGlass.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier.size(64.dp).background(themeColors.accent.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(32.dp))
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = themeColors.textPrimary,
+                textAlign = TextAlign.Center,
+                lineHeight = 24.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -216,26 +376,30 @@ fun FeatureCards(themeColors: HavamaniaColors) {
             title = "Akıllı Giysi Önerisi",
             desc = "Hava durumuna göre ne giyeceğinizi söyler.",
             icon = Icons.Rounded.Checkroom,
-            themeColors = themeColors
+            themeColors = themeColors,
+            onClick = { onCardClick("Bugünkü hava durumuna göre ne giymeliyim?") }
         )
         FeatureCard(
             title = "Aktivite Analizi",
             desc = "Dışarı çıkmak için en iyi zamanı belirler.",
             icon = Icons.Rounded.DirectionsRun,
-            themeColors = themeColors
+            themeColors = themeColors,
+            onClick = { onCardClick("Bugün dışarı çıkmak, yürüyüş yapmak veya spor için uygun mu?") }
         )
         FeatureCard(
             title = "Seyahat Planlama",
             desc = "Rotalarınız için özel hava tavsiyeleri verir.",
             icon = Icons.Rounded.Route,
-            themeColors = themeColors
+            themeColors = themeColors,
+            onClick = { onCardClick("Seyahat planım için hava durumuna göre öneriler verir misin?") }
         )
     }
 }
 
 @Composable
-fun FeatureCard(title: String, desc: String, icon: ImageVector, themeColors: HavamaniaColors) {
+fun FeatureCard(title: String, desc: String, icon: ImageVector, themeColors: HavamaniaColors, onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
         color = themeColors.surfaceGlass.copy(alpha = 0.3f),
         shape = RoundedCornerShape(20.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f)),
@@ -360,6 +524,14 @@ fun ChatInput(onSend: (String) -> Unit, isLoading: Boolean, themeColors: Havaman
                 ),
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (text.isNotBlank()) {
+                            onSend(text)
+                            text = ""
+                        }
+                    }
+                ),
                 enabled = !isLoading
             )
 
@@ -424,4 +596,3 @@ fun TypingIndicator(themeColors: HavamaniaColors) {
         }
     }
 }
-

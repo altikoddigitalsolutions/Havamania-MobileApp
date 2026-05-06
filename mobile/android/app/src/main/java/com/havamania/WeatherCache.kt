@@ -3,6 +3,28 @@ package com.havamania
 import androidx.room.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.ListSerializer
+
+/**
+ * TypeConverter for AI Chat Messages
+ */
+class ChatTypeConverters {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @TypeConverter
+    fun fromChatMessageList(value: List<AltikodChatMessage>): String {
+        return json.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun toChatMessageList(value: String): List<AltikodChatMessage> {
+        return try {
+            json.decodeFromString(value)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+}
 
 /**
  * Hava durumu verilerini veritabanında saklamak için Entity
@@ -37,7 +59,7 @@ data class AiHistoryEntity(
     @PrimaryKey val id: String,
     val title: String,
     val summary: String,
-    val fullText: String,
+    val messages: List<AltikodChatMessage>,
     val cityName: String?,
     val timestamp: Long = System.currentTimeMillis()
 )
@@ -86,7 +108,8 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 3, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 4, exportSchema = false)
+@TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
 

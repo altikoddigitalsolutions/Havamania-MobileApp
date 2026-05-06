@@ -86,6 +86,7 @@ object ThemeManager {
     private val USER_BIO_KEY = stringPreferencesKey("user_bio")
     private val USER_IMAGE_URI_KEY = stringPreferencesKey("user_image_uri")
     private val USER_INTERESTS_KEY = stringPreferencesKey("user_interests")
+    private val USER_ABOUT_ME_KEY = stringPreferencesKey("user_about_me")
 
     // Şehir Ayarları
     private val REGISTERED_CITIES_KEY = stringPreferencesKey("registered_cities")
@@ -132,6 +133,13 @@ object ThemeManager {
     fun getUserInterests(context: Context): Flow<Set<String>> = context.dataStore.data.map {
         val str = it[USER_INTERESTS_KEY] ?: "Kamp,Yürüyüş,Seyahat"
         if (str.isEmpty()) emptySet() else str.split(",").toSet()
+    }
+
+    suspend fun saveUserAboutMe(context: Context, aboutMe: String) = context.dataStore.edit {
+        it[USER_ABOUT_ME_KEY] = aboutMe
+    }
+    fun getUserAboutMe(context: Context): Flow<String> = context.dataStore.data.map {
+        it[USER_ABOUT_ME_KEY] ?: ""
     }
 
     suspend fun saveRegisteredCities(context: Context, cities: List<GeocodingResultDto>) = context.dataStore.edit {

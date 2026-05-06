@@ -66,13 +66,9 @@ fun AiHistoryDetailScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                HavamaniaGlassCard(alpha = 0.4f) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text(
-                            text = item.fullText,
-                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
-                            color = themeColors.textPrimary
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    item.messages.forEach { msg ->
+                        ChatBubble(msg, themeColors)
                     }
                 }
 
