@@ -125,6 +125,7 @@ fun AiChatScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
+    val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
 
     var showEndChatDialog by remember { mutableStateOf(false) }
 
@@ -210,7 +211,7 @@ fun AiChatScreen(
                 ) {
                     WelcomeCard(config?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?", themeColors)
 
-                    if (aboutMe.isNotBlank()) {
+                    if (aboutMe.isNotBlank() || userInterests.isNotEmpty()) {
                         PersonalizedContextCard(aboutMe, themeColors)
                     }
 
@@ -219,9 +220,7 @@ fun AiChatScreen(
                     FeatureCards(
                         themeColors = themeColors,
                         onCardClick = { prompt ->
-                            val fullPrompt = if (aboutMe.isNotBlank()) {
-                                "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $prompt"
-                            } else prompt
+                            val fullPrompt = buildPersonalizedPrompt(prompt, aboutMe, userInterests)
                             viewModel.sendMessage(fullPrompt)
                         }
                     )
@@ -236,9 +235,7 @@ fun AiChatScreen(
                             "Yağmur yağacak mı?"
                         ),
                         onSuggestionClick = { suggestion ->
-                            val fullPrompt = if (aboutMe.isNotBlank()) {
-                                "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $suggestion"
-                            } else suggestion
+                            val fullPrompt = buildPersonalizedPrompt(suggestion, aboutMe, userInterests)
                             viewModel.sendMessage(fullPrompt)
                         },
                         themeColors = themeColors
@@ -264,8 +261,8 @@ fun AiChatScreen(
 
             ChatInput(
                 onSend = { prompt ->
-                    val fullPrompt = if (messages.isEmpty() && aboutMe.isNotBlank()) {
-                        "Kullanıcı hakkındaki şu bilgilere göre cevap ver: \"$aboutMe\". Soru: $prompt"
+                    val fullPrompt = if (messages.isEmpty()) {
+                        buildPersonalizedPrompt(prompt, aboutMe, userInterests)
                     } else prompt
                     viewModel.sendMessage(fullPrompt)
                 },
@@ -308,6 +305,21 @@ fun AiChatScreen(
             }
         )
     }
+}
+
+fun buildPersonalizedPrompt(question: String, aboutMe: String, interests: Set<String>): String {
+    if (aboutMe.isBlank() && interests.isEmpty()) return question
+
+    val interestsStr = if (interests.isNotEmpty()) {
+        "Kullanıcının ilgi alanları: ${interests.joinToString(", ")}. "
+    } else ""
+
+    val aboutMeStr = if (aboutMe.isNotBlank()) {
+        "Kullanıcı hakkında bilgi: \"$aboutMe\". "
+    } else ""
+
+    return "Sistem Talimatı: Aşağıdaki kullanıcı profiline göre daha kişiselleştirilmiş bir cevap ver. " +
+            "$interestsStr$aboutMeStr Soru: $question"
 }
 
 @Composable

@@ -1,32 +1,34 @@
 package com.havamania
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,11 +72,6 @@ fun ProfileScreen(
     var comingSoonTitle by remember { mutableStateOf("") }
     var showAboutMeSheet by remember { mutableStateOf(false) }
 
-    val availableInterests = listOf(
-        "Kamp", "Yürüyüş", "Deniz", "Kayak", "Fotoğrafçılık",
-        "Spor", "Bisiklet", "Seyahat", "Koşu", "Yüzme"
-    )
-
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
@@ -85,7 +82,7 @@ fun ProfileScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFİL PANELİ",
+                title = "HAVA KİMLİĞİ",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
@@ -104,11 +101,19 @@ fun ProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 1. Header with Photo & Info
-            EnhancedProfileHeader(
+            // 1. Premium Profile Header
+            PremiumProfileHeader(
                 name = name,
                 bio = bio,
                 imageUri = imageUri,
+                interests = userInterests,
+                aboutMe = aboutMe,
+                stats = mapOf(
+                    "İlgi" to userInterests.size.toString(),
+                    "Rota" to travelPlans.size.toString(),
+                    "Analiz" to aiHistoryItems.size.toString(),
+                    "Favori" to (travelPlans.groupBy { it.tripType }.maxByOrNull { it.value.size }?.key?.label ?: "Outdoor")
+                ),
                 onAvatarClick = {
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -119,69 +124,25 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 2. Statistics Cards
-            SectionHeader("İSTATİSTİKLER")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCardPremium(label = "Şehir", value = registeredCities.size.toString(), icon = Icons.Rounded.LocationOn, modifier = Modifier.weight(1f))
-                StatCardPremium(label = "Seyahat", value = travelPlans.size.toString(), icon = Icons.Rounded.Route, modifier = Modifier.weight(1f))
-                StatCardPremium(label = "AI Analiz", value = aiHistoryItems.size.toString(), icon = Icons.Rounded.AutoAwesome, modifier = Modifier.weight(1f))
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val favTrip = travelPlans.groupBy { it.tripType }.maxByOrNull { it.value.size }?.key?.label ?: "Belirsiz"
-                StatCardPremium(label = "Favori Tip", value = favTrip, icon = Icons.Rounded.Star, modifier = Modifier.weight(1.5f))
-                StatCardPremium(label = "En Çok", value = defaultCity.name, icon = Icons.Rounded.TrendingUp, modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 3. Weather Preferences Summary
-            SectionHeader("HAVA DURUMU TERCİHLERİ")
-            HavamaniaGlassCard(alpha = 0.4f) {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    PreferenceSummaryRow("Sıcaklık Birimi", tempUnit.symbol, Icons.Rounded.Thermostat)
-                    PreferenceSummaryRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity)
-                    PreferenceSummaryRow("Uyarılar", if (notificationsEnabled) "Açık" else "Kapalı", Icons.Rounded.NotificationsActive)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 4. Interests
-            SectionHeader("İLGİ ALANLARINIZ")
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                availableInterests.forEach { interest ->
-                    val isSelected = userInterests.contains(interest)
-                    HavamaniaChip(
-                        selected = isSelected,
-                        onClick = { themeViewModel.toggleInterest(interest) },
-                        label = interest
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 5. Kendinden Bahset
-            SectionHeader("KENDİNDEN BAHSET")
-            AboutMeCard(
+            // 2. Kendinden Bahset (Premium Card)
+            SectionHeader("KİŞİSEL ANALİZ")
+            PremiumAboutMeCard(
                 text = aboutMe,
                 onClick = { showAboutMeSheet = true }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 6. Selected Theme Card Preview
-            SectionHeader("AKTİF TEMA")
-            ThemePreviewCard(theme = currentTheme, onClick = onNavigateToSettings)
+            // 3. Premium Kategori Bazlı İlgi Alanları
+            SectionHeader("HAVA TERCİHLERİ & İLGİ ALANLARI")
+            PremiumInterestsSection(
+                selectedInterests = userInterests,
+                onInterestToggle = { themeViewModel.toggleInterest(it) }
+            )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 7. Quick Actions
+            // 4. Quick Actions
             SectionHeader("HIZLI İŞLEMLER")
             QuickActionsGrid(
                 onManageCities = onNavigateToCities,
@@ -208,7 +169,7 @@ fun ProfileScreen(
                 containerColor = themeColors.surface,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
             ) {
-                AboutMeContent(
+                PremiumAboutMeContent(
                     initialText = aboutMe,
                     onSave = {
                         themeViewModel.setUserAboutMe(it)
@@ -221,17 +182,119 @@ fun ProfileScreen(
 }
 
 @Composable
-fun AboutMeCard(text: String, onClick: () -> Unit) {
+fun PremiumProfileHeader(
+    name: String,
+    bio: String,
+    imageUri: String?,
+    interests: Set<String>,
+    aboutMe: String,
+    stats: Map<String, String>,
+    onAvatarClick: () -> Unit,
+    onEditClick: () -> Unit
+) {
+    val themeColors = HavamaniaTheme.colors
+
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Photo Section with Ambient Glow
+        Box(contentAlignment = Alignment.Center) {
+            val infiniteTransition = rememberInfiniteTransition(label = "profile_glow")
+            val glowScale by infiniteTransition.animateFloat(
+                initialValue = 0.8f, targetValue = 1.2f,
+                animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Reverse),
+                label = "glow_scale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .scale(glowScale)
+                    .blur(30.dp)
+                    .background(themeColors.accent.copy(alpha = 0.15f), CircleShape)
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(themeColors.surfaceGlass)
+                    .border(2.dp, Brush.linearGradient(themeColors.gradientPrimary), CircleShape)
+                    .clickable { onAvatarClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUri != null) {
+                    AsyncImage(
+                        model = imageUri, contentDescription = null,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Rounded.Person, null, tint = themeColors.textPrimary, modifier = Modifier.size(50.dp))
+                }
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Icon(Icons.Rounded.PhotoCamera, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(bottom = 8.dp).size(16.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = name, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp), color = themeColors.textPrimary)
+            IconButton(onClick = onEditClick) {
+                Icon(Icons.Rounded.Verified, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+            }
+        }
+
+        Text(text = bio, style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary, textAlign = TextAlign.Center)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // AI Personality Badge
+        val personality = remember(interests, aboutMe) { generateAiPersonality(interests, aboutMe) }
+        Surface(
+            color = themeColors.accent.copy(alpha = 0.1f),
+            shape = CircleShape,
+            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.2f))
+        ) {
+            Text(
+                personality.uppercase(),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
+                color = themeColors.accent
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Mini Stats Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            stats.forEach { (label, value) ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = themeColors.textMuted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val hasContent = text.isNotBlank()
 
     HavamaniaGlassCard(
         onClick = onClick,
-        alpha = 0.5f,
-        cornerRadius = 24.dp,
+        alpha = 0.6f,
+        cornerRadius = 28.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,62 +302,304 @@ fun AboutMeCard(text: String, onClick: () -> Unit) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(themeColors.accent.copy(alpha = 0.1f)),
+                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(themeColors.accent.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        "Kendinden Bahset",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                        color = themeColors.textPrimary
-                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text("Kendinden Bahset", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                        Text("AI seni tanısın, önerileri özelleştirsin.", style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                    }
                 }
-                Icon(Icons.Rounded.Edit, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted)
             }
 
-            Spacer(Modifier.height(12.dp))
-
             if (hasContent) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                    color = themeColors.textSecondary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(themeColors.surfaceGlass.copy(alpha = 0.3f)).padding(16.dp)
+                ) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                        color = themeColors.textPrimary.copy(alpha = 0.9f),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                // AI Badge Mockup (Bonus Özellik)
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Spacer(Modifier.height(16.dp))
+                // Analysis Badges
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val badges = remember(text) { generateBadges(text) }
                     badges.forEach { badge ->
-                        Surface(
-                            color = themeColors.accent.copy(alpha = 0.1f),
-                            shape = CircleShape,
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, themeColors.accent.copy(alpha = 0.2f))
-                        ) {
-                            Text(
-                                badge,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = themeColors.accent
+                        PremiumBadge(badge)
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(16.dp))
+                Text("Henüz bir bilgi eklemedin. AI önerileri için profilini tamamla.", style = MaterialTheme.typography.bodySmall, color = themeColors.textMuted)
+            }
+        }
+    }
+}
+
+@Composable
+fun PremiumBadge(text: String) {
+    val themeColors = HavamaniaTheme.colors
+    Surface(
+        color = themeColors.surfaceGlass,
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(themeColors.accent))
+            Spacer(Modifier.width(6.dp))
+            Text(text, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+        }
+    }
+}
+
+@Composable
+fun PremiumInterestsSection(
+    selectedInterests: Set<String>,
+    onInterestToggle: (String) -> Unit
+) {
+    val categories = InterestsData.categories
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        categories.forEach { category ->
+            PremiumInterestCategoryCard(
+                category = category,
+                selectedInterests = selectedInterests,
+                onInterestToggle = onInterestToggle
+            )
+        }
+    }
+}
+
+@Composable
+fun PremiumInterestCategoryCard(
+    category: InterestCategory,
+    selectedInterests: Set<String>,
+    onInterestToggle: (String) -> Unit
+) {
+    val themeColors = HavamaniaTheme.colors
+    var expanded by remember { mutableStateOf(false) }
+    val selectedCount = remember(selectedInterests) { category.interests.count { selectedInterests.contains(it.id) } }
+
+    HavamaniaGlassCard(
+        alpha = 0.45f,
+        cornerRadius = 24.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(themeColors.accent.copy(alpha = 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(category.icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(category.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                    Text(category.description, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+
+                if (selectedCount > 0) {
+                    Surface(color = themeColors.accent, shape = CircleShape) {
+                        Text(selectedCount.toString(), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black), color = Color.White)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                }
+
+                Icon(
+                    if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    null, tint = themeColors.textMuted
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    Spacer(Modifier.height(20.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        category.interests.forEach { item ->
+                            PremiumInterestChip(
+                                item = item,
+                                isSelected = selectedInterests.contains(item.id),
+                                onClick = { onInterestToggle(item.id) }
                             )
                         }
                     }
                 }
-            } else {
-                Text(
-                    "Havamania deneyimini sana özel hale getirelim.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = themeColors.textMuted
-                )
             }
         }
+    }
+}
+
+@Composable
+fun PremiumInterestChip(
+    item: InterestItem,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val themeColors = HavamaniaTheme.colors
+
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "chip_scale")
+
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        color = if (isSelected) themeColors.accent else themeColors.surfaceGlass.copy(alpha = 0.5f),
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.1f)
+        ),
+        modifier = Modifier.scale(scale)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                item.icon, null,
+                tint = if (isSelected) Color.White else themeColors.accent,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                item.label,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (isSelected) Color.White else themeColors.textPrimary
+            )
+        }
+    }
+}
+
+@Composable
+fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    var text by remember { mutableStateOf(initialText) }
+
+    val sampleCards = listOf(
+        AboutMeSample("Outdoor", "Hafta sonları doğa yürüyüşü ve kamp yapmayı seviyorum. Rüzgar ve sıcaklık takibi benim için kritik.", Icons.Rounded.Terrain),
+        AboutMeSample("Aile", "Çocuklarım için hava durumunu takip ediyorum. Park ve bahçe günlerini planlıyorum.", Icons.Rounded.ChildCare),
+        AboutMeSample("Seyahat", "İş için sık seyahat ediyorum. Hafif ama şık giyinmeyi, yağmurdan kaçınmayı severim.", Icons.Rounded.Flight),
+        AboutMeSample("Macera", "Kar tutkunuyum. Kışın her fırsatta snowboard yapmaya giderim. Kar durumunu bilmek önemli.", Icons.Rounded.Snowboarding),
+        AboutMeSample("Şehir", "Şehir hayatını seviyorum. Fotoğraf çekmek için en güzel ışığı ve bulutları arıyorum.", Icons.Rounded.CameraAlt)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .padding(bottom = 32.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text("HAVA KİMLİĞİ", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = themeColors.accent)
+        Text("Kendinden Bahset", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+        Text("AI, bu bilgilerle sana özel seyahat ve kıyafet önerileri üretecek.", style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary)
+
+        Spacer(Modifier.height(32.dp))
+
+        // Örnek Kartlar (Yatay Kaydırılabilir)
+        Text("ÖRNEK SENARYOLAR", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textMuted)
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(end = 40.dp)
+        ) {
+            items(sampleCards) { sample ->
+                PremiumSampleCard(sample = sample, onClick = { text = sample.text })
+            }
+        }
+
+        Spacer(Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            modifier = Modifier.fillMaxWidth().height(160.dp),
+            placeholder = { Text("Kimsin? Hava durumu hayatını nasıl etkiliyor? Havamania sana nasıl yardımcı olabilir?", color = themeColors.textMuted.copy(alpha = 0.6f)) },
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = themeColors.accent,
+                unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
+                cursorColor = themeColors.accent,
+                focusedTextColor = themeColors.textPrimary,
+                unfocusedTextColor = themeColors.textPrimary
+            )
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        Button(
+            onClick = { onSave(text) },
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            enabled = text.isNotBlank(),
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("PROFİLİ GÜNCELLE", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun PremiumSampleCard(sample: AboutMeSample, onClick: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    HavamaniaGlassCard(
+        onClick = onClick,
+        alpha = 0.4f,
+        cornerRadius = 24.dp,
+        modifier = Modifier.width(220.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(themeColors.accent.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                    Icon(sample.icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(sample.label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(sample.text, style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp), color = themeColors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(12.dp))
+            Text("Örneği Kullan", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = themeColors.accent))
+        }
+    }
+}
+
+data class AboutMeSample(val label: String, val text: String, val icon: ImageVector)
+
+fun generateAiPersonality(interests: Set<String>, aboutMe: String): String {
+    val t = aboutMe.lowercase()
+    return when {
+        t.contains("firtina") || interests.contains("firtina_takibi") -> "Atmosfer Avcısı"
+        t.contains("kamp") || interests.contains("kamp") -> "Outdoor Gezgini"
+        t.contains("cocuk") || interests.contains("cocuklar_icin") -> "Aile Meteoroloğu"
+        t.contains("drone") || interests.contains("drone") -> "Gökyüzü Kaşifi"
+        t.contains("motorsiklet") || interests.contains("motorsiklet") -> "Yol Savaşçısı"
+        interests.contains("snowboard") || interests.contains("kayak") -> "Kış Tutkunu"
+        interests.size > 10 -> "Hava Gurusu"
+        else -> "Hava Meraklısı"
     }
 }
 
@@ -306,158 +611,10 @@ fun generateBadges(text: String): List<String> {
     if (t.contains("seyahat") || t.contains("rota")) badges.add("Gezgin")
     if (t.contains("bisiklet") || t.contains("spor") || t.contains("koşu")) badges.add("Aktif Yaşam")
     if (t.contains("yağmur") || t.contains("kar") || t.contains("kış")) badges.add("Kış Tutkunu")
-    if (badges.isEmpty() && text.isNotBlank()) badges.add("Hava Meraklısı")
+    if (t.contains("drone") || t.contains("pilot")) badges.add("Hava Meraklısı")
+    if (t.contains("iş") || t.contains("seyahat")) badges.add("Şehir Kaşifi")
+    if (badges.isEmpty() && text.isNotBlank()) badges.add("Hava Analisti")
     return badges.take(3)
-}
-
-@Composable
-fun AboutMeContent(initialText: String, onSave: (String) -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    var text by remember { mutableStateOf(initialText) }
-
-    val sampleTexts = listOf(
-        "Hafta sonları doğa yürüyüşü yapmayı seviyorum. Genelde çocuklarımla dışarı çıkıyorum, bu yüzden yağmur ve rüzgar durumunu önceden bilmek benim için önemli. Yazın deniz tatillerini, kışın ise kısa şehir gezilerini tercih ederim. Çok sıcak havaları sevmem. Kamp, fotoğrafçılık ve sahil yürüyüşleri ilgimi çeker.",
-        "İş için sık seyahat ediyorum. Toplantı günlerinde yağmur, rüzgar ve trafik etkilerini önceden bilmek istiyorum. Genelde hafif ama şık giyinmeyi tercih ederim.",
-        "Çocuklarım için hava durumunu takip ediyorum. Hafta sonları park, yürüyüş ve açık hava aktiviteleri planlıyoruz. Yağmur, UV ve rüzgar uyarıları benim için önemli.",
-        "Kamp ve doğa aktiviteleriyle ilgileniyorum. Rüzgar, gece sıcaklığı, yağış ihtimali ve görüş mesafesi benim için önemli. Hava uygunsa hafta sonu rota planlamayı severim."
-    )
-
-    var currentSampleIndex by remember { mutableIntStateOf(0) }
-
-    val suggestions = listOf(
-        "Kamp seviyorum",
-        "Çocuklar için kullanıyorum",
-        "Seyahat etmeyi seviyorum",
-        "Bisiklet sürüyorum",
-        "Yağmuru seviyorum",
-        "Kış sporlarıyla ilgileniyorum",
-        "Hafta sonu planları yapıyorum",
-        "Sıcak havaları sevmiyorum"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp)
-            .padding(bottom = 32.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(
-            "KENDİNDEN BAHSET",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-            color = themeColors.textPrimary
-        )
-        Text(
-            "Ne kadar çok bilgi verirsen, Havamania sana o kadar iyi öneriler sunar.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = themeColors.textSecondary
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // Örnek Metin Kartı
-        HavamaniaGlassCard(
-            alpha = 0.3f,
-            cornerRadius = 20.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column {
-                Text(
-                    "ÖRNEK METİN",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
-                    color = themeColors.accent
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = sampleTexts[currentSampleIndex],
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                    color = themeColors.textPrimary.copy(alpha = 0.8f)
-                )
-                Spacer(Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = { text = sampleTexts[currentSampleIndex] },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent.copy(alpha = 0.2f), contentColor = themeColors.accent)
-                    ) {
-                        Text("Örneği Kullan", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-                    }
-                    OutlinedButton(
-                        onClick = { currentSampleIndex = (currentSampleIndex + 1) % sampleTexts.size },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f))
-                    ) {
-                        Text("Başka Örnek", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
-            placeholder = {
-                Text(
-                    "Kendinden bahset... İlgi alanların, seyahat alışkanlıkların, hava hassasiyetlerin veya kimin için hava durumunu takip ettiğini yazabilirsin.",
-                    color = themeColors.textMuted.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            shape = RoundedCornerShape(20.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = themeColors.accent,
-                unfocusedBorderColor = themeColors.border.copy(alpha = 0.3f),
-                cursorColor = themeColors.accent,
-                focusedTextColor = themeColors.textPrimary,
-                unfocusedTextColor = themeColors.textPrimary
-            )
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(end = 24.dp)
-        ) {
-            items(suggestions) { suggestion ->
-                Surface(
-                    onClick = {
-                        val separator = if (text.isNotBlank() && !text.endsWith(" ")) " " else ""
-                        text += separator + suggestion + "."
-                    },
-                    color = themeColors.accent.copy(alpha = 0.05f),
-                    shape = CircleShape,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.1f))
-                ) {
-                    Text(
-                        suggestion,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = themeColors.textPrimary
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        Button(
-            onClick = { onSave(text) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            enabled = text.isNotBlank(),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
-        ) {
-            Text("KAYDET", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = Color.White)
-        }
-    }
 }
 
 @Composable
@@ -465,147 +622,10 @@ fun SectionHeader(text: String) {
     val themeColors = HavamaniaTheme.colors
     Text(
         text = text,
-        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp, fontWeight = FontWeight.Black),
         color = themeColors.accent.copy(alpha = 0.8f),
         modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
     )
-}
-
-@Composable
-fun StatCardPremium(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
-    val themeColors = HavamaniaTheme.colors
-    HavamaniaGlassCard(
-        modifier = modifier,
-        cornerRadius = 24.dp,
-        alpha = 0.5f
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(themeColors.accent.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                color = themeColors.textPrimary,
-                maxLines = 1,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                color = themeColors.textSecondary,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-fun PreferenceSummaryRow(label: String, value: String, icon: ImageVector) {
-    val themeColors = HavamaniaTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, null, tint = themeColors.accent.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = themeColors.textPrimary, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
-    }
-}
-
-@Composable
-fun EnhancedProfileHeader(
-    name: String,
-    bio: String,
-    imageUri: String?,
-    onAvatarClick: () -> Unit,
-    onEditClick: () -> Unit
-) {
-    val themeColors = HavamaniaTheme.colors
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(110.dp)
-                    .blur(20.dp)
-                    .background(themeColors.accent.copy(alpha = 0.2f), CircleShape)
-            )
-            Box(
-                modifier = Modifier
-                    .size(90.dp)
-                    .clip(CircleShape)
-                    .background(themeColors.surfaceGlass)
-                    .border(1.5.dp, themeColors.accent.copy(alpha = 0.5f), CircleShape)
-                    .clickable { onAvatarClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageUri != null) {
-                    AsyncImage(
-                        model = imageUri,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        Icons.Rounded.Person,
-                        null,
-                        tint = themeColors.textPrimary,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Icon(Icons.Rounded.PhotoCamera, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(bottom = 6.dp).size(14.dp))
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(18.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = name, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-            IconButton(onClick = onEditClick) {
-                Icon(Icons.Rounded.Edit, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
-            }
-        }
-        Text(text = bio, style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-fun ThemePreviewCard(theme: AppTheme, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    HavamaniaGlassCard(onClick = onClick, alpha = 0.6f, cornerRadius = 24.dp) {
-        Row(modifier = Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(themeColors.gradientPrimary)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.Palette, null, tint = themeColors.onAccent, modifier = Modifier.size(24.dp))
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(theme.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                Text("Seçili Atmosfer", style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
-            }
-            Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted)
-        }
-    }
 }
 
 @Composable
