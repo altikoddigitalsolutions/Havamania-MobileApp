@@ -18,6 +18,8 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.WeatherViewModel
 import com.havamania.WeatherUiState
+import java.time.LocalDateTime
+import kotlinx.coroutines.delay
 
 val AppTypography = Typography(
     displayLarge = TextStyle(
@@ -63,9 +65,19 @@ fun HavamaniaTheme(
     val currentThemeSelection by themeViewModel.currentTheme.collectAsState()
     val weatherUiState by weatherViewModel.uiState.collectAsState()
 
+    // Real-time time tracking for Auto Theme
+    var currentDateTime by remember { mutableStateOf(LocalDateTime.now()) }
+    LaunchedEffect(currentThemeSelection) {
+        if (currentThemeSelection == AppTheme.AUTO) {
+            while (true) {
+                currentDateTime = LocalDateTime.now()
+                kotlinx.coroutines.delay(60000) // Check every minute
+            }
+        }
+    }
+
     val finalTheme = if (currentThemeSelection == AppTheme.AUTO) {
-        val weatherData = (weatherUiState as? WeatherUiState.Success)?.data
-        ThemeManager.getAutoTheme(weatherData)
+        ThemeManager.getAutoTheme(currentDateTime.monthValue, currentDateTime.hour)
     } else {
         currentThemeSelection
     }

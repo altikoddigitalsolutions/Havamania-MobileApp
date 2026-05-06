@@ -131,7 +131,7 @@ fun CitiesManagementScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(registeredCities) { city ->
+                items(registeredCities, key = { it.id }) { city ->
                     val isDefault = city.id == defaultCity.id
                     CityListItem(
                         city = city,

@@ -95,7 +95,8 @@ fun HourlyForecastItem(
     val themeColors = HavamaniaTheme.colors
 
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1.05f else 1f,

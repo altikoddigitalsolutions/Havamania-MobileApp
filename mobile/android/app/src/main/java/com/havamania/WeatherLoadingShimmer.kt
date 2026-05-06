@@ -78,7 +78,7 @@ fun HourlyForecastSkeleton(brush: Brush) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             userScrollEnabled = false
         ) {
-            items(6) {
+            items(6, key = { it }) {
                 Box(
                     modifier = Modifier
                         .width(74.dp)

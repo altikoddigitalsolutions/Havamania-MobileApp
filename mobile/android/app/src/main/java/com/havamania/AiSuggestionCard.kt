@@ -61,7 +61,7 @@ object RecommendationMapper {
 fun AiSuggestionCard(
     weather: WeatherData,
     timeOfDay: TimeOfDay,
-    userInterests: List<UserInterest> = listOf(UserInterest.SPORT),
+    userInterests: Set<String> = emptySet(),
     travelPlans: List<TravelPlan> = emptyList(),
     modifier: Modifier = Modifier,
     onAskAiClick: (HavamaniaRecommendation) -> Unit = {}
@@ -242,7 +242,8 @@ fun AiAskButton(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1f,

@@ -30,7 +30,8 @@ fun WeatherEffectLayer(
     timeOfDay: TimeOfDay,
     intensity: WeatherEffectIntensity = WeatherEffectIntensity.MEDIUM,
     weatherCode: Int = 0,
-    isAnimationEnabled: Boolean = true
+    isAnimationEnabled: Boolean = true,
+    parallaxOffset: Float = 0f
 ) {
     if (intensity == WeatherEffectIntensity.OFF) return
 
@@ -48,7 +49,7 @@ fun WeatherEffectLayer(
                         modifier = Modifier.fillMaxSize(),
                         isAnimationEnabled = isAnimationEnabled,
                         intensity = intensity,
-                        parallaxOffset = 0f // Could be passed from parent
+                        parallaxOffset = parallaxOffset
                     )
                 } else {
                     SunGlowEffect(effectiveOpacity)

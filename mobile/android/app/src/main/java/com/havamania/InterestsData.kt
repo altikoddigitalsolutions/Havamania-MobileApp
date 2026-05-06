@@ -52,7 +52,7 @@ object InterestsData {
             icon = Icons.Rounded.Landscape,
             description = "Doğa aktiviteleri için en uygun zamanı bulun.",
             interests = listOf(
-                InterestItem("kamp", "Kamp", Icons.Rounded.Tent),
+                InterestItem("kamp", "Kamp", Icons.Rounded.Terrain),
                 InterestItem("dagcilik", "Dağcılık", Icons.Rounded.FilterHdr),
                 InterestItem("snowboard", "Snowboard", Icons.Rounded.Snowboarding),
                 InterestItem("kayak", "Kayak", Icons.Rounded.DownhillSkiing),

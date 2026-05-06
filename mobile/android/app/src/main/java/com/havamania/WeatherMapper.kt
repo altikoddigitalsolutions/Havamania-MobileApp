@@ -309,7 +309,7 @@ object WeatherMapper {
         else -> Icons.Rounded.Cloud
     }
 
-    private fun getWeatherCondition(code: Int): String = when (code) {
+    fun getWeatherCondition(code: Int): String = when (code) {
         0 -> "Güneşli"; 1 -> "Çoğunlukla Güneşli"; 2 -> "Parçalı Bulutlu"
         3 -> "Bulutlu"; 45, 48 -> "Sisli"; 51, 53, 55 -> "Hafif Yağmurlu"
         61, 63, 65 -> "Yağmurlu"; 71, 73, 75 -> "Karlı"

@@ -1,7 +1,7 @@
 package com.havamania
 
 import kotlinx.serialization.Serializable
-import java.util.UUID
+import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Ana Hava Durumu Veri Modeli - Cache için Serializable yapıldı
@@ -88,25 +88,22 @@ sealed class WeatherCondition {
 }
 
 /**
- * AI Mesaj Modelleri - Merkezi ve Serileştirilebilir
- * Not: Java UUID serileştirme sorunları çıkarabildiği için id string olarak yönetilir.
+ * Recommendation Models
  */
-@Serializable
-data class StructuredAiContent(
-    val summary: String? = null,
-    val suggestions: List<String> = emptyList(),
-    val warnings: List<String> = emptyList(),
-    val packingTips: List<String> = emptyList(),
-    val rawText: String? = null
-)
+enum class RecommendationType {
+    GENERAL, SPORT, TRAVEL, WARNING, COMFORT, OUTDOOR, HEALTH
+}
 
-@Serializable
-data class ChatMessage(
-    val id: String = "",
-    val text: String? = null,
-    val structuredContent: StructuredAiContent? = null,
-    val isUser: Boolean,
-    val timestamp: Long = 0L
+enum class RecommendationPriority {
+    LOW, MEDIUM, HIGH, CRITICAL
+}
+
+data class HavamaniaRecommendation(
+    val title: String = "HAVAMANIA ÖNERİSİ",
+    val message: String,
+    val type: RecommendationType,
+    val highlightedWords: List<String>,
+    val priority: RecommendationPriority
 )
 
 /**

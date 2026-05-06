@@ -2,6 +2,7 @@ package com.havamania
 
 import androidx.room.*
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
 
@@ -13,15 +14,27 @@ class ChatTypeConverters {
 
     @TypeConverter
     fun fromChatMessageList(value: List<AltikodChatMessage>): String {
-        return json.encodeToString(value)
+        return json.encodeToString(ListSerializer(AltikodChatMessage.serializer()), value)
     }
 
     @TypeConverter
     fun toChatMessageList(value: String): List<AltikodChatMessage> {
         return try {
-            json.decodeFromString(value)
+            json.decodeFromString(ListSerializer(AltikodChatMessage.serializer()), value)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun fromForecastSnapshot(value: ForecastSnapshot?): String? {
+        return value?.let { json.encodeToString(ForecastSnapshot.serializer(), it) }
+    }
+
+    @TypeConverter
+    fun toForecastSnapshot(value: String?): ForecastSnapshot? {
+        return value?.let {
+            try { json.decodeFromString(ForecastSnapshot.serializer(), it) } catch(e: Exception) { null }
         }
     }
 }
@@ -43,12 +56,19 @@ data class WeatherCacheEntity(
 data class TravelPlanEntity(
     @PrimaryKey val id: String,
     val city: String,
+    val latitude: Double,
+    val longitude: Double,
     val tripType: String,
     val startDate: Long,
     val endDate: Long,
     val createdAt: Long = System.currentTimeMillis(),
     val weatherSummary: String? = null,
-    val aiSuggestion: String? = null
+    val aiSuggestion: String? = null,
+    val lastWeatherAnalysisText: String? = null,
+    val lastWeatherAnalysisDate: Long? = null,
+    val lastForecastSnapshot: ForecastSnapshot? = null,
+    val nextAnalysisEligibleDate: Long? = null,
+    val weatherAnalysisStatus: String = "TOO_EARLY"
 )
 
 /**
@@ -108,7 +128,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 4, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 5, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao

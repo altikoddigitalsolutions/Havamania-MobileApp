@@ -42,32 +42,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.*
+import android.widget.Toast
 
 /**
- * Modern Travel Planner Models
+ * TravelPlannerScreen - Reusable UI for managing travels
  */
-enum class TripType(val label: String, val icon: ImageVector) {
-    BUSINESS("İş", Icons.Rounded.BusinessCenter),
-    VACATION("Tatil", Icons.Rounded.BeachAccess),
-    FAMILY("Aile", Icons.Rounded.People),
-    SPORTS("Spor", Icons.Rounded.Sports),
-    CAMPING("Kamp", Icons.Rounded.Terrain),
-    OTHER("Diğer", Icons.Rounded.MoreHoriz)
-}
-
-data class TravelPlan(
-    val id: String = UUID.randomUUID().toString(),
-    val city: String,
-    val tripType: TripType,
-    val startDate: LocalDate,
-    val endDate: LocalDate,
-    val createdAt: Long = System.currentTimeMillis(),
-    val weatherSummary: String? = null,
-    val aiSuggestion: String? = null,
-    val isAnalyzing: Boolean = false
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TravelPlannerScreen(
@@ -105,16 +86,17 @@ fun TravelPlannerScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     items(plans, key = { it.id }) { plan ->
+                        val context = LocalContext.current
                         TravelPlanCard(
                             plan = plan,
                             onDelete = { planToDelete = plan },
                             onEdit = { planToEdit = plan; showAddDialog = true },
                             onReanalyze = {
-                                scope.launch {
-                                    // Simulated re-analysis
-                                    val suggestion = generateAiSuggestion(plan.city, plan.tripType)
-                                    val updatedPlan = plan.copy(aiSuggestion = suggestion)
-                                    viewModel.savePlan(updatedPlan)
+                                val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), plan.startDate)
+                                if (daysUntil > 15) {
+                                    Toast.makeText(context, "Bu seyahat için güvenilir hava analizi seyahate 15 gün kala yapılabilir.", Toast.LENGTH_LONG).show()
+                                } else {
+                                    viewModel.analyzeTravelWeather(plan)
                                 }
                             }
                         )
@@ -174,7 +156,8 @@ fun TravelPlanCard(
     val dateRange = "${plan.startDate.format(formatter)} - ${plan.endDate.format(formatter)}"
 
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
     val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "cardScale")
 
     HavamaniaGlassCard(
@@ -238,7 +221,10 @@ fun TravelPlanCard(
             HorizontalDivider(color = themeColors.divider.copy(alpha = 0.1f))
             Spacer(Modifier.height(20.dp))
 
-            // Weather Summary
+            // 1. Weather Analysis Text (Technical)
+            val today = LocalDate.now()
+            val hasAnalysis = plan.lastWeatherAnalysisText != null || plan.lastWeatherAnalysisDate != null
+
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     Icons.Rounded.WbSunny,
@@ -247,8 +233,15 @@ fun TravelPlanCard(
                     modifier = Modifier.padding(top = 2.dp).size(16.dp)
                 )
                 Spacer(Modifier.width(12.dp))
+                val weatherText = when {
+                    plan.isAnalyzing -> "Hava durumu verileri analiz ediliyor..."
+                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.ERROR -> plan.lastWeatherAnalysisText ?: "Analiz sırasında bir hata oluştu."
+                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.TOO_EARLY -> "Bu tarih için hava durumu tahmini henüz erken."
+                    hasAnalysis -> plan.lastWeatherAnalysisText ?: "Hava durumu analizi tamamlandı."
+                    else -> "Hava verisi henüz analiz edilmedi. Yeniden Analiz butonuna basabilirsin."
+                }
                 Text(
-                    text = plan.weatherSummary ?: "Hava verisi daha sonra güncellenecek",
+                    text = weatherText,
                     style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
                     color = themeColors.textPrimary.copy(alpha = 0.9f),
                     overflow = TextOverflow.Visible
@@ -257,7 +250,7 @@ fun TravelPlanCard(
 
             Spacer(Modifier.height(16.dp))
 
-            // AI Suggestion
+            // 2. AI Suggestion (Conversational)
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     Icons.Rounded.AutoAwesome,
@@ -266,14 +259,35 @@ fun TravelPlanCard(
                     modifier = Modifier.padding(top = 2.dp).size(16.dp)
                 )
                 Spacer(Modifier.width(12.dp))
+                val suggestionText = when {
+                    plan.isAnalyzing -> "AI önerileri hazırlanıyor..."
+                    plan.aiSuggestion != null -> plan.aiSuggestion
+                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.TOO_EARLY -> {
+                        TravelAiHelper.getCitySuggestion(plan.city, plan.tripType)
+                    }
+                    else -> "Analiz yapılması bekleniyor..."
+                }
                 Text(
-                    text = plan.aiSuggestion ?: "Analiz yapılması bekleniyor...",
+                    text = suggestionText!!,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         lineHeight = 22.sp
                     ),
                     color = themeColors.textSecondary,
                     overflow = TextOverflow.Visible
+                )
+            }
+
+            // 3. Last Analysis Date
+            if (plan.lastWeatherAnalysisDate != null) {
+                val analysisTime = Instant.ofEpochMilli(plan.lastWeatherAnalysisDate)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("d MMM HH:mm", Locale("tr")))
+                Text(
+                    text = "Son analiz: $analysisTime",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = themeColors.textMuted,
+                    modifier = Modifier.padding(top = 12.dp, start = 28.dp)
                 )
             }
 
@@ -369,11 +383,13 @@ fun AddTravelPlanDialog(
                                     TravelPlan(
                                         id = initialPlan?.id ?: UUID.randomUUID().toString(),
                                         city = cityInput,
+                                        latitude = selectedCity?.latitude ?: initialPlan?.latitude ?: 0.0,
+                                        longitude = selectedCity?.longitude ?: initialPlan?.longitude ?: 0.0,
                                         tripType = selectedType,
                                         startDate = finalStart,
                                         endDate = finalEnd,
-                                        weatherSummary = generateWeatherSummary(cityInput, finalStart, finalEnd),
-                                        aiSuggestion = generateAiSuggestion(cityInput, selectedType)
+                                        weatherSummary = initialPlan?.weatherSummary,
+                                        aiSuggestion = initialPlan?.aiSuggestion
                                     )
                                 )
                             }
@@ -475,23 +491,6 @@ fun AddTravelPlanDialog(
     }
 }
 
-// Logic Helpers
-fun generateWeatherSummary(city: String, start: LocalDate, end: LocalDate): String {
-    val tempRange = (18..26).random().let { "${it - 2}-${it + 3}°C" }
-    return "$city için seyahat tarihlerinde hava genellikle parçalı bulutlu, sıcaklık $tempRange."
-}
-
-fun generateAiSuggestion(city: String, type: TripType): String {
-    return when(type) {
-        TripType.VACATION -> "Hafif kıyafetler ve güneş koruması eklemeyi unutma. $city sokaklarını keşfetmek için rahat ayakkabılar şart!"
-        TripType.BUSINESS -> "Toplantı günleri için hava değişimine karşı yanına ince bir ceket almanı öneririm."
-        TripType.FAMILY -> "Çocuklar için yedek kıyafet ve akşam serinliğine karşı hırka bulundurmak iyi olur."
-        TripType.SPORTS -> "Açık hava aktiviteleri için rüzgar ve UV durumunu kontrol etmeyi ihmal etme."
-        TripType.CAMPING -> "Gece sıcaklık düşüşlerine karşı termal ekipman kontrolü yapman yerinde olur."
-        TripType.OTHER -> "Seyahat tarihine yaklaştıkça güncel hava durumuna göre valizini kontrol etmelisin."
-    }
-}
-
 @Composable
 fun TravelEmptyState(onAddClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
@@ -511,7 +510,8 @@ fun TravelEmptyState(onAddClick: () -> Unit) {
 fun PremiumRouteButton(onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, label = "fabScale")
 
     val backgroundBrush = if (themeColors.buttonGradient != null) {
@@ -552,7 +552,8 @@ fun PremiumRouteButton(onClick: () -> Unit) {
 @Composable
 fun ActionIconButton(icon: ImageVector, text: String, color: Color, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
     val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, label = "btnScale")
     val themeColors = HavamaniaTheme.colors
 

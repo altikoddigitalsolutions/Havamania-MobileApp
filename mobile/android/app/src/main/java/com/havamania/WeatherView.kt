@@ -45,22 +45,23 @@ import java.util.Locale
 import java.time.LocalTime
 import com.havamania.HomeScreenLoading
 import com.havamania.WeatherErrorState
-import com.havamania.SectionLabel
-import com.havamania.WeatherDetailsGrid
-
-// Şehir Listesi Data - Redundant, using API search
-// val cities = listOf(...)
+import com.havamania.ui.theme.SectionLabel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun HomeScreen(
     viewModel: WeatherViewModel = viewModel(),
+    themeViewModel: com.havamania.ui.theme.ThemeViewModel = viewModel(),
+    travelViewModel: TravelViewModel = viewModel(),
     onNavigateToAi: (HavamaniaRecommendation) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val selectedHour by viewModel.selectedHour.collectAsState()
     val citySuggestions by viewModel.citySuggestions.collectAsState()
+    val userInterests by themeViewModel.userInterests.collectAsState()
+    val travelPlans by travelViewModel.plans.collectAsState()
+
     val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
     val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
@@ -71,10 +72,6 @@ fun HomeScreen(
         val isDay = selectedHour?.isDay ?: currentData?.isDay ?: true
         WeatherMapper.mapWeatherCodeToCondition(code, isDay)
     }
-
-    // Dynamic theme-aware background base colors
-    val bgColorTop by animateColorAsState(targetValue = themeColors.gradientPrimary[0], animationSpec = tween(1500), label = "topColor")
-    val bgColorBottom by animateColorAsState(targetValue = themeColors.gradientPrimary.last(), animationSpec = tween(1500), label = "bottomColor")
 
     var showCitySwitcher by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
@@ -95,25 +92,17 @@ fun HomeScreen(
             .fillMaxSize()
             .pullRefresh(pullRefreshState)
     ) {
-        // Layer 1: Dynamic Background
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(bgColorTop, bgColorBottom)))
-                .zIndex(0f)
-        ) {
-            // Atmospheric Glows
-            Box(modifier = Modifier.fillMaxSize().alpha(0.6f)) {
-                if (condition is WeatherCondition.Clear) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0xFFFBBF24).copy(alpha = 0.2f), Color.Transparent),
-                                center = Offset(size.width * 0.8f, size.height * 0.2f),
-                                radius = size.maxDimension * 0.9f
-                            )
+        // Layer 1: Atmospheric Glows & Condition Effects
+        Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
+            if (condition is WeatherCondition.Clear) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(themeColors.glow.copy(alpha = 0.4f), Color.Transparent),
+                            center = Offset(size.width * 0.8f, size.height * 0.2f),
+                            radius = size.maxDimension * 0.9f
                         )
-                    }
+                    )
                 }
             }
         }
@@ -143,6 +132,8 @@ fun HomeScreen(
                     WeatherSuccessContent(
                         data = state.data,
                         selectedHour = selectedHour,
+                        userInterests = userInterests,
+                        travelPlans = travelPlans,
                         onSelectHour = { viewModel.selectHour(it) },
                         scrollState = scrollState,
                         onAskAiClick = onNavigateToAi,
@@ -196,7 +187,7 @@ fun HomeScreen(
 
                     // Şehir Listesi
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                        items(citySuggestions) { suggestion ->
+                        items(citySuggestions, key = { it.id }) { suggestion ->
                             val currentCity = (uiState as? WeatherUiState.Success)?.data?.cityName ?: ""
                             val isSelected = currentCity == suggestion.name
 
@@ -251,6 +242,8 @@ fun HomeScreen(
 fun WeatherSuccessContent(
     data: WeatherData,
     selectedHour: HourlyForecastData?,
+    userInterests: Set<String> = emptySet(),
+    travelPlans: List<TravelPlan> = emptyList(),
     onSelectHour: (HourlyForecastData?) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onAskAiClick: (HavamaniaRecommendation) -> Unit = {},
@@ -355,8 +348,8 @@ fun WeatherSuccessContent(
                     AiSuggestionCard(
                         weather = data,
                         timeOfDay = displayTime.hour.let { WeatherMapper.resolveTimeOfDay(it) },
-                        userInterests = listOf(UserInterest.SPORT, UserInterest.TRAVEL), // Mock interests
-                        travelPlans = emptyList(), // Mock or pass from state
+                        userInterests = userInterests,
+                        travelPlans = travelPlans,
                         modifier = Modifier.padding(horizontal = 16.dp),
                         onAskAiClick = onAskAiClick
                     )

@@ -104,12 +104,10 @@ fun WeatherErrorState(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF0B0E14)
+@Preview(showBackground = true)
 @Composable
 fun PreviewWeatherErrorState() {
     HavamaniaTheme {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0B0E14))) {
-            WeatherErrorState(onRetry = {})
-        }
+        WeatherErrorState(onRetry = {})
     }
 }

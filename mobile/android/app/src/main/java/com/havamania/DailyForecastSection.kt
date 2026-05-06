@@ -211,7 +211,8 @@ fun ForecastExpandButton(
 ) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1f,
@@ -265,7 +266,8 @@ fun ForecastExpandButton(
 fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
     val style = DailyForecastStyleMapper.getStyle(data.weatherCode)
 
     val scale by animateFloatAsState(

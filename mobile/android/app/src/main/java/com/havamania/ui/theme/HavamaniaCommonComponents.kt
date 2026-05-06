@@ -79,7 +79,8 @@ fun HavamaniaGlassCard(
 ) {
     val colors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed && onClick != null) 0.97f else 1f,
@@ -129,7 +130,8 @@ fun HavamaniaPrimaryButton(
 ) {
     val colors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1f,
@@ -299,6 +301,64 @@ fun HavamaniaToggle(
             uncheckedBorderColor = colors.border
         )
     )
+}
+
+/**
+ * Section Label
+ */
+@Composable
+fun SectionLabel(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = HavamaniaTheme.colors.accent.copy(alpha = 0.8f),
+        modifier = modifier.padding(bottom = 10.dp)
+    )
+}
+
+/**
+ * Small Detail Card (e.g., Moon Phase, Sunrise etc.)
+ */
+@Composable
+fun DetailSmallCard(
+    label: String,
+    value: String,
+    emoji: String,
+    modifier: Modifier = Modifier
+) {
+    val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = themeColors.surfaceGlass.copy(alpha = 0.5f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(themeStyles.cardBorderWidth, themeColors.border)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(emoji, fontSize = 22.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = themeColors.textSecondary.copy(alpha = 0.6f)
+                )
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = themeColors.textPrimary
+                )
+            )
+        }
+    }
 }
 
 /**

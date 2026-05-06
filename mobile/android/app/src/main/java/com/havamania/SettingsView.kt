@@ -424,13 +424,17 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
 }
 
 fun getThemeDesc(theme: AppTheme): String = when(theme) {
-    AppTheme.AUTO -> "Hava durumuna göre dinamik atmosfer"
+    AppTheme.AUTO -> "Mevsime ve günün saatine göre otomatik değişir"
     AppTheme.LIGHT -> "Temiz ve ferah gökyüzü tonları"
     AppTheme.DARK -> "Koyu ve modern gece atmosferi"
-    AppTheme.SPRING -> "Taze bahar esintisi ve yeşil dokular"
-    AppTheme.SUMMER -> "Sıcak yaz güneşi ve canlı renkler"
-    AppTheme.AUTUMN -> "Huzurlu sonbahar ve toprak tonları"
-    AppTheme.WINTER -> "Soğuk kış esintisi ve buzsu maviler"
+    AppTheme.SPRING_DAY -> "Taze bahar esintisi ve yeşil dokular"
+    AppTheme.SPRING_NIGHT -> "Huzurlu bahar gecesi atmosferi"
+    AppTheme.SUMMER_DAY -> "Sıcak yaz güneşi ve canlı renkler"
+    AppTheme.SUMMER_NIGHT -> "Ferah yaz gecesi esintisi"
+    AppTheme.AUTUMN_DAY -> "Huzurlu sonbahar ve toprak tonları"
+    AppTheme.AUTUMN_NIGHT -> "Gizemli sonbahar gecesi renkleri"
+    AppTheme.WINTER_DAY -> "Soğuk kış esintisi ve buzsu maviler"
+    AppTheme.WINTER_NIGHT -> "Derin kış gecesi ve kristal tonlar"
 }
 
 @Composable

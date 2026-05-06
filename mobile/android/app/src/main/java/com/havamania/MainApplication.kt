@@ -35,6 +35,10 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     SoLoader.init(this, false)
+
+    // Schedule daily travel weather analysis
+    DailyTravelWeatherAnalysisWorker.schedule(this)
+
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // Yeni mimari etkinse giriş noktasını yüklüyoruz.
       // Hata mesajına göre Boolean bekleniyor, isNewArchEnabled gönderiyoruz.

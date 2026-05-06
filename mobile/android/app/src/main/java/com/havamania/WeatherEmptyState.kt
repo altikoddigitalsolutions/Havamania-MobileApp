@@ -21,6 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.HavamaniaPrimaryButton
 
 /**
  * Genel Empty State Bileşeni
@@ -33,8 +34,11 @@ fun WeatherEmptyState(
     description: String,
     buttonText: String? = null,
     onButtonClick: () -> Unit = {},
-    accentColor: Color = Color(0xFF38BDF8)
+    accentColor: Color? = null
 ) {
+    val themeColors = HavamaniaTheme.colors
+    val effectiveAccent = accentColor ?: themeColors.accent
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -49,7 +53,7 @@ fun WeatherEmptyState(
                     .size(140.dp)
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(accentColor.copy(alpha = 0.12f), Color.Transparent)
+                            colors = listOf(effectiveAccent.copy(alpha = 0.12f), Color.Transparent)
                         )
                     )
             )
@@ -57,7 +61,7 @@ fun WeatherEmptyState(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(72.dp),
-                tint = accentColor.copy(alpha = 0.7f)
+                tint = effectiveAccent.copy(alpha = 0.7f)
             )
         }
 
@@ -70,7 +74,7 @@ fun WeatherEmptyState(
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.5).sp
             ),
-            color = Color.White,
+            color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
 
@@ -82,7 +86,7 @@ fun WeatherEmptyState(
             style = MaterialTheme.typography.bodyMedium.copy(
                 lineHeight = 22.sp
             ),
-            color = Color.White.copy(alpha = 0.5f),
+            color = themeColors.textSecondary.copy(alpha = 0.6f),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -90,29 +94,12 @@ fun WeatherEmptyState(
         // Aksiyon Butonu (Opsiyonel)
         if (buttonText != null) {
             Spacer(modifier = Modifier.height(48.dp))
-            Button(
+            HavamaniaPrimaryButton(
+                text = buttonText,
                 onClick = onButtonClick,
-                modifier = Modifier
-                    .fillMaxWidth(0.8f)
-                    .height(56.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accentColor.copy(alpha = 0.15f),
-                    contentColor = accentColor
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    accentColor.copy(alpha = 0.3f)
-                )
-            ) {
-                Text(
-                    text = buttonText.uppercase(),
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.2.sp
-                    )
-                )
-            }
+                modifier = Modifier.fillMaxWidth(0.8f),
+                icon = if (title.contains("Şehir")) Icons.Rounded.AddLocationAlt else Icons.Rounded.AutoAwesome
+            )
         }
     }
 }
@@ -147,22 +134,18 @@ fun NoAiHistoryEmptyState(onAskClick: () -> Unit) {
     )
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF0B0E14)
+@Preview(showBackground = true)
 @Composable
 fun PreviewNoCities() {
     HavamaniaTheme {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0B0E14))) {
-            NoCitiesEmptyState {}
-        }
+        NoCitiesEmptyState {}
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF0B0E14)
+@Preview(showBackground = true)
 @Composable
 fun PreviewNoAiHistory() {
     HavamaniaTheme {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0B0E14))) {
-            NoAiHistoryEmptyState {}
-        }
+        NoAiHistoryEmptyState {}
     }
 }

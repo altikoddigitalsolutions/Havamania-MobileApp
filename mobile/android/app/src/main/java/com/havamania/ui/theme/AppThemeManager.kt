@@ -21,7 +21,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 enum class AppTheme(val title: String) {
-    AUTO("Otomatik"), LIGHT("Açık Tema"), DARK("Koyu Tema"), SPRING("İlkbahar"), SUMMER("Yaz"), AUTUMN("Sonbahar"), WINTER("Kış")
+    AUTO("Otomatik"),
+    LIGHT("Açık Tema"),
+    DARK("Koyu Tema"),
+    SPRING_DAY("İlkbahar Gündüz"),
+    SPRING_NIGHT("İlkbahar Gece"),
+    SUMMER_DAY("Yaz Gündüz"),
+    SUMMER_NIGHT("Yaz Gece"),
+    AUTUMN_DAY("Sonbahar Gündüz"),
+    AUTUMN_NIGHT("Sonbahar Gece"),
+    WINTER_DAY("Kış Gündüz"),
+    WINTER_NIGHT("Kış Gece")
 }
 
 enum class TemperatureUnit(val symbol: String, val title: String) {
@@ -95,7 +105,19 @@ object ThemeManager {
     suspend fun saveTheme(context: Context, theme: AppTheme) = context.dataStore.edit { it[THEME_KEY] = theme.name }
 
     fun getTheme(context: Context): Flow<AppTheme> = context.dataStore.data.map {
-        AppTheme.valueOf(it[THEME_KEY] ?: AppTheme.DARK.name)
+        val themeName = it[THEME_KEY] ?: AppTheme.DARK.name
+        try {
+            AppTheme.valueOf(themeName)
+        } catch (e: Exception) {
+            // Migration for old theme names
+            when (themeName) {
+                "SPRING" -> AppTheme.SPRING_DAY
+                "SUMMER" -> AppTheme.SUMMER_DAY
+                "AUTUMN" -> AppTheme.AUTUMN_DAY
+                "WINTER" -> AppTheme.WINTER_DAY
+                else -> AppTheme.DARK
+            }
+        }
     }
 
     suspend fun saveTempUnit(context: Context, unit: TemperatureUnit) = context.dataStore.edit { it[TEMP_UNIT_KEY] = unit.name }
@@ -205,21 +227,20 @@ object ThemeManager {
         it.clear()
     }
 
-    fun getAutoTheme(weatherData: WeatherData?): AppTheme {
-        if (weatherData == null) return AppTheme.DARK
-        val condition = weatherData.condition.lowercase()
-        return when {
-            condition.contains("karlı") -> AppTheme.WINTER
-            condition.contains("güneşli") || condition.contains("açık") -> AppTheme.SUMMER
-            condition.contains("yağmurlu") -> AppTheme.DARK
-            condition.contains("bulutlu") -> AppTheme.AUTUMN
-            else -> AppTheme.SPRING
+    fun getAutoTheme(month: Int, hour: Int): AppTheme {
+        val isDay = hour in 6..18
+        return when (month) {
+            3, 4, 5 -> if (isDay) AppTheme.SPRING_DAY else AppTheme.SPRING_NIGHT
+            6, 7, 8 -> if (isDay) AppTheme.SUMMER_DAY else AppTheme.SUMMER_NIGHT
+            9, 10, 11 -> if (isDay) AppTheme.AUTUMN_DAY else AppTheme.AUTUMN_NIGHT
+            12, 1, 2 -> if (isDay) AppTheme.WINTER_DAY else AppTheme.WINTER_NIGHT
+            else -> if (isDay) AppTheme.SUMMER_DAY else AppTheme.DARK
         }
     }
 
     fun getColorScheme(theme: AppTheme): ColorScheme {
         return when (theme) {
-            AppTheme.DARK -> darkColorScheme(
+            AppTheme.DARK, AppTheme.SPRING_NIGHT, AppTheme.SUMMER_NIGHT, AppTheme.AUTUMN_NIGHT, AppTheme.WINTER_NIGHT -> darkColorScheme(
                 primary = Color(0xFF00C2FF),
                 secondary = Color(0xFF38BDF8),
                 background = Color(0xFF0B0F14),
@@ -241,7 +262,7 @@ object ThemeManager {
                 onSurfaceVariant = Color(0xFF6B7280),
                 outline = Color(0xFFE2E8F0)
             )
-            AppTheme.SPRING -> lightColorScheme(
+            AppTheme.SPRING_DAY -> lightColorScheme(
                 primary = Color(0xFF4ADE80),
                 secondary = Color(0xFFF472B6),
                 background = Color(0xFFF0FFF4),
@@ -251,7 +272,7 @@ object ThemeManager {
                 onSurface = Color(0xFF1F2937),
                 onSurfaceVariant = Color(0xFF6B7280)
             )
-            AppTheme.SUMMER -> lightColorScheme(
+            AppTheme.SUMMER_DAY -> lightColorScheme(
                 primary = Color(0xFF00B4D8),
                 secondary = Color(0xFFFFD60A),
                 background = Color(0xFFE0F7FF),
@@ -261,7 +282,7 @@ object ThemeManager {
                 onSurface = Color(0xFF0F172A),
                 onSurfaceVariant = Color(0xFF475569)
             )
-            AppTheme.AUTUMN -> lightColorScheme(
+            AppTheme.AUTUMN_DAY -> lightColorScheme(
                 primary = Color(0xFFF97316),
                 secondary = Color(0xFFA16207),
                 background = Color(0xFFFFF7ED),
@@ -271,7 +292,7 @@ object ThemeManager {
                 onSurface = Color(0xFF3F2A1D),
                 onSurfaceVariant = Color(0xFF7C5A3C)
             )
-            AppTheme.WINTER -> lightColorScheme(
+            AppTheme.WINTER_DAY -> lightColorScheme(
                 primary = Color(0xFF60A5FA),
                 secondary = Color(0xFF1E3A8A),
                 background = Color(0xFFF1F5F9),

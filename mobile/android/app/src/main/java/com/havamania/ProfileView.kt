@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.havamania
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,6 +11,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -38,7 +42,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.havamania.ui.theme.*
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit = {},
@@ -177,6 +180,20 @@ fun ProfileScreen(
                     }
                 )
             }
+        }
+
+        if (showComingSoonDialog) {
+            AlertDialog(
+                onDismissRequest = { showComingSoonDialog = false },
+                containerColor = themeColors.surface,
+                title = { Text("YAKINDA", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
+                text = { Text(comingSoonTitle, color = themeColors.textSecondary) },
+                confirmButton = {
+                    TextButton(onClick = { showComingSoonDialog = false }) {
+                        Text("TAMAM", fontWeight = FontWeight.Black, color = themeColors.accent)
+                    }
+                }
+            )
         }
     }
 }
@@ -456,7 +473,8 @@ fun PremiumInterestChip(
     val themeColors = HavamaniaTheme.colors
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
     val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "chip_scale")
 
     Surface(
@@ -522,7 +540,7 @@ fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(end = 40.dp)
         ) {
-            items(sampleCards) { sample ->
+            items(sampleCards, key = { it.label }) { sample ->
                 PremiumSampleCard(sample = sample, onClick = { text = sample.text })
             }
         }

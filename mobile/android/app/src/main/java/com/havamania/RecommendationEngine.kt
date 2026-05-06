@@ -1,38 +1,12 @@
 package com.havamania
 
-import androidx.compose.ui.graphics.Color
 import java.util.UUID
-
-enum class RecommendationType {
-    GENERAL, SPORT, TRAVEL, WARNING, COMFORT, OUTDOOR, HEALTH
-}
-
-enum class RecommendationPriority {
-    LOW, MEDIUM, HIGH, CRITICAL
-}
-
-enum class UserInterest(val label: String) {
-    SPORT("Spor"),
-    TRAVEL("Seyahat"),
-    PHOTOGRAPHY("Fotoğrafçılık"),
-    NATURE("Doğa"),
-    FOOD("Gastronomi"),
-    WELLNESS("Wellness")
-}
-
-data class HavamaniaRecommendation(
-    val title: String = "HAVAMANIA ÖNERİSİ",
-    val message: String,
-    val type: RecommendationType,
-    val highlightedWords: List<String>,
-    val priority: RecommendationPriority
-)
 
 object RecommendationEngine {
     fun generateRecommendation(
         weather: WeatherData,
         timeOfDay: TimeOfDay,
-        userInterests: List<UserInterest>,
+        userInterests: Set<String>,
         travelPlans: List<TravelPlan>
     ): HavamaniaRecommendation {
         val tempValue = weather.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
@@ -83,7 +57,7 @@ object RecommendationEngine {
         }
 
         // Priority 5: Sports & Interests
-        if (userInterests.contains(UserInterest.SPORT)) {
+        if (userInterests.contains("acik_hava") || userInterests.contains("trekking")) {
             if (tempValue in 15..25 && !condition.contains("yağmur")) {
                 return HavamaniaRecommendation(
                     message = "Harika bir spor havası. Açık havada yürüyüş veya hafif koşu için iyi bir zaman.",

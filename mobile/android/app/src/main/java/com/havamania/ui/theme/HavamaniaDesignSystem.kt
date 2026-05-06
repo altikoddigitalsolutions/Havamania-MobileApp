@@ -168,7 +168,7 @@ object ThemeFactory {
                 buttonGradient = listOf(Color(0xFF0EA5E9), Color(0xFF0284C7)),
                 isDark = false
             )
-            AppTheme.SPRING -> HavamaniaColors(
+            AppTheme.SPRING_DAY -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7)),
                 gradientSecondary = listOf(Color(0xFFBBF7D0), Color(0xFF86EFAC)),
                 accent = Color(0xFF16A34A),
@@ -189,7 +189,28 @@ object ThemeFactory {
                 buttonGradient = listOf(Color(0xFF4ADE80), Color(0xFF16A34A)),
                 isDark = false
             )
-            AppTheme.SUMMER -> HavamaniaColors(
+            AppTheme.SPRING_NIGHT -> HavamaniaColors(
+                gradientPrimary = listOf(Color(0xFF064E3B), Color(0xFF022C22)),
+                gradientSecondary = listOf(Color(0xFF065F46), Color(0xFF064E3B)),
+                accent = Color(0xFF34D399),
+                onAccent = Color.White,
+                background = Color(0xFF022C22),
+                surface = Color(0xFF064E3B),
+                surfaceGlass = Color(0xFF064E3B).copy(alpha = 0.7f),
+                textPrimary = Color(0xFFECFDF5),
+                textSecondary = Color(0xFFA7F3D0),
+                textMuted = Color(0xFF059669).copy(alpha = 0.7f),
+                border = Color.White.copy(alpha = 0.08f),
+                divider = Color.White.copy(alpha = 0.05f),
+                glow = Color(0xFF10B981).copy(alpha = 0.2f),
+                error = Color(0xFFEF4444),
+                success = Color(0xFF10B981),
+                warning = Color(0xFFF59E0B),
+                shadow = Color.Black.copy(alpha = 0.4f),
+                buttonGradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
+                isDark = true
+            )
+            AppTheme.SUMMER_DAY -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)),
                 gradientSecondary = listOf(Color(0xFFFFD8A8), Color(0xFFFDBA74)),
                 accent = Color(0xFFEA580C),
@@ -210,7 +231,49 @@ object ThemeFactory {
                 buttonGradient = listOf(Color(0xFFF97316), Color(0xFFEA580C)),
                 isDark = false
             )
-            AppTheme.AUTUMN -> HavamaniaColors(
+            AppTheme.SUMMER_NIGHT -> HavamaniaColors(
+                gradientPrimary = listOf(Color(0xFF0C4A6E), Color(0xFF082F49)),
+                gradientSecondary = listOf(Color(0xFF075985), Color(0xFF0C4A6E)),
+                accent = Color(0xFF38BDF8),
+                onAccent = Color.White,
+                background = Color(0xFF082F49),
+                surface = Color(0xFF0C4A6E),
+                surfaceGlass = Color(0xFF0C4A6E).copy(alpha = 0.7f),
+                textPrimary = Color(0xFFF0F9FF),
+                textSecondary = Color(0xFFBAE6FD),
+                textMuted = Color(0xFF0EA5E9).copy(alpha = 0.7f),
+                border = Color.White.copy(alpha = 0.08f),
+                divider = Color.White.copy(alpha = 0.05f),
+                glow = Color(0xFF0284C7).copy(alpha = 0.2f),
+                error = Color(0xFFEF4444),
+                success = Color(0xFF10B981),
+                warning = Color(0xFFF59E0B),
+                shadow = Color.Black.copy(alpha = 0.4f),
+                buttonGradient = listOf(Color(0xFF0EA5E9), Color(0xFF0284C7)),
+                isDark = true
+            )
+            AppTheme.AUTUMN_DAY -> HavamaniaColors(
+                gradientPrimary = listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)),
+                gradientSecondary = listOf(Color(0xFFFDE68A), Color(0xFFFBBF24)),
+                accent = Color(0xFFD97706),
+                onAccent = Color.White,
+                background = Color(0xFFFFFBEB),
+                surface = Color.White,
+                surfaceGlass = Color.White.copy(alpha = 0.8f),
+                textPrimary = Color(0xFF78350F),
+                textSecondary = Color(0xFF92400E),
+                textMuted = Color(0xFFB45309).copy(alpha = 0.6f),
+                border = Color(0xFFFDE68A).copy(alpha = 0.5f),
+                divider = Color(0xFFFEF3C7),
+                glow = Color(0xFFF59E0B).copy(alpha = 0.2f),
+                error = Color(0xFFDC2626),
+                success = Color(0xFF059669),
+                warning = Color(0xFFD97706),
+                shadow = Color(0xFF78350F).copy(alpha = 0.05f),
+                buttonGradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
+                isDark = false
+            )
+            AppTheme.AUTUMN_NIGHT -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFF451A03), Color(0xFF78350F)),
                 gradientSecondary = listOf(Color(0xFF92400E), Color(0xFFB45309)),
                 accent = Color(0xFFF97316),
@@ -221,8 +284,8 @@ object ThemeFactory {
                 textPrimary = Color(0xFFFFEDD5),
                 textSecondary = Color(0xFFFED7AA),
                 textMuted = Color(0xFFD97706).copy(alpha = 0.7f),
-                border = Color(0xFFB45309).copy(alpha = 0.3f),
-                divider = Color(0xFF92400E).copy(alpha = 0.5f),
+                border = Color.White.copy(alpha = 0.08f),
+                divider = Color.White.copy(alpha = 0.05f),
                 glow = Color(0xFFF59E0B).copy(alpha = 0.2f),
                 error = Color(0xFFEF4444),
                 success = Color(0xFF10B981),
@@ -231,7 +294,7 @@ object ThemeFactory {
                 buttonGradient = listOf(Color(0xFFFB923C), Color(0xFFF97316)),
                 isDark = true
             )
-            AppTheme.WINTER -> HavamaniaColors(
+            AppTheme.WINTER_DAY -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0)),
                 gradientSecondary = listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8)),
                 accent = Color(0xFF1D4ED8),
@@ -251,6 +314,27 @@ object ThemeFactory {
                 shadow = Color(0xFF1E293B).copy(alpha = 0.05f),
                 buttonGradient = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
                 isDark = false
+            )
+            AppTheme.WINTER_NIGHT -> HavamaniaColors(
+                gradientPrimary = listOf(Color(0xFF1E293B), Color(0xFF0F172A)),
+                gradientSecondary = listOf(Color(0xFF334155), Color(0xFF1E293B)),
+                accent = Color(0xFF60A5FA),
+                onAccent = Color.White,
+                background = Color(0xFF0F172A),
+                surface = Color(0xFF1E293B),
+                surfaceGlass = Color(0xFF1E293B).copy(alpha = 0.7f),
+                textPrimary = Color(0xFFF1F5F9),
+                textSecondary = Color(0xFFCBD5E1),
+                textMuted = Color(0xFF94A3B8).copy(alpha = 0.7f),
+                border = Color.White.copy(alpha = 0.08f),
+                divider = Color.White.copy(alpha = 0.05f),
+                glow = Color(0xFF3B82F6).copy(alpha = 0.2f),
+                error = Color(0xFFEF4444),
+                success = Color(0xFF10B981),
+                warning = Color(0xFFF59E0B),
+                shadow = Color.Black.copy(alpha = 0.4f),
+                buttonGradient = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
+                isDark = true
             )
             else -> createColors(AppTheme.DARK)
         }

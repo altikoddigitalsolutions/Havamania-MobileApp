@@ -1,6 +1,25 @@
 import { create } from 'zustand';
 
-export type TravelType = 'Business' | 'Vacation' | 'Family' | 'Sports' | 'Camping' | 'Other';
+export type TravelType =
+  | 'Business'
+  | 'Vacation'
+  | 'Family'
+  | 'Sports'
+  | 'Camping'
+  | 'Culture'
+  | 'Nature'
+  | 'Romantic'
+  | 'Gastronomy'
+  | 'Beach'
+  | 'Winter'
+  | 'Adventure'
+  | 'Photography'
+  | 'Shopping'
+  | 'Weekend'
+  | 'Health'
+  | 'Event'
+  | 'RoadTrip'
+  | 'Other';
 
 export interface TravelPlan {
   id: string;

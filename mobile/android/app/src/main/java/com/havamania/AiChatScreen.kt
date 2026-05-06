@@ -129,13 +129,7 @@ fun AiChatScreen(
 
     var showEndChatDialog by remember { mutableStateOf(false) }
 
-    val bgColors = remember(isDark) {
-        if (isDark) {
-            listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A))
-        } else {
-            listOf(Color(0xFFEAF7F0), Color(0xFFD8F0E4), Color(0xFFCBE9DB))
-        }
-    }
+    val bgColors = themeColors.gradientPrimary
 
     val listState = rememberLazyListState()
 

@@ -62,7 +62,7 @@ fun AiHistoryScreen(
                     contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(historyItems) { item ->
+                    items(historyItems, key = { it.id }) { item ->
                         AiHistoryCard(
                             item = item,
                             onClick = { onNavigateToDetail(item.id) },

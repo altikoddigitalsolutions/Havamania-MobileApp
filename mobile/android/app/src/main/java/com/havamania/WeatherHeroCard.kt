@@ -37,14 +37,11 @@ private const val TAG = "WeatherHeroCard"
 
 // ── Models & Styles ──────────────────────────────────────────────────────────
 
-enum class WeatherEffectType { NONE, SUNNY, CLOUDY, RAINY, NIGHT, SNOW, FOG, THUNDER }
-
 data class WeatherCardStyle(
     val gradientColors: List<Color>,
     val lightOverlay: Color,
     val accentColor: Color,
     val icon: ImageVector,
-    val effectType: WeatherEffectType,
     val isDark: Boolean,
     val styleName: String
 )
@@ -79,7 +76,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color.White.copy(alpha = 0.3f),
                 accentColor = Color(0xFF475569),
                 icon = Icons.Rounded.Cloud,
-                effectType = WeatherEffectType.CLOUDY,
                 isDark = false,
                 styleName = "CLOUDY_MORNING"
             )
@@ -88,7 +84,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color.White.copy(alpha = 0.2f),
                 accentColor = Color(0xFF334155),
                 icon = Icons.Rounded.Cloud,
-                effectType = WeatherEffectType.CLOUDY,
                 isDark = false,
                 styleName = "CLOUDY_DAY"
             )
@@ -97,7 +92,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color(0xFFFFCCBC).copy(alpha = 0.1f),
                 accentColor = Color(0xFFF1F5F9),
                 icon = Icons.Rounded.Cloud,
-                effectType = WeatherEffectType.CLOUDY,
                 isDark = true,
                 styleName = "CLOUDY_EVENING"
             )
@@ -106,7 +100,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color.Transparent,
                 accentColor = Color(0xFFA7B5C5),
                 icon = Icons.Rounded.Cloud,
-                effectType = WeatherEffectType.NIGHT,
                 isDark = true,
                 styleName = "CLOUDY_NIGHT"
             )
@@ -120,7 +113,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color(0xFFFFF9C4).copy(alpha = 0.4f),
                 accentColor = Color(0xFFD84315),
                 icon = Icons.Rounded.WbSunny,
-                effectType = WeatherEffectType.SUNNY,
                 isDark = false,
                 styleName = "SUNNY_MORNING"
             )
@@ -129,7 +121,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color.White.copy(alpha = 0.3f),
                 accentColor = Color(0xFF0369A1),
                 icon = Icons.Rounded.WbSunny,
-                effectType = WeatherEffectType.SUNNY,
                 isDark = false,
                 styleName = "SUNNY_DAY"
             )
@@ -138,7 +129,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color(0xFFF472B6).copy(alpha = 0.2f),
                 accentColor = Color.White,
                 icon = Icons.Rounded.WbSunny,
-                effectType = WeatherEffectType.SUNNY,
                 isDark = true,
                 styleName = "SUNNY_EVENING"
             )
@@ -147,7 +137,6 @@ object WeatherStyleResolver {
                 lightOverlay = Color.Transparent,
                 accentColor = Color(0xFFFDE68A),
                 icon = Icons.Rounded.NightsStay,
-                effectType = WeatherEffectType.NIGHT,
                 isDark = true,
                 styleName = "SUNNY_NIGHT"
             )
@@ -157,7 +146,6 @@ object WeatherStyleResolver {
     private fun resolvePartlyCloudyStyle(time: TimeOfDay): WeatherCardStyle {
         val base = resolveSunnyStyle(time)
         return base.copy(
-            effectType = WeatherEffectType.CLOUDY,
             icon = if (time == TimeOfDay.NIGHT) Icons.Rounded.CloudQueue else Icons.Rounded.WbCloudy,
             styleName = "PARTLY_CLOUDY_$time"
         )
@@ -171,7 +159,6 @@ object WeatherStyleResolver {
             lightOverlay = Color.White.copy(alpha = 0.05f),
             accentColor = Color(0xFF60A5FA),
             icon = Icons.Rounded.WaterDrop,
-            effectType = WeatherEffectType.RAINY,
             isDark = true,
             styleName = "RAIN_$time"
         )
@@ -183,7 +170,6 @@ object WeatherStyleResolver {
             lightOverlay = Color(0xFFC084FC).copy(alpha = 0.1f),
             accentColor = Color(0xFFC084FC),
             icon = Icons.Rounded.Thunderstorm,
-            effectType = WeatherEffectType.THUNDER,
             isDark = true,
             styleName = "THUNDER_$time"
         )
@@ -197,7 +183,6 @@ object WeatherStyleResolver {
             lightOverlay = Color.White.copy(alpha = 0.4f),
             accentColor = if (isNight) Color(0xFF94A3B8) else Color(0xFF0EA5E9),
             icon = Icons.Rounded.AcUnit,
-            effectType = WeatherEffectType.SNOW,
             isDark = isNight,
             styleName = "SNOW_$time"
         )
@@ -209,7 +194,6 @@ object WeatherStyleResolver {
             lightOverlay = Color.White.copy(alpha = 0.2f),
             accentColor = Color(0xFF475569),
             icon = Icons.Rounded.FilterDrama,
-            effectType = WeatherEffectType.FOG,
             isDark = false,
             styleName = "FOG_$time"
         )
@@ -217,17 +201,18 @@ object WeatherStyleResolver {
 
     private fun applyThemePolish(style: WeatherCardStyle, theme: AppTheme): WeatherCardStyle {
         // Subtle seasonal color mixing
-        val polishColor = when (theme) {
-            AppTheme.SPRING -> Color(0xFFD1FAE5)
-            AppTheme.SUMMER -> Color(0xFFFFF7ED)
-            AppTheme.AUTUMN -> Color(0xFFFEF3C7)
-            AppTheme.WINTER -> Color(0xFFEFF6FF)
-            else -> null
+        val (polishColor, accentTweak) = when (theme) {
+            AppTheme.SPRING_DAY, AppTheme.SPRING_NIGHT -> Color(0xFFD1FAE5) to Color(0xFF10B981)
+            AppTheme.SUMMER_DAY, AppTheme.SUMMER_NIGHT -> Color(0xFFFFF7ED) to Color(0xFFF59E0B)
+            AppTheme.AUTUMN_DAY, AppTheme.AUTUMN_NIGHT -> Color(0xFFFEF3C7) to Color(0xFFD97706)
+            AppTheme.WINTER_DAY, AppTheme.WINTER_NIGHT -> Color(0xFFEFF6FF) to Color(0xFF3B82F6)
+            else -> null to null
         }
 
         return if (polishColor != null) {
             style.copy(
-                gradientColors = style.gradientColors.map { it.lerp(polishColor, 0.08f) }
+                gradientColors = style.gradientColors.map { it.lerp(polishColor, 0.08f) },
+                accentColor = if (accentTweak != null) style.accentColor.lerp(accentTweak, 0.15f) else style.accentColor
             )
         } else style
     }
@@ -312,7 +297,13 @@ fun WeatherHeroCard(
         LiveBackgroundLayer(colors = style.gradientColors, isReducedMotion = isReducedMotion)
 
         // Layer 2: Atmospheric Effect
-        AtmosphereEffectLayer(type = style.effectType, accent = style.accentColor, isReducedMotion = isReducedMotion)
+        WeatherEffectLayer(
+            condition = condition,
+            timeOfDay = timeOfDay,
+            weatherCode = weatherCode,
+            isAnimationEnabled = !isReducedMotion,
+            parallaxOffset = parallaxOffset
+        )
 
         // Layer 3: Light Overlay
         Box(modifier = Modifier.fillMaxSize().background(style.lightOverlay))
@@ -344,7 +335,7 @@ fun WeatherHeroCard(
     }
 }
 
-// ── Background & Effects ─────────────────────────────────────────────────────
+// ── Background ─────────────────────────────────────────────────────────────
 
 @Composable
 fun LiveBackgroundLayer(colors: List<Color>, isReducedMotion: Boolean) {
@@ -363,117 +354,6 @@ fun LiveBackgroundLayer(colors: List<Color>, isReducedMotion: Boolean) {
         )
         drawRect(brush)
     }
-}
-
-@Composable
-fun AtmosphereEffectLayer(type: WeatherEffectType, accent: Color, isReducedMotion: Boolean) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        when (type) {
-            WeatherEffectType.SUNNY -> SunGlowEffect(accent, isReducedMotion)
-            WeatherEffectType.CLOUDY -> CloudDriftEffect(isReducedMotion)
-            WeatherEffectType.RAINY -> RainEffect(isReducedMotion)
-            WeatherEffectType.NIGHT -> StarFieldEffect(isReducedMotion)
-            WeatherEffectType.SNOW -> SnowEffect(isReducedMotion)
-            WeatherEffectType.FOG -> FogEffect(isReducedMotion)
-            WeatherEffectType.THUNDER -> ThunderEffect(accent, isReducedMotion)
-            else -> Unit
-        }
-    }
-}
-
-@Composable
-fun SunGlowEffect(accent: Color, isReducedMotion: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "sun")
-    val pulse by if (isReducedMotion) remember { mutableStateOf(0.1f) } else {
-        infiniteTransition.animateFloat(
-            initialValue = 0.05f, targetValue = 0.15f,
-            animationSpec = infiniteRepeatable(tween(10000, easing = SineEaseInOut), RepeatMode.Reverse),
-            label = "pulse"
-        )
-    }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(accent.copy(alpha = pulse), Color.Transparent),
-                center = Offset(size.width * 0.9f, size.height * 0.1f),
-                radius = size.width * 0.7f
-            ),
-            radius = size.width * 0.7f,
-            center = Offset(size.width * 0.9f, size.height * 0.1f)
-        )
-    }
-}
-
-@Composable
-fun CloudDriftEffect(isReducedMotion: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "clouds")
-    val drift by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(60000, easing = LinearEasing)),
-        label = "drift"
-    )
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        // Draw soft hazy "clouds" drifting across the top/sides
-        val cloudColor = Color.White.copy(alpha = 0.1f)
-        val x = drift * size.width
-
-        drawCircle(
-            color = cloudColor,
-            radius = size.width * 0.4f,
-            center = Offset(x % size.width, size.height * 0.2f)
-        )
-        drawCircle(
-            color = cloudColor,
-            radius = size.width * 0.3f,
-            center = Offset((x + size.width * 0.5f) % size.width, size.height * 0.1f)
-        )
-    }
-}
-
-@Composable
-fun StarFieldEffect(isReducedMotion: Boolean) {
-    val stars = remember { List(20) { Offset(Random.nextFloat(), Random.nextFloat() * 0.7f) } }
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        stars.forEach { star ->
-            drawCircle(
-                color = Color.White.copy(alpha = 0.3f),
-                radius = 1.dp.toPx(),
-                center = Offset(star.x * size.width, star.y * size.height)
-            )
-        }
-    }
-}
-
-@Composable
-fun ThunderEffect(accent: Color, isReducedMotion: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "thunder")
-    val flash by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 12000
-                0f at 0
-                0.3f at 9000
-                0f at 9100
-                0.5f at 9300
-                0f at 9500
-            }
-        ),
-        label = "flash"
-    )
-
-    if (flash > 0) {
-        Box(modifier = Modifier.fillMaxSize().background(accent.copy(alpha = flash * 0.15f)))
-    }
-}
-
-@Composable
-fun FogEffect(isReducedMotion: Boolean) {
-    Box(modifier = Modifier.fillMaxSize().alpha(0.15f).background(
-        Brush.verticalGradient(listOf(Color.White, Color.Transparent))
-    ).blur(16.dp))
 }
 
 // ── Content ──────────────────────────────────────────────────────────────────
@@ -616,58 +496,3 @@ fun GlassBottomBar(
 }
 
 data class WeatherDetail(val icon: ImageVector, val value: String)
-
-val SineEaseInOut = Easing { fraction ->
-    (-(Math.cos(Math.PI * fraction) - 1) / 2).toFloat()
-}
-
-// ── Reused effects from previous version (Keep Rain) ─────────────────────────
-
-@Composable
-fun RainEffect(isReducedMotion: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "rain")
-    val progress by if (isReducedMotion) remember { mutableStateOf(0f) } else {
-        infiniteTransition.animateFloat(
-            initialValue = 0f, targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing)),
-            label = "prog"
-        )
-    }
-    val drops = remember { List(40) { Offset(Random.nextFloat(), Random.nextFloat()) } }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        drops.forEach { drop ->
-            val x = drop.x * size.width
-            val y = if (isReducedMotion) drop.y * size.height else ((drop.y + progress) % 1f) * size.height
-            drawLine(
-                color = Color.White.copy(alpha = 0.15f),
-                start = Offset(x, y),
-                end = Offset(x + 1.dp.toPx(), y + 10.dp.toPx()),
-                strokeWidth = 1.dp.toPx()
-            )
-        }
-    }
-}
-
-@Composable
-fun SnowEffect(isReducedMotion: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "snow")
-    val progress by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing)),
-        label = "snow_prog"
-    )
-    val flakes = remember { List(30) { Offset(Random.nextFloat(), Random.nextFloat()) } }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        flakes.forEach { flake ->
-            val x = flake.x * size.width
-            val y = ((flake.y + progress) % 1f) * size.height
-            drawCircle(
-                color = Color.White.copy(alpha = 0.4f),
-                radius = 2.dp.toPx(),
-                center = Offset(x, y)
-            )
-        }
-    }
-}

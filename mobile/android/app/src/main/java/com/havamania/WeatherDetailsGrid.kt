@@ -131,7 +131,8 @@ fun WeatherDetailCard(
 ) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -379,11 +380,3 @@ fun WeatherSuitabilityCard(
     }
 }
 
-@Composable
-fun WeatherDetailsGrid(
-    modifier: Modifier = Modifier,
-    details: List<WeatherDetailData>,
-    onItemClick: (WeatherDetailData) -> Unit = {}
-) {
-    // Legacy support - although WeatherDetailsPanel is preferred
-}
