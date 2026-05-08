@@ -420,54 +420,53 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
         return (
           <View style={StyleSheet.absoluteFill}>
-            {/* 1. SOFT ATMOSPHERIC GLOW */}
+            {/* 1. POWERFUL ATMOSPHERIC GLOW */}
             <Animated.View style={[styles.premiumSunGlow, {
               backgroundColor: isEvening ? '#FF8A3D' : '#FFB703',
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0.16, 0.26]
+                outputRange: [0.25, 0.38]
               }),
               transform: [
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) },
-                { translateX: 40 },
-                { translateY: -40 }
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) }
               ]
             }]} />
 
-            {/* 2. ROTATING SHORT RAYS (Symmetric) */}
+            {/* 2. ROTATING RAYS (Symmetric & Short) */}
             <Animated.View style={[styles.sunRaysContainer, {
-              opacity: isPartly ? 0.08 : isMostlySunny ? 0.12 : 0.2,
+              opacity: isPartly ? 0.15 : isMostlySunny ? 0.25 : 0.4,
               transform: [
                 { rotate: masterAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }
               ]
             }]}>
                {[...Array(12)].map((_, i) => (
-                 <View key={i} style={[styles.sunRayShort, { transform: [{ rotate: `${i * 30}deg` }, { translateY: 32 }] }]} />
+                 <View key={i} style={[styles.sunRayShort, {
+                   backgroundColor: '#FFE8A3',
+                   transform: [{ rotate: `${i * 30}deg` }, { translateY: 54 }]
+                 }]} />
                ))}
             </Animated.View>
 
-            {/* 3. MAIN SUN DISK */}
-            <Animated.View style={[styles.sunDiskSmall, {
+            {/* 3. MAIN SUN DISK (Premium 72dp Disk) */}
+            <Animated.View style={[styles.sunDiskPremium, {
               backgroundColor: '#FFD166',
-              opacity: isPartly ? 0.7 : 1,
+              opacity: isPartly ? 0.8 : 0.98,
               transform: [
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) }
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] }) }
               ]
             }]}>
-              <View style={[styles.sunDiskInnerGlow, { backgroundColor: '#FFE8A3', opacity: 0.4 }]}>
-                {/* Optional: Emoji integration if needed, but keeping it clean and premium */}
-              </View>
+              <View style={[styles.sunDiskInnerGlow, { backgroundColor: '#FFF1B8', opacity: 0.75 }]} />
             </Animated.View>
 
-            {/* 4. CLOUD HAZE (Only for Mostly Sunny/Partly) */}
+            {/* 4. OPTIONAL CLOUD HAZE (For Mostly Sunny) */}
             {(isMostlySunny || isPartly) && (
               <Animated.View style={[StyleSheet.absoluteFill, {
                 opacity: isPartly ? 0.3 : 0.2,
-                transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-25, 25] }) }]
+                transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] }) }]
               }]}>
-                <View style={[styles.cloudHaze, { top: 30, right: 10, width: 200, height: 110 }]} />
-                <View style={[styles.cloudHaze, { top: 120, left: 20, width: 140, height: 70 }]} />
+                <View style={[styles.cloudHaze, { top: 120, right: 20, width: 180, height: 90, opacity: 0.15 }]} />
+                <View style={[styles.cloudHaze, { top: 180, left: 40, width: 140, height: 70, opacity: 0.1 }]} />
               </Animated.View>
             )}
           </View>
@@ -686,8 +685,8 @@ const styles = StyleSheet.create({
   },
   sunRaysContainer: {
     position: 'absolute',
-    top: 25,
-    right: 25,
+    top: 10,
+    right: 10,
     width: 120,
     height: 120,
     justifyContent: 'center',
@@ -696,10 +695,42 @@ const styles = StyleSheet.create({
   },
   sunRayShort: {
     position: 'absolute',
-    width: 3,
-    height: 12,
+    width: 4,
+    height: 14,
     backgroundColor: '#FFF',
     borderRadius: 2,
+  },
+  sunDiskPremium: {
+    position: 'absolute',
+    top: 34,
+    right: 34,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    zIndex: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD166',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 8
+  },
+  sunDiskInnerGlow: {
+    width: '75%',
+    height: '75%',
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  premiumSunGlow: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    zIndex: 1
   },
   sunDiskSmall: {
     position: 'absolute',
@@ -716,22 +747,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 10,
     elevation: 4
-  },
-  sunDiskInnerGlow: {
-    width: '75%',
-    height: '75%',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  premiumSunGlow: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    zIndex: 1
   },
   sunGlow: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140 },
   sunGlowMini: { position: 'absolute', top: 30, right: 30, width: 80, height: 80, borderRadius: 40 },

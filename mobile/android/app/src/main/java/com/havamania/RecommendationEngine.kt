@@ -129,47 +129,74 @@ object RecommendationEngine {
         interests: Set<String> = emptySet()
     ): String {
         val prompt = userPrompt.lowercase()
-        val city = weatherData?.cityName ?: "bulunduğun şehir"
-        val temp = weatherData?.temperature ?: "mevcut"
-        val cond = weatherData?.condition?.lowercase() ?: "değişken"
-        val precip = weatherData?.precipitationProbability ?: 0
+
+        if (weatherData == null) {
+            return "AI bağlantısında kısa bir sorun yaşadım. Şu an güncel hava durumu verilerine de ulaşamıyorum. Lütfen internet bağlantını kontrol edip tekrar dene."
+        }
+
+        val city = weatherData.cityName
+        val temp = weatherData.temperature
+        val feelsLike = weatherData.feelsLike
+        val cond = weatherData.condition.lowercase()
+        val precip = weatherData.precipitationProbability ?: 0
+        val wind = weatherData.windSpeed ?: 0.0
+        val uv = weatherData.uvIndex ?: 0
 
         val baseHeader = "AI bağlantısında kısa bir sorun yaşadım ama mevcut hava verilerine göre yardımcı olayım. "
+        val currentStatus = "$city’da şu an hava $cond, sıcaklık $temp ve hissedilen $feelsLike. "
 
         return when {
-            prompt.contains("giys") || prompt.contains("giyecek") || prompt.contains("ne giy") -> {
-                val advice = if ((weatherData?.temperature?.filter { it.isDigit() || it == '-' }?.toIntOrNull() ?: 20) < 15) {
-                    "Hava serin ($temp) olduğu için kalın bir mont veya katmanlı giyinmeni öneririm."
-                } else {
-                    "Hava $temp civarında. İnce bir ceket veya rahat bir tişört yeterli olabilir."
+            prompt.contains("giys") || prompt.contains("giyecek") || prompt.contains("ne giy") || prompt.contains("kıyafet") -> {
+                val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+                val advice = when {
+                    tempVal < 10 -> "Hava oldukça soğuk, kalın bir mont, bere ve atkı almanı öneririm."
+                    tempVal < 18 -> "Hava serin, orta kalınlıkta bir ceket veya hırka giymek iyi olacaktır."
+                    tempVal < 25 -> "Hava ılık ve rahat; hafif bir ceket veya sweatshirt yeterli olur."
+                    else -> "Hava sıcak; ince, pamuklu ve ferah kıyafetler tercih etmelisin."
                 }
-                val rainAdvice = if (precip > 30) " Ayrıca yağış ihtimaline karşı şemsiyeni yanına almalısın." else ""
-                baseHeader + "$city için hava şu an $cond. $advice$rainAdvice"
+                val rainAdvice = if (precip > 30) " Ayrıca %$precip yağış ihtimali var, şemsiyeni sakın unutma." else ""
+                val uvAdvice = if (uv > 5) " UV indeksi $uv olduğu için güneş koruyucu kullanmanı öneririm." else ""
+                baseHeader + currentStatus + advice + rainAdvice + uvAdvice
             }
-            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("çıkılır mı") -> {
-                val advice = if (precip > 40 || (weatherData?.windSpeed ?: 0.0) > 30.0) {
-                    "Hava koşulları ($cond) şu an dış mekan aktiviteleri için pek elverişli değil, kapalı alanları tercih edebilirsin."
+            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("çıkılır mı") || prompt.contains("spor") -> {
+                val isBadWeather = precip > 40 || wind > 35.0 || uv > 8
+                val advice = if (isBadWeather) {
+                    "Şu anki koşullar ($cond, rüzgar $wind km/s) dışarıda uzun süre vakit geçirmek için pek ideal değil. Kapalı alan aktivitelerini değerlendirebilirsin."
                 } else {
-                    "Hava şu an $cond. Dışarı çıkmak ve yürüyüş yapmak için oldukça uygun bir zaman."
+                    "Hava durumu dışarı çıkmak, yürüyüş yapmak veya hafif tempolu bir spor için oldukça elverişli görünüyor."
                 }
-                baseHeader + advice
+                baseHeader + currentStatus + advice
             }
-            prompt.contains("hafta sonu") -> {
-                baseHeader + "Hafta sonu tahminini günlük verilerden kontrol ettim. Yağış ihtimali olan günlerde açık hava planlarına kapalı alan alternatifi eklemek iyi olur."
-            }
-            prompt.contains("seyahat") || prompt.contains("valiz") || prompt.contains("yolculuk") -> {
-                baseHeader + "Yaklaşan seyahatlerin için hava değişken olabilir. Valizine ince katman, yağmurluk ve rahat ayakkabı eklemek iyi fikir."
-            }
-            prompt.contains("yağmur") || prompt.contains("yağış") -> {
+            prompt.contains("yağmur") || prompt.contains("yağış") || prompt.contains("şemsiye") -> {
                 val advice = if (precip > 20) {
-                    "Bugün %$precip oranında yağış ihtimali var. Yanına şemsiye almanı ve su geçirmez ayakkabı tercih etmeni öneririm."
+                    "Bugün $city için %$precip oranında bir yağış ihtimali bulunuyor. Tedbirli olup şemsiye taşıman akıllıca olur."
                 } else {
-                    "Bugün için belirgin bir yağış beklenmiyor ama gökyüzü $cond görünüyor."
+                    "Bugün için belirgin bir yağış beklenmiyor, gökyüzü genellikle $cond."
                 }
-                baseHeader + advice
+                baseHeader + currentStatus + advice
+            }
+            prompt.contains("rüzgar") || prompt.contains("fırtına") -> {
+                val advice = if (wind > 20.0) {
+                    "Rüzgar hızı $wind km/s seviyesinde. Dışarıdayken biraz esintili hissedebilirsin, rüzgar kesici bir şeyler giymek konforunu artırır."
+                } else {
+                    "Rüzgar şu an oldukça hafif ($wind km/s), hava sakin görünüyor."
+                }
+                baseHeader + currentStatus + advice
+            }
+            prompt.contains("uv") || prompt.contains("güneş") || prompt.contains("krem") -> {
+                val advice = if (uv > 4) {
+                    "UV indeksi $uv seviyesinde, yani güneş etkisi belirgin. Özellikle öğle saatlerinde güneş kremi ve şapka kullanmanı öneririm."
+                } else {
+                    "Güneşin yakıcı etkisi şu an düşük (UV: $uv), ancak yine de gözlerini korumak için güneş gözlüğü takabilirsin."
+                }
+                baseHeader + currentStatus + advice
+            }
+            prompt.contains("hafta sonu") || prompt.contains("tahmin") -> {
+                baseHeader + "Hafta sonu detaylarına AI erişimim şu an kısıtlı ama genel tabloya göre planlarına kapalı alan alternatifleri eklemeni öneririm."
             }
             else -> {
-                baseHeader + "Şu an $city için hava $cond ve sıcaklık $temp. Detaylı analiz için daha sonra tekrar deneyebilir veya ana ekrandaki saatlik ve günlük tabloları inceleyebilirsin."
+                val extraInfo = "Yağış ihtimali %$precip, rüzgar $wind km/s ve UV indeksi $uv seviyesinde."
+                baseHeader + currentStatus + extraInfo + " Başka bir konuda sorunuz olursa buradayım!"
             }
         }
     }

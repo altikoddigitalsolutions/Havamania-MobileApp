@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,16 +42,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.*
 
 // --- VIEWMODEL ---
-class AiChatViewModel : ViewModel() {
+class AiChatViewModel(application: Application) : AndroidViewModel(application) {
     private val api = AltikodChatFactory.create()
     private val botId = "1"
     private var sessionId = UUID.randomUUID().toString()
+
+    private val repository: WeatherRepository by lazy {
+        val database = WeatherDatabase.getDatabase(application)
+        WeatherRepository(weatherDao = database.weatherDao())
+    }
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -66,6 +74,24 @@ class AiChatViewModel : ViewModel() {
 
     init {
         loadConfig()
+        ensureWeatherData()
+    }
+
+    private fun ensureWeatherData() {
+        viewModelScope.launch {
+            if (weatherData != null) return@launch
+            try {
+                // Shared source of truth check: try to get from default city cache
+                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).firstOrNull()?.let { defaultCity ->
+                    repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                        .firstOrNull()?.let { data ->
+                            weatherData = data
+                        }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AssistantData", "Failed to pre-fetch weather data: ${e.message}")
+            }
+        }
     }
 
     private fun loadConfig() {
@@ -79,46 +105,74 @@ class AiChatViewModel : ViewModel() {
         }
     }
 
-    fun sendMessage(text: String, systemContext: String? = null) {
+    fun sendMessage(text: String, systemContext: String? = null, isRetry: Boolean = false) {
         if (text.isBlank() || _isLoading.value) return
 
-        val userMsg = AltikodChatMessage(text = text, isUser = true)
-        _messages.value = _messages.value + userMsg
+        if (!isRetry) {
+            val userMsg = AltikodChatMessage(text = text, isUser = true)
+            // Duplicating check for quick clicks
+            val lastMsg = _messages.value.lastOrNull { it.isUser }
+            if (lastMsg == null || lastMsg.text != text || System.currentTimeMillis() - lastMsg.timestamp > 2000) {
+                _messages.value = _messages.value + userMsg
+            }
+        }
+
         _isLoading.value = true
 
         val fullQuestion = if (systemContext != null) "$systemContext $text" else text
 
         viewModelScope.launch {
-            try {
-                // Timeout logic
-                val response = kotlinx.coroutines.withTimeout(20000) {
-                    api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
+            var retryCount = 0
+            var success = false
+
+            android.util.Log.d("AssistantRequest",
+                "prompt=$text, city=${weatherData?.cityName}, " +
+                "hasCurrentWeather=${weatherData != null}, " +
+                "temperature=${weatherData?.temperature}, " +
+                "condition=${weatherData?.condition}")
+
+            while (!success && retryCount <= 1) {
+                try {
+                    // Timeout logic: 20 seconds
+                    val response = kotlinx.coroutines.withTimeout(20000) {
+                        api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
+                    }
+
+                    if (response.answer.isBlank()) {
+                        throw Exception("Empty response from AI")
+                    }
+
+                    _messages.value = _messages.value + AltikodChatMessage(text = response.answer, isUser = false)
+                    success = true
+                } catch (e: Exception) {
+                    retryCount++
+                    if (retryCount > 1) {
+                        android.util.Log.e("AssistantError",
+                            "errorType=${e.javaClass.simpleName}, " +
+                            "exceptionMessage=${e.message}, " +
+                            "userPrompt=$text, " +
+                            "city=${weatherData?.cityName}")
+
+                        val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
+                            userPrompt = text,
+                            weatherData = weatherData,
+                            aboutMe = userAboutMe,
+                            interests = userInterests
+                        )
+
+                        _messages.value = _messages.value + AltikodChatMessage(
+                            text = fallbackText,
+                            isUser = false,
+                            isFallback = true,
+                            retryPrompt = text
+                        )
+                    } else {
+                        android.util.Log.w("AssistantRetry", "Retrying AI request... (Attempt $retryCount)")
+                        kotlinx.coroutines.delay(1000)
+                    }
                 }
-
-                if (response.answer.isBlank()) {
-                    throw Exception("Empty response from AI")
-                }
-
-                _messages.value = _messages.value + AltikodChatMessage(text = response.answer, isUser = false)
-            } catch (e: Exception) {
-                android.util.Log.e("AssistantError", "type=${e.javaClass.simpleName}, message=${e.message}, userPrompt=$text, city=${weatherData?.cityName}, hasWeatherData=${weatherData != null}")
-
-                val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
-                    userPrompt = text,
-                    weatherData = weatherData,
-                    aboutMe = userAboutMe,
-                    interests = userInterests
-                )
-
-                _messages.value = _messages.value + AltikodChatMessage(
-                    text = fallbackText,
-                    isUser = false,
-                    isFallback = true,
-                    retryPrompt = text
-                )
-            } finally {
-                _isLoading.value = false
             }
+            _isLoading.value = false
         }
     }
 
@@ -278,7 +332,7 @@ fun AiChatScreen(
                             message = message,
                             themeColors = themeColors,
                             onRetry = { prompt ->
-                                viewModel.sendMessage(prompt)
+                                viewModel.sendMessage(prompt, isRetry = true)
                             }
                         )
                     }
