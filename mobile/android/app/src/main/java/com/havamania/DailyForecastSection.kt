@@ -1,5 +1,6 @@
 package com.havamania
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -279,6 +280,13 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
         label = "pressScale"
     )
 
+    SideEffect {
+        Log.d(
+            "DailyForecastStyle",
+            "label=${if (data.isToday) "Bugün" else data.day} date=${data.date} selected=$isSelected today=${data.isToday}"
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -286,11 +294,8 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                when {
-                    isSelected -> themeColors.accent.copy(alpha = 0.15f)
-                    data.isToday -> themeColors.accent.copy(alpha = 0.05f)
-                    else -> Color.Transparent
-                }
+                if (isSelected) themeColors.accent.copy(alpha = 0.15f)
+                else Color.Transparent
             )
             .then(
                 if (isSelected) Modifier.border(1.dp, themeColors.accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
@@ -308,10 +313,10 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
         Text(
             text = if (data.isToday) "Bugün" else data.day.split(" ").last(),
             style = MaterialTheme.typography.bodyLarge.copy(
-                fontWeight = if (data.isToday || isSelected) FontWeight.Black else FontWeight.Bold,
+                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                 fontSize = 15.sp
             ),
-            color = if (data.isToday || isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.8f),
+            color = if (isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.8f),
             modifier = Modifier.width(85.dp)
         )
 
@@ -323,7 +328,7 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
             Icon(
                 imageVector = WeatherMapper.getIconFromName(data.iconName),
                 contentDescription = null,
-                tint = if (data.isToday || isSelected) style.accentColor else style.iconColor.copy(alpha = 0.9f),
+                tint = if (isSelected) style.accentColor else style.iconColor.copy(alpha = 0.9f),
                 modifier = Modifier.size(28.dp) // Larger icon
             )
         }
@@ -347,7 +352,7 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
             min = data.minTemp,
             max = data.maxTemp,
             style = style,
-            isToday = data.isToday || isSelected
+            isSelected = isSelected
         )
 
         // Max Temp
@@ -370,7 +375,7 @@ fun TemperatureRangeBar(
     min: Int,
     max: Int,
     style: DailyForecastStyle,
-    isToday: Boolean = false
+    isSelected: Boolean = false
 ) {
     val themeColors = HavamaniaTheme.colors
     var startAnim by remember { mutableStateOf(false) }
@@ -396,7 +401,7 @@ fun TemperatureRangeBar(
         val startOffset = 0.2f
 
         // Glow for the bar
-        if (isToday) {
+        if (isSelected) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(rangeWidth)

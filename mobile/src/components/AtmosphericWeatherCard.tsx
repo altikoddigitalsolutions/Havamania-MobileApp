@@ -17,6 +17,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export enum WeatherCondition {
   SUNNY = 'SUNNY',
+  MOSTLY_SUNNY = 'MOSTLY_SUNNY',
   CLEAR = 'CLEAR',
   CLEAR_NIGHT = 'CLEAR_NIGHT',
   CLOUDY = 'CLOUDY',
@@ -50,7 +51,7 @@ interface WeatherCardStyle {
 
 const getRawCondition = (code: number): WeatherCondition => {
   if (code === 0) return WeatherCondition.SUNNY;
-  if (code === 1) return WeatherCondition.CLEAR;
+  if (code === 1) return WeatherCondition.MOSTLY_SUNNY;
   if (code === 2) return WeatherCondition.PARTLY_CLOUDY;
   if (code === 3) return WeatherCondition.CLOUDY;
   if (code === 45 || code === 48) return WeatherCondition.FOG;
@@ -73,7 +74,7 @@ const normalizeConditionForDisplay = (
   timeOfDay: TimeOfDay
 ): WeatherCondition => {
   if (timeOfDay === TimeOfDay.NIGHT) {
-    if (rawCondition === WeatherCondition.SUNNY || rawCondition === WeatherCondition.CLEAR) {
+    if (rawCondition === WeatherCondition.SUNNY || rawCondition === WeatherCondition.MOSTLY_SUNNY || rawCondition === WeatherCondition.CLEAR) {
       return WeatherCondition.CLEAR_NIGHT;
     }
     if (rawCondition === WeatherCondition.PARTLY_CLOUDY) {
@@ -105,11 +106,21 @@ const resolveWeatherCardStyle = (
   switch (condition) {
     case WeatherCondition.SUNNY:
       if (timeOfDay === TimeOfDay.MORNING) {
-        style = { gradients: ['#BDEBFF', '#FFD6A5', '#FFF3B0'], effect: 'sunny', isWhiteText: false, accent: '#FFF3B0', name: 'SUNNY_MORNING' };
+        style = { gradients: ['#BDEBFF', '#FFD6A5', '#FFF3B0'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'SUNNY_MORNING' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
-        style = { gradients: ['#FFB86B', '#FF7E67', '#7F5A83'], effect: 'sunny', isWhiteText: true, accent: '#FFB86B', name: 'SUNNY_EVENING' };
+        style = { gradients: ['#FFB86B', '#FF7E67', '#7F5A83'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'SUNNY_EVENING' };
       } else {
-        style = { gradients: ['#56CCF2', '#2F80ED', '#FBCB45'], effect: 'sunny', isWhiteText: true, accent: '#FBCB45', name: 'SUNNY_DAY' };
+        style = { gradients: ['#67D1FF', '#7EDBFF', '#B8EDFF'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'SUNNY_DAY' };
+      }
+      break;
+
+    case WeatherCondition.MOSTLY_SUNNY:
+      if (timeOfDay === TimeOfDay.MORNING) {
+        style = { gradients: ['#B5E5F9', '#D9E9F2'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'MOSTLY_SUNNY_MORNING' };
+      } else if (timeOfDay === TimeOfDay.EVENING) {
+        style = { gradients: ['#F2994A', '#F2C94C', '#A9DDF8'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'MOSTLY_SUNNY_EVENING' };
+      } else {
+        style = { gradients: ['#5EC6F2', '#A9DDF8'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'MOSTLY_SUNNY_DAY' };
       }
       break;
 
@@ -232,8 +243,11 @@ const getDisplayTitle = (condition: WeatherCondition, timeOfDay: TimeOfDay, orig
 
   // Gündüz Koşulları
   if (timeOfDay === TimeOfDay.DAY || timeOfDay === TimeOfDay.MORNING) {
-    if (condition === WeatherCondition.SUNNY || condition === WeatherCondition.CLEAR) {
+    if (condition === WeatherCondition.SUNNY) {
       return 'Güneşli';
+    }
+    if (condition === WeatherCondition.MOSTLY_SUNNY || condition === WeatherCondition.CLEAR) {
+      return 'Çoğunlukla Güneşli';
     }
   }
 
@@ -400,12 +414,63 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
     switch (style.effect) {
       case 'sunny':
+        const isMostlySunny = displayCondition === WeatherCondition.MOSTLY_SUNNY;
+        const isEvening = timeOfDay === TimeOfDay.EVENING;
+        const isPartly = displayCondition === WeatherCondition.PARTLY_CLOUDY;
+
         return (
-          <Animated.View style={[styles.sunGlow, {
-            backgroundColor: style.accent,
-            opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.28] }),
-            transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) }]
-          }]} />
+          <View style={StyleSheet.absoluteFill}>
+            {/* 1. SOFT ATMOSPHERIC GLOW */}
+            <Animated.View style={[styles.premiumSunGlow, {
+              backgroundColor: isEvening ? '#FF8A3D' : '#FFB703',
+              opacity: pulseAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.16, 0.26]
+              }),
+              transform: [
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) },
+                { translateX: 40 },
+                { translateY: -40 }
+              ]
+            }]} />
+
+            {/* 2. ROTATING SHORT RAYS (Symmetric) */}
+            <Animated.View style={[styles.sunRaysContainer, {
+              opacity: isPartly ? 0.08 : isMostlySunny ? 0.12 : 0.2,
+              transform: [
+                { rotate: masterAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }
+              ]
+            }]}>
+               {[...Array(12)].map((_, i) => (
+                 <View key={i} style={[styles.sunRayShort, { transform: [{ rotate: `${i * 30}deg` }, { translateY: 32 }] }]} />
+               ))}
+            </Animated.View>
+
+            {/* 3. MAIN SUN DISK */}
+            <Animated.View style={[styles.sunDiskSmall, {
+              backgroundColor: '#FFD166',
+              opacity: isPartly ? 0.7 : 1,
+              transform: [
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) }
+              ]
+            }]}>
+              <View style={[styles.sunDiskInnerGlow, { backgroundColor: '#FFE8A3', opacity: 0.4 }]}>
+                {/* Optional: Emoji integration if needed, but keeping it clean and premium */}
+              </View>
+            </Animated.View>
+
+            {/* 4. CLOUD HAZE (Only for Mostly Sunny/Partly) */}
+            {(isMostlySunny || isPartly) && (
+              <Animated.View style={[StyleSheet.absoluteFill, {
+                opacity: isPartly ? 0.3 : 0.2,
+                transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-25, 25] }) }]
+              }]}>
+                <View style={[styles.cloudHaze, { top: 30, right: 10, width: 200, height: 110 }]} />
+                <View style={[styles.cloudHaze, { top: 120, left: 20, width: 140, height: 70 }]} />
+              </Animated.View>
+            )}
+          </View>
         );
 
       case 'rain':
@@ -610,6 +675,64 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   infoValue: { fontSize: 15, fontWeight: '800', marginTop: 2 },
   infoDivider: { width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.1)' },
+  premiumSunGlow: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 450,
+    height: 450,
+    borderRadius: 225,
+    zIndex: 1
+  },
+  sunRaysContainer: {
+    position: 'absolute',
+    top: 25,
+    right: 25,
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2
+  },
+  sunRayShort: {
+    position: 'absolute',
+    width: 3,
+    height: 12,
+    backgroundColor: '#FFF',
+    borderRadius: 2,
+  },
+  sunDiskSmall: {
+    position: 'absolute',
+    top: 55,
+    right: 55,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    zIndex: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FFD166',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 4
+  },
+  sunDiskInnerGlow: {
+    width: '75%',
+    height: '75%',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  premiumSunGlow: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    zIndex: 1
+  },
   sunGlow: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140 },
   sunGlowMini: { position: 'absolute', top: 30, right: 30, width: 80, height: 80, borderRadius: 40 },
   moonGlow: { position: 'absolute', top: 40, right: 40, width: 100, height: 100, borderRadius: 50 },

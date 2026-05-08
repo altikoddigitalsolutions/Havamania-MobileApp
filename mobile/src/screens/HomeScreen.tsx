@@ -269,9 +269,31 @@ export function HomeScreen(): React.JSX.Element {
               <Text style={s.sectionTitle}>{t('home.forecastTitle').toUpperCase()}</Text>
             </View>
           </View>
-          {dailyItems.slice(0, 4).map((item, idx) => (
-            <DailyRow key={item.date} item={item} isFirst={idx === 0} C={C} t={t} />
-          ))}
+          {dailyItems.slice(0, 4).map((item, idx) => {
+            const itemDate = item.date;
+            const selectedDate = selectedWeather?.time?.split('T')[0] || selectedWeather?.date;
+            const isSelected = itemDate === selectedDate;
+
+            return (
+              <DailyRow
+                key={item.date}
+                item={item}
+                isFirst={idx === 0}
+                isSelected={isSelected}
+                onPress={() => setSelectedWeather({
+                  ...item,
+                  time: item.date + 'T12:00', // Günlük seçimde öğle vaktini baz al
+                  temperature: item.temp_max,
+                  description: getWeatherLabel(item.weather_code),
+                  weather_code: item.weather_code,
+                  feels_like: item.temp_max,
+                  is_day: true
+                })}
+                C={C}
+                t={t}
+              />
+            );
+          })}
           <TouchableOpacity
             style={s.viewMoreBtn}
             onPress={() => navigation.navigate('Forecast', {lat, lon, city})}>
@@ -416,16 +438,29 @@ const aiStyles = (C: AppColors) => StyleSheet.create({
   },
 });
 
-function DailyRow({item, isFirst, C, t}: {item: any; isFirst: boolean; C: AppColors; t: any}) {
+function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirst: boolean; isSelected: boolean; onPress: () => void; C: AppColors; t: any}) {
   const barPct = Math.min(100, Math.max(15, ((item.temp_max - item.temp_min) / 15) * 80));
   return (
-    <View style={dailyStyles(C).row}>
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        dailyStyles(C).row,
+        isSelected && {
+          backgroundColor: C.cardHourlyActive,
+          borderColor: C.accent,
+          borderWidth: 1,
+          borderRadius: Radius.md,
+          marginVertical: 2,
+          paddingHorizontal: 8
+        }
+      ]}>
       <Text style={dailyStyles(C).day}>{isFirst ? t('home.today') : formatDayShort(item.date)}</Text>
       <Text style={dailyStyles(C).emoji}>{getWeatherEmoji(item.weather_code)}</Text>
       <Text style={dailyStyles(C).tempMin}>{item.temp_min}°</Text>
       <View style={dailyStyles(C).barTrack}><View style={[dailyStyles(C).barFill, {width: `${barPct}%`}]} /></View>
       <Text style={dailyStyles(C).tempMax}>{item.temp_max}°</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
