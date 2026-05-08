@@ -80,6 +80,8 @@ export function HomeScreen(): React.JSX.Element {
     }
   }, [locationSearch]);
 
+  const [selectedWeather, setSelectedWeather] = useState<any>(null);
+
   const profileQuery = useQuery({
     queryKey: ['profile'],
     queryFn: getProfile,
@@ -106,6 +108,20 @@ export function HomeScreen(): React.JSX.Element {
       },
     ],
   });
+
+  // Sync selectedWeather with current data on first load or refresh
+  useEffect(() => {
+    if (currentQuery.data) {
+      setSelectedWeather({
+        temperature: currentQuery.data.temperature,
+        weather_code: currentQuery.data.weather_code,
+        feels_like: currentQuery.data.feels_like,
+        time: new Date().toISOString(),
+        description: getWeatherLabel(currentQuery.data.weather_code),
+        is_day: currentQuery.data.is_day
+      });
+    }
+  }, [currentQuery.data]);
 
   const isLoading =
     currentQuery.isLoading || hourlyQuery.isLoading || dailyQuery.isLoading;
@@ -197,13 +213,14 @@ export function HomeScreen(): React.JSX.Element {
         {/* ── Ana Hava Durumu Kartı ── */}
         <AtmosphericWeatherCard
           city={city.split(',')[0]}
-          temperature={current.temperature}
-          description={getWeatherLabel(current.weather_code)}
+          temperature={selectedWeather?.temperature ?? current.temperature}
+          description={selectedWeather?.description ?? getWeatherLabel(selectedWeather?.weather_code ?? current.weather_code)}
           high={todayDaily?.temp_max ?? current.temperature}
           low={todayDaily?.temp_min ?? current.temperature}
-          feelsLike={current.feels_like}
-          weatherCode={current.weather_code}
-          isDay={current.is_day}
+          feelsLike={selectedWeather?.feels_like ?? selectedWeather?.apparent_temperature ?? current.feels_like}
+          weatherCode={selectedWeather?.weather_code ?? current.weather_code}
+          isDay={selectedWeather?.is_day ?? current.is_day}
+          time={selectedWeather?.time}
           lastUpdated={new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
           C={C}
         />
@@ -225,8 +242,8 @@ export function HomeScreen(): React.JSX.Element {
             renderItem={({item, index}) => (
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => navigation.navigate('Hourly', {lat, lon, city})}
-                style={[s.hourCard, index === 0 && s.hourCardActive]}>
+                onPress={() => setSelectedWeather(item)}
+                style={[s.hourCard, selectedWeather?.time === item.time && s.hourCardActive]}>
                 <Text style={s.hourLabel}>{index === 0 ? t('home.today') : formatHour(item.time)}</Text>
                 <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
                 <Text style={s.hourTemp}>{item.temperature}°</Text>

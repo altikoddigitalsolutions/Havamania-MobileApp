@@ -150,37 +150,36 @@ object WeatherMapper {
         return directions[((deg + 22.5) / 45).toInt() % 8]
     }
 
-    private fun mapHourly(hourly: HourlyDto?): List<HourlyForecastData> {
+    private fun mapHourly(hourly: HourlyDto?): List<HourlyWeather> {
         if (hourly == null) return emptyList()
         val calendar = Calendar.getInstance()
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+        val currentHourStr = SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(calendar.time)
 
-        return hourly.time.indices
-            .filter { i -> i in currentHour..24 }
-            .map { i ->
-                val timeStr = hourly.time[i]
-                var hourLabel = timeStr.split("T").last()
-                val hourInt = hourLabel.split(":").first().toInt()
-                if (hourLabel == "00:00" && i > currentHour) hourLabel = "24:00"
+        return hourly.time.indices.map { i ->
+            val fullTime = hourly.time[i]
+            var hourLabel = fullTime.split("T").last()
+            val hourInt = hourLabel.split(":").first().toInt()
 
-                HourlyForecastData(
-                    time = hourLabel,
-                    iconName = getWeatherIconName(hourly.weatherCode[i]),
-                    condition = getWeatherCondition(hourly.weatherCode[i]),
-                    weatherCode = hourly.weatherCode[i],
-                    isDay = hourInt in 6..19, // Basit gündüz tahmini
-                    temp = "${hourly.temperature[i].toInt()}°",
-                    precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
-                    isSelected = i == currentHour
-                )
-            }
+            HourlyWeather(
+                time = hourLabel,
+                fullTime = fullTime,
+                iconName = getWeatherIconName(hourly.weatherCode[i]),
+                condition = getWeatherCondition(hourly.weatherCode[i]),
+                weatherCode = hourly.weatherCode[i],
+                isDay = hourInt in 6..19,
+                temp = "${hourly.temperature[i].toInt()}°",
+                precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
+                isSelected = fullTime == currentHourStr
+            )
+        }
     }
 
-    private fun mapDaily(daily: DailyDto?): List<DailyForecastData> {
+    private fun mapDaily(daily: DailyDto?): List<DailyForecast> {
         if (daily == null) return emptyList()
         return daily.time.mapIndexed { index, time ->
-            DailyForecastData(
+            DailyForecast(
                 day = getDayName(time),
+                date = time,
                 iconName = getWeatherIconName(daily.weatherCode[index]),
                 weatherCode = daily.weatherCode[index],
                 minTemp = daily.tempMin[index].toInt(),
@@ -316,6 +315,34 @@ object WeatherMapper {
         80, 81, 82 -> "Sağanak Yağış"; 95, 96, 99 -> "Fırtınalı"; else -> "Bulutlu"
     }
 
+    /**
+     * UI ekranında görünecek condition metnini günün saatine göre normalize eder.
+     * Gece 22:00'da "Güneşli" yerine "Açık Gece" yazmasını sağlar.
+     */
+    fun getDisplayCondition(code: Int, hour: Int): String {
+        val timeOfDay = resolveTimeOfDay(hour)
+        val base = getWeatherCondition(code)
+
+        if (timeOfDay == TimeOfDay.NIGHT) {
+            return when (code) {
+                0, 1 -> "Açık Gece"
+                2 -> "Parçalı Bulutlu Gece"
+                3 -> "Bulutlu Gece"
+                45, 48 -> "Sisli Gece"
+                51, 53, 55, 61, 63, 65, 80, 81, 82 -> "Yağmurlu Gece"
+                71, 73, 75, 77, 85, 86 -> "Karlı Gece"
+                95, 96, 99 -> "Fırtınalı Gece"
+                else -> "$base Gece"
+            }
+        }
+
+        if (timeOfDay == TimeOfDay.EVENING && (code == 0 || code == 1)) {
+            return "Açık Akşam"
+        }
+
+        return base
+    }
+
     fun resolveTimeOfDay(hour: Int): TimeOfDay {
         return when (hour) {
             in 6..10 -> TimeOfDay.MORNING
@@ -328,7 +355,8 @@ object WeatherMapper {
     fun mapWeatherCodeToCondition(code: Int, isDay: Boolean): WeatherCondition {
         return when (code) {
             0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
-            1, 2 -> WeatherCondition.PartlyCloudy
+            1 -> if (isDay) WeatherCondition.MostlySunny else WeatherCondition.NightClear
+            2 -> WeatherCondition.PartlyCloudy
             3 -> WeatherCondition.Cloudy
             45, 48 -> WeatherCondition.Fog
             51, 53, 55, 61, 63, 65, 80, 81, 82 -> WeatherCondition.Rain

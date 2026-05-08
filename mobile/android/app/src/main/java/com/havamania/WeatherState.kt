@@ -36,14 +36,15 @@ data class WeatherData(
     val weatherSuitabilityScore: Int = 100,
     val weatherSuitabilityText: String = "",
     val weatherSuitabilityDesc: String = "",
-    val hourlyForecast: List<HourlyForecastData> = emptyList(),
-    val dailyForecast: List<DailyForecastData> = emptyList(),
+    val hourlyForecast: List<HourlyWeather> = emptyList(),
+    val dailyForecast: List<DailyForecast> = emptyList(),
     val details: List<WeatherDetailData> = emptyList()
 )
 
 @Serializable
-data class HourlyForecastData(
-    val time: String,
+data class HourlyWeather(
+    val time: String, // HH:mm format for display
+    val fullTime: String = "", // ISO format for logic (YYYY-MM-DDTHH:mm)
     val temp: String,
     val condition: String = "Bulutlu",
     val weatherCode: Int = 0,
@@ -54,8 +55,9 @@ data class HourlyForecastData(
 )
 
 @Serializable
-data class DailyForecastData(
-    val day: String,
+data class DailyForecast(
+    val day: String, // Display name (e.g. "Monday")
+    val date: String = "", // ISO date (YYYY-MM-DD)
     val minTemp: Int,
     val maxTemp: Int,
     val iconName: String = "WbSunny",
@@ -78,6 +80,7 @@ enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
 
 sealed class WeatherCondition {
     object Clear : WeatherCondition()
+    object MostlySunny : WeatherCondition()
     object PartlyCloudy : WeatherCondition()
     object Cloudy : WeatherCondition()
     object Rain : WeatherCondition()

@@ -39,7 +39,7 @@ private const val TAG = "HourlyForecast"
 @Composable
 fun HourlyForecastRow(
     modifier: Modifier = Modifier,
-    items: List<HourlyForecastData>,
+    items: List<HourlyWeather>,
     onItemSelect: (Int) -> Unit = {},
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
@@ -62,8 +62,8 @@ fun HourlyForecastRow(
         LazyRow(
             state = listState,
             flingBehavior = flingBehavior,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 48.dp, top = 8.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -87,7 +87,7 @@ fun HourlyForecastRow(
 
 @Composable
 fun HourlyForecastItem(
-    data: HourlyForecastData,
+    data: HourlyWeather,
     currentTheme: AppTheme,
     onClick: () -> Unit
 ) {

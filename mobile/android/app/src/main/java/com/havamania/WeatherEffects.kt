@@ -55,6 +55,10 @@ fun WeatherEffectLayer(
                     SunGlowEffect(effectiveOpacity)
                 }
             }
+            is WeatherCondition.MostlySunny -> {
+                SunGlowEffect(effectiveOpacity * 0.9f)
+                CloudHazeEffect(effectiveOpacity * 0.3f, intensity = intensity)
+            }
             is WeatherCondition.Cloudy -> {
                 CloudHazeEffect(effectiveOpacity, intensity = intensity)
             }

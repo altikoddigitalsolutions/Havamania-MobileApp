@@ -77,8 +77,9 @@ object DailyForecastStyleMapper {
 @Composable
 fun DailyForecastSection(
     modifier: Modifier = Modifier,
-    forecasts: List<DailyForecastData>,
-    onDayClick: (DailyForecastData) -> Unit = {}
+    forecasts: List<DailyForecast>,
+    selectedDate: String = "",
+    onDayClick: (DailyForecast) -> Unit = {}
 ) {
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -91,14 +92,15 @@ fun DailyForecastSection(
         enter = fadeIn(tween(1000)) + slideInVertically(initialOffsetY = { 40 }, animationSpec = tween(1000)),
         modifier = modifier.padding(horizontal = 16.dp)
     ) {
-        DailyForecastPanel(forecasts = forecasts, onDayClick = onDayClick)
+        DailyForecastPanel(forecasts = forecasts, selectedDate = selectedDate, onDayClick = onDayClick)
     }
 }
 
 @Composable
 fun DailyForecastPanel(
-    forecasts: List<DailyForecastData>,
-    onDayClick: (DailyForecastData) -> Unit
+    forecasts: List<DailyForecast>,
+    selectedDate: String = "",
+    onDayClick: (DailyForecast) -> Unit
 ) {
     var expandedForecast by remember { mutableStateOf(false) }
     val visibleForecast = if (expandedForecast) forecasts.take(10) else forecasts.take(7)
@@ -174,8 +176,9 @@ fun DailyForecastPanel(
             // Forecast List
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 visibleForecast.forEachIndexed { index, forecast ->
-                    key(forecast.day) {
-                        DailyForecastRow(forecast, onClick = { onDayClick(forecast) })
+                    key(forecast.date) {
+                        val isSelected = forecast.date == selectedDate
+                        DailyForecastRow(forecast, isSelected = isSelected, onClick = { onDayClick(forecast) })
                         if (index < visibleForecast.size - 1) {
                             Spacer(
                                 modifier = Modifier
@@ -263,7 +266,7 @@ fun ForecastExpandButton(
 
 
 @Composable
-fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
+fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
@@ -283,7 +286,15 @@ fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (data.isToday) themeColors.accent.copy(alpha = 0.08f) else Color.Transparent
+                when {
+                    isSelected -> themeColors.accent.copy(alpha = 0.15f)
+                    data.isToday -> themeColors.accent.copy(alpha = 0.05f)
+                    else -> Color.Transparent
+                }
+            )
+            .then(
+                if (isSelected) Modifier.border(1.dp, themeColors.accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                else Modifier
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -297,10 +308,10 @@ fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
         Text(
             text = if (data.isToday) "Bugün" else data.day.split(" ").last(),
             style = MaterialTheme.typography.bodyLarge.copy(
-                fontWeight = if (data.isToday) FontWeight.Black else FontWeight.Bold,
+                fontWeight = if (data.isToday || isSelected) FontWeight.Black else FontWeight.Bold,
                 fontSize = 15.sp
             ),
-            color = if (data.isToday) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.8f),
+            color = if (data.isToday || isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.8f),
             modifier = Modifier.width(85.dp)
         )
 
@@ -312,7 +323,7 @@ fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
             Icon(
                 imageVector = WeatherMapper.getIconFromName(data.iconName),
                 contentDescription = null,
-                tint = if (data.isToday) style.accentColor else style.iconColor.copy(alpha = 0.9f),
+                tint = if (data.isToday || isSelected) style.accentColor else style.iconColor.copy(alpha = 0.9f),
                 modifier = Modifier.size(28.dp) // Larger icon
             )
         }
@@ -336,7 +347,7 @@ fun DailyForecastRow(data: DailyForecastData, onClick: () -> Unit) {
             min = data.minTemp,
             max = data.maxTemp,
             style = style,
-            isToday = data.isToday
+            isToday = data.isToday || isSelected
         )
 
         // Max Temp

@@ -8,7 +8,9 @@ data class AltikodChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isFallback: Boolean = false,
+    val retryPrompt: String? = null
 )
 
 @Serializable

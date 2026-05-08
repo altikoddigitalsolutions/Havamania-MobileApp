@@ -60,6 +60,10 @@ class AiChatViewModel : ViewModel() {
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
     val config = _config.asStateFlow()
 
+    var weatherData: WeatherData? = null
+    var userAboutMe: String = ""
+    var userInterests: Set<String> = emptySet()
+
     init {
         loadConfig()
     }
@@ -75,19 +79,43 @@ class AiChatViewModel : ViewModel() {
         }
     }
 
-    fun sendMessage(text: String) {
+    fun sendMessage(text: String, systemContext: String? = null) {
         if (text.isBlank() || _isLoading.value) return
 
         val userMsg = AltikodChatMessage(text = text, isUser = true)
         _messages.value = _messages.value + userMsg
         _isLoading.value = true
 
+        val fullQuestion = if (systemContext != null) "$systemContext $text" else text
+
         viewModelScope.launch {
             try {
-                val response = api.sendMessage(botId, AltikodChatRequest(question = text, session_id = sessionId))
+                // Timeout logic
+                val response = kotlinx.coroutines.withTimeout(20000) {
+                    api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
+                }
+
+                if (response.answer.isBlank()) {
+                    throw Exception("Empty response from AI")
+                }
+
                 _messages.value = _messages.value + AltikodChatMessage(text = response.answer, isUser = false)
             } catch (e: Exception) {
-                _messages.value = _messages.value + AltikodChatMessage(text = "Üzgünüm, şu an yanıt veremiyorum. Lütfen tekrar deneyin.", isUser = false)
+                android.util.Log.e("AssistantError", "type=${e.javaClass.simpleName}, message=${e.message}, userPrompt=$text, city=${weatherData?.cityName}, hasWeatherData=${weatherData != null}")
+
+                val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
+                    userPrompt = text,
+                    weatherData = weatherData,
+                    aboutMe = userAboutMe,
+                    interests = userInterests
+                )
+
+                _messages.value = _messages.value + AltikodChatMessage(
+                    text = fallbackText,
+                    isUser = false,
+                    isFallback = true,
+                    retryPrompt = text
+                )
             } finally {
                 _isLoading.value = false
             }
@@ -114,6 +142,7 @@ class AiChatViewModel : ViewModel() {
 @Composable
 fun AiChatScreen(
     initialRecommendation: HavamaniaRecommendation? = null,
+    weatherData: WeatherData? = null,
     onBack: () -> Unit,
     viewModel: AiChatViewModel = viewModel(),
     historyViewModel: AiHistoryViewModel = viewModel(),
@@ -126,6 +155,13 @@ fun AiChatScreen(
     val config by viewModel.config.collectAsStateWithLifecycle()
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
+
+    // Sync data with ViewModel
+    LaunchedEffect(weatherData, aboutMe, userInterests) {
+        viewModel.weatherData = weatherData
+        viewModel.userAboutMe = aboutMe
+        viewModel.userInterests = userInterests
+    }
 
     var showEndChatDialog by remember { mutableStateOf(false) }
 
@@ -142,7 +178,8 @@ fun AiChatScreen(
     // İlk girdi (initialRecommendation) varsa gönder
     LaunchedEffect(initialRecommendation) {
         initialRecommendation?.let {
-            viewModel.sendMessage(it.message)
+            val context = buildPersonalizedContext(aboutMe, userInterests)
+            viewModel.sendMessage(it.message, systemContext = context)
         }
     }
 
@@ -214,23 +251,17 @@ fun AiChatScreen(
                     FeatureCards(
                         themeColors = themeColors,
                         onCardClick = { prompt ->
-                            val fullPrompt = buildPersonalizedPrompt(prompt, aboutMe, userInterests)
-                            viewModel.sendMessage(fullPrompt)
+                            val context = buildPersonalizedContext(aboutMe, userInterests)
+                            viewModel.sendMessage(prompt, systemContext = context)
                         }
                     )
 
                     Spacer(Modifier.height(16.dp))
 
                     QuickSuggestions(
-                        suggestions = config?.example_questions ?: listOf(
-                            "Bugün ne giymeliyim?",
-                            "Hafta sonu hava nasıl?",
-                            "Dışarı çıkmak için uygun mu?",
-                            "Yağmur yağacak mı?"
-                        ),
-                        onSuggestionClick = { suggestion ->
-                            val fullPrompt = buildPersonalizedPrompt(suggestion, aboutMe, userInterests)
-                            viewModel.sendMessage(fullPrompt)
+                        onSuggestionClick = { prompt ->
+                            val context = buildPersonalizedContext(aboutMe, userInterests)
+                            viewModel.sendMessage(prompt, systemContext = context)
                         },
                         themeColors = themeColors
                     )
@@ -243,7 +274,13 @@ fun AiChatScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(messages, key = { it.id }) { message ->
-                        ChatBubble(message, themeColors)
+                        ChatBubble(
+                            message = message,
+                            themeColors = themeColors,
+                            onRetry = { prompt ->
+                                viewModel.sendMessage(prompt)
+                            }
+                        )
                     }
                     if (isLoading) {
                         item {
@@ -255,10 +292,10 @@ fun AiChatScreen(
 
             ChatInput(
                 onSend = { prompt ->
-                    val fullPrompt = if (messages.isEmpty()) {
-                        buildPersonalizedPrompt(prompt, aboutMe, userInterests)
-                    } else prompt
-                    viewModel.sendMessage(fullPrompt)
+                    val context = if (messages.isEmpty()) {
+                        buildPersonalizedContext(aboutMe, userInterests)
+                    } else null
+                    viewModel.sendMessage(prompt, systemContext = context)
                 },
                 isLoading = isLoading,
                 themeColors = themeColors
@@ -301,8 +338,8 @@ fun AiChatScreen(
     }
 }
 
-fun buildPersonalizedPrompt(question: String, aboutMe: String, interests: Set<String>): String {
-    if (aboutMe.isBlank() && interests.isEmpty()) return question
+fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
+    if (aboutMe.isBlank() && interests.isEmpty()) return ""
 
     val interestsStr = if (interests.isNotEmpty()) {
         "Kullanıcının ilgi alanları: ${interests.joinToString(", ")}. "
@@ -313,7 +350,7 @@ fun buildPersonalizedPrompt(question: String, aboutMe: String, interests: Set<St
     } else ""
 
     return "Sistem Talimatı: Aşağıdaki kullanıcı profiline göre daha kişiselleştirilmiş bir cevap ver. " +
-            "$interestsStr$aboutMeStr Soru: $question"
+            "$interestsStr$aboutMeStr"
 }
 
 @Composable
@@ -369,8 +406,44 @@ fun WelcomeCard(message: String, themeColors: HavamaniaColors) {
     }
 }
 
+enum class AssistantFeatureType { CLOTHING, ACTIVITY, TRAVEL }
+
+data class AssistantFeature(
+    val title: String,
+    val desc: String,
+    val icon: ImageVector,
+    val prompt: String,
+    val type: AssistantFeatureType
+)
+
 @Composable
 fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
+    val features = remember {
+        listOf(
+            AssistantFeature(
+                title = "Akıllı Giysi Önerisi",
+                desc = "Hava durumuna göre ne giyeceğinizi söyler.",
+                icon = Icons.Rounded.Checkroom,
+                prompt = "Bugünkü hava durumuna göre ne giymeliyim? Sıcaklık, rüzgar, yağış ve UV durumuna göre pratik kıyafet önerisi ver.",
+                type = AssistantFeatureType.CLOTHING
+            ),
+            AssistantFeature(
+                title = "Aktivite Analizi",
+                desc = "Dışarı çıkmak için en iyi zamanı belirler.",
+                icon = Icons.Rounded.DirectionsRun,
+                prompt = "Bugün dışarı çıkmak, yürüyüş yapmak, spor yapmak veya açık hava aktivitesi için uygun mu? Hava durumuna göre en uygun saatleri ve dikkat etmem gerekenleri söyle.",
+                type = AssistantFeatureType.ACTIVITY
+            ),
+            AssistantFeature(
+                title = "Seyahat Planlama",
+                desc = "Rotalarınız için özel hava tavsiyeleri verir.",
+                icon = Icons.Rounded.Route,
+                prompt = "Yaklaşan seyahatlerim ve mevcut hava durumuna göre bana seyahat planlama önerisi verir misin? Valiz, ulaşım, rota ve hava riskleri açısından tavsiye ver.",
+                type = AssistantFeatureType.TRAVEL
+            )
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -378,27 +451,15 @@ fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        FeatureCard(
-            title = "Akıllı Giysi Önerisi",
-            desc = "Hava durumuna göre ne giyeceğinizi söyler.",
-            icon = Icons.Rounded.Checkroom,
-            themeColors = themeColors,
-            onClick = { onCardClick("Bugünkü hava durumuna göre ne giymeliyim?") }
-        )
-        FeatureCard(
-            title = "Aktivite Analizi",
-            desc = "Dışarı çıkmak için en iyi zamanı belirler.",
-            icon = Icons.Rounded.DirectionsRun,
-            themeColors = themeColors,
-            onClick = { onCardClick("Bugün dışarı çıkmak, yürüyüş yapmak veya spor için uygun mu?") }
-        )
-        FeatureCard(
-            title = "Seyahat Planlama",
-            desc = "Rotalarınız için özel hava tavsiyeleri verir.",
-            icon = Icons.Rounded.Route,
-            themeColors = themeColors,
-            onClick = { onCardClick("Seyahat planım için hava durumuna göre öneriler verir misin?") }
-        )
+        features.forEach { feature ->
+            FeatureCard(
+                title = feature.title,
+                desc = feature.desc,
+                icon = feature.icon,
+                themeColors = themeColors,
+                onClick = { onCardClick(feature.prompt) }
+            )
+        }
     }
 }
 
@@ -421,12 +482,41 @@ fun FeatureCard(title: String, desc: String, icon: ImageVector, themeColors: Hav
     }
 }
 
+data class AssistantSuggestion(
+    val label: String,
+    val prompt: String
+)
+
 @Composable
 fun QuickSuggestions(
-    suggestions: List<String>,
     onSuggestionClick: (String) -> Unit,
     themeColors: HavamaniaColors
 ) {
+    val suggestions = remember {
+        listOf(
+            AssistantSuggestion(
+                label = "Bugün ne giymeliyim?",
+                prompt = "Bugünkü hava durumuna göre ne giymeliyim?"
+            ),
+            AssistantSuggestion(
+                label = "Hafta sonu hava nasıl?",
+                prompt = "Bulunduğum şehir için hafta sonu hava durumu nasıl görünüyor? Plan yaparken nelere dikkat etmeliyim?"
+            ),
+            AssistantSuggestion(
+                label = "Dışarı çıkmak için uygun mu?",
+                prompt = "Bugün dışarı çıkmak için hava uygun mu? Yağış, rüzgar, sıcaklık ve UV durumuna göre yorumla."
+            ),
+            AssistantSuggestion(
+                label = "Yağmur yağacak mı?",
+                prompt = "Bugün bulunduğum şehirde yağmur yağma ihtimali var mı? Hangi saatlerde dikkatli olmalıyım?"
+            ),
+            AssistantSuggestion(
+                label = "Valizime ne almalıyım?",
+                prompt = "Yaklaşan seyahatlerim ve hava durumuna göre valizime neler almalıyım?"
+            )
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -447,13 +537,13 @@ fun QuickSuggestions(
         ) {
             suggestions.forEach { suggestion ->
                 Surface(
-                    onClick = { onSuggestionClick(suggestion) },
+                    onClick = { onSuggestionClick(suggestion.prompt) },
                     color = themeColors.surfaceGlass.copy(alpha = 0.4f),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
                 ) {
                     Text(
-                        text = suggestion,
+                        text = suggestion.label,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = themeColors.textPrimary
@@ -466,7 +556,11 @@ fun QuickSuggestions(
 }
 
 @Composable
-fun ChatBubble(message: AltikodChatMessage, themeColors: HavamaniaColors) {
+fun ChatBubble(
+    message: AltikodChatMessage,
+    themeColors: HavamaniaColors,
+    onRetry: (String) -> Unit = {}
+) {
     val alignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (message.isUser) themeColors.accent else themeColors.surfaceGlass
     val textColor = if (message.isUser) Color.White else themeColors.textPrimary
@@ -476,19 +570,45 @@ fun ChatBubble(message: AltikodChatMessage, themeColors: HavamaniaColors) {
         RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
     }
 
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = alignment) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
+    ) {
         Surface(
             color = bubbleColor,
             shape = shape,
             tonalElevation = 2.dp,
             shadowElevation = 1.dp
         ) {
-            Text(
-                text = message.text,
-                color = textColor,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(
+                    text = message.text,
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+
+                if (message.isFallback && message.retryPrompt != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        onClick = { onRetry(message.retryPrompt) },
+                        color = Color.White.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Refresh, null, tint = textColor, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "Tekrar dene",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = textColor
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

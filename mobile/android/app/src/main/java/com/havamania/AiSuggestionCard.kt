@@ -62,12 +62,14 @@ fun AiSuggestionCard(
     weather: WeatherData,
     timeOfDay: TimeOfDay,
     userInterests: Set<String> = emptySet(),
-    travelPlans: List<TravelPlan> = emptyList(),
     modifier: Modifier = Modifier,
     onAskAiClick: (HavamaniaRecommendation) -> Unit = {}
 ) {
-    val recommendation = remember(weather, timeOfDay, userInterests, travelPlans) {
-        RecommendationEngine.generateRecommendation(weather, timeOfDay, userInterests, travelPlans)
+    val recommendation = remember(weather, userInterests) {
+        RecommendationEngine.generateTodayRecommendation(
+            weatherData = weather,
+            userInterests = userInterests
+        )
     }
 
     RecommendationCard(

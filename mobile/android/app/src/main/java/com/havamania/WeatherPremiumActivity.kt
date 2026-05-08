@@ -39,6 +39,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                 }
 
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
+                var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
                 if (appState == "splash") {
                     TravelInspiredSplashScreen(onNavigateToHome = {
@@ -72,8 +73,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                         ) {
                             NavHost(navController = navController, startDestination = "weather") {
                                 composable("weather") {
-                                    HomeScreen(onNavigateToAi = { rec ->
+                                    HomeScreen(onNavigateToAi = { rec, data ->
                                         pendingRecommendation = rec
+                                        activeWeatherData = data
                                         navController.navigate("ai")
                                     })
                                 }
@@ -83,6 +85,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 composable("ai") {
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
+                                        weatherData = activeWeatherData,
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()

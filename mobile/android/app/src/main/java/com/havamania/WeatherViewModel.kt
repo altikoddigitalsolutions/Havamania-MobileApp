@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -37,8 +38,19 @@ class WeatherViewModel(
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
 
-    private val _selectedHour = MutableStateFlow<HourlyForecastData?>(null)
-    val selectedHour: StateFlow<HourlyForecastData?> = _selectedHour.asStateFlow()
+    private val _selectedForecastDate = MutableStateFlow<LocalDate>(LocalDate.now())
+    val selectedForecastDate: StateFlow<LocalDate> = _selectedForecastDate.asStateFlow()
+
+    private val _selectedDailyForecast = MutableStateFlow<DailyForecast?>(null)
+    val selectedDailyForecast: StateFlow<DailyForecast?> = _selectedDailyForecast.asStateFlow()
+
+    private val _selectedHourlyWeather = MutableStateFlow<HourlyWeather?>(null)
+    val selectedHourlyWeather: StateFlow<HourlyWeather?> = _selectedHourlyWeather.asStateFlow()
+
+    private val _todayRecommendation = MutableStateFlow<HavamaniaRecommendation?>(null)
+    val todayRecommendation: StateFlow<HavamaniaRecommendation?> = _todayRecommendation.asStateFlow()
+
+    private var currentUserInterests: Set<String> = emptySet()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -76,6 +88,21 @@ class WeatherViewModel(
                 }
                 .collect { data ->
                     _uiState.value = WeatherUiState.Success(data)
+                    // Reset to today
+                    val todayDate = LocalDate.now()
+                    _selectedForecastDate.value = todayDate
+                    val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
+                    _selectedDailyForecast.value = todayForecast
+
+                    // Initial hourly selection: current hour or next available
+                    val nowHour = java.time.LocalTime.now().hour
+                    val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
+                    _selectedHourlyWeather.value = todayHourly.find {
+                        val h = it.time.split(":")[0].toIntOrNull() ?: 0
+                        h >= nowHour
+                    } ?: todayHourly.firstOrNull()
+
+                    updateRecommendation()
                 }
         }
     }
@@ -87,7 +114,6 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             _isRefreshing.value = true
-            // unique key for cache
             val cacheKey = if (lastDistrict != null) "$lastCity-$lastDistrict" else lastCity
             repository.clearCache(cacheKey)
 
@@ -97,14 +123,70 @@ class WeatherViewModel(
                 }
                 .collect { data ->
                     _uiState.value = WeatherUiState.Success(data)
-                    _selectedHour.value = null // Reset selection on refresh
+                    val todayDate = LocalDate.now()
+                    _selectedForecastDate.value = todayDate
+                    val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
+                    _selectedDailyForecast.value = todayForecast
+
+                    // Initial hourly selection: current hour or next available
+                    val nowHour = java.time.LocalTime.now().hour
+                    val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
+                    _selectedHourlyWeather.value = todayHourly.find {
+                        val h = it.time.split(":")[0].toIntOrNull() ?: 0
+                        h >= nowHour
+                    } ?: todayHourly.firstOrNull()
+
                     _isRefreshing.value = false
+                    updateRecommendation()
                 }
         }
     }
 
-    fun selectHour(hour: HourlyForecastData?) {
-        _selectedHour.value = hour
+    fun selectDailyForecast(day: DailyForecast) {
+        val date = LocalDate.parse(day.date)
+        _selectedForecastDate.value = date
+        _selectedDailyForecast.value = day
+
+        // Select first appropriate hour for the selected day
+        val currentUiState = _uiState.value
+        if (currentUiState is WeatherUiState.Success) {
+            val dayHourly = currentUiState.data.hourlyForecast.filter {
+                it.fullTime.startsWith(day.date)
+            }
+
+            if (day.isToday) {
+                val nowHour = java.time.LocalTime.now().hour
+                val futureHourly = dayHourly.filter {
+                    val h = it.time.split(":")[0].toIntOrNull() ?: 0
+                    h >= nowHour
+                }
+                _selectedHourlyWeather.value = futureHourly.firstOrNull()
+            } else {
+                _selectedHourlyWeather.value = dayHourly.firstOrNull()
+            }
+        }
+    }
+
+    fun selectHour(hour: HourlyWeather?) {
+        _selectedHourlyWeather.value = hour
+    }
+
+    fun updateRecommendation(interests: Set<String>? = null) {
+        if (interests != null) {
+            currentUserInterests = interests
+        }
+
+        val currentUiState = _uiState.value
+        if (currentUiState is WeatherUiState.Success) {
+            val weather = currentUiState.data
+
+            viewModelScope.launch {
+                _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
+                    weatherData = weather,
+                    userInterests = currentUserInterests
+                )
+            }
+        }
     }
 
     fun searchCity(query: String) {

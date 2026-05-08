@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.time.LocalTime
+import java.time.LocalDate
 import com.havamania.HomeScreenLoading
 import com.havamania.WeatherErrorState
 import com.havamania.ui.theme.SectionLabel
@@ -52,24 +53,29 @@ import com.havamania.ui.theme.SectionLabel
 fun HomeScreen(
     viewModel: WeatherViewModel = viewModel(),
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = viewModel(),
-    travelViewModel: TravelViewModel = viewModel(),
-    onNavigateToAi: (HavamaniaRecommendation) -> Unit = {}
+    onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val selectedHour by viewModel.selectedHour.collectAsState()
+    val selectedHourlyWeather by viewModel.selectedHourlyWeather.collectAsState()
+    val selectedForecastDate by viewModel.selectedForecastDate.collectAsState()
+    val selectedDailyForecast by viewModel.selectedDailyForecast.collectAsState()
     val citySuggestions by viewModel.citySuggestions.collectAsState()
     val userInterests by themeViewModel.userInterests.collectAsState()
-    val travelPlans by travelViewModel.plans.collectAsState()
+    val todayRecommendation by viewModel.todayRecommendation.collectAsState()
+
+    LaunchedEffect(userInterests) {
+        viewModel.updateRecommendation(userInterests)
+    }
 
     val scrollState = rememberScrollState()
     val colorScheme = MaterialTheme.colorScheme
     val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
 
     val currentData = (uiState as? WeatherUiState.Success)?.data
-    val condition = remember(currentData, selectedHour) {
-        val code = selectedHour?.weatherCode ?: currentData?.weatherCode ?: 0
-        val isDay = selectedHour?.isDay ?: currentData?.isDay ?: true
+    val condition = remember(currentData, selectedHourlyWeather, selectedDailyForecast) {
+        val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: currentData?.weatherCode ?: 0
+        val isDay = selectedHourlyWeather?.isDay ?: true
         WeatherMapper.mapWeatherCodeToCondition(code, isDay)
     }
 
@@ -92,20 +98,8 @@ fun HomeScreen(
             .fillMaxSize()
             .pullRefresh(pullRefreshState)
     ) {
-        // Layer 1: Atmospheric Glows & Condition Effects
-        Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
-            if (condition is WeatherCondition.Clear) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(themeColors.glow.copy(alpha = 0.4f), Color.Transparent),
-                            center = Offset(size.width * 0.8f, size.height * 0.2f),
-                            radius = size.maxDimension * 0.9f
-                        )
-                    )
-                }
-            }
-        }
+        // Layer 1: Global Background (Removed leaking glows)
+        Box(modifier = Modifier.fillMaxSize().zIndex(0f).background(themeColors.background))
 
         // Global Noise/Grain Overlay
         val noisePoints = remember {
@@ -131,12 +125,15 @@ fun HomeScreen(
                 is WeatherUiState.Success -> {
                     WeatherSuccessContent(
                         data = state.data,
-                        selectedHour = selectedHour,
+                        selectedHourlyWeather = selectedHourlyWeather,
+                        selectedForecastDate = selectedForecastDate,
+                        selectedDailyForecast = selectedDailyForecast,
+                        recommendation = todayRecommendation,
                         userInterests = userInterests,
-                        travelPlans = travelPlans,
                         onSelectHour = { viewModel.selectHour(it) },
+                        onSelectDaily = { viewModel.selectDailyForecast(it) },
                         scrollState = scrollState,
-                        onAskAiClick = onNavigateToAi,
+                        onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
                         onCityClick = { showCitySwitcher = true }
                     )
                 }
@@ -149,7 +146,6 @@ fun HomeScreen(
                 }
             }
         }
-// ... (ModalBottomSheet ve PullRefreshIndicator aynı kalacak)
 
         // GERÇEK ŞEHİR SEÇME MODALI
         if (showCitySwitcher) {
@@ -237,41 +233,58 @@ fun HomeScreen(
     }
 }
 
-// WeatherSuccessContent ve diğer yardımcı bileşenler aynı kalacak şekilde...
 @Composable
 fun WeatherSuccessContent(
     data: WeatherData,
-    selectedHour: HourlyForecastData?,
+    selectedHourlyWeather: HourlyWeather?,
+    selectedForecastDate: LocalDate,
+    selectedDailyForecast: DailyForecast?,
+    recommendation: HavamaniaRecommendation?,
     userInterests: Set<String> = emptySet(),
-    travelPlans: List<TravelPlan> = emptyList(),
-    onSelectHour: (HourlyForecastData?) -> Unit,
+    onSelectHour: (HourlyWeather?) -> Unit,
+    onSelectDaily: (DailyForecast) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
-    onAskAiClick: (HavamaniaRecommendation) -> Unit = {},
+    onAskAiClick: (HavamaniaRecommendation) -> Unit,
     onCityClick: () -> Unit = {}
 ) {
     // Derived state for premium performance and correct logic
-    val displayTemp by remember(data, selectedHour) {
-        derivedStateOf<String> { selectedHour?.temp ?: data.temperature }
+    val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
+        derivedStateOf<String> {
+            selectedHourlyWeather?.temp ?: selectedDailyForecast?.let { "${it.minTemp}° / ${it.maxTemp}°" } ?: data.temperature
+        }
     }
 
-    val displayCondition by remember(data, selectedHour) {
-        derivedStateOf<String> { selectedHour?.condition ?: data.condition }
-    }
-
-    val displayWeatherCode by remember(data, selectedHour) {
-        derivedStateOf<Int> { selectedHour?.weatherCode ?: data.weatherCode }
-    }
-
-    val displayIsDay by remember(data, selectedHour) {
-        derivedStateOf<Boolean> { selectedHour?.isDay ?: data.isDay }
-    }
-
-    val displayTime by remember(selectedHour) {
-        derivedStateOf<LocalTime> {
-            selectedHour?.time?.let {
+    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) {
+        derivedStateOf<String> {
+            val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
+            val hour = selectedHourlyWeather?.time?.let {
                 try {
-                    val hour = it.split(":")[0].toInt()
-                    LocalTime.of(hour, 0)
+                    if (it == "24:00") 0 else it.split(":")[0].toInt()
+                } catch (e: Exception) {
+                    LocalTime.now().hour
+                }
+            } ?: LocalTime.now().hour
+
+            WeatherMapper.getDisplayCondition(code, hour)
+        }
+    }
+
+    val displayWeatherCode by remember(data, selectedHourlyWeather, selectedDailyForecast) {
+        derivedStateOf<Int> {
+            selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
+        }
+    }
+
+    val displayIsDay by remember(data, selectedHourlyWeather) {
+        derivedStateOf<Boolean> { selectedHourlyWeather?.isDay ?: true }
+    }
+
+    val displayTime by remember(selectedHourlyWeather) {
+        derivedStateOf<LocalTime> {
+            selectedHourlyWeather?.time?.let {
+                try {
+                    val hourStr = if (it == "24:00") "0" else it.split(":")[0]
+                    LocalTime.of(hourStr.toInt(), 0)
                 } catch (e: Exception) {
                     LocalTime.now()
                 }
@@ -297,9 +310,9 @@ fun WeatherSuccessContent(
                 conditionLabel = displayCondition,
                 weatherCode = displayWeatherCode,
                 isDay = displayIsDay,
-                high = data.high,
-                low = data.low,
-                feelsLike = data.feelsLike,
+                high = selectedDailyForecast?.maxTemp?.toString()?.plus("°") ?: data.high,
+                low = selectedDailyForecast?.minTemp?.toString()?.plus("°") ?: data.low,
+                feelsLike = selectedHourlyWeather?.temp ?: data.feelsLike,
                 humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65",
                 windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s",
                 uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4",
@@ -325,47 +338,91 @@ fun WeatherSuccessContent(
         ) {
             Column {
                 EntranceAnimation(delayMillis = 150) {
-                    val hourlyWithSelection = remember(data.hourlyForecast, selectedHour) {
-                        data.hourlyForecast.map {
-                            it.copy(isSelected = it.time == (selectedHour?.time ?: data.hourlyForecast.firstOrNull()?.time))
+                    val dateStr = selectedForecastDate.toString()
+                    val today = LocalDate.now()
+                    val currentHour = LocalTime.now().hour
+
+                    val filteredHourly = remember(data.hourlyForecast, dateStr) {
+                        data.hourlyForecast.filter { hour ->
+                            val isSelectedDay = hour.fullTime.startsWith(dateStr)
+                            if (isSelectedDay && selectedForecastDate == today) {
+                                try {
+                                    // Parse "HH:mm" -> HH
+                                    val h = hour.time.split(":")[0].toInt()
+                                    // Requirement: currentHour dahil göster, öncesini gösterme
+                                    // Note: API returns "24:00" as end of day.
+                                    // If we are at 23:30 (currentHour=23), 24:00 should be visible.
+                                    h >= currentHour
+                                } catch (e: Exception) {
+                                    true
+                                }
+                            } else {
+                                isSelectedDay
+                            }
                         }
                     }
 
-                    HourlyForecastRow(
-                        items = hourlyWithSelection,
-                        onItemSelect = { index ->
-                            val selected = data.hourlyForecast[index]
-                            if (selectedHour?.time != selected.time) {
-                                onSelectHour(selected)
+                    if (filteredHourly.isNotEmpty()) {
+                        val hourlyWithSelection = remember(filteredHourly, selectedHourlyWeather) {
+                            filteredHourly.map {
+                                it.copy(isSelected = it.fullTime == selectedHourlyWeather?.fullTime)
                             }
                         }
-                    )
+
+                        HourlyForecastRow(
+                            items = hourlyWithSelection,
+                            onItemSelect = { index ->
+                                onSelectHour(filteredHourly[index])
+                            }
+                        )
+                    } else {
+                        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+                            SectionLabel("SAATLİK TAHMİN", Modifier)
+                            Text(
+                                "Bu gün için saatlik tahmin henüz mevcut değil.",
+                                color = com.havamania.ui.theme.HavamaniaTheme.colors.textPrimary.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 EntranceAnimation(delayMillis = 250) {
-                    AiSuggestionCard(
-                        weather = data,
-                        timeOfDay = displayTime.hour.let { WeatherMapper.resolveTimeOfDay(it) },
-                        userInterests = userInterests,
-                        travelPlans = travelPlans,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        onAskAiClick = onAskAiClick
-                    )
+                    if (recommendation != null) {
+                        RecommendationCard(
+                            recommendation = recommendation,
+                            onAskAiClick = {
+                                onAskAiClick(
+                                    recommendation.copy(
+                                        message = "Bugünkü hava durumunu detaylı analiz eder misin? Sıcaklık, yağış, rüzgar, UV ve gün içindeki değişime göre öneri ver."
+                                    )
+                                )
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
                 EntranceAnimation(delayMillis = 350) {
+                    val today = LocalDate.now()
+                    val futureDaily = remember(data.dailyForecast) {
+                        data.dailyForecast.filter {
+                            try {
+                                !LocalDate.parse(it.date).isBefore(today)
+                            } catch (e: Exception) {
+                                true
+                            }
+                        }
+                    }
                     DailyForecastSection(
-                        forecasts = data.dailyForecast,
+                        forecasts = futureDaily,
+                        selectedDate = selectedForecastDate.toString(),
                         onDayClick = { forecast ->
-                            onAskAiClick(HavamaniaRecommendation(
-                                message = "${forecast.day} günü için detaylı hava analizi ve aktivite önerisi yapabilir misin?",
-                                type = RecommendationType.GENERAL,
-                                highlightedWords = listOf(forecast.day, "analizi"),
-                                priority = RecommendationPriority.MEDIUM
-                            ))
+                            onSelectDaily(forecast)
                         }
                     )
                 }

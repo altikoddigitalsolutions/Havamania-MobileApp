@@ -36,6 +36,7 @@ export interface HourlyWeatherItem {
   cloud_cover: number;
   wind_speed: number;
   wind_gusts: number;
+  apparent_temperature: number;
 }
 
 export interface HourlyWeatherData {
@@ -135,6 +136,7 @@ export async function fetchHourlyWeather(
 ): Promise<HourlyWeatherData> {
   const hourlyFields = [
     'temperature_2m',
+    'apparent_temperature',
     'weather_code',
     'precipitation_probability',
     'precipitation',
@@ -160,6 +162,7 @@ export async function fetchHourlyWeather(
     .map((time: string, i: number) => ({
       time,
       temperature: Math.round(h.temperature_2m[from + i] ?? 0),
+      apparent_temperature: Math.round(h.apparent_temperature[from + i] ?? 0),
       weather_code: h.weather_code[from + i] ?? 0,
       precipitation_probability: h.precipitation_probability[from + i] ?? 0,
       precipitation: Math.round((h.precipitation[from + i] ?? 0) * 10) / 10,
