@@ -314,12 +314,18 @@ interface AtmosphericWeatherCardProps {
   C: AppColors;
 }
 
+// --- PREMIUM SUN SCENE CONFIG ---
+const SUNNY_DEBUG_MODE = false; // Set to true to force sun rendering for testing
+
 export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   city,
   temperature,
   description,
+  high,
+  low,
   feelsLike,
   weatherCode,
+  isDay,
   time,
 }) => {
   const { theme } = useThemeStore();
@@ -331,6 +337,11 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   const rawCondition = useMemo(() => getRawCondition(weatherCode), [weatherCode]);
   const displayCondition = useMemo(() => normalizeConditionForDisplay(rawCondition, timeOfDay), [rawCondition, timeOfDay]);
   const style = useMemo(() => resolveWeatherCardStyle(displayCondition, timeOfDay, theme), [displayCondition, timeOfDay, theme]);
+
+  const isSunnyScene = SUNNY_DEBUG_MODE ||
+    displayCondition === WeatherCondition.SUNNY ||
+    displayCondition === WeatherCondition.MOSTLY_SUNNY ||
+    (displayCondition === WeatherCondition.PARTLY_CLOUDY && timeOfDay !== TimeOfDay.NIGHT);
 
   const displayTitle = getDisplayTitle(displayCondition, timeOfDay, description);
   const displayEmoji = getDisplayEmoji(displayCondition, weatherCode);
@@ -420,53 +431,73 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
         return (
           <View style={StyleSheet.absoluteFill}>
-            {/* 1. POWERFUL ATMOSPHERIC GLOW */}
-            <Animated.View style={[styles.premiumSunGlow, {
+            {/* 1. OUTER ATMOSPHERIC GLOW */}
+            <Animated.View style={[styles.premiumSunSceneGlow, {
               backgroundColor: isEvening ? '#FF8A3D' : '#FFB703',
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0.25, 0.38]
+                outputRange: [0.22, 0.32]
               }),
-              transform: [
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) }
-              ]
+              transform: [{ scale: 1.2 }]
             }]} />
 
-            {/* 2. ROTATING RAYS (Symmetric & Short) */}
-            <Animated.View style={[styles.sunRaysContainer, {
-              opacity: isPartly ? 0.15 : isMostlySunny ? 0.25 : 0.4,
+            {/* 2. INNER GLOW */}
+            <Animated.View style={[styles.premiumSunSceneGlow, {
+              width: 150, height: 150, borderRadius: 75,
+              backgroundColor: '#FFD166',
+              opacity: pulseAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.30, 0.40]
+              }),
+              transform: [{ scale: 1.1 }]
+            }]} />
+
+            {/* 3. ROTATING RAYS */}
+            <Animated.View style={[styles.premiumSunSceneRaysContainer, {
+              opacity: isPartly ? 0.25 : 0.45,
               transform: [
                 { rotate: masterAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }
               ]
             }]}>
                {[...Array(12)].map((_, i) => (
-                 <View key={i} style={[styles.sunRayShort, {
+                 <View key={i} style={[styles.premiumSunSceneRay, {
                    backgroundColor: '#FFE8A3',
-                   transform: [{ rotate: `${i * 30}deg` }, { translateY: 54 }]
+                   height: 18,
+                   transform: [{ rotate: `${i * 30}deg` }, { translateY: 48 }]
                  }]} />
                ))}
             </Animated.View>
 
-            {/* 3. MAIN SUN DISK (Premium 72dp Disk) */}
-            <Animated.View style={[styles.sunDiskPremium, {
+            {/* 4. MANDATORY SUN DISK (Alpha 1.0) */}
+            <Animated.View style={[styles.premiumSunSceneDisk, {
               backgroundColor: '#FFD166',
-              opacity: isPartly ? 0.8 : 0.98,
+              opacity: 1, // Fixed visibility
               transform: [
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.07] }) }
+                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] }) }
               ]
             }]}>
-              <View style={[styles.sunDiskInnerGlow, { backgroundColor: '#FFF1B8', opacity: 0.75 }]} />
+              {/* 5. SUN HIGHLIGHT */}
+              <View style={[styles.premiumSunSceneInnerHighlight, {
+                backgroundColor: '#FFF4C2',
+                opacity: 0.65,
+                position: 'absolute',
+                top: '15%',
+                left: '15%',
+                width: '35%',
+                height: '35%',
+                borderRadius: 15
+              }]} />
             </Animated.View>
 
-            {/* 4. OPTIONAL CLOUD HAZE (For Mostly Sunny) */}
+            {/* 6. CLOUD HAZE (For Mostly Sunny) */}
             {(isMostlySunny || isPartly) && (
               <Animated.View style={[StyleSheet.absoluteFill, {
-                opacity: isPartly ? 0.3 : 0.2,
-                transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] }) }]
+                zIndex: 4,
+                opacity: isPartly ? 0.4 : 0.25,
+                transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 20] }) }]
               }]}>
-                <View style={[styles.cloudHaze, { top: 120, right: 20, width: 180, height: 90, opacity: 0.15 }]} />
-                <View style={[styles.cloudHaze, { top: 180, left: 40, width: 140, height: 70, opacity: 0.1 }]} />
+                <View style={[styles.cloudHaze, { top: 80, right: 20, width: 160, height: 80, opacity: 0.2 }]} />
+                <View style={[styles.cloudHaze, { top: 140, left: 60, width: 120, height: 60, opacity: 0.15 }]} />
               </Animated.View>
             )}
           </View>
@@ -586,7 +617,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
               <Text style={[styles.cityText, { color: secondaryColor }]}>{city.toUpperCase()}</Text>
               <Text style={[styles.conditionText, { color: textColor }]}>{displayTitle}</Text>
             </View>
-            <View style={styles.iconContainer}>
+            <View style={[styles.iconContainer, isSunnyScene && { opacity: 0.2, backgroundColor: 'transparent', borderColor: 'transparent' }]}>
               <Text style={styles.weatherEmoji}>{displayEmoji}</Text>
             </View>
           </View>
@@ -674,39 +705,15 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   infoValue: { fontSize: 15, fontWeight: '800', marginTop: 2 },
   infoDivider: { width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.1)' },
-  premiumSunGlow: {
+
+  // --- PREMIUM SUN SCENE STYLES ---
+  premiumSunSceneDisk: {
     position: 'absolute',
-    top: -100,
-    right: -100,
-    width: 450,
-    height: 450,
-    borderRadius: 225,
-    zIndex: 1
-  },
-  sunRaysContainer: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 120,
-    height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2
-  },
-  sunRayShort: {
-    position: 'absolute',
-    width: 4,
-    height: 14,
-    backgroundColor: '#FFF',
-    borderRadius: 2,
-  },
-  sunDiskPremium: {
-    position: 'absolute',
-    top: 34,
-    right: 34,
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    top: 76, // ~24% of 320 height
+    right: '22%', // ~78% from left
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     zIndex: 3,
     justifyContent: 'center',
     alignItems: 'center',
@@ -716,38 +723,43 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 8
   },
-  sunDiskInnerGlow: {
-    width: '75%',
+  premiumSunSceneInnerHighlight: {
+    width: '70%',
     height: '75%',
-    borderRadius: 27,
-    justifyContent: 'center',
-    alignItems: 'center'
+    borderRadius: 25,
   },
-  premiumSunGlow: {
+  premiumSunSceneGlow: {
     position: 'absolute',
-    top: -10,
-    right: -10,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    zIndex: 1
-  },
-  sunDiskSmall: {
-    position: 'absolute',
-    top: 55,
-    right: 55,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    zIndex: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FFD166',
+    top: 38,
+    right: '12%',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    zIndex: 1,
+    shadowColor: '#FFB703',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 10,
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
     elevation: 4
   },
+  premiumSunSceneRaysContainer: {
+    position: 'absolute',
+    top: 48,
+    right: '13.5%',
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2
+  },
+  premiumSunSceneRay: {
+    position: 'absolute',
+    width: 2,
+    height: 14, // Ray length
+    borderRadius: 1,
+  },
+
+  // Legacy / Unused styles cleaning
   sunGlow: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140 },
   sunGlowMini: { position: 'absolute', top: 30, right: 30, width: 80, height: 80, borderRadius: 40 },
   moonGlow: { position: 'absolute', top: 40, right: 40, width: 100, height: 100, borderRadius: 50 },

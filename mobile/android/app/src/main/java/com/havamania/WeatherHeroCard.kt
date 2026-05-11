@@ -37,6 +37,14 @@ import java.time.LocalTime
 import kotlin.random.Random
 
 private const val TAG = "WeatherHeroCard"
+private const val SunnyDebugMode = true // Premium Sun Disk Debug Mode
+
+enum class SunVariant {
+    CLEAR_DAY,
+    MOSTLY_SUNNY,
+    PARTLY_CLOUDY,
+    EVENING
+}
 
 // ── Models & Styles ──────────────────────────────────────────────────────────
 
@@ -264,6 +272,11 @@ fun WeatherHeroCard(
     val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
     val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)
 
+    val isSunnyScene = SunnyDebugMode ||
+            condition is WeatherCondition.Clear ||
+            condition is WeatherCondition.MostlySunny ||
+            (condition is WeatherCondition.PartlyCloudy && timeOfDay != TimeOfDay.NIGHT)
+
     val context = LocalContext.current
     val isReducedMotion = remember {
         try {
@@ -297,8 +310,17 @@ fun WeatherHeroCard(
             }
             .clip(RoundedCornerShape(32.dp))
     ) {
-        // Layer 1: Background
-        LiveBackgroundLayer(colors = style.gradientColors, isReducedMotion = isReducedMotion)
+        val sunVariant = if (isSunnyScene && timeOfDay != TimeOfDay.NIGHT) {
+            when {
+                timeOfDay == TimeOfDay.EVENING -> SunVariant.EVENING
+                condition is WeatherCondition.MostlySunny -> SunVariant.MOSTLY_SUNNY
+                condition is WeatherCondition.PartlyCloudy -> SunVariant.PARTLY_CLOUDY
+                else -> SunVariant.CLEAR_DAY
+            }
+        } else null
+
+        // Layer 1: Background (Integrated with Lighting)
+        LiveBackgroundLayer(colors = style.gradientColors, isReducedMotion = isReducedMotion, sunVariant = sunVariant)
 
         // Layer 2: Atmospheric Effect (CLIPPED INSIDE)
         Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(32.dp))) {
@@ -325,6 +347,7 @@ fun WeatherHeroCard(
             windSpeed = windSpeed,
             uvIndex = uvIndex,
             style = style,
+            isSunnyScene = isSunnyScene,
             onCityClick = onCityClick
         )
 
@@ -342,21 +365,58 @@ fun WeatherHeroCard(
 }
 
 @Composable
-fun LiveBackgroundLayer(colors: List<Color>, isReducedMotion: Boolean) {
+fun LiveBackgroundLayer(colors: List<Color>, isReducedMotion: Boolean, sunVariant: SunVariant? = null) {
     val infiniteTransition = rememberInfiniteTransition(label = "live_bg")
     val move by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 100f,
-        animationSpec = infiniteRepeatable(tween(25000, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(60000, easing = LinearEasing), RepeatMode.Reverse),
         label = "move"
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val brush = Brush.linearGradient(
-            colors = colors,
-            start = Offset(move, -move),
-            end = Offset(size.width - move, size.height + move)
+        val sunCenter = Offset(size.width * 0.82f, size.height * (if (sunVariant == SunVariant.EVENING) 0.32f else 0.23f))
+
+        // 1. BASE DYNAMIC ATMOSPHERE
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = colors,
+                start = Offset(move, -move),
+                end = Offset(size.width - move, size.height + move)
+            )
         )
-        drawRect(brush)
+
+        // 2. MULTI-STAGE ATMOSPHERIC SCATTERING
+        if (sunVariant != null) {
+            val scatteringBase = when(sunVariant) {
+                SunVariant.EVENING -> Color(0xFFFF7A3D)
+                else -> Color(0xFFFFD166)
+            }
+
+            // Layer A: Wide Sky Wash (Environmental base)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0.0f to scatteringBase.copy(alpha = 0.12f),
+                    0.5f to scatteringBase.copy(alpha = 0.04f),
+                    1.0f to Color.Transparent,
+                    center = sunCenter,
+                    radius = size.width * 1.6f
+                ),
+                center = sunCenter,
+                radius = size.width * 1.6f
+            )
+
+            // Layer B: Warm Haze Concentration (Near the source)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0.0f to scatteringBase.copy(alpha = 0.08f),
+                    1.0f to Color.Transparent,
+                    center = sunCenter,
+                    radius = size.width * 0.8f
+                ),
+                center = sunCenter,
+                radius = size.width * 0.8f
+            )
+        }
     }
 }
 
@@ -372,184 +432,226 @@ fun WeatherEffectLayer(
 ) {
     if (!isAnimationEnabled) return
 
+    val isSunnyScene = SunnyDebugMode ||
+            condition is WeatherCondition.Clear ||
+            condition is WeatherCondition.MostlySunny ||
+            (condition is WeatherCondition.PartlyCloudy && timeOfDay != TimeOfDay.NIGHT)
+
     Box(modifier = Modifier.fillMaxSize()) {
-        when (condition) {
-            is WeatherCondition.Clear, is WeatherCondition.NightClear -> {
-                if (timeOfDay == TimeOfDay.NIGHT) StarFieldEffect()
-                else {
-                    SunPulseEffect()
-                    SunRayEffect()
+        val isSunnyScene = SunnyDebugMode ||
+                condition is WeatherCondition.Clear ||
+                condition is WeatherCondition.MostlySunny ||
+                (condition is WeatherCondition.PartlyCloudy && timeOfDay != TimeOfDay.NIGHT)
+
+        if (isSunnyScene && timeOfDay != TimeOfDay.NIGHT) {
+            val sunVariant = when {
+                timeOfDay == TimeOfDay.EVENING -> SunVariant.EVENING
+                condition is WeatherCondition.MostlySunny -> SunVariant.MOSTLY_SUNNY
+                condition is WeatherCondition.PartlyCloudy -> SunVariant.PARTLY_CLOUDY
+                else -> SunVariant.CLEAR_DAY
+            }
+
+            PremiumSunEffect(variant = sunVariant)
+
+            if (condition is WeatherCondition.MostlySunny) {
+                CloudDriftEffect(count = 2, opacity = 0.20f)
+            } else if (condition is WeatherCondition.PartlyCloudy) {
+                CloudDriftEffect(count = 3, opacity = 0.32f)
+            }
+        } else {
+            when (condition) {
+                is WeatherCondition.Clear, is WeatherCondition.NightClear -> {
+                    if (timeOfDay == TimeOfDay.NIGHT) StarFieldEffect()
                 }
-            }
-            is WeatherCondition.MostlySunny -> {
-                if (timeOfDay == TimeOfDay.NIGHT) {
-                    StarFieldEffect()
-                } else {
-                    MostlySunnyEffect(timeOfDay)
+                is WeatherCondition.MostlySunny -> {
+                    if (timeOfDay == TimeOfDay.NIGHT) StarFieldEffect()
                 }
-            }
-            is WeatherCondition.PartlyCloudy -> {
-                if (timeOfDay == TimeOfDay.NIGHT) {
-                    StarFieldEffect()
-                    CloudDriftEffect(count = 2, opacity = 0.12f)
-                } else {
-                    SunPulseEffect(sizeScale = 0.55f, alphaScale = 0.25f)
-                    SunRayEffect(opacity = 0.05f)
-                    CloudDriftEffect(count = 3, opacity = 0.14f)
+                is WeatherCondition.PartlyCloudy -> {
+                    if (timeOfDay == TimeOfDay.NIGHT) {
+                        StarFieldEffect()
+                        CloudDriftEffect(count = 2, opacity = 0.25f, color = Color(0xFF94A3B8))
+                    }
                 }
+                is WeatherCondition.Cloudy -> {
+                    val cloudColor = if (timeOfDay == TimeOfDay.NIGHT) Color(0xFF64748B) else Color(0xFFD1D5DB)
+                    if (timeOfDay == TimeOfDay.NIGHT) CloudDriftEffect(count = 4, opacity = 0.35f, color = cloudColor)
+                    else CloudDriftEffect(count = 6, opacity = 0.42f, color = cloudColor)
+                }
+                is WeatherCondition.Rain -> RainEffect()
+                is WeatherCondition.Thunderstorm -> {
+                    RainEffect()
+                    LightningEffect()
+                }
+                is WeatherCondition.Snow -> SnowParticleEffect()
+                is WeatherCondition.Fog -> FogHazeEffect()
             }
-            is WeatherCondition.Cloudy -> {
-                if (timeOfDay == TimeOfDay.NIGHT) CloudDriftEffect(count = 4, opacity = 0.15f)
-                else CloudDriftEffect(count = 6, opacity = 0.22f)
-            }
-            is WeatherCondition.Rain -> RainEffect()
-            is WeatherCondition.Thunderstorm -> {
-                RainEffect()
-                LightningEffect()
-            }
-            is WeatherCondition.Snow -> SnowParticleEffect()
-            is WeatherCondition.Fog -> FogHazeEffect()
         }
     }
 }
 
 @Composable
-fun SunPulseEffect(
-    sizeScale: Float = 1f,
-    alphaScale: Float = 0.32f,
-    glowColors: List<Color>? = null,
-    centerOffset: Offset? = null
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "sun")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 1f, targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(tween(3000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "pulse"
+fun PremiumSunEffect(variant: SunVariant) {
+    val infiniteTransition = rememberInfiniteTransition(label = "premium_sun")
+
+    // Luxury motion: barely perceptible
+    val drift by infiniteTransition.animateFloat(
+        initialValue = 0.999f, targetValue = 1.001f,
+        animationSpec = infiniteRepeatable(tween(30000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "drift"
     )
 
-    val colors = glowColors ?: listOf(Color(0xFFFFD166).copy(alpha = alphaScale), Color.Transparent)
+    val energy by infiniteTransition.animateFloat(
+        initialValue = 1f, targetValue = 1.012f,
+        animationSpec = infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "energy"
+    )
+
+    // Cinematic configuration
+    val sunRadiusBase = if (variant == SunVariant.EVENING) 46.dp else 36.dp
+    val centerXMult = 0.82f
+    val centerYMult = if (variant == SunVariant.EVENING) 0.32f else 0.23f
+
+    val coreColors = when (variant) {
+        SunVariant.EVENING -> listOf(Color(0xFFFFE5B4), Color(0xFFFF9933), Color(0xFFFF6600))
+        SunVariant.MOSTLY_SUNNY -> listOf(Color(0xFFFFF9E0), Color(0xFFFFF5D0), Color(0xFFFFD88A))
+        else -> listOf(Color(0xFFFFFDF0), Color(0xFFFFF3C4), Color(0xFFFFD166))
+    }
+
+    val atmosphereColor = when (variant) {
+        SunVariant.EVENING -> Color(0xFFFF5500)
+        else -> Color(0xFFFFB703)
+    }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val center = centerOffset ?: Offset(size.width * 0.85f, size.height * 0.15f)
+        val center = Offset(size.width * centerXMult, size.height * centerYMult)
+        val r = sunRadiusBase.toPx() * energy
+
+        // 1. DISSOLVED MULTI-LAYER GLOW SYSTEM
+        // Level 4: Distant Bloom (Sky integration)
         drawCircle(
             brush = Brush.radialGradient(
-                colors = colors,
+                0.0f to atmosphereColor.copy(alpha = 0.04f * drift),
+                1.0f to Color.Transparent,
                 center = center,
-                radius = 160.dp.toPx() * pulse * sizeScale
+                radius = 350.dp.toPx()
+            ),
+            center = center,
+            radius = 350.dp.toPx()
+        )
+
+        // Level 3: Soft Diffusion (The airy glow)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to atmosphereColor.copy(alpha = 0.08f),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = 200.dp.toPx() * drift
             ),
             center = center,
             radius = 200.dp.toPx()
         )
-    }
-}
 
-@Composable
-fun SunRayEffect(opacity: Float = 0.08f) {
-    val infiniteTransition = rememberInfiniteTransition(label = "rays")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(60000, easing = LinearEasing)),
-        label = "rotation"
-    )
+        // Level 2: Warm Halo (Transition layer)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to coreColors[1].copy(alpha = 0.15f),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = r * 3.5f
+            ),
+            center = center,
+            radius = r * 3.5f
+        )
 
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val center = Offset(size.width * 0.85f, size.height * 0.15f)
-        val rayCount = 5
-        val rayLength = size.width * 0.8f
+        // Level 1: Source Bloom (Blends the core edge)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to coreColors[1].copy(alpha = 0.25f),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = r * 1.8f
+            ),
+            center = center,
+            radius = r * 1.8f
+        )
 
-        rotate(rotation, center) {
-            repeat(rayCount) { i ->
-                val angle = (i.toFloat() / rayCount) * 360f
-                rotate(angle, center) {
-                    drawPath(
-                        path = Path().apply {
-                            moveTo(center.x, center.y)
-                            lineTo(center.x - 40.dp.toPx(), center.y + rayLength)
-                            lineTo(center.x + 40.dp.toPx(), center.y + rayLength)
-                            close()
-                        },
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.White.copy(alpha = opacity), Color.Transparent),
-                            startY = center.y,
-                            endY = center.y + rayLength
-                        )
-                    )
-                }
-            }
+        // 2. THE DISSOLVED CORE (No hard edges)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to coreColors[0],
+                0.3f to coreColors[1].copy(alpha = 0.95f),
+                0.7f to coreColors[2].copy(alpha = 0.60f),
+                1.0f to Color.Transparent, // Edge dissolve
+                center = center,
+                radius = r * 1.1f
+            ),
+            center = center,
+            radius = r * 1.1f,
+            alpha = if (variant == SunVariant.PARTLY_CLOUDY) 0.5f else 0.8f
+        )
+
+        // 3. INTERNAL LUMINANCE VARIATION (Subtle energy depth)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to Color.White.copy(alpha = 0.12f * drift),
+                1.0f to Color.Transparent,
+                center = Offset(center.x - r * 0.2f, center.y - r * 0.2f),
+                radius = r * 0.6f
+            ),
+            center = Offset(center.x - r * 0.2f, center.y - r * 0.2f),
+            radius = r * 0.6f
+        )
+
+        // 4. ATMOSPHERIC INTERACTION
+        if (variant == SunVariant.MOSTLY_SUNNY || variant == SunVariant.PARTLY_CLOUDY) {
+            drawCircle(
+                color = Color.White.copy(alpha = 0.06f),
+                radius = r * 2.2f,
+                center = Offset(center.x + (drift - 1f) * 30f, center.y + 15.dp.toPx())
+            )
         }
     }
 }
 
-@Composable
-fun MostlySunnyEffect(time: TimeOfDay) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        val glowColors = when (time) {
-            TimeOfDay.EVENING -> listOf(Color(0xFFFFB703).copy(alpha = 0.32f), Color.Transparent)
-            else -> listOf(Color(0xFFFFD166).copy(alpha = 0.28f), Color.Transparent)
-        }
-        SunPulseEffect(sizeScale = 0.85f, glowColors = glowColors)
-        SunRayEffect(opacity = 0.06f)
-        CloudDriftEffect(count = 2, opacity = 0.12f)
-    }
+val SineEaseInOut = Easing { f ->
+    ((1 - Math.cos(f * Math.PI)) / 2).toFloat()
 }
 
 // ── CLOUD DRAWING HELPER (Natural Path Silhouette) ──────────────────────────
 
-fun DrawScope.drawCloud(center: Offset, scale: Float, alpha: Float) {
-    val color = Color.White.copy(alpha = alpha)
-    val w = 140.dp.toPx() * scale
-    val h = 70.dp.toPx() * scale
+fun DrawScope.drawCloud(center: Offset, scale: Float, color: Color) {
+    val w = 150.dp.toPx() * scale
+    val h = 80.dp.toPx() * scale
+
+    // Multi-layered cloud for cinematic mass
+    val cloudColor = color.copy(alpha = color.alpha * 0.8f)
 
     val path = Path().apply {
-        // Start from bottom left
-        moveTo(center.x - w * 0.35f, center.y + h * 0.25f)
-
-        // Left Fluff
-        cubicTo(
-            center.x - w * 0.55f, center.y + h * 0.1f,
-            center.x - w * 0.5f, center.y - h * 0.25f,
-            center.x - w * 0.25f, center.y - h * 0.2f
-        )
-
-        // Top Main Fluff (Peak 1)
-        cubicTo(
-            center.x - w * 0.15f, center.y - h * 0.6f,
-            center.x + w * 0.15f, center.y - h * 0.6f,
-            center.x + w * 0.2f, center.y - h * 0.15f
-        )
-
-        // Right Fluff (Peak 2)
-        cubicTo(
-            center.x + w * 0.55f, center.y - h * 0.2f,
-            center.x + w * 0.55f, center.y + h * 0.35f,
-            center.x + w * 0.3f, center.y + h * 0.3f
-        )
-
-        // Bottom (Flat but slightly organic)
-        quadraticTo(
-            center.x, center.y + h * 0.4f,
-            center.x - w * 0.35f, center.y + h * 0.25f
-        )
-
+        moveTo(center.x - w * 0.4f, center.y + h * 0.25f)
+        cubicTo(center.x - w * 0.65f, center.y + h * 0.1f, center.x - w * 0.6f, center.y - h * 0.35f, center.x - w * 0.25f, center.y - h * 0.25f)
+        cubicTo(center.x - w * 0.1f, center.y - h * 0.75f, center.x + w * 0.3f, center.y - h * 0.7f, center.x + w * 0.35f, center.y - h * 0.2f)
+        cubicTo(center.x + w * 0.65f, center.y - h * 0.1f, center.x + w * 0.7f, center.y + h * 0.35f, center.x + w * 0.4f, center.y + h * 0.3f)
+        lineTo(center.x - w * 0.4f, center.y + h * 0.25f)
         close()
     }
 
-    drawPath(
-        path = path,
-        color = color,
-        style = Fill
-    )
+    // Base Mass
+    drawPath(path = path, color = cloudColor, style = Fill)
 
-    // Subtle Highlight Layer
+    // Subtle internal shading for volume
     drawPath(
         path = path,
-        color = Color.White.copy(alpha = alpha * 0.3f),
-        style = Stroke(width = 1.dp.toPx())
+        brush = Brush.radialGradient(
+            colors = listOf(Color.White.copy(alpha = 0.05f), Color.Transparent),
+            center = center,
+            radius = w * 0.5f
+        ),
+        style = Fill
     )
 }
 
 @Composable
-fun CloudDriftEffect(count: Int = 3, opacity: Float = 0.3f) {
+fun CloudDriftEffect(count: Int = 3, opacity: Float = 0.3f, color: Color = Color.White) {
     val infiniteTransition = rememberInfiniteTransition(label = "clouds")
     val drift by infiniteTransition.animateFloat(
         initialValue = -80f, targetValue = 80f,
@@ -557,25 +659,24 @@ fun CloudDriftEffect(count: Int = 3, opacity: Float = 0.3f) {
         label = "drift"
     )
 
-    // Remember cloud properties with fixed initial distribution to prevent "empty start"
+    // Remember cloud properties with fixed initial distribution
     val clouds = remember(count) {
-        val initialPoints = listOf(0.1f, 0.35f, 0.55f, 0.75f, 0.92f, 0.22f, 0.48f)
         List(count) { i ->
             Triple(
-                Offset(initialPoints.getOrElse(i) { Random.nextFloat() }, Random.nextFloat() * 0.35f + 0.05f),
-                0.7f + Random.nextFloat() * 0.6f,
-                0.6f + Random.nextFloat() * 0.8f
+                Offset(Random.nextFloat(), Random.nextFloat() * 0.35f + 0.05f),
+                0.8f + Random.nextFloat() * 0.7f,
+                0.5f + Random.nextFloat() * 1.0f
             )
         }
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        val finalColor = color.copy(alpha = opacity)
         clouds.forEach { (pos, scale, speed) ->
-            val cloudW = 140.dp.toPx() * scale
-            // Distribute clouds across the width from the start
+            val cloudW = 160.dp.toPx() * scale
             val x = (size.width * pos.x + drift * speed * 1.5f) % (size.width + cloudW * 2) - cloudW
             val y = size.height * pos.y
-            drawCloud(Offset(x, y), scale, opacity)
+            drawCloud(Offset(x, y), scale, finalColor)
         }
     }
 }
@@ -697,6 +798,7 @@ fun PremiumWeatherContent(
     windSpeed: String,
     uvIndex: String,
     style: WeatherCardStyle,
+    isSunnyScene: Boolean,
     onCityClick: () -> Unit
 ) {
     val textColor = if (style.isDark) Color.White else Color(0xFF0F172A)
@@ -758,14 +860,16 @@ fun PremiumWeatherContent(
                 }
             }
 
-            Icon(
-                style.icon,
-                null,
-                tint = style.accentColor,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(36.dp)
-            )
+            if (!isSunnyScene) {
+                Icon(
+                    style.icon,
+                    null,
+                    tint = style.accentColor,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(36.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.weight(0.5f))
