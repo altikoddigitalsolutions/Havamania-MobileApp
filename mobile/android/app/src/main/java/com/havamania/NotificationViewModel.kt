@@ -4,154 +4,144 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+
+data class NotificationUiState(
+    val notifications: List<NotificationItem> = emptyList(),
+    val filteredNotifications: List<NotificationItem> = emptyList(),
+    val unreadCount: Int = 0,
+    val selectedIds: Set<String> = emptySet(),
+    val isSelectionMode: Boolean = false,
+    val activeFilter: NotificationCategory? = null,
+    val isLoading: Boolean = false
+)
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
+    private val TAG = "NotificationVM"
+    private val repository: NotificationRepository
 
-    val notifications: StateFlow<List<AppNotification>> = NotificationRepository.notifications
+    private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
+    val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
-    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
-    val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
+    init {
+        val database = NotificationDatabase.getDatabase(application)
+        repository = NotificationRepository(database.notificationDao())
 
-    private val _isSelectionMode = MutableStateFlow(false)
-    val isSelectionMode: StateFlow<Boolean> = _isSelectionMode.asStateFlow()
+        // Observe all notifications from Room
+        viewModelScope.launch {
+            repository.allNotifications
+                .catch { e ->
+                    Log.e(TAG, "Failed to fetch notifications", e)
+                    emit(emptyList())
+                }
+                .collect { list ->
+                    updateStateWithList(list)
+                }
+        }
+    }
 
-    private val actionMutex = Mutex()
-    private var lastActionTime = 0L
-    private val DEBOUNCE_TIME = 500L
+    private fun updateStateWithList(list: List<NotificationItem>) {
+        _uiState.update { current ->
+            val filtered = list.filter { item ->
+                current.activeFilter == null || item.category == current.activeFilter
+            }
+            current.copy(
+                notifications = list,
+                filteredNotifications = filtered,
+                unreadCount = list.count { !it.isRead },
+                isLoading = false,
+                isSelectionMode = current.isSelectionMode && filtered.isNotEmpty()
+            )
+        }
+    }
 
-    private fun checkDebounce(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - lastActionTime < DEBOUNCE_TIME) return false
-        lastActionTime = now
-        return true
+    fun setFilter(category: NotificationCategory?) {
+        _uiState.update { current ->
+            val filtered = current.notifications.filter { item ->
+                category == null || item.category == category
+            }
+            current.copy(
+                activeFilter = category,
+                filteredNotifications = filtered,
+                selectedIds = if (current.isSelectionMode) emptySet() else current.selectedIds,
+                isSelectionMode = false
+            )
+        }
     }
 
     fun toggleSelection(id: String) {
-        viewModelScope.launch {
-            actionMutex.withLock {
-                val current = _selectedIds.value
-                if (current.contains(id)) {
-                    _selectedIds.value = current - id
-                    if (_selectedIds.value.isEmpty()) {
-                        _isSelectionMode.value = false
-                    }
-                } else {
-                    _selectedIds.value = current + id
-                    _isSelectionMode.value = true
-                }
+        _uiState.update { current ->
+            val newSelected = if (current.selectedIds.contains(id)) {
+                current.selectedIds - id
+            } else {
+                current.selectedIds + id
             }
-        }
-    }
-
-    fun enterSelectionMode(firstId: String) {
-        viewModelScope.launch {
-            actionMutex.withLock {
-                _isSelectionMode.value = true
-                _selectedIds.value = setOf(firstId)
-            }
-        }
-    }
-
-    fun exitSelectionMode() {
-        viewModelScope.launch {
-            actionMutex.withLock {
-                _isSelectionMode.value = false
-                _selectedIds.value = emptySet()
-            }
+            current.copy(
+                selectedIds = newSelected,
+                isSelectionMode = newSelected.isNotEmpty()
+            )
         }
     }
 
     fun selectAll() {
+        _uiState.update { current ->
+            val allIds = current.filteredNotifications.map { it.id }.toSet()
+            val newSelected = if (current.selectedIds.size == allIds.size) emptySet() else allIds
+            current.copy(
+                selectedIds = newSelected,
+                isSelectionMode = newSelected.isNotEmpty()
+            )
+        }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectedIds = emptySet(), isSelectionMode = false) }
+    }
+
+    fun deleteNotification(id: String) {
         viewModelScope.launch {
-            actionMutex.withLock {
-                _selectedIds.value = notifications.value.map { it.id }.toSet()
-            }
-        }
-    }
-
-    fun markAsRead(id: String) {
-        if (!checkDebounce()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.markAsRead(id)
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in markAsRead", e)
-            }
-        }
-    }
-
-    fun toggleReadStatus(id: String) {
-        if (!checkDebounce()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.toggleReadStatus(id)
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in toggleReadStatus", e)
-            }
-        }
-    }
-
-    fun markSelectedAsRead() {
-        val ids = _selectedIds.value
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.markMultipleAsRead(ids)
-                launch(Dispatchers.Main) { exitSelectionMode() }
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in markSelectedAsRead", e)
-            }
+            repository.delete(id)
+            _uiState.update { it.copy(selectedIds = it.selectedIds - id) }
         }
     }
 
     fun deleteSelected() {
-        val ids = _selectedIds.value
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.deleteMultiple(ids)
-                launch(Dispatchers.Main) { exitSelectionMode() }
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in deleteSelected", e)
-            }
+        val idsToDelete = _uiState.value.selectedIds.toList()
+        if (idsToDelete.isEmpty()) return
+
+        viewModelScope.launch {
+            repository.delete(idsToDelete)
+            clearSelection()
+        }
+    }
+
+    fun markAsRead(id: String) {
+        viewModelScope.launch {
+            repository.markAsRead(id)
+        }
+    }
+
+    fun toggleReadStatus(id: String) {
+        val item = _uiState.value.notifications.find { it.id == id } ?: return
+        viewModelScope.launch {
+            repository.toggleReadStatus(id, item.isRead)
+        }
+    }
+
+    fun markSelectedAsRead() {
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+
+        viewModelScope.launch {
+            repository.markAsRead(ids)
+            clearSelection()
         }
     }
 
     fun markAllAsRead() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.markAllAsRead()
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in markAllAsRead", e)
-            }
-        }
-    }
-
-    fun deleteNotification(id: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.deleteNotification(id)
-                if (_selectedIds.value.contains(id)) {
-                    launch(Dispatchers.Main) { toggleSelection(id) }
-                }
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in deleteNotification", e)
-            }
-        }
-    }
-
-    fun undoDelete() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                NotificationRepository.undoDelete()
-            } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in undoDelete", e)
-            }
+        viewModelScope.launch {
+            repository.markAllAsRead()
         }
     }
 }

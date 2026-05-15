@@ -16,11 +16,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,6 +53,8 @@ import android.widget.Toast
 @Composable
 fun TravelPlannerScreen(
     viewModel: TravelViewModel = viewModel(),
+    focusId: String? = null,
+    highlight: String? = null,
     onBack: () -> Unit
 ) {
     val plans by viewModel.plans.collectAsState()

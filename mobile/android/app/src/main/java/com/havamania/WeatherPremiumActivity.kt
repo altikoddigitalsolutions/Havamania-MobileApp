@@ -26,14 +26,13 @@ class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // We use the full path to ensure we call the @Composable function
-            com.havamania.ui.theme.HavamaniaTheme {
+            HavamaniaTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER
 
                 var appState by remember { mutableStateOf("splash") }
-                val themeColors = com.havamania.ui.theme.HavamaniaTheme.colors
+                val themeColors = HavamaniaTheme.colors
                 val backgroundGradient = remember(themeColors) {
                     Brush.verticalGradient(themeColors.gradientPrimary)
                 }
@@ -140,8 +139,10 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 }
                                 composable(Routes.NOTIFICATION_CENTER) {
                                     NotificationCenterScreen(
-                                        navController = navController,
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToDetail = { screen, params ->
+                                            navController.navigate(screen)
+                                        }
                                     )
                                 }
                             }

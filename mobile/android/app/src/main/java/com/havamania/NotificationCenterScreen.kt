@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -31,116 +30,49 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
 import com.havamania.ui.theme.HavamaniaTheme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCenterScreen(
-    navController: NavController,
     onBack: () -> Unit,
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
     viewModel: NotificationViewModel = viewModel()
 ) {
+    val state by viewModel.uiState.collectAsState()
     val themeColors = HavamaniaTheme.colors
-    val notifications by viewModel.notifications.collectAsState()
-    val selectedIds by viewModel.selectedIds.collectAsState()
-    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
-
-    var selectedFilter by rememberSaveable { mutableStateOf(NotificationFilter.ALL) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
-    val filteredNotifications = remember(notifications, selectedFilter) {
-        when (selectedFilter) {
-            NotificationFilter.ALL -> notifications
-            NotificationFilter.UNREAD -> notifications.filter { !it.isRead }
-            NotificationFilter.TRAVEL -> notifications.filter { it.type == NotificationType.TRAVEL }
-            NotificationFilter.RAIN -> notifications.filter { it.type == NotificationType.RAIN }
-            NotificationFilter.UV -> notifications.filter { it.type == NotificationType.UV }
-            NotificationFilter.WARNING -> notifications.filter { it.type == NotificationType.WARNING }
-            NotificationFilter.SUMMARY -> notifications.filter { it.type == NotificationType.SUMMARY }
-            NotificationFilter.UPDATE -> notifications.filter { it.type == NotificationType.UPDATE }
-            NotificationFilter.GENERAL -> notifications.filter { it.type == NotificationType.GENERAL }
-        }
-    }
-
-    fun handleNotificationClick(notification: AppNotification) {
-        if (isSelectionMode) {
-            viewModel.toggleSelection(notification.id)
-            return
-        }
-
-        viewModel.markAsRead(notification.id)
-
-        when (notification.type) {
-            NotificationType.TRAVEL -> navController.navigate(Routes.CALENDAR)
-            NotificationType.RAIN -> navController.navigate(Routes.WEATHER)
-            NotificationType.UV -> navController.navigate(Routes.WEATHER)
-            NotificationType.SUMMARY -> navController.navigate(Routes.AI)
-            NotificationType.WARNING -> navController.navigate(Routes.WEATHER)
-            NotificationType.GENERAL -> navController.navigate(Routes.SETTINGS)
-            NotificationType.UPDATE -> navController.navigate(Routes.PROFILE)
-            else -> {}
-        }
-    }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            if (isSelectionMode) {
-                SelectionTopBar(
-                    selectedCount = selectedIds.size,
-                    onExitSelection = { viewModel.exitSelectionMode() },
-                    onSelectAll = { viewModel.selectAll() },
-                    onMarkRead = { viewModel.markSelectedAsRead() },
-                    onDelete = {
-                        viewModel.deleteSelected()
-                        scope.launch {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "Bildirimler silindi",
-                                actionLabel = "GERİ AL",
-                                duration = SnackbarDuration.Short
-                            )
-                            if (result == SnackbarResult.ActionPerformed) {
-                                viewModel.undoDelete()
-                            }
+            HavamaniaTopBar(
+                title = if (state.isSelectionMode) "${state.selectedIds.size} SEÇİLDİ" else "BİLDİRİM MERKEZİ",
+                onBack = {
+                    if (state.isSelectionMode) viewModel.clearSelection() else onBack()
+                },
+                actions = {
+                    if (state.isSelectionMode) {
+                        IconButton(onClick = { viewModel.selectAll() }) {
+                            Icon(Icons.Rounded.SelectAll, null, tint = themeColors.textPrimary)
+                        }
+                        IconButton(onClick = { viewModel.markSelectedAsRead() }) {
+                            Icon(Icons.Rounded.DoneAll, null, tint = themeColors.accent)
+                        }
+                        IconButton(onClick = { viewModel.deleteSelected() }) {
+                            Icon(Icons.Rounded.Delete, null, tint = themeColors.error)
+                        }
+                    } else if (state.notifications.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.markAllAsRead() }) {
+                            Icon(Icons.Rounded.DoneAll, null, tint = themeColors.accent)
                         }
                     }
-                )
-            } else {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            "BİLDİRİM MERKEZİ",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Geri")
-                        }
-                    },
-                    actions = {
-                        if (notifications.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.markAllAsRead() }) {
-                                Icon(Icons.Rounded.DoneAll, contentDescription = "Tümünü Okundu Yap", tint = themeColors.accent)
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = themeColors.textPrimary,
-                        navigationIconContentColor = themeColors.textPrimary
-                    )
-                )
-            }
+                }
+            )
         },
-        containerColor = themeColors.background
+        containerColor = Color.Transparent
     ) { padding ->
         Column(
             modifier = Modifier
@@ -148,14 +80,14 @@ fun NotificationCenterScreen(
                 .padding(padding)
         ) {
             NotificationFilterRow(
-                selectedFilter = selectedFilter,
-                onFilterSelected = { selectedFilter = it }
+                activeFilter = state.activeFilter,
+                onFilterChange = { viewModel.setFilter(it) }
             )
 
-            if (filteredNotifications.isEmpty()) {
+            if (state.filteredNotifications.isEmpty() && !state.isLoading) {
                 EmptyNotificationState(
-                    hasAnyNotifications = notifications.isNotEmpty(),
-                    onResetFilter = { selectedFilter = NotificationFilter.ALL }
+                    hasAnyNotifications = state.notifications.isNotEmpty(),
+                    onResetFilter = { viewModel.setFilter(null) }
                 )
             } else {
                 LazyColumn(
@@ -163,28 +95,21 @@ fun NotificationCenterScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredNotifications, key = { it.id }) { notification ->
-                        val isSelected = selectedIds.contains(notification.id)
+                    items(state.filteredNotifications, key = { it.id }) { notification ->
+                        val isSelected = state.selectedIds.contains(notification.id)
 
                         SwipeableNotificationItem(
                             notification = notification,
                             isSelected = isSelected,
-                            isSelectionMode = isSelectionMode,
-                            onClick = { handleNotificationClick(notification) },
-                            onLongClick = { viewModel.enterSelectionMode(notification.id) },
-                            onDelete = {
-                                viewModel.deleteNotification(notification.id)
-                                scope.launch {
-                                    val result = snackbarHostState.showSnackbar(
-                                        message = "Bildirim silindi",
-                                        actionLabel = "GERİ AL",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                    if (result == SnackbarResult.ActionPerformed) {
-                                        viewModel.undoDelete()
-                                    }
+                            isSelectionMode = state.isSelectionMode,
+                            onClick = {
+                                viewModel.markAsRead(notification.id)
+                                notification.deepLinkTarget?.let { target ->
+                                    onNavigateToDetail(target, notification.relatedTripId?.let { mapOf("tripId" to it) })
                                 }
                             },
+                            onLongClick = { viewModel.toggleSelection(notification.id) },
+                            onDelete = { viewModel.deleteNotification(notification.id) },
                             onToggleRead = { viewModel.toggleReadStatus(notification.id) },
                             onToggleSelection = { viewModel.toggleSelection(notification.id) }
                         )
@@ -195,47 +120,10 @@ fun NotificationCenterScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SelectionTopBar(
-    selectedCount: Int,
-    onExitSelection: () -> Unit,
-    onSelectAll: () -> Unit,
-    onMarkRead: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val themeColors = HavamaniaTheme.colors
-    TopAppBar(
-        title = { Text("$selectedCount Seçildi", style = MaterialTheme.typography.titleMedium) },
-        navigationIcon = {
-            IconButton(onClick = onExitSelection) {
-                Icon(Icons.Rounded.Close, contentDescription = "Vazgeç")
-            }
-        },
-        actions = {
-            IconButton(onClick = onSelectAll) {
-                Icon(Icons.Rounded.SelectAll, contentDescription = "Tümünü Seç")
-            }
-            IconButton(onClick = onMarkRead) {
-                Icon(Icons.Rounded.Drafts, contentDescription = "Okundu Yap")
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Sil", tint = themeColors.error)
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = themeColors.surfaceGlass,
-            titleContentColor = themeColors.textPrimary,
-            navigationIconContentColor = themeColors.textPrimary,
-            actionIconContentColor = themeColors.textPrimary
-        )
-    )
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwipeableNotificationItem(
-    notification: AppNotification,
+    notification: NotificationItem,
     isSelected: Boolean,
     isSelectionMode: Boolean,
     onClick: () -> Unit,
@@ -253,7 +141,6 @@ fun SwipeableNotificationItem(
 
     val themeColors = HavamaniaTheme.colors
 
-    // Theme-based action colors
     val readActionBg = if (themeColors.isDark) {
         Brush.horizontalGradient(listOf(Color(0xFF1E3A8A), Color(0xFF2563EB)))
     } else {
@@ -275,13 +162,10 @@ fun SwipeableNotificationItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
             .height(IntrinsicSize.Min)
     ) {
-        // Background Action Layer (Visible only when swiped)
         Box(modifier = Modifier.matchParentSize()) {
             if (offsetX.value > 8f) {
-                // Left Action (Read/Unread)
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -300,7 +184,7 @@ fun SwipeableNotificationItem(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             if (notification.isRead) Icons.Rounded.MarkEmailUnread else Icons.Rounded.MarkEmailRead,
-                            contentDescription = null,
+                            null,
                             tint = readTextColor,
                             modifier = Modifier.size(24.dp)
                         )
@@ -315,7 +199,6 @@ fun SwipeableNotificationItem(
             }
 
             if (offsetX.value < -8f) {
-                // Right Action (Delete)
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
@@ -332,12 +215,7 @@ fun SwipeableNotificationItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = null,
-                            tint = deleteTextColor,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Rounded.Delete, null, tint = deleteTextColor, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.height(4.dp))
                         Text(
                             stringResource(R.string.notification_delete),
@@ -349,7 +227,6 @@ fun SwipeableNotificationItem(
             }
         }
 
-        // Foreground Card Layer
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -384,17 +261,13 @@ fun SwipeableNotificationItem(
                             if (isSelectionMode) onToggleSelection() else onClick()
                         }
                     },
-                    onLongClick = {
-                        if (offsetX.value == 0f) onLongClick()
-                    }
+                    onLongClick = { if (offsetX.value == 0f) onLongClick() }
                 )
         ) {
             NotificationCard(
                 notification = notification,
                 isSelected = isSelected,
                 isSelectionMode = isSelectionMode,
-                onClick = { /* Handled by wrapper */ },
-                onLongClick = { /* Handled by wrapper */ },
                 onToggleSelection = onToggleSelection
             )
         }
@@ -403,14 +276,14 @@ fun SwipeableNotificationItem(
 
 @Composable
 fun NotificationCard(
-    notification: AppNotification,
+    notification: NotificationItem,
     isSelected: Boolean,
     isSelectionMode: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
     onToggleSelection: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
+    val dateFormat = remember { SimpleDateFormat("HH:mm", Locale("tr")) }
+    val timeStr = remember(notification.createdAt) { dateFormat.format(Date(notification.createdAt)) }
 
     val cardBgColor = if (isSelected) {
         themeColors.accent.copy(alpha = 0.15f)
@@ -428,30 +301,24 @@ fun NotificationCard(
         themeColors.accent.copy(alpha = 0.25f)
     }
 
-    val titleWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         color = cardBgColor,
-        border = BorderStroke(
-            if (isSelected) 2.dp else 1.dp,
-            cardBorderColor
-        ),
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, cardBorderColor),
         shadowElevation = if (notification.isRead) 0.dp else 4.dp
     ) {
         Row(
             modifier = Modifier.padding(18.dp),
             verticalAlignment = Alignment.Top
         ) {
-            val iconBgColor = when (notification.type) {
-                NotificationType.TRAVEL -> Color(0xFF6366F1)
-                NotificationType.RAIN -> Color(0xFF3B82F6)
-                NotificationType.UV -> Color(0xFFF59E0B)
-                NotificationType.WARNING -> Color(0xFFEF4444)
-                NotificationType.SUMMARY -> Color(0xFF10B981)
-                NotificationType.UPDATE -> Color(0xFF8B5CF6)
-                NotificationType.GENERAL -> Color(0xFF64748B)
+            val iconBgColor = when (notification.category) {
+                NotificationCategory.TRAVEL -> Color(0xFF6366F1)
+                NotificationCategory.RAIN -> Color(0xFF3B82F6)
+                NotificationCategory.UV -> Color(0xFFF59E0B)
+                NotificationCategory.WARNING -> Color(0xFFEF4444)
+                NotificationCategory.SUMMARY -> Color(0xFF10B981)
+                NotificationCategory.UPDATE -> Color(0xFF8B5CF6)
                 else -> themeColors.accent
             }
 
@@ -463,7 +330,7 @@ fun NotificationCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = notification.type.getIcon(),
+                    imageVector = notification.category.getIcon(),
                     contentDescription = null,
                     tint = iconBgColor,
                     modifier = Modifier.size(26.dp)
@@ -473,15 +340,11 @@ fun NotificationCard(
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
-                        text = notification.title,
+                        text = notification.getSafeTitle(),
                         style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = titleWeight,
+                            fontWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black,
                             letterSpacing = 0.2.sp
                         ),
                         color = themeColors.textPrimary,
@@ -489,37 +352,30 @@ fun NotificationCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = notification.timeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = themeColors.textMuted
-                    )
+                    Text(text = timeStr, style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = notification.message,
+                    text = notification.getSafeMessage(),
                     style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                     color = if (notification.isRead) themeColors.textSecondary.copy(alpha = 0.8f) else themeColors.textSecondary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (notification.actionText != null) {
+                if (notification.actionLabel != null) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Surface(
-                        onClick = { onClick() },
+                        onClick = { /* Handled by parent click or deepLink */ },
                         shape = CircleShape,
                         color = themeColors.accent.copy(alpha = 0.08f),
                         border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
                     ) {
                         Text(
-                            text = notification.actionText.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.8.sp
-                            ),
+                            text = notification.actionLabel.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.8.sp),
                             color = themeColors.accent,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                         )
@@ -541,11 +397,7 @@ fun NotificationCard(
                         .padding(top = 6.dp)
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.6f))
-                            )
-                        )
+                        .background(Brush.radialGradient(listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.6f))))
                         .border(1.5.dp, themeColors.surface, CircleShape)
                 )
             }
@@ -555,111 +407,72 @@ fun NotificationCard(
 
 @Composable
 fun NotificationFilterRow(
-    selectedFilter: NotificationFilter,
-    onFilterSelected: (NotificationFilter) -> Unit
+    activeFilter: NotificationCategory?,
+    onFilterChange: (NotificationCategory?) -> Unit
 ) {
-    val filters = NotificationFilter.entries
+    val categories = remember { NotificationCategory.entries.filter { it != NotificationCategory.SYSTEM } }
     val themeColors = HavamaniaTheme.colors
 
     LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(filters) { filter ->
-            val isSelected = selectedFilter == filter
-            val label = when (filter) {
-                NotificationFilter.ALL -> "Tümü"
-                NotificationFilter.UNREAD -> "Okunmamış"
-                NotificationFilter.TRAVEL -> "Seyahat"
-                NotificationFilter.RAIN -> "Yağmur"
-                NotificationFilter.UV -> "UV"
-                NotificationFilter.WARNING -> "Uyarı"
-                NotificationFilter.SUMMARY -> "Özet"
-                NotificationFilter.UPDATE -> "Güncelleme"
-                NotificationFilter.GENERAL -> "Genel"
-            }
-
-            Surface(
-                onClick = { onFilterSelected(filter) },
-                shape = RoundedCornerShape(16.dp),
-                color = if (isSelected) themeColors.accent else themeColors.surfaceGlass.copy(alpha = 0.4f),
-                border = BorderStroke(
-                    1.dp,
-                    if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.15f)
-                ),
-                tonalElevation = if (isSelected) 4.dp else 0.dp
-            ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    color = if (isSelected) Color.White else themeColors.textPrimary
-                )
-            }
+        item {
+            FilterChip(isSelected = activeFilter == null, label = "Tümü", onClick = { onFilterChange(null) })
+        }
+        items(categories) { category ->
+            FilterChip(isSelected = activeFilter == category, label = category.label, onClick = { onFilterChange(category) })
         }
     }
 }
 
 @Composable
-fun EmptyNotificationState(
-    hasAnyNotifications: Boolean,
-    onResetFilter: () -> Unit
-) {
+fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) themeColors.accent else themeColors.surfaceGlass.copy(alpha = 0.4f),
+        border = BorderStroke(1.dp, if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.15f)),
+        tonalElevation = if (isSelected) 4.dp else 0.dp
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            ),
+            color = if (isSelected) Color.White else themeColors.textPrimary
+        )
+    }
+}
 
+@Composable
+fun EmptyNotificationState(hasAnyNotifications: Boolean, onResetFilter: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
+        modifier = Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(themeColors.accent.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (hasAnyNotifications) Icons.Rounded.SearchOff else Icons.Rounded.NotificationsNone,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = themeColors.accent
-            )
-        }
-
+        Icon(
+            imageVector = if (hasAnyNotifications) Icons.Rounded.SearchOff else Icons.Rounded.NotificationsNone,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = themeColors.accent.copy(alpha = 0.3f)
+        )
         Spacer(modifier = Modifier.height(24.dp))
-
         Text(
             text = if (hasAnyNotifications) "Bu kategoride bildirim yok." else "Henüz bildiriminiz bulunmuyor.",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = if (hasAnyNotifications) "Lütfen farklı bir filtre seçmeyi deneyin." else "Yeni bildirimleriniz olduğunda burada görünecektir.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = themeColors.textSecondary,
-            textAlign = TextAlign.Center
-        )
-
         if (hasAnyNotifications) {
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onResetFilter,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
-            ) {
+            Button(onClick = onResetFilter, colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)) {
                 Text("TÜMÜNÜ GÖSTER", fontWeight = FontWeight.Bold)
             }
         }

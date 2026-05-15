@@ -50,6 +50,7 @@ fun ProfileScreen(
     onNavigateToAiHistory: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToTravels: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
     aiHistoryViewModel: AiHistoryViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel()
@@ -153,10 +154,7 @@ fun ProfileScreen(
                 onMyTravels = onNavigateToTravels,
                 onChooseTheme = onNavigateToSettings,
                 onEditProfile = onNavigateToEditProfile,
-                onNotifications = {
-                    comingSoonTitle = "Bildirim tercihleri yakında eklenecek."
-                    showComingSoonDialog = true
-                },
+                onNotifications = onNavigateToNotifications,
                 onPremium = {
                     comingSoonTitle = "Havamania Premium yakında hizmetinizde olacak."
                     showComingSoonDialog = true
