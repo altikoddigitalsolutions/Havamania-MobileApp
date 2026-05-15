@@ -58,6 +58,8 @@ class WeatherViewModel(
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
+    val unreadNotificationCount: StateFlow<Int> = NotificationRepository.unreadCountFlow
+
     private var lastCity = "İstanbul"
     private var lastDistrict: String? = null
     private var lastLat = 41.0082

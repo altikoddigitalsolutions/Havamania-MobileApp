@@ -53,7 +53,8 @@ import com.havamania.ui.theme.SectionLabel
 fun HomeScreen(
     viewModel: WeatherViewModel = viewModel(),
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = viewModel(),
-    onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> }
+    onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> },
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -63,6 +64,7 @@ fun HomeScreen(
     val citySuggestions by viewModel.citySuggestions.collectAsState()
     val userInterests by themeViewModel.userInterests.collectAsState()
     val todayRecommendation by viewModel.todayRecommendation.collectAsState()
+    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsState()
 
     LaunchedEffect(userInterests) {
         viewModel.updateRecommendation(userInterests)
@@ -134,7 +136,9 @@ fun HomeScreen(
                         onSelectDaily = { viewModel.selectDailyForecast(it) },
                         scrollState = scrollState,
                         onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
-                        onCityClick = { showCitySwitcher = true }
+                        onCityClick = { showCitySwitcher = true },
+                        onNotificationClick = onNavigateToNotifications,
+                        unreadNotificationCount = unreadNotificationCount
                     )
                 }
                 is WeatherUiState.Error -> {
@@ -245,7 +249,9 @@ fun WeatherSuccessContent(
     onSelectDaily: (DailyForecast) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onAskAiClick: (HavamaniaRecommendation) -> Unit,
-    onCityClick: () -> Unit = {}
+    onCityClick: () -> Unit = {},
+    onNotificationClick: () -> Unit = {},
+    unreadNotificationCount: Int = 0
 ) {
     // Derived state for premium performance and correct logic
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
@@ -317,6 +323,8 @@ fun WeatherSuccessContent(
                 windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s",
                 uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4",
                 onCityClick = onCityClick,
+                onNotificationClick = onNotificationClick,
+                unreadNotificationCount = unreadNotificationCount,
                 time = displayTime,
                 parallaxOffset = scrollState.value * 0.12f,
                 modifier = Modifier

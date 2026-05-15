@@ -44,8 +44,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import retrofit2.HttpException
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.*
 
 // --- VIEWMODEL ---
@@ -86,10 +90,11 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
                         .firstOrNull()?.let { data ->
                             weatherData = data
+                            android.util.Log.d("HAVAMANIA_AI", "Weather data başarıyla alındı: ${data.cityName}")
                         }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AssistantData", "Failed to pre-fetch weather data: ${e.message}")
+                android.util.Log.e("HAVAMANIA_AI", "Weather API Error: ${e.message}", e)
             }
         }
     }
@@ -99,8 +104,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val cfg = api.getConfig(botId)
                 _config.value = cfg
+                android.util.Log.d("HAVAMANIA_AI", "Bot config yüklendi: ${cfg.name}")
             } catch (e: Exception) {
-                // Hata durumunda varsayılan config veya sessiz hata
+                android.util.Log.e("HAVAMANIA_AI", "Config loading Error", e)
             }
         }
     }
@@ -108,71 +114,108 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     fun sendMessage(text: String, systemContext: String? = null, isRetry: Boolean = false) {
         if (text.isBlank() || _isLoading.value) return
 
+        if (botId.isBlank()) {
+            android.util.Log.e("HAVAMANIA_AI", "API KEY EMPTY (botId is blank)")
+        }
+
+        val truncatedText = if (text.length > 4000) text.take(4000) else text
+
         if (!isRetry) {
-            val userMsg = AltikodChatMessage(text = text, isUser = true)
+            val userMsg = AltikodChatMessage(text = truncatedText, isUser = true)
             // Duplicating check for quick clicks
             val lastMsg = _messages.value.lastOrNull { it.isUser }
-            if (lastMsg == null || lastMsg.text != text || System.currentTimeMillis() - lastMsg.timestamp > 2000) {
+            val isDuplicate = lastMsg != null && lastMsg.text == truncatedText && System.currentTimeMillis() - lastMsg.timestamp > 2000
+            if (!isDuplicate) {
                 _messages.value = _messages.value + userMsg
             }
         }
 
         _isLoading.value = true
 
-        val fullQuestion = if (systemContext != null) "$systemContext $text" else text
+        val fullQuestion = if (systemContext != null) "$systemContext $truncatedText" else truncatedText
 
         viewModelScope.launch {
-            var retryCount = 0
-            var success = false
+            android.util.Log.d("HAVAMANIA_AI", "Prompt gönderiliyor: $truncatedText")
 
-            android.util.Log.d("AssistantRequest",
-                "prompt=$text, city=${weatherData?.cityName}, " +
-                "hasCurrentWeather=${weatherData != null}, " +
-                "temperature=${weatherData?.temperature}, " +
-                "condition=${weatherData?.condition}")
-
-            while (!success && retryCount <= 1) {
-                try {
-                    // Timeout logic: 20 seconds
-                    val response = kotlinx.coroutines.withTimeout(20000) {
-                        api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
-                    }
-
-                    if (response.answer.isBlank()) {
-                        throw Exception("Empty response from AI")
-                    }
-
-                    _messages.value = _messages.value + AltikodChatMessage(text = response.answer, isUser = false)
-                    success = true
-                } catch (e: Exception) {
-                    retryCount++
-                    if (retryCount > 1) {
-                        android.util.Log.e("AssistantError",
-                            "errorType=${e.javaClass.simpleName}, " +
-                            "exceptionMessage=${e.message}, " +
-                            "userPrompt=$text, " +
-                            "city=${weatherData?.cityName}")
-
-                        val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
-                            userPrompt = text,
-                            weatherData = weatherData,
-                            aboutMe = userAboutMe,
-                            interests = userInterests
-                        )
-
-                        _messages.value = _messages.value + AltikodChatMessage(
-                            text = fallbackText,
-                            isUser = false,
-                            isFallback = true,
-                            retryPrompt = text
-                        )
-                    } else {
-                        android.util.Log.w("AssistantRetry", "Retrying AI request... (Attempt $retryCount)")
-                        kotlinx.coroutines.delay(1000)
-                    }
+            try {
+                // AI Request
+                val response = kotlinx.coroutines.withTimeout(30000) {
+                    api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
                 }
+
+                val answer = response.answer
+                if (answer.isBlank()) {
+                    throw Exception("Empty response from AI")
+                }
+
+                android.util.Log.d("HAVAMANIA_AI", "AI Response alındı")
+
+                _messages.value = _messages.value + AltikodChatMessage(text = answer, isUser = false)
+            } catch (e: SocketTimeoutException) {
+                android.util.Log.e("HAVAMANIA_AI", "AI TIMEOUT ERROR", e)
+                addErrorMessage(truncatedText, "Bağlantı zaman aşımına uğradı.")
+            } catch (e: HttpException) {
+                android.util.Log.e("HAVAMANIA_AI", "AI HTTP ERROR code=${e.code()}", e)
+                val friendlyMessage = if (e.code() == 429) {
+                    "AI yoğunluğu nedeniyle şu an gelişmiş analiz oluşturulamıyor. Temel hava önerileri gösteriliyor."
+                } else {
+                    "AI bağlantısında kısa bir sorun yaşadım (HTTP ${e.code()})."
+                }
+                addErrorMessage(truncatedText, friendlyMessage)
+            } catch (e: IOException) {
+                android.util.Log.e("HAVAMANIA_AI", "AI NETWORK ERROR", e)
+                addErrorMessage(truncatedText, "İnternet bağlantısında bir sorun var.")
+            } catch (e: SerializationException) {
+                android.util.Log.e("HAVAMANIA_AI", "AI PARSE ERROR", e)
+                addErrorMessage(truncatedText, "Veri işlenirken bir hata oluştu.")
+            } catch (e: Exception) {
+                android.util.Log.e("HAVAMANIA_AI", "AI ERROR", e)
+                addErrorMessage(truncatedText, "AI bağlantısında beklenmedik bir sorun yaşadım.")
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
+        }
+    }
+
+    private fun addErrorMessage(userPrompt: String, prefix: String) {
+        val lastMsg = _messages.value.lastOrNull()
+        if (lastMsg?.isFallback == true && lastMsg.text.startsWith(prefix)) {
+            return // Duplicate protection
+        }
+
+        try {
+            val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
+                userPrompt = userPrompt,
+                weatherData = weatherData,
+                aboutMe = userAboutMe,
+                interests = userInterests
+            )
+
+            val combinedMessage = if (fallbackText.startsWith("AI bağlantısında kısa bir sorun yaşadım")) {
+                // RecommendationEngine already has its own prefix, we can merge or replace
+                if (weatherData != null) {
+                    "$prefix Ancak mevcut verilere göre önerilerim: " + fallbackText.substringAfter("yardımcı olayım. ")
+                } else {
+                    fallbackText
+                }
+            } else {
+                "$prefix $fallbackText"
+            }
+
+            _messages.value = _messages.value + AltikodChatMessage(
+                text = combinedMessage,
+                isUser = false,
+                isFallback = true,
+                retryPrompt = userPrompt
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("HAVAMANIA_AI", "Recommendation generation Error", e)
+            _messages.value = _messages.value + AltikodChatMessage(
+                text = "$prefix Şu an teknik bir sorun nedeniyle detaylı öneri sunamıyorum.",
+                isUser = false,
+                isFallback = true,
+                retryPrompt = userPrompt
+            )
         }
     }
 
@@ -751,28 +794,38 @@ fun ChatInput(onSend: (String) -> Unit, isLoading: Boolean, themeColors: Havaman
 
 @Composable
 fun TypingIndicator(themeColors: HavamaniaColors) {
-    Row(
+    Column(
         modifier = Modifier.padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val infiniteTransition = rememberInfiniteTransition(label = "typing")
-        repeat(3) { index ->
-            val delay = index * 200
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600, delayMillis = delay),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "dot_alpha"
-            )
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(themeColors.textSecondary.copy(alpha = alpha))
-            )
+        Text(
+            "Havamania düşünüyor...",
+            style = MaterialTheme.typography.labelSmall,
+            color = themeColors.textSecondary.copy(alpha = 0.7f),
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "typing")
+            repeat(3) { index ->
+                val delay = index * 200
+                val alpha by infiniteTransition.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600, delayMillis = delay),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "dot_alpha"
+                )
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(themeColors.accent.copy(alpha = alpha))
+                )
+            }
         }
     }
 }

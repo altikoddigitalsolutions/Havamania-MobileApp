@@ -24,7 +24,11 @@ object AltikodChatFactory {
 
     fun create(): AltikodChatService {
         val logger = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
-        val client = OkHttpClient.Builder().addInterceptor(logger).build()
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logger)
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
 
         return Retrofit.Builder()
             .baseUrl("https://chatbot.altikodtech.com.tr/")

@@ -261,6 +261,8 @@ fun WeatherHeroCard(
     windSpeed: String,
     uvIndex: String,
     onCityClick: () -> Unit,
+    onNotificationClick: () -> Unit = {},
+    unreadNotificationCount: Int = 0,
     modifier: Modifier = Modifier,
     districtName: String? = null,
     time: LocalTime = LocalTime.now(),
@@ -349,6 +351,15 @@ fun WeatherHeroCard(
             style = style,
             isSunnyScene = isSunnyScene,
             onCityClick = onCityClick
+        )
+
+        PremiumNotificationButton(
+            unreadCount = unreadNotificationCount,
+            isDarkCard = style.isDark,
+            onClick = onNotificationClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 18.dp, end = 18.dp)
         )
 
         // Border
@@ -858,17 +869,6 @@ fun PremiumWeatherContent(
                         )
                     )
                 }
-            }
-
-            if (!isSunnyScene) {
-                Icon(
-                    style.icon,
-                    null,
-                    tint = style.accentColor,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(36.dp)
-                )
             }
         }
 
