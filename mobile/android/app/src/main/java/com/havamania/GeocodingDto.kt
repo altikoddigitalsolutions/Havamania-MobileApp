@@ -32,4 +32,7 @@ data class GeocodingResultDto(
 
     val district: String?
         get() = if (admin1 != null && admin1 != name) name else null
+
+    fun getSafeCity(): String = city
+    fun getSafeDistrict(): String? = district
 }

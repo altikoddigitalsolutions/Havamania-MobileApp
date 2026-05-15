@@ -53,7 +53,9 @@ import com.havamania.ui.theme.SectionLabel
 fun HomeScreen(
     viewModel: WeatherViewModel = viewModel(),
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = viewModel(),
-    onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> }
+    notificationViewModel: NotificationViewModel = viewModel(),
+    onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> },
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -63,6 +65,8 @@ fun HomeScreen(
     val citySuggestions by viewModel.citySuggestions.collectAsState()
     val userInterests by themeViewModel.userInterests.collectAsState()
     val todayRecommendation by viewModel.todayRecommendation.collectAsState()
+    val notificationUiState by notificationViewModel.uiState.collectAsState()
+    val unreadNotificationsCount = notificationUiState.unreadCount
 
     LaunchedEffect(userInterests) {
         viewModel.updateRecommendation(userInterests)
@@ -107,7 +111,7 @@ fun HomeScreen(
                 Offset(kotlin.random.Random.nextFloat(), kotlin.random.Random.nextFloat())
             }
         }
-        Box(modifier = Modifier.fillMaxSize().zIndex(10f).alpha(0.04f)) {
+        Box(modifier = Modifier.fillMaxSize().zIndex(0.5f).alpha(0.04f)) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 noisePoints.forEach { point ->
                     drawCircle(
@@ -130,11 +134,13 @@ fun HomeScreen(
                         selectedDailyForecast = selectedDailyForecast,
                         recommendation = todayRecommendation,
                         userInterests = userInterests,
+                        unreadCount = unreadNotificationsCount,
                         onSelectHour = { viewModel.selectHour(it) },
                         onSelectDaily = { viewModel.selectDailyForecast(it) },
                         scrollState = scrollState,
                         onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
-                        onCityClick = { showCitySwitcher = true }
+                        onCityClick = { showCitySwitcher = true },
+                        onNotificationsClick = onNavigateToNotifications
                     )
                 }
                 is WeatherUiState.Error -> {
@@ -184,8 +190,9 @@ fun HomeScreen(
                     // Şehir Listesi
                     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                         items(citySuggestions, key = { it.id }) { suggestion ->
-                            val currentCity = (uiState as? WeatherUiState.Success)?.data?.cityName ?: ""
-                            val isSelected = currentCity == suggestion.name
+                            val currentData = (uiState as? WeatherUiState.Success)?.data
+                            val isSelected = currentData?.cityName == suggestion.getSafeCity() &&
+                                           currentData?.districtName == suggestion.getSafeDistrict()
 
                             Row(
                                 modifier = Modifier
@@ -196,9 +203,12 @@ fun HomeScreen(
                                         viewModel.fetchWeather(
                                             suggestion.latitude,
                                             suggestion.longitude,
-                                            suggestion.city,
-                                            suggestion.district
+                                            suggestion.getSafeCity(),
+                                            suggestion.getSafeDistrict()
                                         )
+                                        // Varsayılan şehri de güncelle (Requirement 3)
+                                        themeViewModel.setDefaultCity(suggestion)
+
                                         showCitySwitcher = false
                                         searchText = ""
                                     }
@@ -207,10 +217,16 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text(suggestion.name, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
-                                    if (suggestion.admin1 != null && suggestion.admin1 != suggestion.name) {
-                                        Text(suggestion.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
-                                    }
+                                    Text(
+                                        suggestion.getSafeDistrict() ?: suggestion.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        suggestion.getSafeCity(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
                                 }
                                 if (isSelected) {
                                     Icon(Icons.Rounded.Check, null, tint = colorScheme.primary)
@@ -241,11 +257,13 @@ fun WeatherSuccessContent(
     selectedDailyForecast: DailyForecast?,
     recommendation: HavamaniaRecommendation?,
     userInterests: Set<String> = emptySet(),
+    unreadCount: Int = 0,
     onSelectHour: (HourlyWeather?) -> Unit,
     onSelectDaily: (DailyForecast) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onAskAiClick: (HavamaniaRecommendation) -> Unit,
-    onCityClick: () -> Unit = {}
+    onCityClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {}
 ) {
     // Derived state for premium performance and correct logic
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
@@ -297,6 +315,7 @@ fun WeatherSuccessContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(scrollState)
     ) {
         Spacer(modifier = Modifier.height(20.dp))
@@ -316,7 +335,9 @@ fun WeatherSuccessContent(
                 humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65",
                 windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s",
                 uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4",
+                unreadCount = unreadCount,
                 onCityClick = onCityClick,
+                onNotificationsClick = onNotificationsClick,
                 time = displayTime,
                 parallaxOffset = scrollState.value * 0.12f,
                 modifier = Modifier

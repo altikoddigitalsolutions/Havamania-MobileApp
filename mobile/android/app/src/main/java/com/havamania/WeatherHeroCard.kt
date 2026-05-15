@@ -14,12 +14,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -80,63 +86,46 @@ object WeatherStyleResolver {
     }
 
     private fun resolveCloudyStyle(time: TimeOfDay): WeatherCardStyle {
-        return when (time) {
-            TimeOfDay.MORNING -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFFD8E6F2), Color(0xFFAFC1D2), Color(0xFF7F95AA)),
-                lightOverlay = Color.White.copy(alpha = 0.3f),
-                accentColor = Color(0xFF475569),
-                icon = Icons.Rounded.Cloud,
-                isDark = false,
-                styleName = "CLOUDY_MORNING"
-            )
-            TimeOfDay.DAY -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFFB0C4D6), Color(0xFF91A6B8), Color(0xFF708596)),
-                lightOverlay = Color.White.copy(alpha = 0.15f),
-                accentColor = Color(0xFF2C3E50),
-                icon = Icons.Rounded.Cloud,
-                isDark = false,
-                styleName = "CLOUDY_DAY"
-            )
-            TimeOfDay.EVENING -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFFB7AFC8), Color(0xFF8F8FA8), Color(0xFF5F7185)),
-                lightOverlay = Color(0xFFFFCCBC).copy(alpha = 0.1f),
-                accentColor = Color(0xFFF1F5F9),
-                icon = Icons.Rounded.Cloud,
-                isDark = true,
-                styleName = "CLOUDY_EVENING"
-            )
-            TimeOfDay.NIGHT -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFF1B2432), Color(0xFF263447), Color(0xFF33485F)),
-                lightOverlay = Color.Transparent,
-                accentColor = Color(0xFFA7B5C5),
-                icon = Icons.Rounded.Cloud,
-                isDark = true,
-                styleName = "CLOUDY_NIGHT"
-            )
+        val baseColors = when (time) {
+            TimeOfDay.MORNING -> listOf(Color(0xFFD8E6F2), Color(0xFFAFC1D2), Color(0xFF7F95AA))
+            TimeOfDay.DAY -> listOf(Color(0xFFC4D5E4), Color(0xFF9BAFC3), Color(0xFF6F849A))
+            TimeOfDay.EVENING -> listOf(Color(0xFFB7AFC8), Color(0xFF8F8FA8), Color(0xFF5F7185))
+            TimeOfDay.NIGHT -> listOf(Color(0xFF1B2432), Color(0xFF263447), Color(0xFF33485F))
         }
+
+        val isDark = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
+
+        return WeatherCardStyle(
+            gradientColors = baseColors,
+            lightOverlay = if (isDark) Color.Transparent else Color.White.copy(alpha = 0.15f),
+            accentColor = if (isDark) Color(0xFFA7B5C5) else Color(0xFF475569),
+            icon = Icons.Rounded.Cloud,
+            isDark = isDark,
+            styleName = "CLOUDY_$time"
+        )
     }
 
     private fun resolveSunnyStyle(time: TimeOfDay): WeatherCardStyle {
         return when (time) {
             TimeOfDay.MORNING -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFFFFADAD), Color(0xFFFFD1D1), Color(0xFFD0E1FF)),
-                lightOverlay = Color(0xFFFFF9C4).copy(alpha = 0.4f),
+                gradientColors = listOf(Color(0xFFFFD1D1), Color(0xFFD0E1FF), Color(0xFFBAE6FD)),
+                lightOverlay = Color(0xFFFFF9C4).copy(alpha = 0.2f),
                 accentColor = Color(0xFFD84315),
                 icon = Icons.Rounded.WbSunny,
                 isDark = false,
                 styleName = "SUNNY_MORNING"
             )
             TimeOfDay.DAY -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFF56CCF2), Color(0xFF7DDDF5), Color(0xFFBDEBFF)),
-                lightOverlay = Color.White.copy(alpha = 0.25f),
-                accentColor = Color(0xFF0369A1),
+                gradientColors = listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8), Color(0xFF7DD3FC)),
+                lightOverlay = Color.White.copy(alpha = 0.1f),
+                accentColor = Color(0xFFFFD600),
                 icon = Icons.Rounded.WbSunny,
                 isDark = false,
                 styleName = "SUNNY_DAY"
             )
             TimeOfDay.EVENING -> WeatherCardStyle(
-                gradientColors = listOf(Color(0xFFF97316), Color(0xFFFB923C), Color(0xFFFCD34D)),
-                lightOverlay = Color(0xFFF472B6).copy(alpha = 0.2f),
+                gradientColors = listOf(Color(0xFFF97316), Color(0xFFFB923C), Color(0xFFFDE68A)),
+                lightOverlay = Color(0xFFF472B6).copy(alpha = 0.1f),
                 accentColor = Color.White,
                 icon = Icons.Rounded.WbSunny,
                 isDark = true,
@@ -154,19 +143,22 @@ object WeatherStyleResolver {
     }
 
     private fun resolveMostlySunnyStyle(time: TimeOfDay): WeatherCardStyle {
-        return when (time) {
-            TimeOfDay.DAY -> resolveSunnyStyle(TimeOfDay.DAY).copy(styleName = "MOSTLY_SUNNY_DAY")
-            TimeOfDay.MORNING -> resolveSunnyStyle(TimeOfDay.MORNING).copy(styleName = "MOSTLY_SUNNY_MORNING")
-            TimeOfDay.EVENING -> resolveSunnyStyle(TimeOfDay.EVENING).copy(styleName = "MOSTLY_SUNNY_EVENING")
-            TimeOfDay.NIGHT -> resolveSunnyStyle(TimeOfDay.NIGHT).copy(styleName = "MOSTLY_SUNNY_NIGHT")
-        }
+        val sunny = resolveSunnyStyle(time)
+        return sunny.copy(
+            icon = Icons.Rounded.WbSunny, // Or a sun with a small cloud if available
+            styleName = "MOSTLY_SUNNY_$time"
+        )
     }
 
     private fun resolvePartlyCloudyStyle(time: TimeOfDay): WeatherCardStyle {
-        val base = resolveSunnyStyle(time)
-        return base.copy(
-            gradientColors = if (time == TimeOfDay.DAY) listOf(Color(0xFF4FA8E5), Color(0xFF8BCDF5), Color(0xFFC7E9FF)) else base.gradientColors,
+        val isNight = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
+        return WeatherCardStyle(
+            gradientColors = if (isNight) listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569))
+                             else listOf(Color(0xFFBAE6FD), Color(0xFF7DD3FC), Color(0xFFE0F2FE)),
+            lightOverlay = if (isNight) Color.Transparent else Color.White.copy(alpha = 0.15f),
+            accentColor = Color(0xFFF1F5F9),
             icon = if (time == TimeOfDay.NIGHT) Icons.Rounded.CloudQueue else Icons.Rounded.WbCloudy,
+            isDark = isNight,
             styleName = "PARTLY_CLOUDY_$time"
         )
     }
@@ -186,9 +178,9 @@ object WeatherStyleResolver {
 
     private fun resolveThunderStyle(time: TimeOfDay): WeatherCardStyle {
         return WeatherCardStyle(
-            gradientColors = listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF1E293B)),
+            gradientColors = listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)),
             lightOverlay = Color(0xFFC084FC).copy(alpha = 0.1f),
-            accentColor = Color(0xFFC084FC),
+            accentColor = Color(0xFFFACC15),
             icon = Icons.Rounded.Thunderstorm,
             isDark = true,
             styleName = "THUNDER_$time"
@@ -196,14 +188,12 @@ object WeatherStyleResolver {
     }
 
     private fun resolveSnowStyle(time: TimeOfDay): WeatherCardStyle {
-        val isNight = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
         return WeatherCardStyle(
-            gradientColors = if (isNight) listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF33485F))
-                             else listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFFFFFFF)),
-            lightOverlay = Color.White.copy(alpha = 0.4f),
-            accentColor = if (isNight) Color(0xFF94A3B8) else Color(0xFF0EA5E9),
+            gradientColors = listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFFFFFFF)),
+            lightOverlay = Color.White.copy(alpha = 0.2f),
+            accentColor = Color(0xFF38BDF8),
             icon = Icons.Rounded.AcUnit,
-            isDark = isNight,
+            isDark = false,
             styleName = "SNOW_$time"
         )
     }
@@ -261,6 +251,8 @@ fun WeatherHeroCard(
     windSpeed: String,
     uvIndex: String,
     onCityClick: () -> Unit,
+    onNotificationsClick: () -> Unit = {},
+    unreadCount: Int = 0,
     modifier: Modifier = Modifier,
     districtName: String? = null,
     time: LocalTime = LocalTime.now(),
@@ -271,6 +263,11 @@ fun WeatherHeroCard(
     val timeOfDay = remember(time) { WeatherMapper.resolveTimeOfDay(time.hour) }
     val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
     val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)
+
+    // Log the current hour and resolved style for debugging (as requested)
+    LaunchedEffect(condition, time.hour, currentTheme, style) {
+        Log.d("WeatherCard", "condition=$condition, selectedHour=${time.hour}, timeOfDay=$timeOfDay, theme=$currentTheme, styleName=${style.styleName}")
+    }
 
     val isSunnyScene = SunnyDebugMode ||
             condition is WeatherCondition.Clear ||
@@ -309,6 +306,7 @@ fun WeatherHeroCard(
                 this.scaleY = if (isReducedMotion) 1f else scale
             }
             .clip(RoundedCornerShape(32.dp))
+            .border(1.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(32.dp))
     ) {
         val sunVariant = if (isSunnyScene && timeOfDay != TimeOfDay.NIGHT) {
             when {
@@ -337,30 +335,24 @@ fun WeatherHeroCard(
         Box(modifier = Modifier.fillMaxSize().background(style.lightOverlay))
 
         // Layer 4: Content
-        PremiumWeatherContent(
-            cityName = cityName,
-            districtName = districtName,
-            conditionLabel = conditionLabel,
-            temperature = temperature,
-            feelsLike = feelsLike,
-            humidity = humidity,
-            windSpeed = windSpeed,
-            uvIndex = uvIndex,
-            style = style,
-            isSunnyScene = isSunnyScene,
-            onCityClick = onCityClick
-        )
+        Box(modifier = Modifier.fillMaxSize().zIndex(100f)) {
+            PremiumWeatherContent(
+                cityName = cityName,
+                districtName = districtName,
+                conditionLabel = conditionLabel,
+                temperature = temperature,
+                feelsLike = feelsLike,
+                humidity = humidity,
+                windSpeed = windSpeed,
+                uvIndex = uvIndex,
+                style = style,
+                isSunnyScene = isSunnyScene,
+                unreadCount = unreadCount,
+                onCityClick = onCityClick,
+                onNotificationsClick = onNotificationsClick
+            )
+        }
 
-        // Border
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .border(
-                    width = 0.5.dp,
-                    color = if (style.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(32.dp)
-                )
-        )
     }
 }
 
@@ -715,9 +707,9 @@ fun LightningEffect() {
                 durationMillis = 6000
                 0f at 0
                 0f at 5000
-                0.25f at 5050
+                0.2f at 5050 // çok hafif lightning glow, strobe yok
                 0f at 5100
-                0.4f at 5150
+                0.3f at 5150
                 0f at 5300
             }
         ),
@@ -799,7 +791,9 @@ fun PremiumWeatherContent(
     uvIndex: String,
     style: WeatherCardStyle,
     isSunnyScene: Boolean,
-    onCityClick: () -> Unit
+    unreadCount: Int = 0,
+    onCityClick: () -> Unit,
+    onNotificationsClick: () -> Unit = {}
 ) {
     val textColor = if (style.isDark) Color.White else Color(0xFF0F172A)
     val secondaryColor = textColor.copy(alpha = 0.7f)
@@ -860,15 +854,31 @@ fun PremiumWeatherContent(
                 }
             }
 
-            if (!isSunnyScene) {
-                Icon(
-                    style.icon,
-                    null,
-                    tint = style.accentColor,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(36.dp)
+            // [ SAĞ ÜST ] Bildirimler & Hava Durumu İkonu
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 4.dp)
+                    .zIndex(110f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // PREMIUM BİLDİRİM BUTONU
+                PremiumNotificationButton(
+                    unreadCount = unreadCount,
+                    isDark = style.isDark,
+                    tint = textColor,
+                    onClick = onNotificationsClick
                 )
+
+                if (!isSunnyScene) {
+                    Icon(
+                        style.icon,
+                        null,
+                        tint = style.accentColor,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
             }
         }
 
@@ -953,6 +963,74 @@ fun GlassBottomBar(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun PremiumNotificationButton(
+    unreadCount: Int,
+    isDark: Boolean,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val btnScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "button_scale"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .zIndex(120f)
+            .graphicsLayer {
+                scaleX = btnScale
+                scaleY = btnScale
+            }
+            .clip(CircleShape)
+            .background(
+                Brush.verticalGradient(
+                    colors = if (isDark) {
+                        listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.1f))
+                    } else {
+                        listOf(Color.Black.copy(alpha = 0.12f), Color.Black.copy(alpha = 0.05f))
+                    }
+                )
+            )
+            .border(
+                width = 1.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.15f),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                Log.d("Havamania", "Notification button clicked")
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Notifications,
+            contentDescription = "Bildirimler",
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
+
+        if (unreadCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp)
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF3B82F6)) // Canlı mavi nokta
+                    .border(1.5.dp, if (isDark) Color(0xFF1E293B) else Color.White, CircleShape)
+            )
         }
     }
 }

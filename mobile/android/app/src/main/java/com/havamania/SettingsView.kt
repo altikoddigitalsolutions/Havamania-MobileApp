@@ -301,6 +301,16 @@ fun PremiumThemeRow(selectedTheme: AppTheme, onClick: () -> Unit) {
 @Composable
 fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -> Unit) {
     val themeColors = HavamaniaTheme.colors
+    val displayThemes = listOf(
+        AppTheme.AUTO,
+        AppTheme.LIGHT,
+        AppTheme.DARK,
+        AppTheme.SPRING_DAY,
+        AppTheme.SUMMER_DAY,
+        AppTheme.AUTUMN_DAY,
+        AppTheme.WINTER_DAY
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -309,6 +319,7 @@ fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -
             .padding(horizontal = 24.dp)
             .padding(bottom = 16.dp)
     ) {
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             "TEMA SEÇİN",
             style = MaterialTheme.typography.titleLarge.copy(
@@ -329,9 +340,9 @@ fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -
                 .fillMaxWidth()
                 .weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            items(AppTheme.values()) { theme ->
+            items(displayThemes) { theme ->
                 ThemeCardPremium(
                     theme = theme,
                     isSelected = selectedTheme == theme,
@@ -346,6 +357,13 @@ fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -
 fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val themeStyleColors = ThemeFactory.createColors(theme)
+    val displayName = when(theme) {
+        AppTheme.SPRING_DAY -> "İlkbahar"
+        AppTheme.SUMMER_DAY -> "Yaz"
+        AppTheme.AUTUMN_DAY -> "Sonbahar"
+        AppTheme.WINTER_DAY -> "Kış"
+        else -> theme.title
+    }
 
     HavamaniaGlassCard(
         modifier = Modifier.fillMaxWidth(),
@@ -356,16 +374,16 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        theme.title,
+                        displayName,
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Black,
                             fontSize = 18.sp
@@ -379,11 +397,12 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
                             lineHeight = 16.sp
                         ),
                         color = themeColors.textSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 4.dp),
+                        softWrap = true
                     )
                 }
 
-                Box(contentAlignment = Alignment.Center) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(start = 8.dp)) {
                     if (isSelected) {
                         Icon(
                             Icons.Rounded.CheckCircle,
@@ -413,9 +432,10 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(10.dp)
+                            .height(12.dp)
                             .clip(CircleShape)
                             .background(color)
+                            .border(0.5.dp, Color.White.copy(alpha = 0.1f), CircleShape)
                     )
                 }
             }
