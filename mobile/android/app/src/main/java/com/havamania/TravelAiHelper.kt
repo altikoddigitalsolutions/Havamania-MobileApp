@@ -49,12 +49,12 @@ object TravelAiHelper {
         return sb.toString().trim()
     }
 
-    private fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot): String {
+    fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot): String {
         val changes = mutableListOf<String>()
 
         val precipDiff = (new.precipitationProbability ?: 0) - (old.precipitationProbability ?: 0)
         if (precipDiff >= 20) {
-            changes.add("Önceki analizimde yağmur ihtimali %${old.precipitationProbability} iken şimdi %${new.precipitationProbability}'ye çıktı. Planlarını kapalı alanlara göre revize etmeni öneririm.")
+            changes.add("Yağmur ihtimali önceki analize göre %$precipDiff arttı (Toplam %${new.precipitationProbability}). Planlarını kapalı alanlara göre revize etmeni öneririm.")
         } else if (precipDiff <= -20) {
             changes.add("Yağmur ihtimali %${old.precipitationProbability}'den %${new.precipitationProbability}'ye düştü, hava düzeliyor.")
         }

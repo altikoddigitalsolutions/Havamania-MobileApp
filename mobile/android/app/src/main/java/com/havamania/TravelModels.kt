@@ -52,6 +52,23 @@ data class ForecastSnapshot(
     val generatedAt: Long = System.currentTimeMillis()
 )
 
+@Serializable
+data class TravelNotificationData(
+    val travelId: String,
+    val destination: String,
+    val travelStartDate: String,
+    val travelEndDate: String,
+    val daysLeft: Int,
+    val weatherSummary: String?,
+    val rainProbability: Int?,
+    val minTemp: Double?,
+    val maxTemp: Double?,
+    val windRisk: String?,
+    val previousAnalysisSummary: String? = null,
+    val comparisonText: String? = null,
+    val recommendedItems: List<String> = emptyList()
+)
+
 data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
     val city: String,
@@ -67,6 +84,7 @@ data class TravelPlan(
     val lastWeatherAnalysisText: String? = null,
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
+    val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.TOO_EARLY,
     val isArchived: Boolean = false

@@ -34,7 +34,7 @@ interface NotificationDao {
     suspend fun deleteAll()
 }
 
-@Database(entities = [NotificationItem::class], version = 1, exportSchema = false)
+@Database(entities = [NotificationItem::class], version = 2, exportSchema = false)
 @TypeConverters(NotificationConverters::class)
 abstract class NotificationDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
@@ -49,7 +49,9 @@ abstract class NotificationDatabase : RoomDatabase() {
                     context.applicationContext,
                     NotificationDatabase::class.java,
                     "notification_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }
@@ -58,9 +60,23 @@ abstract class NotificationDatabase : RoomDatabase() {
 }
 
 class NotificationConverters {
+    private val json = Json { ignoreUnknownKeys = true }
+
     @TypeConverter
     fun fromCategory(category: NotificationCategory): String = category.name
 
     @TypeConverter
     fun toCategory(value: String): NotificationCategory = NotificationCategory.valueOf(value)
+
+    @TypeConverter
+    fun fromTravelNotificationData(value: TravelNotificationData?): String? {
+        return value?.let { json.encodeToString(TravelNotificationData.serializer(), it) }
+    }
+
+    @TypeConverter
+    fun toTravelNotificationData(value: String?): TravelNotificationData? {
+        return value?.let {
+            try { json.decodeFromString(TravelNotificationData.serializer(), it) } catch(e: Exception) { null }
+        }
+    }
 }

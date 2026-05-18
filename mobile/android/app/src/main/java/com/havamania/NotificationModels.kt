@@ -30,7 +30,8 @@ data class NotificationItem(
     val isRead: Boolean = false,
     val deepLinkTarget: String? = null,
     val relatedTripId: String? = null,
-    val actionLabel: String? = null
+    val actionLabel: String? = null,
+    val travelData: TravelNotificationData? = null
 ) {
     fun getSafeId(): String = id.ifBlank { UUID.randomUUID().toString() }
     fun getSafeTitle(): String = title.ifBlank { "Bildirim" }

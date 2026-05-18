@@ -79,6 +79,16 @@ fun TravelPlannerScreen(
     var planToDelete by remember { mutableStateOf<TravelPlan?>(null) }
     var selectedPlanForDetail by remember { mutableStateOf<TravelPlan?>(null) }
 
+    val listState = rememberLazyListState()
+    LaunchedEffect(focusId, plans) {
+        if (!focusId.isNullOrBlank() && plans.isNotEmpty()) {
+            val index = plans.indexOfFirst { it.id == focusId }
+            if (index >= 0) {
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
+
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
@@ -139,14 +149,17 @@ fun TravelPlannerScreen(
                     )
                 } else {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         items(plans, key = { it.id }) { plan ->
                             val context = LocalContext.current
+                            val isFocused = plan.id == focusId
                             TravelPlanCard(
                                 plan = plan,
+                                isFocused = isFocused,
                                 onDelete = { planToDelete = plan },
                                 onEdit = { planToEdit = plan; showAddDialog = true },
                                 onArchive = { viewModel.archiveTrip(plan.id) },
@@ -215,6 +228,7 @@ fun TravelPlannerScreen(
 @Composable
 fun TravelPlanCard(
     plan: TravelPlan,
+    isFocused: Boolean = false,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
     onArchive: () -> Unit,
@@ -235,11 +249,18 @@ fun TravelPlanCard(
     val isPressed = isPressedState.value
     val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "cardScale")
 
+    val borderGlow by animateColorAsState(
+        targetValue = if (isFocused) themeColors.accent else Color.Transparent,
+        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+        label = "borderGlow"
+    )
+
     HavamaniaGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .alpha(if (isPast && !isArchived) 0.8f else 1f),
+            .alpha(if (isPast && !isArchived) 0.8f else 1f)
+            .then(if (isFocused) Modifier.border(2.dp, borderGlow, RoundedCornerShape(32.dp)) else Modifier),
         alpha = if (isArchived) 0.7f else 0.85f
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

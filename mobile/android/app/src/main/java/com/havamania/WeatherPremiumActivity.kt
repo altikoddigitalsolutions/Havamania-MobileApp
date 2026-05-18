@@ -22,6 +22,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
+import androidx.navigation.navDeepLink
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
+
 class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +81,10 @@ class WeatherPremiumActivity : ComponentActivity() {
                             .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
                             NavHost(navController = navController, startDestination = Routes.WEATHER) {
-                                composable(Routes.WEATHER) {
+                                composable(
+                                    Routes.WEATHER,
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
+                                ) {
                                     HomeScreen(onNavigateToAi = { rec, data ->
                                         pendingRecommendation = rec
                                         activeWeatherData = data
@@ -86,8 +93,18 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         navController.navigate(Routes.NOTIFICATION_CENTER)
                                     })
                                 }
-                                composable(Routes.CALENDAR) {
-                                    TravelPlannerScreen(onBack = { navController.popBackStack() })
+                                composable(
+                                    "${Routes.CALENDAR}?focusId={focusId}",
+                                    arguments = listOf(
+                                        navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                    ),
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}" })
+                                ) { backStackEntry ->
+                                    val focusId = backStackEntry.arguments?.getString("focusId")
+                                    TravelPlannerScreen(
+                                        onBack = { navController.popBackStack() },
+                                        focusId = focusId
+                                    )
                                 }
                                 composable(Routes.AI) {
                                     AiChatScreen(

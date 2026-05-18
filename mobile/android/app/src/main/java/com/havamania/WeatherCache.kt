@@ -39,6 +39,18 @@ class ChatTypeConverters {
             try { json.decodeFromString(ForecastSnapshot.serializer(), it) } catch(e: Exception) { null }
         }
     }
+
+    @TypeConverter
+    fun fromTravelNotificationData(value: TravelNotificationData?): String? {
+        return value?.let { json.encodeToString(TravelNotificationData.serializer(), it) }
+    }
+
+    @TypeConverter
+    fun toTravelNotificationData(value: String?): TravelNotificationData? {
+        return value?.let {
+            try { json.decodeFromString(TravelNotificationData.serializer(), it) } catch(e: Exception) { null }
+        }
+    }
 }
 
 /**
@@ -69,6 +81,7 @@ data class TravelPlanEntity(
     val lastWeatherAnalysisText: String? = null,
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
+    val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: String = "TOO_EARLY",
     @ColumnInfo(defaultValue = "0")

@@ -196,6 +196,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 lastWeatherAnalysisText = analysisText,
                 aiSuggestion = aiSuggestion,
                 lastWeatherAnalysisDate = System.currentTimeMillis(),
+                previousForecastSnapshot = plan.lastForecastSnapshot,
                 lastForecastSnapshot = currentSnapshot,
                 weatherAnalysisStatus = if (plan.lastForecastSnapshot == null) TravelWeatherAnalysisStatus.ANALYZED else TravelWeatherAnalysisStatus.UPDATED
             )
@@ -283,6 +284,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         lastWeatherAnalysisText = lastWeatherAnalysisText,
         lastWeatherAnalysisDate = lastWeatherAnalysisDate,
         lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY },
         isArchived = isArchived
@@ -302,6 +304,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         lastWeatherAnalysisText = lastWeatherAnalysisText,
         lastWeatherAnalysisDate = lastWeatherAnalysisDate,
         lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = weatherAnalysisStatus.name,
         isArchived = isArchived

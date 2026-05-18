@@ -37,7 +37,7 @@ class MainApplication : Application(), ReactApplication {
     SoLoader.init(this, false)
 
     // Schedule daily travel weather analysis
-    DailyTravelWeatherAnalysisWorker.schedule(this)
+    TravelNotificationWorker.schedule(this)
 
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // Yeni mimari etkinse giriş noktasını yüklüyoruz.
