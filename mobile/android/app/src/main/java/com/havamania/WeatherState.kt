@@ -79,8 +79,6 @@ data class WeatherDetailData(
 
 enum class DayPhase { NIGHT, SUNRISE, DAY, SUNSET }
 
-enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
-
 sealed class WeatherCondition {
     object Clear : WeatherCondition()
     object MostlySunny : WeatherCondition()

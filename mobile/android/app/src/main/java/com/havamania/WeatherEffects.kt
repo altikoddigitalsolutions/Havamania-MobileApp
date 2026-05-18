@@ -27,7 +27,7 @@ enum class WeatherEffectIntensity { OFF, LOW, MEDIUM }
 @Composable
 fun WeatherEffectLayer(
     condition: WeatherCondition,
-    timeOfDay: TimeOfDay,
+    phase: DayPhase,
     intensity: WeatherEffectIntensity = WeatherEffectIntensity.MEDIUM,
     weatherCode: Int = 0,
     isAnimationEnabled: Boolean = true,
@@ -44,7 +44,7 @@ fun WeatherEffectLayer(
     Box(modifier = Modifier.fillMaxSize()) {
         when (condition) {
             is WeatherCondition.Clear, is WeatherCondition.NightClear -> {
-                if (timeOfDay == TimeOfDay.NIGHT) {
+                if (phase == DayPhase.NIGHT) {
                     StarFieldEffect(
                         modifier = Modifier.fillMaxSize(),
                         isAnimationEnabled = isAnimationEnabled,
@@ -64,7 +64,7 @@ fun WeatherEffectLayer(
             }
             is WeatherCondition.PartlyCloudy -> {
                 CloudHazeEffect(effectiveOpacity * 0.6f, intensity = intensity)
-                if (timeOfDay != TimeOfDay.NIGHT) {
+                if (phase != DayPhase.NIGHT) {
                     SunGlowEffect(effectiveOpacity * 0.7f)
                 }
             }

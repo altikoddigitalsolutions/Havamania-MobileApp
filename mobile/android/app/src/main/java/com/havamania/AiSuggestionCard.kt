@@ -60,7 +60,7 @@ object RecommendationMapper {
 @Composable
 fun AiSuggestionCard(
     weather: WeatherData,
-    timeOfDay: TimeOfDay,
+    phase: DayPhase,
     userInterests: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
     onAskAiClick: (HavamaniaRecommendation) -> Unit = {}

@@ -227,8 +227,7 @@ object ThemeManager {
         it.clear()
     }
 
-    fun getAutoTheme(month: Int, hour: Int): AppTheme {
-        val isDay = hour in 6..18
+    fun getAutoTheme(month: Int, isDay: Boolean): AppTheme {
         return when (month) {
             3, 4, 5 -> if (isDay) AppTheme.SPRING_DAY else AppTheme.SPRING_NIGHT
             6, 7, 8 -> if (isDay) AppTheme.SUMMER_DAY else AppTheme.SUMMER_NIGHT

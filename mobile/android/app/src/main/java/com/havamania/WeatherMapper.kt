@@ -365,15 +365,6 @@ object WeatherMapper {
         }
     }
 
-    fun resolveTimeOfDay(hour: Int): TimeOfDay {
-        return when (hour) {
-            in 6..10 -> TimeOfDay.MORNING
-            in 11..16 -> TimeOfDay.DAY
-            in 17..18 -> TimeOfDay.EVENING
-            else -> TimeOfDay.NIGHT
-        }
-    }
-
     fun mapWeatherCodeToCondition(code: Int, isDay: Boolean): WeatherCondition {
         return when (code) {
             0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
