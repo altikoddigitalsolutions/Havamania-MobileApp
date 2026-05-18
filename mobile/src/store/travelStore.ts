@@ -30,19 +30,22 @@ export interface TravelPlan {
   endDate: string;   // ISO format (YYYY-MM-DD)
   type: TravelType;
   note?: string;
+  isArchived?: boolean;
 }
 
 interface TravelState {
   plans: TravelPlan[];
-  addPlan: (plan: Omit<TravelPlan, 'id'>) => void;
+  addPlan: (plan: Omit<TravelPlan, 'id' | 'isArchived'>) => void;
   updatePlan: (id: string, plan: Partial<TravelPlan>) => void;
   removePlan: (id: string) => void;
+  archivePlan: (id: string) => void;
+  unarchivePlan: (id: string) => void;
 }
 
 export const useTravelStore = create<TravelState>((set) => ({
   plans: [],
   addPlan: (plan) => set((state) => ({
-    plans: [...state.plans, { ...plan, id: Math.random().toString(36).substring(7) }].sort(
+    plans: [...state.plans, { ...plan, id: Math.random().toString(36).substring(7), isArchived: false }].sort(
       (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     )
   })),
@@ -53,5 +56,11 @@ export const useTravelStore = create<TravelState>((set) => ({
   })),
   removePlan: (id) => set((state) => ({
     plans: state.plans.filter((p) => p.id !== id)
+  })),
+  archivePlan: (id) => set((state) => ({
+    plans: state.plans.map(p => p.id === id ? { ...p, isArchived: true } : p)
+  })),
+  unarchivePlan: (id) => set((state) => ({
+    plans: state.plans.map(p => p.id === id ? { ...p, isArchived: false } : p)
   })),
 }));

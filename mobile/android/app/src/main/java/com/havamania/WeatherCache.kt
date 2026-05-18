@@ -68,7 +68,8 @@ data class TravelPlanEntity(
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
-    val weatherAnalysisStatus: String = "TOO_EARLY"
+    val weatherAnalysisStatus: String = "TOO_EARLY",
+    val isArchived: Boolean = false
 )
 
 /**

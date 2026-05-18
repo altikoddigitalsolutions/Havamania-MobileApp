@@ -251,6 +251,24 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun archiveTrip(id: String) {
+        viewModelScope.launch {
+            val plan = _plans.value.find { it.id == id } ?: return@launch
+            val updated = plan.copy(isArchived = true)
+            dao.insertTravelPlan(updated.toEntity())
+            loadPlans()
+        }
+    }
+
+    fun unarchiveTrip(id: String) {
+        viewModelScope.launch {
+            val plan = _plans.value.find { it.id == id } ?: return@launch
+            val updated = plan.copy(isArchived = false)
+            dao.insertTravelPlan(updated.toEntity())
+            loadPlans()
+        }
+    }
+
     private fun TravelPlanEntity.toDomain() = TravelPlan(
         id = id,
         city = city,
@@ -266,7 +284,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         lastWeatherAnalysisDate = lastWeatherAnalysisDate,
         lastForecastSnapshot = lastForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
-        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY }
+        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY },
+        isArchived = isArchived
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -284,6 +303,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         lastWeatherAnalysisDate = lastWeatherAnalysisDate,
         lastForecastSnapshot = lastForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
-        weatherAnalysisStatus = weatherAnalysisStatus.name
+        weatherAnalysisStatus = weatherAnalysisStatus.name,
+        isArchived = isArchived
     )
 }
