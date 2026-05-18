@@ -146,14 +146,19 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 generatedAt = System.currentTimeMillis()
             )
 
-            val daysText = when {
-                daysUntil == 0 -> "bugün"
-                daysUntil < 0 -> "geçmişte"
-                daysUntil == 1 -> "yarın"
-                else -> "$daysUntil gün"
+            val start = plan.startDate
+            val end = plan.endDate
+
+            val tripStatusText = when {
+                end.isBefore(today) -> "Bu seyahat tamamlandı."
+                start.isBefore(today) && !end.isBefore(today) -> "Seyahatiniz devam ediyor."
+                start.isEqual(today) -> "Seyahatiniz bugün başlıyor."
+                start.isEqual(today.plusDays(1)) -> "Seyahatinize 1 gün kaldı."
+                start.isAfter(today) -> "Seyahatinize ${ChronoUnit.DAYS.between(today, start)} gün kaldı."
+                else -> ""
             }
 
-            val analysisText = "Seyahatine $daysText kaldı. Tahminlere göre hava '${currentSnapshot.conditionSummary}', " +
+            val analysisText = "$tripStatusText Tahminlere göre hava '${currentSnapshot.conditionSummary}', " +
                     "yağmur ihtimali %${currentSnapshot.precipitationProbability ?: 0}, " +
                     "sıcaklık ${currentSnapshot.minTemp?.toInt() ?: 0}-${currentSnapshot.maxTemp?.toInt() ?: 0}° aralığında."
 
@@ -178,7 +183,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
             val errorMessage = when {
                 e is java.net.UnknownHostException -> "İnternet bağlantısı kurulamadı."
-                else -> "Analiz hatası oluştu."
+                e.message?.contains("API") == true || e.message?.contains("weather") == true -> "Bu tarih için güncel hava verisi henüz alınamadı."
+                else -> "Gelişmiş analiz şu an hazırlanamadı. Temel seyahat önerilerini yine de görüntüleyebilirsin."
             }
 
             plan.copy(

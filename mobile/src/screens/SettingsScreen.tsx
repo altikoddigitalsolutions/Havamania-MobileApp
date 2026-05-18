@@ -193,7 +193,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           </View>
         </View>
 
-        <Text style={s.footerText}>Havamania Premium © 2024</Text>
+        <Text style={s.footerText}>Havamania © 2024</Text>
       </ScrollView>
     </SafeAreaView>
   );

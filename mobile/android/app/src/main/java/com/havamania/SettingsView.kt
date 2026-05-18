@@ -109,7 +109,7 @@ fun SettingsScreen(
                 SettingsNavRow("Profil Bilgileri", "İsim, bio ve fotoğraf", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
                 SettingsDivider()
                 SettingsNavRow("Premium Üyelik", "Tüm özellikleri aç", Icons.Rounded.WorkspacePremium) {
-                    comingSoonTitle = "Havamania Premium yakında geliyor."
+                    comingSoonTitle = "Havamania yakında geliyor."
                     showComingSoonDialog = true
                 }
                 SettingsDivider()

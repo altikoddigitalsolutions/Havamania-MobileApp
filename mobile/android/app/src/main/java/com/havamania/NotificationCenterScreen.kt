@@ -49,6 +49,7 @@ fun NotificationCenterScreen(
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
 
     var selectedFilter by rememberSaveable { mutableStateOf(NotificationFilter.ALL) }
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -86,6 +87,35 @@ fun NotificationCenterScreen(
         }
     }
 
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            containerColor = themeColors.surface,
+            titleContentColor = themeColors.textPrimary,
+            textContentColor = themeColors.textSecondary,
+            title = { Text("Tüm bildirimleri silmek istiyor musun?") },
+            text = { Text("Bu işlem geri alınamaz.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteAllNotifications()
+                        showDeleteAllDialog = false
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Tüm bildirimler silindi")
+                        }
+                    }
+                ) {
+                    Text("Tümünü Sil", color = themeColors.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) {
+                    Text("Vazgeç", color = themeColors.textPrimary)
+                }
+            }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -111,6 +141,31 @@ fun NotificationCenterScreen(
                 )
             } else {
                 CenterAlignedTopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Geri", tint = themeColors.textPrimary)
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.refreshDemoNotifications() }) {
+                            Icon(Icons.Rounded.Refresh, "Demo Yükle", tint = themeColors.accent)
+                        }
+                        IconButton(
+                            onClick = { showDeleteAllDialog = true },
+                            enabled = notifications.isNotEmpty()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Delete,
+                                contentDescription = "Tümünü Sil",
+                                tint = if (notifications.isNotEmpty()) themeColors.error else themeColors.textSecondary.copy(alpha = 0.5f)
+                            )
+                        }
+                        if (notifications.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.markAllAsRead() }) {
+                                Icon(Icons.Rounded.DoneAll, contentDescription = "Tümünü Okundu Yap", tint = themeColors.accent)
+                            }
+                        }
+                    },
                     title = {
                         Text(
                             "BİLDİRİM MERKEZİ",
@@ -119,18 +174,6 @@ fun NotificationCenterScreen(
                                 letterSpacing = 1.sp
                             )
                         )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Geri")
-                        }
-                    },
-                    actions = {
-                        if (notifications.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.markAllAsRead() }) {
-                                Icon(Icons.Rounded.DoneAll, contentDescription = "Tümünü Okundu Yap", tint = themeColors.accent)
-                            }
-                        }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                         containerColor = Color.Transparent,
@@ -349,7 +392,6 @@ fun SwipeableNotificationItem(
             }
         }
 
-        // Foreground Card Layer
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -393,8 +435,8 @@ fun SwipeableNotificationItem(
                 notification = notification,
                 isSelected = isSelected,
                 isSelectionMode = isSelectionMode,
-                onClick = { /* Handled by wrapper */ },
-                onLongClick = { /* Handled by wrapper */ },
+                onClick = onClick,
+                onLongClick = onLongClick,
                 onToggleSelection = onToggleSelection
             )
         }

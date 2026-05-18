@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">havamania</string>
+    <string name="app_name">Havamania</string>
     <string name="notification_mark_read">Okundu Yap</string>
     <string name="notification_mark_unread">Okunmadı Yap</string>
     <string name="notification_delete">Sil</string>

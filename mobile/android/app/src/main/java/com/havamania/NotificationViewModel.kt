@@ -16,6 +16,13 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     val notifications: StateFlow<List<AppNotification>> = NotificationRepository.notifications
 
+    init {
+        // Auto-load demos if empty
+        if (notifications.value.isEmpty()) {
+            refreshDemoNotifications()
+        }
+    }
+
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
 
@@ -151,6 +158,26 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 NotificationRepository.undoDelete()
             } catch (e: Exception) {
                 Log.e("NotificationVM", "Error in undoDelete", e)
+            }
+        }
+    }
+
+    fun deleteAllNotifications() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                NotificationRepository.clearAll()
+            } catch (e: Exception) {
+                Log.e("NotificationVM", "Error in deleteAllNotifications", e)
+            }
+        }
+    }
+
+    fun refreshDemoNotifications() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                NotificationRepository.refreshDemoNotifications()
+            } catch (e: Exception) {
+                Log.e("NotificationVM", "Error in refreshDemoNotifications", e)
             }
         }
     }

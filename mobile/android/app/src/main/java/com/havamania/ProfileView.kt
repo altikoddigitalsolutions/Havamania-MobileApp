@@ -158,7 +158,7 @@ fun ProfileScreen(
                     showComingSoonDialog = true
                 },
                 onPremium = {
-                    comingSoonTitle = "Havamania Premium yakında hizmetinizde olacak."
+                    comingSoonTitle = "Havamania yakında hizmetinizde olacak."
                     showComingSoonDialog = true
                 }
             )

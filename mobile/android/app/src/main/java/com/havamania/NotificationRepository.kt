@@ -129,6 +129,11 @@ object NotificationRepository {
         updateUnreadCount()
     }
 
+    fun refreshDemoNotifications() {
+        _notifications.value = createDefaultNotifications()
+        updateUnreadCount()
+    }
+
     private fun updateUnreadCount() {
         _unreadCount.value = _notifications.value.count { !it.isRead }
     }
