@@ -3,6 +3,9 @@ package com.havamania
 import android.content.Context
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 
 @Dao
 interface NotificationDao {
