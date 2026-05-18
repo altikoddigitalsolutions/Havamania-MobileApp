@@ -1,6 +1,8 @@
 package com.havamania
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -69,6 +71,7 @@ data class TravelPlanEntity(
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: String = "TOO_EARLY",
+    @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean = false
 )
 
@@ -129,7 +132,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 5, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 6, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -138,6 +141,14 @@ abstract class WeatherDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: WeatherDatabase? = null
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE travel_plans ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -145,7 +156,8 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .fallbackToDestructiveMigration() // Şimdilik geliştirme için kolaylık
+                .addMigrations(MIGRATION_5_6)
+                .fallbackToDestructiveMigration() // Backup if migration fails
                 .build()
                 INSTANCE = instance
                 instance
