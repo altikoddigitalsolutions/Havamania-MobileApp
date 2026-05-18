@@ -5,6 +5,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Date
@@ -34,14 +36,19 @@ object WeatherMapper {
         val suitability = calculateSuitability(current, daily)
 
         // Sunrise/Sunset/SolarNoon
-        val sunrise = daily?.sunrise?.firstOrNull()?.split("T")?.last()
-        val sunset = daily?.sunset?.firstOrNull()?.split("T")?.last()
+        val sunriseISO = daily?.sunrise?.firstOrNull()
+        val sunsetISO = daily?.sunset?.firstOrNull()
+        val sunrise = sunriseISO?.split("T")?.last()
+        val sunset = sunsetISO?.split("T")?.last()
         var solarNoon: String? = null
 
         // Solar noon fallback calculation
         if (sunrise != null && sunset != null) {
             solarNoon = calculateSolarNoon(sunrise, sunset)
         }
+
+        val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { LocalTime.of(6, 30) }
+        val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { LocalTime.of(19, 30) }
 
         return WeatherData(
             cityName = cityName,
@@ -55,6 +62,7 @@ object WeatherMapper {
             feelsLike = "${feelsLike}°",
             sunriseTime = if (sunrise.isNullOrEmpty()) null else sunrise,
             sunsetTime = if (sunset.isNullOrEmpty()) null else sunset,
+            timezone = response.timezone,
             solarNoon = if (solarNoon.isNullOrEmpty()) null else solarNoon,
             windSpeed = current?.windSpeed ?: 0.0,
             windGust = current?.windGusts ?: 0.0,
@@ -72,7 +80,7 @@ object WeatherMapper {
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
-            hourlyForecast = mapHourly(hourly),
+            hourlyForecast = mapHourly(hourly, sunriseLocalTime, sunsetLocalTime),
             dailyForecast = mapDaily(daily),
             details = mapDetails(current, daily)
         )
@@ -150,7 +158,7 @@ object WeatherMapper {
         return directions[((deg + 22.5) / 45).toInt() % 8]
     }
 
-    private fun mapHourly(hourly: HourlyDto?): List<HourlyWeather> {
+    private fun mapHourly(hourly: HourlyDto?, sunrise: LocalTime, sunset: LocalTime): List<HourlyWeather> {
         if (hourly == null) return emptyList()
         val calendar = Calendar.getInstance()
         val currentHourStr = SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(calendar.time)
@@ -158,7 +166,7 @@ object WeatherMapper {
         return hourly.time.indices.map { i ->
             val fullTime = hourly.time[i]
             var hourLabel = fullTime.split("T").last()
-            val hourInt = hourLabel.split(":").first().toInt()
+            val timeObj = try { LocalTime.parse(hourLabel) } catch (e: Exception) { LocalTime.of(hourLabel.split(":").first().toInt(), 0) }
 
             HourlyWeather(
                 time = hourLabel,
@@ -166,7 +174,7 @@ object WeatherMapper {
                 iconName = getWeatherIconName(hourly.weatherCode[i]),
                 condition = getWeatherCondition(hourly.weatherCode[i]),
                 weatherCode = hourly.weatherCode[i],
-                isDay = hourInt in 6..19,
+                isDay = !timeObj.isBefore(sunrise) && timeObj.isBefore(sunset),
                 temp = "${hourly.temperature[i].toInt()}°",
                 precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
                 isSelected = fullTime == currentHourStr
@@ -319,28 +327,42 @@ object WeatherMapper {
      * UI ekranında görünecek condition metnini günün saatine göre normalize eder.
      * Gece 22:00'da "Güneşli" yerine "Açık Gece" yazmasını sağlar.
      */
-    fun getDisplayCondition(code: Int, hour: Int): String {
-        val timeOfDay = resolveTimeOfDay(hour)
+    fun getDisplayCondition(code: Int, phase: DayPhase): String {
         val base = getWeatherCondition(code)
 
-        if (timeOfDay == TimeOfDay.NIGHT) {
-            return when (code) {
-                0, 1 -> "Açık Gece"
-                2 -> "Parçalı Bulutlu Gece"
-                3 -> "Bulutlu Gece"
-                45, 48 -> "Sisli Gece"
-                51, 53, 55, 61, 63, 65, 80, 81, 82 -> "Yağmurlu Gece"
-                71, 73, 75, 77, 85, 86 -> "Karlı Gece"
-                95, 96, 99 -> "Fırtınalı Gece"
-                else -> "$base Gece"
+        return when (phase) {
+            DayPhase.NIGHT -> {
+                when (code) {
+                    0, 1 -> "Açık Gece"
+                    2 -> "Parçalı Bulutlu Gece"
+                    3 -> "Bulutlu Gece"
+                    45, 48 -> "Sisli Gece"
+                    51, 53, 55, 61, 63, 65, 80, 81, 82 -> "Yağmurlu Gece"
+                    71, 73, 75, 77, 85, 86 -> "Karlı Gece"
+                    95, 96, 99 -> "Fırtınalı Gece"
+                    else -> "$base Gece"
+                }
             }
+            DayPhase.SUNSET -> {
+                if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
+            }
+            DayPhase.SUNRISE -> {
+                if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
+            }
+            DayPhase.DAY -> base
         }
+    }
 
-        if (timeOfDay == TimeOfDay.EVENING && (code == 0 || code == 1)) {
-            return "Açık Akşam"
+    fun getDayPhase(now: LocalDateTime, sunrise: LocalTime, sunset: LocalTime): DayPhase {
+        val current = now.toLocalTime()
+
+        return when {
+            current.isBefore(sunrise.minusMinutes(45)) -> DayPhase.NIGHT
+            current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.SUNRISE
+            current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
+            current.isBefore(sunset.plusMinutes(45)) -> DayPhase.SUNSET
+            else -> DayPhase.NIGHT
         }
-
-        return base
     }
 
     fun resolveTimeOfDay(hour: Int): TimeOfDay {

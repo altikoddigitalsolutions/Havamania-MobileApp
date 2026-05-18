@@ -54,57 +54,59 @@ data class WeatherCardStyle(
 
 object WeatherStyleResolver {
     @Composable
-    fun resolve(condition: WeatherCondition, timeOfDay: TimeOfDay, theme: AppTheme): WeatherCardStyle {
+    fun resolve(condition: WeatherCondition, phase: DayPhase, theme: AppTheme, isDay: Boolean): WeatherCardStyle {
         val style = when (condition) {
-            is WeatherCondition.Clear, is WeatherCondition.NightClear -> resolveSunnyStyle(timeOfDay)
-            is WeatherCondition.MostlySunny -> resolveMostlySunnyStyle(timeOfDay)
-            is WeatherCondition.PartlyCloudy -> resolvePartlyCloudyStyle(timeOfDay)
-            is WeatherCondition.Cloudy -> resolveCloudyStyle(timeOfDay)
-            is WeatherCondition.Rain -> resolveRainStyle(timeOfDay)
-            is WeatherCondition.Thunderstorm -> resolveThunderStyle(timeOfDay)
-            is WeatherCondition.Snow -> resolveSnowStyle(timeOfDay)
-            is WeatherCondition.Fog -> resolveFogStyle(timeOfDay)
+            is WeatherCondition.Clear, is WeatherCondition.NightClear -> resolveSunnyStyle(phase, isDay)
+            is WeatherCondition.MostlySunny -> resolveMostlySunnyStyle(phase, isDay)
+            is WeatherCondition.PartlyCloudy -> resolvePartlyCloudyStyle(phase, isDay)
+            is WeatherCondition.Cloudy -> resolveCloudyStyle(phase)
+            is WeatherCondition.Rain -> resolveRainStyle(phase)
+            is WeatherCondition.Thunderstorm -> resolveThunderStyle(phase)
+            is WeatherCondition.Snow -> resolveSnowStyle(phase)
+            is WeatherCondition.Fog -> resolveFogStyle(phase)
         }
         return applyThemePolish(style, theme)
     }
 
-    private fun resolveCloudyStyle(time: TimeOfDay): WeatherCardStyle {
-        val baseColors = when (time) {
-            TimeOfDay.MORNING -> listOf(Color(0xFFD8E6F2), Color(0xFFAFC1D2), Color(0xFF7F95AA))
-            TimeOfDay.DAY -> listOf(Color(0xFFC4D5E4), Color(0xFF9BAFC3), Color(0xFF6F849A))
-            TimeOfDay.EVENING -> listOf(Color(0xFFB7AFC8), Color(0xFF8F8FA8), Color(0xFF5F7185))
-            TimeOfDay.NIGHT -> listOf(Color(0xFF1B2432), Color(0xFF263447), Color(0xFF33485F))
+    private fun resolveCloudyStyle(phase: DayPhase): WeatherCardStyle {
+        val baseColors = when (phase) {
+            DayPhase.SUNRISE -> listOf(Color(0xFFD8E6F2), Color(0xFFAFC1D2), Color(0xFF7F95AA))
+            DayPhase.DAY -> listOf(Color(0xFFC4D5E4), Color(0xFF9BAFC3), Color(0xFF6F849A))
+            DayPhase.SUNSET -> listOf(Color(0xFFB7AFC8), Color(0xFF8F8FA8), Color(0xFF5F7185))
+            DayPhase.NIGHT -> listOf(Color(0xFF1B2432), Color(0xFF263447), Color(0xFF33485F))
         }
-        val isDark = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
-        return WeatherCardStyle(baseColors, if (isDark) Color.Transparent else Color.White.copy(0.15f), if (isDark) Color(0xFFA7B5C5) else Color(0xFF475569), Icons.Rounded.Cloud, isDark, "CLOUDY_$time")
+        val isDark = phase == DayPhase.NIGHT || phase == DayPhase.SUNSET
+        return WeatherCardStyle(baseColors, if (isDark) Color.Transparent else Color.White.copy(0.15f), if (isDark) Color(0xFFA7B5C5) else Color(0xFF475569), Icons.Rounded.Cloud, isDark, "CLOUDY_$phase")
     }
 
-    private fun resolveSunnyStyle(time: TimeOfDay): WeatherCardStyle {
-        return when (time) {
-            TimeOfDay.MORNING -> WeatherCardStyle(listOf(Color(0xFFFFD1D1), Color(0xFFD0E1FF), Color(0xFFBAE6FD)), Color(0xFFFFF9C4).copy(0.2f), Color(0xFFD84315), Icons.Rounded.WbSunny, false, "SUNNY_MORNING")
-            TimeOfDay.DAY -> WeatherCardStyle(listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8), Color(0xFF7DD3FC)), Color.White.copy(0.1f), Color(0xFFFFD600), Icons.Rounded.WbSunny, false, "SUNNY_DAY")
-            TimeOfDay.EVENING -> WeatherCardStyle(listOf(Color(0xFFF97316), Color(0xFFFB923C), Color(0xFFFDE68A)), Color(0xFFF472B6).copy(0.1f), Color.White, Icons.Rounded.WbSunny, true, "SUNNY_EVENING")
-            TimeOfDay.NIGHT -> WeatherCardStyle(listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155)), Color.Transparent, Color(0xFFFDE68A), Icons.Rounded.NightsStay, true, "SUNNY_NIGHT")
+    private fun resolveSunnyStyle(phase: DayPhase, isDay: Boolean): WeatherCardStyle {
+        val icon = if (isDay) Icons.Rounded.WbSunny else Icons.Rounded.NightsStay
+        return when (phase) {
+            DayPhase.SUNRISE -> WeatherCardStyle(listOf(Color(0xFFFFD1D1), Color(0xFFD0E1FF), Color(0xFFBAE6FD)), Color(0xFFFFF9C4).copy(0.2f), Color(0xFFD84315), icon, false, "SUNNY_SUNRISE")
+            DayPhase.DAY -> WeatherCardStyle(listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8), Color(0xFF7DD3FC)), Color.White.copy(0.1f), Color(0xFFFFD600), icon, false, "SUNNY_DAY")
+            DayPhase.SUNSET -> WeatherCardStyle(listOf(Color(0xFFF97316), Color(0xFFFB923C), Color(0xFFFDE68A)), Color(0xFFF472B6).copy(0.1f), Color.White, icon, true, "SUNNY_SUNSET")
+            DayPhase.NIGHT -> WeatherCardStyle(listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155)), Color.Transparent, Color(0xFFFDE68A), icon, true, "SUNNY_NIGHT")
         }
     }
 
-    private fun resolveMostlySunnyStyle(time: TimeOfDay): WeatherCardStyle = resolveSunnyStyle(time).copy(styleName = "MOSTLY_SUNNY_$time")
+    private fun resolveMostlySunnyStyle(phase: DayPhase, isDay: Boolean): WeatherCardStyle = resolveSunnyStyle(phase, isDay).copy(styleName = "MOSTLY_SUNNY_$phase")
 
-    private fun resolvePartlyCloudyStyle(time: TimeOfDay): WeatherCardStyle {
-        val isNight = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
-        return WeatherCardStyle(if (isNight) listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)) else listOf(Color(0xFFBAE6FD), Color(0xFF7DD3FC), Color(0xFFE0F2FE)), if (isNight) Color.Transparent else Color.White.copy(0.15f), Color(0xFFF1F5F9), if (time == TimeOfDay.NIGHT) Icons.Rounded.CloudQueue else Icons.Rounded.WbCloudy, isNight, "PARTLY_CLOUDY_$time")
+    private fun resolvePartlyCloudyStyle(phase: DayPhase, isDay: Boolean): WeatherCardStyle {
+        val isDark = phase == DayPhase.NIGHT || phase == DayPhase.SUNSET
+        val icon = if (isDay) Icons.Rounded.WbCloudy else Icons.Rounded.CloudQueue
+        return WeatherCardStyle(if (isDark) listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)) else listOf(Color(0xFFBAE6FD), Color(0xFF7DD3FC), Color(0xFFE0F2FE)), if (isDark) Color.Transparent else Color.White.copy(0.15f), Color(0xFFF1F5F9), icon, isDark, "PARTLY_CLOUDY_$phase")
     }
 
-    private fun resolveRainStyle(time: TimeOfDay): WeatherCardStyle {
-        val isNight = time == TimeOfDay.NIGHT || time == TimeOfDay.EVENING
-        return WeatherCardStyle(if (isNight) listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF1E293B)) else listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)), Color.White.copy(0.05f), Color(0xFF60A5FA), Icons.Rounded.WaterDrop, true, "RAIN_$time")
+    private fun resolveRainStyle(phase: DayPhase): WeatherCardStyle {
+        val isDark = phase == DayPhase.NIGHT || phase == DayPhase.SUNSET
+        return WeatherCardStyle(if (isDark) listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF1E293B)) else listOf(Color(0xFF1E293B), Color(0xFF334155), Color(0xFF475569)), Color.White.copy(0.05f), Color(0xFF60A5FA), Icons.Rounded.WaterDrop, true, "RAIN_$phase")
     }
 
-    private fun resolveThunderStyle(time: TimeOfDay): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)), Color(0xFFC084FC).copy(0.1f), Color(0xFFFACC15), Icons.Rounded.Thunderstorm, true, "THUNDER_$time")
+    private fun resolveThunderStyle(phase: DayPhase): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA)), Color(0xFFC084FC).copy(0.1f), Color(0xFFFACC15), Icons.Rounded.Thunderstorm, true, "THUNDER_$phase")
 
-    private fun resolveSnowStyle(time: TimeOfDay): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFFFFFFF)), Color.White.copy(0.2f), Color(0xFF38BDF8), Icons.Rounded.AcUnit, false, "SNOW_$time")
+    private fun resolveSnowStyle(phase: DayPhase): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFFFFFFF)), Color.White.copy(0.2f), Color(0xFF38BDF8), Icons.Rounded.AcUnit, false, "SNOW_$phase")
 
-    private fun resolveFogStyle(time: TimeOfDay): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFF94A3B8), Color(0xFFCBD5E1), Color(0xFFE2E8F0)), Color.White.copy(0.2f), Color(0xFF475569), Icons.Rounded.FilterDrama, false, "FOG_$time")
+    private fun resolveFogStyle(phase: DayPhase): WeatherCardStyle = WeatherCardStyle(listOf(Color(0xFF94A3B8), Color(0xFFCBD5E1), Color(0xFFE2E8F0)), Color.White.copy(0.2f), Color(0xFF475569), Icons.Rounded.FilterDrama, false, "FOG_$phase")
 
     private fun applyThemePolish(style: WeatherCardStyle, theme: AppTheme): WeatherCardStyle {
         val (polishColor, accentTweak) = when (theme) {
@@ -141,15 +143,23 @@ fun WeatherHeroCard(
     modifier: Modifier = Modifier,
     districtName: String? = null,
     time: LocalTime = LocalTime.now(),
+    sunriseTime: String? = null,
+    sunsetTime: String? = null,
     parallaxOffset: Float = 0f,
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val currentTheme by themeViewModel.currentTheme.collectAsState()
-    val timeOfDay = remember(time) { WeatherMapper.resolveTimeOfDay(time.hour) }
-    val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
-    val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)
 
-    val isSunnyScene = SunnyDebugMode || condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || (condition is WeatherCondition.PartlyCloudy && timeOfDay != TimeOfDay.NIGHT)
+    val phase = remember(time, sunriseTime, sunsetTime) {
+        val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
+        val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+        WeatherMapper.getDayPhase(java.time.LocalDateTime.now(), sunrise, sunset)
+    }
+
+    val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
+    val style = WeatherStyleResolver.resolve(condition, phase, currentTheme, isDay)
+
+    val isSunnyScene = SunnyDebugMode || condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || (condition is WeatherCondition.PartlyCloudy && isDay)
 
     val context = LocalContext.current
     val isReducedMotion = remember {
@@ -174,9 +184,9 @@ fun WeatherHeroCard(
             .clip(RoundedCornerShape(32.dp))
             .border(1.5.dp, Color.White.copy(0.15f), RoundedCornerShape(32.dp))
     ) {
-        val sunVariant = if (isSunnyScene && timeOfDay != TimeOfDay.NIGHT) {
+        val sunVariant = if (isSunnyScene && phase != DayPhase.NIGHT) {
             when {
-                timeOfDay == TimeOfDay.EVENING -> SunVariant.EVENING
+                phase == DayPhase.SUNSET -> SunVariant.EVENING
                 condition is WeatherCondition.MostlySunny -> SunVariant.MOSTLY_SUNNY
                 condition is WeatherCondition.PartlyCloudy -> SunVariant.PARTLY_CLOUDY
                 else -> SunVariant.CLEAR_DAY
@@ -186,7 +196,7 @@ fun WeatherHeroCard(
         LiveBackgroundLayer(colors = style.gradientColors, isReducedMotion = isReducedMotion, sunVariant = sunVariant)
 
         Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(32.dp))) {
-            WeatherEffectLayer(condition, timeOfDay, weatherCode, !isReducedMotion, parallaxOffset)
+            WeatherEffectLayer(condition, phase, weatherCode, !isReducedMotion, parallaxOffset)
         }
 
         Box(modifier = Modifier.fillMaxSize().background(style.lightOverlay))
@@ -220,20 +230,20 @@ fun LiveBackgroundLayer(colors: List<Color>, isReducedMotion: Boolean, sunVarian
 }
 
 @Composable
-fun WeatherEffectLayer(condition: WeatherCondition, timeOfDay: TimeOfDay, weatherCode: Int, isAnimationEnabled: Boolean, parallaxOffset: Float) {
+fun WeatherEffectLayer(condition: WeatherCondition, phase: DayPhase, weatherCode: Int, isAnimationEnabled: Boolean, parallaxOffset: Float) {
     if (!isAnimationEnabled) return
-    val isSunnyScene = SunnyDebugMode || condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || (condition is WeatherCondition.PartlyCloudy && timeOfDay != TimeOfDay.NIGHT)
+    val isSunnyScene = SunnyDebugMode || condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || (condition is WeatherCondition.PartlyCloudy && phase != DayPhase.NIGHT)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isSunnyScene && timeOfDay != TimeOfDay.NIGHT) {
-            val variant = when { timeOfDay == TimeOfDay.EVENING -> SunVariant.EVENING; condition is WeatherCondition.MostlySunny -> SunVariant.MOSTLY_SUNNY; condition is WeatherCondition.PartlyCloudy -> SunVariant.PARTLY_CLOUDY; else -> SunVariant.CLEAR_DAY }
+        if (isSunnyScene && phase != DayPhase.NIGHT) {
+            val variant = when { phase == DayPhase.SUNSET -> SunVariant.EVENING; condition is WeatherCondition.MostlySunny -> SunVariant.MOSTLY_SUNNY; condition is WeatherCondition.PartlyCloudy -> SunVariant.PARTLY_CLOUDY; else -> SunVariant.CLEAR_DAY }
             PremiumSunEffect(variant)
             if (condition is WeatherCondition.MostlySunny) CloudDriftEffect(2, 0.2f) else if (condition is WeatherCondition.PartlyCloudy) CloudDriftEffect(3, 0.32f)
         } else {
             when (condition) {
-                is WeatherCondition.Clear, is WeatherCondition.NightClear, is WeatherCondition.MostlySunny -> if (timeOfDay == TimeOfDay.NIGHT) StarFieldEffect()
-                is WeatherCondition.PartlyCloudy -> if (timeOfDay == TimeOfDay.NIGHT) { StarFieldEffect(); CloudDriftEffect(2, 0.25f, Color(0xFF94A3B8)) }
-                is WeatherCondition.Cloudy -> CloudDriftEffect(if (timeOfDay == TimeOfDay.NIGHT) 4 else 6, if (timeOfDay == TimeOfDay.NIGHT) 0.35f else 0.42f, if (timeOfDay == TimeOfDay.NIGHT) Color(0xFF64748B) else Color(0xFFD1D5DB))
+                is WeatherCondition.Clear, is WeatherCondition.NightClear, is WeatherCondition.MostlySunny -> if (phase == DayPhase.NIGHT) StarFieldEffect()
+                is WeatherCondition.PartlyCloudy -> if (phase == DayPhase.NIGHT) { StarFieldEffect(); CloudDriftEffect(2, 0.25f, Color(0xFF94A3B8)) }
+                is WeatherCondition.Cloudy -> CloudDriftEffect(if (phase == DayPhase.NIGHT) 4 else 6, if (phase == DayPhase.NIGHT) 0.35f else 0.42f, if (phase == DayPhase.NIGHT) Color(0xFF64748B) else Color(0xFFD1D5DB))
                 is WeatherCondition.Rain -> RainEffect()
                 is WeatherCondition.Thunderstorm -> { RainEffect(); LightningEffect() }
                 is WeatherCondition.Snow -> SnowParticleEffect()

@@ -40,6 +40,8 @@ private const val TAG = "HourlyForecast"
 fun HourlyForecastRow(
     modifier: Modifier = Modifier,
     items: List<HourlyWeather>,
+    sunriseTime: String? = null,
+    sunsetTime: String? = null,
     onItemSelect: (Int) -> Unit = {},
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
@@ -73,6 +75,8 @@ fun HourlyForecastRow(
             ) { index, item ->
                 HourlyForecastItem(
                     data = item,
+                    sunriseTime = sunriseTime,
+                    sunsetTime = sunsetTime,
                     currentTheme = currentTheme,
                     onClick = {
                         if (!item.isSelected) {
@@ -88,6 +92,8 @@ fun HourlyForecastRow(
 @Composable
 fun HourlyForecastItem(
     data: HourlyWeather,
+    sunriseTime: String? = null,
+    sunsetTime: String? = null,
     currentTheme: AppTheme,
     onClick: () -> Unit
 ) {
@@ -104,19 +110,19 @@ fun HourlyForecastItem(
         label = "scale"
     )
 
-    val timeOfDay = remember(data.time) {
-        WeatherMapper.resolveTimeOfDay(try {
-            data.time.split(":")[0].toInt()
-        } catch (e: Exception) {
-            if (data.isDay) 12 else 0
-        })
+    val phase = remember(data.time, sunriseTime, sunsetTime) {
+        val sunrise = try { java.time.LocalTime.parse(sunriseTime) } catch (e: Exception) { java.time.LocalTime.of(6, 30) }
+        val sunset = try { java.time.LocalTime.parse(sunsetTime) } catch (e: Exception) { java.time.LocalTime.of(19, 30) }
+        val timeObj = try { java.time.LocalTime.parse(data.time) } catch (e: Exception) { java.time.LocalTime.of(data.time.split(":")[0].toInt(), 0) }
+        val ldt = java.time.LocalDateTime.now().with(timeObj)
+        WeatherMapper.getDayPhase(ldt, sunrise, sunset)
     }
 
     val condition = remember(data.weatherCode, data.isDay) {
         WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, data.isDay)
     }
 
-    val style = WeatherStyleResolver.resolve(condition, timeOfDay, currentTheme)
+    val style = WeatherStyleResolver.resolve(condition, phase, currentTheme, data.isDay)
 
     val itemAlpha by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.88f,

@@ -19,6 +19,7 @@ data class WeatherData(
     val feelsLike: String = "8°",
     val sunriseTime: String? = null,
     val sunsetTime: String? = null,
+    val timezone: String = "UTC",
     val solarNoon: String? = null,
     val windSpeed: Double? = null,
     val windGust: Double? = null,
@@ -75,6 +76,8 @@ data class WeatherDetailData(
     val progress: Float? = null,
     val isSelected: Boolean = false
 )
+
+enum class DayPhase { NIGHT, SUNRISE, DAY, SUNSET }
 
 enum class TimeOfDay { MORNING, DAY, EVENING, NIGHT }
 

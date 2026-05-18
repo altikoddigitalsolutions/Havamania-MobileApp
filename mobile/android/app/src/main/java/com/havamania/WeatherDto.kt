@@ -7,6 +7,9 @@ import kotlinx.serialization.Serializable
 data class OpenMeteoResponse(
     val latitude: Double,
     val longitude: Double,
+    val timezone: String = "UTC",
+    @SerialName("timezone_abbreviation")
+    val timezoneAbbreviation: String = "UTC",
     val current: CurrentWeatherDto? = null,
     val daily: DailyDto? = null,
     val hourly: HourlyDto? = null

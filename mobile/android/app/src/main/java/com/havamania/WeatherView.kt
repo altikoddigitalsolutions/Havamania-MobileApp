@@ -168,18 +168,53 @@ fun WeatherSuccessContent(
     onCityClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {}
 ) {
+    val displayTime by remember(selectedHourlyWeather) { derivedStateOf { selectedHourlyWeather?.time?.let { try { val hourStr = if (it == "24:00") "0" else it.split(":")[0]; LocalTime.of(hourStr.toInt(), 0) } catch (e: Exception) { LocalTime.now() } } ?: LocalTime.now() } }
+    val displayPhase by remember(data, displayTime) {
+        derivedStateOf {
+            val sunrise = try { LocalTime.parse(data.sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
+            val sunset = try { LocalTime.parse(data.sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+            val now = if (selectedHourlyWeather != null) {
+                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { java.time.LocalDateTime.now().with(displayTime) }
+            } else {
+                java.time.LocalDateTime.now()
+            }
+            WeatherMapper.getDayPhase(now, sunrise, sunset)
+        }
+    }
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) { derivedStateOf { selectedHourlyWeather?.temp ?: selectedDailyForecast?.let { "${it.minTemp}° / ${it.maxTemp}°" } ?: data.temperature } }
-    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) { derivedStateOf { val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode; val hour = selectedHourlyWeather?.time?.let { try { if (it == "24:00") 0 else it.split(":")[0].toInt() } catch (e: Exception) { LocalTime.now().hour } } ?: LocalTime.now().hour; WeatherMapper.getDisplayCondition(code, hour) } }
+    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast, displayPhase) {
+        derivedStateOf {
+            val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
+            WeatherMapper.getDisplayCondition(code, displayPhase)
+        }
+    }
     val displayWeatherCode by remember(data, selectedHourlyWeather, selectedDailyForecast) { derivedStateOf { selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode } }
     val displayIsDay by remember(data, selectedHourlyWeather) { derivedStateOf { selectedHourlyWeather?.isDay ?: true } }
-    val displayTime by remember(selectedHourlyWeather) { derivedStateOf { selectedHourlyWeather?.time?.let { try { val hourStr = if (it == "24:00") "0" else it.split(":")[0]; LocalTime.of(hourStr.toInt(), 0) } catch (e: Exception) { LocalTime.now() } } ?: LocalTime.now() } }
     val density = LocalDensity.current.density
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().verticalScroll(scrollState)) {
         Spacer(modifier = Modifier.height(20.dp))
         EntranceAnimation(delayMillis = 50) {
             WeatherHeroCard(
-                cityName = data.cityName, districtName = data.districtName, temperature = displayTemp, conditionLabel = displayCondition, weatherCode = displayWeatherCode, isDay = displayIsDay, high = selectedDailyForecast?.maxTemp?.toString()?.plus("°") ?: data.high, low = selectedDailyForecast?.minTemp?.toString()?.plus("°") ?: data.low, feelsLike = selectedHourlyWeather?.temp ?: data.feelsLike, humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65", windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s", uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4", unreadCount = unreadCount, onCityClick = onCityClick, onNotificationsClick = onNotificationsClick, time = displayTime, parallaxOffset = scrollState.value * 0.12f,
+                cityName = data.cityName,
+                districtName = data.districtName,
+                temperature = displayTemp,
+                conditionLabel = displayCondition,
+                weatherCode = displayWeatherCode,
+                isDay = displayIsDay,
+                high = selectedDailyForecast?.maxTemp?.toString()?.plus("°") ?: data.high,
+                low = selectedDailyForecast?.minTemp?.toString()?.plus("°") ?: data.low,
+                feelsLike = selectedHourlyWeather?.temp ?: data.feelsLike,
+                humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65",
+                windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s",
+                uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4",
+                unreadCount = unreadCount,
+                onCityClick = onCityClick,
+                onNotificationsClick = onNotificationsClick,
+                time = displayTime,
+                sunriseTime = data.sunriseTime,
+                sunsetTime = data.sunsetTime,
+                parallaxOffset = scrollState.value * 0.12f,
                 modifier = Modifier.padding(horizontal = 16.dp).zIndex(1f).graphicsLayer { this.cameraDistance = 12f * density }
             )
         }
@@ -191,7 +226,12 @@ fun WeatherSuccessContent(
                     val filteredHourly = remember(data.hourlyForecast, dateStr) { data.hourlyForecast.filter { hour -> val isSelectedDay = hour.fullTime.startsWith(dateStr); if (isSelectedDay && selectedForecastDate == today) { try { val h = hour.time.split(":")[0].toInt(); h >= currentHour } catch (e: Exception) { true } } else isSelectedDay } }
                     if (filteredHourly.isNotEmpty()) {
                         val hourlyWithSelection = remember(filteredHourly, selectedHourlyWeather) { filteredHourly.map { it.copy(isSelected = it.fullTime == selectedHourlyWeather?.fullTime) } }
-                        HourlyForecastRow(items = hourlyWithSelection, onItemSelect = { index -> onSelectHour(filteredHourly[index]) })
+                        HourlyForecastRow(
+                            items = hourlyWithSelection,
+                            sunriseTime = data.sunriseTime,
+                            sunsetTime = data.sunsetTime,
+                            onItemSelect = { index -> onSelectHour(filteredHourly[index]) }
+                        )
                     } else {
                         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) { SectionLabel("SAATLİK TAHMİN", Modifier); Text("Bu gün için saatlik tahmin henüz mevcut değil.", color = com.havamania.ui.theme.HavamaniaTheme.colors.textPrimary.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp)) }
                     }
