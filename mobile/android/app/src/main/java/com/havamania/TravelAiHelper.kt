@@ -9,12 +9,19 @@ object TravelAiHelper {
         tripType: TripType,
         forecastSnapshot: ForecastSnapshot?,
         previousSnapshot: ForecastSnapshot?,
-        daysUntilTrip: Int
+        daysUntilTrip: Int,
+        isPastTrip: Boolean = false,
+        endDate: LocalDate? = null
     ): String {
         val sb = StringBuilder()
 
+        if (isPastTrip) {
+            val dateStr = endDate?.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM")) ?: "geçtiğimiz günlerde"
+            return "$city seyahatin $dateStr'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin. Geçmiş hava verisi bu seyahat için artık güncel öneri üretmek amacıyla kullanılmıyor."
+        }
+
         if (daysUntilTrip > 15 || forecastSnapshot == null) {
-            sb.append("Bu tarih için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım. ")
+            sb.append("Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım. ")
             sb.append(getTripTypeAdvice(tripType, forecastSnapshot, daysUntilTrip))
             sb.append("\n\n").append(getCitySuggestion(city, tripType))
             return sb.toString().trim()

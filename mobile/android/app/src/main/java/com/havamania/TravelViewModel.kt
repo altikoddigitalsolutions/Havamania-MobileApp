@@ -64,7 +64,28 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun performAnalysis(plan: TravelPlan): TravelPlan {
         val today = LocalDate.now()
+        val isPastTrip = plan.endDate.isBefore(today)
         val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
+
+        // Case: Past trip
+        if (isPastTrip) {
+            val suggestion = TravelAiHelper.generateTravelAiSuggestion(
+                city = plan.city,
+                tripType = plan.tripType,
+                forecastSnapshot = null,
+                previousSnapshot = null,
+                daysUntilTrip = daysUntil,
+                isPastTrip = true,
+                endDate = plan.endDate
+            )
+            return plan.copy(
+                isAnalyzing = false,
+                weatherAnalysisStatus = TravelWeatherAnalysisStatus.ANALYZED,
+                lastWeatherAnalysisText = "Bu seyahat geçmişte tamamlandı.",
+                aiSuggestion = suggestion,
+                lastWeatherAnalysisDate = System.currentTimeMillis()
+            )
+        }
 
         // Case: More than 15 days until trip
         if (daysUntil > 15) {
@@ -78,7 +99,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return plan.copy(
                 isAnalyzing = false,
                 weatherAnalysisStatus = TravelWeatherAnalysisStatus.TOO_EARLY,
-                lastWeatherAnalysisText = "Bu tarih için hava durumu tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım.",
+                lastWeatherAnalysisText = "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım.",
                 aiSuggestion = suggestion,
                 lastWeatherAnalysisDate = System.currentTimeMillis()
             )
@@ -126,8 +147,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 )
                 return plan.copy(
                     isAnalyzing = false,
-                    weatherAnalysisStatus = TravelWeatherAnalysisStatus.READY,
-                    lastWeatherAnalysisText = "Bu tarih için hava verisi henüz API tarafından sağlanmıyor.",
+                    weatherAnalysisStatus = TravelWeatherAnalysisStatus.ERROR,
+                    lastWeatherAnalysisText = "Güncel hava verisi şu anda alınamadı.",
                     aiSuggestion = suggestion,
                     lastWeatherAnalysisDate = System.currentTimeMillis()
                 )
@@ -153,7 +174,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 end.isBefore(today) -> "Bu seyahat tamamlandı."
                 start.isBefore(today) && !end.isBefore(today) -> "Seyahatiniz devam ediyor."
                 start.isEqual(today) -> "Seyahatiniz bugün başlıyor."
-                start.isEqual(today.plusDays(1)) -> "Seyahatinize 1 gün kaldı."
+                start.isEqual(today.plusDays(1)) -> "Seyahatinize yarın çıkıyorsunuz."
                 start.isAfter(today) -> "Seyahatinize ${ChronoUnit.DAYS.between(today, start)} gün kaldı."
                 else -> ""
             }

@@ -81,4 +81,45 @@ class NotificationRepository(private val dao: NotificationDao) {
             Log.e(TAG, "Failed to delete all", e)
         }
     }
+
+    suspend fun refreshDemoNotifications() {
+        try {
+            dao.deleteAll()
+            val demoList = listOf(
+                NotificationItem(
+                    title = "Batman Seyahat Analizi Hazır",
+                    message = "Batman seyahatin için güncel hava analizi hazır. Yağmur ihtimali yüksek görünüyor.",
+                    category = NotificationCategory.TRAVEL,
+                    actionLabel = "Seyahati Aç"
+                ),
+                NotificationItem(
+                    title = "Yağmur Başlıyor",
+                    message = "Bulunduğun konumda 15 dakika içinde hafif yağış başlayacak.",
+                    category = NotificationCategory.RAIN,
+                    actionLabel = "Saatlik Tahmini Aç"
+                ),
+                NotificationItem(
+                    title = "Yüksek UV Endeksi",
+                    message = "Bugün UV seviyesi 7. Öğle saatlerinde güneş kremi ve şapka önerilir.",
+                    category = NotificationCategory.UV,
+                    actionLabel = "UV Detayları"
+                ),
+                NotificationItem(
+                    title = "Kritik Hava Uyarısı",
+                    message = "Önümüzdeki 3 saat içinde kuvvetli rüzgar bekleniyor. Dışarıdaki eşyalarını kontrol et.",
+                    category = NotificationCategory.WARNING,
+                    actionLabel = "Uyarıyı Aç"
+                ),
+                NotificationItem(
+                    title = "Uygulama Güncellendi",
+                    message = "Bildirim Merkezi, seyahat analizleri ve premium hava kartları iyileştirildi.",
+                    category = NotificationCategory.UPDATE,
+                    actionLabel = "Yenilikleri Gör"
+                )
+            )
+            demoList.forEach { dao.insert(it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to refresh demo notifications", e)
+        }
+    }
 }

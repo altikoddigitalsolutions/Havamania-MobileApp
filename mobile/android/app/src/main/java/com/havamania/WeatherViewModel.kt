@@ -58,7 +58,17 @@ class WeatherViewModel(
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
-    val unreadNotificationCount: StateFlow<Int> = NotificationRepository.unreadCountFlow
+    private val notificationRepository: NotificationRepository by lazy {
+        val database = NotificationDatabase.getDatabase(application)
+        NotificationRepository(database.notificationDao())
+    }
+
+    val unreadNotificationCount: StateFlow<Int> = notificationRepository.unreadCount
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
 
     private var lastCity = "İstanbul"
     private var lastDistrict: String? = null

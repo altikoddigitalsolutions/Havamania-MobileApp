@@ -334,8 +334,8 @@ fun PremiumWeatherContent(
                 Icon(Icons.Rounded.LocationOn, null, tint = style.accentColor, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) { Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(FontWeight.Black, letterSpacing = 1.sp, color = textColor)); Icon(Icons.Rounded.KeyboardArrowDown, null, tint = secondaryColor, modifier = Modifier.size(16.dp)) }
-                    Text("Konumu değiştir", style = MaterialTheme.typography.bodySmall.copy(9.sp, FontWeight.Bold, color = secondaryColor.copy(0.5f)))
+                    Row(verticalAlignment = Alignment.CenterVertically) { Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor)); Icon(Icons.Rounded.KeyboardArrowDown, null, tint = secondaryColor, modifier = Modifier.size(16.dp)) }
+                    Text("Konumu değiştir", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -346,15 +346,15 @@ fun PremiumWeatherContent(
         }
         Spacer(Modifier.weight(0.5f))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(temperature, style = MaterialTheme.typography.displayLarge.copy(110.sp, FontWeight.W100, letterSpacing = (-6).sp, color = textColor))
-            Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(FontWeight.Bold, color = textColor))
-            Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(FontWeight.SemiBold, color = secondaryColor))
+            Text(temperature, style = MaterialTheme.typography.displayLarge.copy(fontSize = 110.sp, fontWeight = FontWeight.W100, letterSpacing = (-6).sp, color = textColor))
+            Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = textColor))
+            Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = secondaryColor))
         }
         Spacer(Modifier.weight(1f))
         Surface(modifier = Modifier.fillMaxWidth().height(64.dp), color = if (style.isDark) Color.White.copy(0.1f) else Color.Black.copy(0.05f), shape = RoundedCornerShape(24.dp), border = BorderStroke(0.5.dp, if (style.isDark) Color.White.copy(0.15f) else Color.Black.copy(0.08f))) {
             Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to "UV $uvIndex").forEach { (icon, valStr) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = textColor.copy(0.6f), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(FontWeight.ExtraBold), color = textColor) }
+                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = textColor.copy(0.6f), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold), color = textColor) }
                 }
             }
         }

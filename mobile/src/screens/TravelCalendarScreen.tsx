@@ -96,9 +96,11 @@ function TravelScreen() {
     const today = new Date().toISOString().split('T')[0];
     let result = [...plans];
     if (filter === 'Upcoming') {
-      result = plans.filter(p => p.startDate >= today);
+      // Hem devam eden hem de gelecekteki seyahatler
+      result = plans.filter(p => p.endDate >= today);
     } else if (filter === 'Past') {
-      result = plans.filter(p => p.startDate < today);
+      // Tamamen bitmiş seyahatler
+      result = plans.filter(p => p.endDate < today);
     }
     return result;
   }, [plans, filter]);
@@ -388,20 +390,101 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
 
   const typeInfo = TRAVEL_TYPES.find(t => t.type === plan.type) || TRAVEL_TYPES[5];
 
-  const { data: weatherData, refetch, isFetching } = useQuery({
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const isPastTrip = plan.endDate < today;
+  const isActiveTrip = plan.startDate <= today && plan.endDate >= today;
+  const isFutureTrip = plan.startDate > today;
+
+  const daysUntilStart = useMemo(() => {
+    const todayDate = new Date(today);
+    const start = new Date(plan.startDate);
+    const diffTime = start.getTime() - todayDate.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }, [plan.startDate, today]);
+
+  const { data: weatherData, refetch, isFetching, error } = useQuery({
     queryKey: ['weather', plan.lat, plan.lon, plan.startDate],
     queryFn: () => getDailyWeather(plan.lat, plan.lon, 10),
     staleTime: 10 * 60 * 1000,
+    enabled: !isPastTrip && daysUntilStart <= 15,
   });
 
   const analysis = useMemo(() => {
-    if (!weatherData) return null;
+    const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const formatDate = (dateStr: string) => {
+      const [y, m, d] = dateStr.split('-');
+      return `${parseInt(d)} ${MONTHS[parseInt(m) - 1]}`;
+    };
+
+    if (isPastTrip) {
+      return {
+        status: 'past',
+        msg: `${plan.city} seyahatin ${formatDate(plan.endDate)}'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin.`,
+        icon: 'archive-outline',
+        color: C.textMuted
+      };
+    }
+
+    if (isActiveTrip) {
+      const activeMsg = plan.startDate === today ? "Seyahatiniz bugün başlıyor." : "Seyahatiniz devam ediyor.";
+
+      if (!weatherData) {
+        return {
+          status: 'active',
+          msg: isFetching ? "Hava durumu analiz ediliyor..." : activeMsg,
+          icon: 'navigate-outline',
+          color: C.accent
+        };
+      }
+
+      const dayData = weatherData.items.find(i => i.date === today) || weatherData.items[0];
+      return {
+        status: 'active',
+        msg: activeMsg,
+        temp: dayData ? `${dayData.temp_min}° / ${dayData.temp_max}°` : undefined,
+        icon: 'navigate-outline',
+        color: C.accent
+      };
+    }
+
+    // Future Trip
+    if (daysUntilStart > 15) {
+      return {
+        status: 'far-future',
+        msg: "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım.",
+        icon: 'time-outline',
+        color: C.textMuted
+      };
+    }
+
+    if (!weatherData) {
+      if (error) {
+        return {
+          status: 'error',
+          msg: "Güncel hava verisi şu anda alınamadı.",
+          icon: 'alert-circle-outline',
+          color: '#EF4444'
+        };
+      }
+
+      let futureMsg = `Seyahatinize ${daysUntilStart} gün kaldı. Güncel hava analizini hazırlayabilirim.`;
+      if (daysUntilStart === 1) futureMsg = "Seyahatinize yarın çıkıyorsunuz.";
+      if (daysUntilStart === 0) futureMsg = "Seyahatiniz bugün başlıyor.";
+
+      return {
+        status: 'future-pending',
+        msg: futureMsg,
+        icon: 'sparkles-outline',
+        color: C.accent
+      };
+    }
+
     const targetDate = plan.startDate;
     const dayData = weatherData.items.find(i => i.date === targetDate);
 
     if (!dayData) return {
       status: 'pending',
-      msg: 'Hava tahmini seyahat tarihinize yaklaştığında burada detaylandırılacaktır.',
+      msg: "Güncel hava verisi şu anda alınamadı.",
       icon: 'time-outline',
       color: C.textMuted
     };
@@ -431,16 +514,21 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
       packing.push("Hafif ceket");
     }
 
+    let futureMsg = `Seyahatinize ${daysUntilStart} gün kaldı. Güncel hava analizini hazırlayabilirim.`;
+    if (daysUntilStart === 1) futureMsg = "Seyahatinize yarın çıkıyorsunuz.";
+    if (daysUntilStart === 0) futureMsg = "Seyahatiniz bugün başlıyor.";
+
     return {
       status: 'ready',
       msg: advice,
+      subMsg: futureMsg,
       packing: packing,
       temp: `${dayData.temp_min}° / ${dayData.temp_max}°`,
       summary: dayData.precipitation_probability > 30 ? 'Yağış İhtimali' : 'Açık/Az Bulutlu',
       color,
       icon
     };
-  }, [weatherData, plan.startDate, C]);
+  }, [weatherData, plan.startDate, C, isPastTrip, isActiveTrip, daysUntilStart, today, plan.city, plan.endDate, error, isFetching]);
 
   const startDate = new Date(plan.startDate);
   const endDate = new Date(plan.endDate);
@@ -451,8 +539,8 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
       styles.card,
       {
         backgroundColor: 'rgba(255,255,255,0.03)',
-        borderColor: 'rgba(255,255,255,0.08)',
-        opacity: fadeAnim,
+        borderColor: isPastTrip ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.08)',
+        opacity: isPastTrip ? 0.7 : fadeAnim,
         transform: [{ translateY: slideAnim }]
       }
     ]}>
@@ -465,10 +553,17 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
           <View style={[styles.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '20' }]}>
-            <Icon name="navigate-outline" size={20} color={analysis?.color || C.accent} />
+            <Icon name={isPastTrip ? "archive-outline" : "navigate-outline"} size={20} color={analysis?.color || C.accent} />
           </View>
           <View>
-            <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
+              {isPastTrip && (
+                <View style={[styles.completedBadge, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}>
+                  <Text style={[styles.completedBadgeText, { color: C.textSecondary }]}>TAMAMLANDI</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.cardDates, { color: C.textSecondary }]}>
               {plan.startDate} • {diffDays} Gün
             </Text>
@@ -484,7 +579,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
         </View>
       </View>
 
-      <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} />
+      <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} isPast={isPastTrip} />
 
       <View style={styles.cardFooter}>
         <View style={styles.footerLeft}>
@@ -497,16 +592,25 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
             <Text style={[styles.actionBtnText, { color: C.textSecondary }]}>Düzenle</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => {
-              refetch();
-              onReAnalyze();
-            }}
-          >
-            <Icon name="sparkles" size={16} color={C.accent} />
-            <Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text>
-          </TouchableOpacity>
+          {!isPastTrip && (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                refetch();
+                onReAnalyze();
+              }}
+            >
+              <Icon name="sparkles" size={16} color={C.accent} />
+              <Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text>
+            </TouchableOpacity>
+          )}
+
+          {isPastTrip && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+              <Icon name="archive-outline" size={16} color={C.textMuted} />
+              <Text style={[styles.actionBtnText, { color: C.textMuted }]}>Arşivle</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.actionBtn} onPress={onDelete}>
             <Icon name="trash" size={16} color="#EF444499" />
@@ -521,7 +625,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
 /**
  * AI Önerileri Bölümü
  */
-function TravelAiRecommendationSection({ analysis, isFetching }: { analysis: any; isFetching: boolean }) {
+function TravelAiRecommendationSection({ analysis, isFetching, isPast }: { analysis: any; isFetching: boolean, isPast: boolean }) {
   const C = useColors();
 
   if (isFetching) {
@@ -537,34 +641,43 @@ function TravelAiRecommendationSection({ analysis, isFetching }: { analysis: any
   return (
     <View style={styles.aiSection}>
       <View style={styles.aiTitleRow}>
-        <Icon name="sparkles-outline" size={14} color={C.accent} />
-        <Text style={[styles.aiTitle, { color: C.accent }]}>HAVAMANIA AI ÖNERİLERİ</Text>
+        <Icon name={isPast ? "archive-outline" : "sparkles-outline"} size={14} color={isPast ? C.textMuted : C.accent} />
+        <Text style={[styles.aiTitle, { color: isPast ? C.textMuted : C.accent }]}>
+          {isPast ? "GEÇMİŞ SEYAHAT ÖZETİ" : "HAVAMANIA AI ÖNERİLERİ"}
+        </Text>
       </View>
 
       <View style={styles.aiGrid}>
-        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
-          <View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}>
-            <Icon name="airplane-outline" size={12} color="#3B82F6" />
-          </View>
-          <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
-            {analysis.status === 'ready' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}
-          </Text>
-        </View>
+        {!isPast && (
+          <>
+            <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
+              <View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}>
+                <Icon name="airplane-outline" size={12} color="#3B82F6" />
+              </View>
+              <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
+                {analysis.status === 'ready' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}
+              </Text>
+            </View>
 
-        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
-          <View style={[styles.aiMiniIcon, { backgroundColor: '#10B98120' }]}>
-            <Icon name="briefcase-outline" size={12} color="#10B981" />
-          </View>
-          <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
-            Valiz: {analysis.packing ? (Array.isArray(analysis.packing) ? analysis.packing.slice(0, 2).join(', ') : analysis.packing) : 'Standart'}
-          </Text>
-        </View>
+            <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}>
+              <View style={[styles.aiMiniIcon, { backgroundColor: '#10B98120' }]}>
+                <Icon name="briefcase-outline" size={12} color="#10B981" />
+              </View>
+              <Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>
+                Valiz: {analysis.packing ? (Array.isArray(analysis.packing) ? analysis.packing.slice(0, 2).join(', ') : analysis.packing) : 'Standart'}
+              </Text>
+            </View>
+          </>
+        )}
 
         <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)', flexBasis: '100%' }]}>
-          <View style={[styles.aiMiniIcon, { backgroundColor: analysis.color + '20' }]}>
-            <Icon name="bulb-outline" size={12} color={analysis.color} />
+          <View style={[styles.aiMiniIcon, { backgroundColor: (isPast ? C.textMuted : analysis.color) + '20' }]}>
+            <Icon name={isPast ? "information-circle-outline" : "bulb-outline"} size={12} color={isPast ? C.textMuted : analysis.color} />
           </View>
-          <Text style={[styles.aiMiniText, { color: C.text }]}>{analysis.msg}</Text>
+          <Text style={[styles.aiMiniText, { color: C.text }]}>
+            {analysis.msg}
+            {analysis.subMsg ? `\n\n${analysis.subMsg}` : ''}
+          </Text>
         </View>
       </View>
     </View>
@@ -662,6 +775,17 @@ const styles = StyleSheet.create({
   routeIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   cardCity: { fontSize: 22, fontWeight: '800' },
   cardDates: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  completedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  completedBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
   weatherSummary: { alignItems: 'flex-end', gap: 4 },
   cardTemp: { fontSize: 18, fontWeight: '800' },
 

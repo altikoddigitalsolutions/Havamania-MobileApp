@@ -155,4 +155,14 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
+
+    fun refreshDemoNotifications() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.refreshDemoNotifications()
+            } catch (e: Exception) {
+                Log.e("NotificationVM", "Error in refreshDemoNotifications", e)
+            }
+        }
+    }
 }
