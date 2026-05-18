@@ -4,34 +4,52 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.util.UUID
 
-enum class NotificationType {
-    TRAVEL, RAIN, UV, SUMMARY, WARNING, UPDATE, GENERAL, OTHER
+enum class NotificationCategory(val label: String) {
+    TRAVEL("Seyahat"),
+    RAIN("Yağmur"),
+    UV("UV"),
+    SUMMARY("Özet"),
+    WARNING("Uyarı"),
+    SYSTEM("Sistem"),
+    GENERAL("Genel"),
+    UPDATE("Güncelleme")
+}
+
+@Entity(tableName = "notifications")
+data class NotificationItem(
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    val title: String = "",
+    val message: String = "",
+    val category: NotificationCategory = NotificationCategory.GENERAL,
+    val createdAt: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false,
+    val deepLinkTarget: String? = null,
+    val relatedTripId: String? = null,
+    val actionLabel: String? = null
+) {
+    fun getSafeId(): String = id.ifBlank { UUID.randomUUID().toString() }
+    fun getSafeTitle(): String = title.ifBlank { "Bildirim" }
+    fun getSafeMessage(): String = message.ifBlank { "İçerik mevcut değil." }
 }
 
 enum class NotificationFilter {
     ALL, UNREAD, TRAVEL, RAIN, UV, WARNING, SUMMARY, UPDATE, GENERAL
 }
 
-data class AppNotification(
-    val id: String,
-    val title: String,
-    val message: String,
-    val type: NotificationType,
-    val timeText: String,
-    val isRead: Boolean = false,
-    val actionText: String? = null
-)
-
-fun NotificationType.getIcon(): ImageVector {
+fun NotificationCategory.getIcon(): ImageVector {
     return when (this) {
-        NotificationType.TRAVEL -> Icons.Rounded.Route
-        NotificationType.RAIN -> Icons.Rounded.WaterDrop
-        NotificationType.UV -> Icons.Rounded.WbSunny
-        NotificationType.WARNING -> Icons.Rounded.Warning
-        NotificationType.SUMMARY -> Icons.AutoMirrored.Rounded.Article
-        NotificationType.UPDATE -> Icons.Rounded.SystemUpdate
-        NotificationType.GENERAL -> Icons.Rounded.Info
-        NotificationType.OTHER -> Icons.Rounded.Notifications
+        NotificationCategory.TRAVEL -> Icons.Rounded.Route
+        NotificationCategory.RAIN -> Icons.Rounded.WaterDrop
+        NotificationCategory.UV -> Icons.Rounded.WbSunny
+        NotificationCategory.WARNING -> Icons.Rounded.Warning
+        NotificationCategory.SUMMARY -> Icons.AutoMirrored.Rounded.Article
+        NotificationCategory.UPDATE -> Icons.Rounded.SystemUpdate
+        NotificationCategory.SYSTEM -> Icons.Rounded.Settings
+        NotificationCategory.GENERAL -> Icons.Rounded.Info
     }
 }
