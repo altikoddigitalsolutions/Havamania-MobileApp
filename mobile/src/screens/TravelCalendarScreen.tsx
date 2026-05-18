@@ -419,7 +419,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
     if (isPastTrip) {
       return {
         status: 'past',
-        msg: `${plan.city} seyahatin ${formatDate(plan.endDate)}'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin.`,
+        msg: `${plan.city} seyahatin ${formatDate(plan.endDate)}'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin. Geçmiş hava verisi bu seyahat için artık güncel öneri üretmek amacıyla kullanılmıyor.`,
         icon: 'archive-outline',
         color: C.textMuted
       };
@@ -559,8 +559,8 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
               {isPastTrip && (
-                <View style={[styles.completedBadge, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }]}>
-                  <Text style={[styles.completedBadgeText, { color: C.textSecondary }]}>TAMAMLANDI</Text>
+                <View style={[styles.completedBadge, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 1 }]}>
+                  <Text style={[styles.completedBadgeText, { color: '#60A5FA' }]}>TAMAMLANDI</Text>
                 </View>
               )}
             </View>
@@ -592,7 +592,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
             <Text style={[styles.actionBtnText, { color: C.textSecondary }]}>Düzenle</Text>
           </TouchableOpacity>
 
-          {!isPastTrip && (
+          {!isPastTrip ? (
             <TouchableOpacity
               style={styles.actionBtn}
               onPress={() => {
@@ -602,6 +602,11 @@ function TravelCard({ plan, index, onEdit, onDelete, onReAnalyze }: {
             >
               <Icon name="sparkles" size={16} color={C.accent} />
               <Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+              <Icon name="stats-chart-outline" size={16} color={C.textMuted} />
+              <Text style={[styles.actionBtnText, { color: C.textMuted }]}>Geçmiş Özeti</Text>
             </TouchableOpacity>
           )}
 
