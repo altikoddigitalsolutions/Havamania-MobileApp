@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
 import com.havamania.ui.theme.AppTheme
+import java.time.LocalDateTime
+import java.time.LocalTime
 
 private const val TAG = "HourlyForecast"
 
@@ -111,10 +113,10 @@ fun HourlyForecastItem(
     )
 
     val phase = remember(data.time, sunriseTime, sunsetTime) {
-        val sunrise = try { java.time.LocalTime.parse(sunriseTime) } catch (e: Exception) { java.time.LocalTime.of(6, 30) }
-        val sunset = try { java.time.LocalTime.parse(sunsetTime) } catch (e: Exception) { java.time.LocalTime.of(19, 30) }
-        val timeObj = try { java.time.LocalTime.parse(data.time) } catch (e: Exception) { java.time.LocalTime.of(data.time.split(":")[0].toInt(), 0) }
-        val ldt = java.time.LocalDateTime.now().with(timeObj)
+        val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
+        val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+        val timeObj = try { LocalTime.parse(data.time) } catch (e: Exception) { LocalTime.of(data.time.split(":")[0].toInt(), 0) }
+        val ldt = LocalDateTime.now().with(timeObj)
         WeatherMapper.getDayPhase(ldt, sunrise, sunset)
     }
 
@@ -122,7 +124,7 @@ fun HourlyForecastItem(
         WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, data.isDay)
     }
 
-    val style = WeatherStyleResolver.resolve(condition, phase, currentTheme, data.isDay)
+    val spec = WeatherStyleResolver.resolveSpec(condition, phase, currentTheme)
 
     val itemAlpha by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.88f,
@@ -190,7 +192,7 @@ fun HourlyForecastItem(
             )
 
             Icon(
-                imageVector = style.icon,
+                imageVector = spec.mainIcon,
                 contentDescription = null,
                 modifier = Modifier.size(if (isSelected) 32.dp else 28.dp),
                 tint = if (isSelected) Color.White else themeColors.textPrimary

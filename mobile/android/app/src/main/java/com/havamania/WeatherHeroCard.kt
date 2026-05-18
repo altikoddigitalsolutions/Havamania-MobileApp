@@ -21,9 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.AppTheme
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.random.Random
 
@@ -209,8 +211,8 @@ fun WeatherHeroCard(
     val phase = remember(time, sunriseTime, sunsetTime) {
         val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
-        val dummyDate = java.time.LocalDate.now()
-        WeatherMapper.getDayPhase(java.time.LocalDateTime.of(dummyDate, time), sunrise, sunset)
+        val dummyDate = LocalDate.now()
+        WeatherMapper.getDayPhase(LocalDateTime.of(dummyDate, time), sunrise, sunset)
     }
 
     val condition = remember(weatherCode, isDay) { WeatherMapper.mapWeatherCodeToCondition(weatherCode, isDay) }
@@ -342,8 +344,12 @@ fun PremiumMoonEffect(spec: WeatherCardVisualSpec) {
 
         drawCircle(brush = Brush.radialGradient(0.0f to Color(0xFFFDE68A).copy(0.18f * glow), 1.0f to Color.Transparent, center = center, radius = 120.dp.toPx()), center = center, radius = 120.dp.toPx())
 
-        val path = Path().apply { addCircle(center.x, center.y, r, Path.Direction.CW) }
-        val clipPath = Path().apply { addCircle(center.x - r * 0.65f, center.y - r * 0.25f, r, Path.Direction.CW) }
+        val path = Path().apply {
+            addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
+        }
+        val clipPath = Path().apply {
+            addOval(Rect(center.x - r * 1.65f, center.y - r * 1.25f, center.x + r * 0.35f, center.y + r * 0.75f))
+        }
 
         drawContext.canvas.save()
         drawContext.canvas.clipPath(clipPath, ClipOp.Difference)
