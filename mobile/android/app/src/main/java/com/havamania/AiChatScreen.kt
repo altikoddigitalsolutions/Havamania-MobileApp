@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
@@ -58,10 +59,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val botId = "1"
     private var sessionId = UUID.randomUUID().toString()
 
-    private val repository: WeatherRepository by lazy {
-        val database = WeatherDatabase.getDatabase(application)
-        WeatherRepository(weatherDao = database.weatherDao())
-    }
+    private val repository = WeatherRepository.getInstance(application)
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -72,31 +70,55 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
     val config = _config.asStateFlow()
 
-    var weatherData: WeatherData? = null
+    private val _weatherData = MutableStateFlow<WeatherData?>(null)
+    val weatherData = _weatherData.asStateFlow()
+
     var userAboutMe: String = ""
     var userInterests: Set<String> = emptySet()
 
     init {
         loadConfig()
-        ensureWeatherData()
+        observeWeatherState()
     }
 
-    private fun ensureWeatherData() {
+    private fun observeWeatherState() {
         viewModelScope.launch {
-            if (weatherData != null) return@launch
-            try {
-                // Shared source of truth check: try to get from default city cache
-                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).firstOrNull()?.let { defaultCity ->
-                    repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
-                        .firstOrNull()?.let { data ->
-                            weatherData = data
-                            android.util.Log.d("HAVAMANIA_AI", "Weather data başarıyla alındı: ${data.cityName}")
-                        }
+            repository.currentWeatherState.collect { data ->
+                _weatherData.value = data
+                if (data != null) {
+                    android.util.Log.d("HAVAMANIA_AI", "Shared weather data received: ${data.cityName}")
+                    logWeatherState(data)
+                } else {
+                    android.util.Log.w("HAVAMANIA_AI", "Shared weather data is NULL")
+                    tryAutoFetch()
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("HAVAMANIA_AI", "Weather API Error: ${e.message}", e)
             }
         }
+    }
+
+    private fun tryAutoFetch() {
+        viewModelScope.launch {
+            try {
+                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).firstOrNull()?.let { defaultCity ->
+                    android.util.Log.d("HAVAMANIA_AI", "Auto-fetching weather for ${defaultCity.name}")
+                    repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district).collect {}
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HAVAMANIA_AI", "Auto-fetch failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun logWeatherState(data: WeatherData?) {
+        android.util.Log.d("HAVAMANIA_AI_DEBUG", """
+            Assistant weather state:
+            - currentWeather: ${data != null}
+            - temperature: ${data?.temperature}
+            - condition: ${data?.condition}
+            - city: ${data?.cityName}
+            - hourlyForecast size: ${data?.hourlyForecast?.size ?: 0}
+            - weather loaded bool: ${data != null}
+        """.trimIndent())
     }
 
     private fun loadConfig() {
@@ -104,73 +126,93 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val cfg = api.getConfig(botId)
                 _config.value = cfg
-                android.util.Log.d("HAVAMANIA_AI", "Bot config yüklendi: ${cfg.name}")
             } catch (e: Exception) {
                 android.util.Log.e("HAVAMANIA_AI", "Config loading Error", e)
             }
         }
     }
 
+    private fun cleanMarkdown(text: String): String {
+        return text.replace(Regex("\\*\\*"), "")
+            .replace(Regex("###"), "")
+            .replace(Regex("##"), "")
+            .replace(Regex("#"), "")
+            .replace(Regex("\\*"), "")
+            .replace(Regex("_"), "")
+            .trim()
+    }
+
+    private fun buildWeatherContext(): String {
+        val data = _weatherData.value ?: return "Hava durumu verisi şu an kullanılamıyor. Lütfen ana ekrandan hava durumunun yüklendiğinden emin ol."
+
+        val temp = data.temperature
+        val feelsLike = data.feelsLike
+        val cond = data.condition
+        val city = data.cityName
+        val humidity = data.humidity ?: "Bilinmiyor"
+        val wind = data.windSpeed ?: "Bilinmiyor"
+        val uv = data.uvIndex ?: "Bilinmiyor"
+        val precip = data.precipitationProbability ?: 0
+
+        val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
+        val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
+
+        return """
+            MEVCUT HAVA DURUMU (SİSTEM BİLGİSİ):
+            Şehir: $city
+            Sıcaklık: $temp, Hissedilen: $feelsLike
+            Durum: $cond
+            Nem: %$humidity
+            Rüzgar: $wind km/s
+            UV İndeksi: $uv
+            Yağış İhtimali: %$precip
+            Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
+            Günlük Tahmin (Gelecek 3 gün): $dailySummary
+
+            TALİMATLAR:
+            1. Cevaplarını doğal Türkçe ile, kısa paragraflar halinde ver.
+            2. Markdown formatı kullanma (** işaretlerini, # başlıklarını, _ italiklerini asla kullanma).
+            3. Kıyafet önerisi istendiğinde mutlaka şu formatı kullan:
+               - Bugün [Şehir]'da [Sıcaklık]°, hissedilen [Hissedilen]°
+               - Rüzgar [Düzey] (Düşük/Orta/Yüksek)
+               - Yağış ihtimali %[Yüzde]
+               - UV [İndeks]
+               - Öneri: [Kıyafetler]
+            4. Kullanıcı sormadıkça spor, kayak, kış sporları veya termal giysi gibi kişisel varsayımlarda bulunma.
+            5. Cevabın kısa, öz ve kart yapısına uygun olsun.
+        """.trimIndent()
+    }
+
     fun sendMessage(text: String, systemContext: String? = null, isRetry: Boolean = false) {
         if (text.isBlank() || _isLoading.value) return
-
-        if (botId.isBlank()) {
-            android.util.Log.e("HAVAMANIA_AI", "API KEY EMPTY (botId is blank)")
-        }
 
         val truncatedText = if (text.length > 4000) text.take(4000) else text
 
         if (!isRetry) {
             val userMsg = AltikodChatMessage(text = truncatedText, isUser = true)
-            // Duplicating check for quick clicks
-            val lastMsg = _messages.value.lastOrNull { it.isUser }
-            val isDuplicate = lastMsg != null && lastMsg.text == truncatedText && System.currentTimeMillis() - lastMsg.timestamp > 2000
-            if (!isDuplicate) {
-                _messages.value = _messages.value + userMsg
-            }
+            _messages.value = _messages.value + userMsg
         }
 
         _isLoading.value = true
 
-        val fullQuestion = if (systemContext != null) "$systemContext $truncatedText" else truncatedText
+        val weatherContext = buildWeatherContext()
+        val personalContext = systemContext ?: ""
+        val fullQuestion = "$weatherContext\n$personalContext\nKullanıcı: $truncatedText"
 
         viewModelScope.launch {
-            android.util.Log.d("HAVAMANIA_AI", "Prompt gönderiliyor: $truncatedText")
-
+            logWeatherState(_weatherData.value)
             try {
-                // AI Request
-                val response = kotlinx.coroutines.withTimeout(30000) {
+                val response = kotlinx.coroutines.withTimeout(35000) {
                     api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
                 }
 
-                val answer = response.answer
-                if (answer.isBlank()) {
-                    throw Exception("Empty response from AI")
-                }
-
-                android.util.Log.d("HAVAMANIA_AI", "AI Response alındı")
+                val answer = cleanMarkdown(response.answer)
+                if (answer.isBlank()) throw Exception("Empty response")
 
                 _messages.value = _messages.value + AltikodChatMessage(text = answer, isUser = false)
-            } catch (e: SocketTimeoutException) {
-                android.util.Log.e("HAVAMANIA_AI", "AI TIMEOUT ERROR", e)
-                addErrorMessage(truncatedText, "Bağlantı zaman aşımına uğradı.")
-            } catch (e: HttpException) {
-                android.util.Log.e("HAVAMANIA_AI", "AI HTTP ERROR code=${e.code()}", e)
-                val friendlyMessage = if (e.code() == 429) {
-                    "AI yoğunluğu nedeniyle şu an gelişmiş analiz oluşturulamıyor. Temel hava önerileri gösteriliyor."
-                } else {
-                    "AI bağlantısında kısa bir sorun yaşadım (HTTP ${e.code()})."
-                }
-                addErrorMessage(truncatedText, friendlyMessage)
-            } catch (e: IOException) {
-                android.util.Log.e("HAVAMANIA_AI", "AI NETWORK ERROR", e)
-                addErrorMessage(truncatedText, "İnternet bağlantısında bir sorun var.")
-            } catch (e: SerializationException) {
-                android.util.Log.e("HAVAMANIA_AI", "AI PARSE ERROR", e)
-                addErrorMessage(truncatedText, "Veri işlenirken bir hata oluştu.")
             } catch (e: Exception) {
-                android.util.Log.e("HAVAMANIA_AI", "AI ERROR", e)
-                addErrorMessage(truncatedText, "AI bağlantısında beklenmedik bir sorun yaşadım.")
+                android.util.Log.e("HAVAMANIA_AI", "AI ERROR: ${e.message}")
+                addErrorMessage(truncatedText, "Asistan şu an yoğun, yerel verilere göre yanıt veriyorum.")
             } finally {
                 _isLoading.value = false
             }
@@ -178,26 +220,16 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun addErrorMessage(userPrompt: String, prefix: String) {
-        val lastMsg = _messages.value.lastOrNull()
-        if (lastMsg?.isFallback == true && lastMsg.text.startsWith(prefix)) {
-            return // Duplicate protection
-        }
-
         try {
             val fallbackText = RecommendationEngine.generateAssistantFallbackReply(
                 userPrompt = userPrompt,
-                weatherData = weatherData,
+                weatherData = _weatherData.value,
                 aboutMe = userAboutMe,
                 interests = userInterests
             )
 
-            val combinedMessage = if (fallbackText.startsWith("AI bağlantısında kısa bir sorun yaşadım")) {
-                // RecommendationEngine already has its own prefix, we can merge or replace
-                if (weatherData != null) {
-                    "$prefix Ancak mevcut verilere göre önerilerim: " + fallbackText.substringAfter("yardımcı olayım. ")
-                } else {
-                    fallbackText
-                }
+            val combinedMessage = if (fallbackText.contains("Hava durumu bilgilerini")) {
+                fallbackText
             } else {
                 "$prefix $fallbackText"
             }
@@ -209,9 +241,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 retryPrompt = userPrompt
             )
         } catch (e: Exception) {
-            android.util.Log.e("HAVAMANIA_AI", "Recommendation generation Error", e)
             _messages.value = _messages.value + AltikodChatMessage(
-                text = "$prefix Şu an teknik bir sorun nedeniyle detaylı öneri sunamıyorum.",
+                text = "Hava durumuna şu an ulaşılamıyor, lütfen daha sonra tekrar deneyin.",
                 isUser = false,
                 isFallback = true,
                 retryPrompt = userPrompt
@@ -239,31 +270,27 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 @Composable
 fun AiChatScreen(
     initialRecommendation: HavamaniaRecommendation? = null,
-    weatherData: WeatherData? = null,
     onBack: () -> Unit,
     viewModel: AiChatViewModel = viewModel(),
     historyViewModel: AiHistoryViewModel = viewModel(),
     themeViewModel: ThemeViewModel = viewModel()
 ) {
     val themeColors = HavamaniaTheme.colors
-    val isDark = themeColors.isDark
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
+    val currentWeatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
 
-    // Sync data with ViewModel
-    LaunchedEffect(weatherData, aboutMe, userInterests) {
-        viewModel.weatherData = weatherData
+    // Sync non-weather data with ViewModel
+    LaunchedEffect(aboutMe, userInterests) {
         viewModel.userAboutMe = aboutMe
         viewModel.userInterests = userInterests
     }
 
     var showEndChatDialog by remember { mutableStateOf(false) }
-
     val bgColors = themeColors.gradientPrimary
-
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
@@ -273,10 +300,10 @@ fun AiChatScreen(
     }
 
     // İlk girdi (initialRecommendation) varsa gönder
-    LaunchedEffect(initialRecommendation) {
-        initialRecommendation?.let {
+    LaunchedEffect(initialRecommendation, currentWeatherData) {
+        if (initialRecommendation != null && currentWeatherData != null && messages.isEmpty()) {
             val context = buildPersonalizedContext(aboutMe, userInterests)
-            viewModel.sendMessage(it.message, systemContext = context)
+            viewModel.sendMessage(initialRecommendation.message, systemContext = context)
         }
     }
 
@@ -287,6 +314,7 @@ fun AiChatScreen(
             HavamaniaTopBar(
                 title = config?.name ?: "HAVAMANIA ASİSTAN",
                 onBack = onBack,
+                // ... rest of the TopBar logic ...
                 actions = {
                     if (messages.isNotEmpty()) {
                         Surface(
@@ -331,7 +359,22 @@ fun AiChatScreen(
                 }
             )
 
-            if (messages.isEmpty()) {
+            if (currentWeatherData == null && messages.isEmpty()) {
+                // Weather Loading State
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = themeColors.accent)
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Hava verisi yükleniyor...",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = themeColors.textPrimary.copy(alpha = 0.7f)
+                    )
+                }
+            } else if (messages.isEmpty()) {
                 // Başlangıç Ekranı (Empty State)
                 Column(
                     modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),

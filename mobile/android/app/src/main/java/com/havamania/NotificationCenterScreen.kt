@@ -106,10 +106,6 @@ fun NotificationCenterScreen(
         }
     }
 
-    LaunchedEffect(state.notifications.size) {
-        android.util.Log.d("NotificationScreen", "Notification UI list size: ${state.notifications.size}")
-    }
-
     LaunchedEffect(Unit) {
         viewModel.ensureSeeded()
     }
@@ -197,35 +193,56 @@ fun NotificationCenterScreen(
                     CircularProgressIndicator(color = themeColors.accent)
                 }
             } else {
-                val displayNotifications = remember(state.filteredNotifications) {
-                    if (state.filteredNotifications.isEmpty() && state.activeFilter == NotificationFilter.ALL) {
-                         DefaultNotifications.create()
-                    } else {
-                        state.filteredNotifications
+                // Guaranteed non-empty list logic
+                val notificationsToShow = if (state.notifications.isEmpty()) {
+                    DefaultNotifications.create()
+                } else {
+                    state.notifications
+                }
+
+                // Filter logic
+                val filteredList = remember(notificationsToShow, state.activeFilter) {
+                    when (state.activeFilter) {
+                        NotificationFilter.ALL -> notificationsToShow
+                        NotificationFilter.UNREAD -> notificationsToShow.filter { !it.isRead }
+                        NotificationFilter.TRAVEL -> notificationsToShow.filter { it.category == NotificationCategory.TRAVEL }
+                        NotificationFilter.RAIN -> notificationsToShow.filter { it.category == NotificationCategory.RAIN }
+                        NotificationFilter.UV -> notificationsToShow.filter { it.category == NotificationCategory.UV }
+                        NotificationFilter.WARNING -> notificationsToShow.filter { it.category == NotificationCategory.WARNING }
+                        NotificationFilter.SUMMARY -> notificationsToShow.filter { it.category == NotificationCategory.SUMMARY }
+                        NotificationFilter.UPDATE -> notificationsToShow.filter { it.category == NotificationCategory.UPDATE }
+                        NotificationFilter.GENERAL -> notificationsToShow.filter { it.category == NotificationCategory.GENERAL }
+                        NotificationFilter.SYSTEM -> notificationsToShow.filter { it.category == NotificationCategory.SYSTEM }
                     }
                 }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(displayNotifications, key = { it.id }) { notification ->
-                        val isSelected = state.selectedIds.contains(notification.id)
+                if (filteredList.isEmpty()) {
+                    EmptyNotificationState(
+                        onResetFilter = { viewModel.setFilter(NotificationFilter.ALL) }
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredList, key = { it.id }) { notification ->
+                            val isSelected = state.selectedIds.contains(notification.id)
 
-                        SwipeableNotificationItem(
-                            notification = notification,
-                            isSelected = isSelected,
-                            isSelectionMode = state.isSelectionMode,
-                            onClick = { handleNotificationClick(notification) },
-                            onLongClick = { viewModel.toggleSelection(notification.id) },
-                            onDelete = { viewModel.deleteNotification(notification.id) },
-                            onToggleRead = { viewModel.toggleReadStatus(notification.id) },
-                            onToggleSelection = { viewModel.toggleSelection(notification.id) },
-                            onNavigateToDetail = { screen, params ->
-                                handleNotificationClick(notification)
-                            }
-                        )
+                            SwipeableNotificationItem(
+                                notification = notification,
+                                isSelected = isSelected,
+                                isSelectionMode = state.isSelectionMode,
+                                onClick = { handleNotificationClick(notification) },
+                                onLongClick = { viewModel.toggleSelection(notification.id) },
+                                onDelete = { viewModel.deleteNotification(notification.id) },
+                                onToggleRead = { viewModel.toggleReadStatus(notification.id) },
+                                onToggleSelection = { viewModel.toggleSelection(notification.id) },
+                                onNavigateToDetail = { screen, params ->
+                                    handleNotificationClick(notification)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -575,7 +592,7 @@ fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun EmptyNotificationState(hasAnyNotifications: Boolean, onResetFilter: () -> Unit) {
+fun EmptyNotificationState(onResetFilter: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -583,23 +600,21 @@ fun EmptyNotificationState(hasAnyNotifications: Boolean, onResetFilter: () -> Un
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            imageVector = if (hasAnyNotifications) Icons.Rounded.SearchOff else Icons.Rounded.NotificationsNone,
+            imageVector = Icons.Rounded.SearchOff,
             contentDescription = null,
             modifier = Modifier.size(80.dp),
             tint = themeColors.accent.copy(alpha = 0.3f)
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = if (hasAnyNotifications) "Bu kategoride bildirim yok." else "Henüz bildiriminiz bulunmuyor.",
+            text = "Bu kategoride filtreye uygun bildirim bulunamadı.",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
-        if (hasAnyNotifications) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onResetFilter, colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)) {
-                Text("TÜMÜNÜ GÖSTER", fontWeight = FontWeight.Bold)
-            }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onResetFilter, colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)) {
+            Text("FİLTREYİ TEMİZLE", fontWeight = FontWeight.Bold)
         }
     }
 }

@@ -53,7 +53,8 @@ data class WeatherCardVisualSpec(
     val isDark: Boolean,
     val cloudColor: Color = Color.White,
     val isEvening: Boolean = false,
-    val isNight: Boolean = false
+    val isNight: Boolean = false,
+    val isDawn: Boolean = false
 )
 
 object WeatherStyleResolver {
@@ -64,10 +65,10 @@ object WeatherStyleResolver {
         val isDawn = phase == DayPhase.DAWN
         val isDay = phase == DayPhase.DAY
 
-        // 1. Base Colors by Condition & Phase
+        // 1. Base Colors by Condition & Phase - Refined for premium contrast
         val baseColors = when {
             isEvening -> when (condition) {
-                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm -> listOf(Color(0xFF475569), Color(0xFF1E293B), Color(0xFFF97316), Color(0xFF7C2D12))
+                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm -> listOf(Color(0xFF334155), Color(0xFF1E293B), Color(0xFFF97316), Color(0xFF7C2D12))
                 else -> listOf(Color(0xFFFDBA3B), Color(0xFFF97316), Color(0xFFEF5D60), Color(0xFF7C2D12))
             }
             isNight -> listOf(Color(0xFF07111F), Color(0xFF0F1B33), Color(0xFF1E1B4B), Color(0xFF111827))
@@ -85,19 +86,19 @@ object WeatherStyleResolver {
             }
         }
 
-        // 2. Effect Mapping
+        // 2. Effect Mapping - Fixed Priorities
         val effectType = when {
-            windSpeed > 30f && condition !is WeatherCondition.Rain && condition !is WeatherCondition.Thunderstorm -> VisualEffectType.WIND
-            condition is WeatherCondition.Clear -> if (isNight) VisualEffectType.MOON else VisualEffectType.SUN
-            condition is WeatherCondition.MostlySunny || condition is WeatherCondition.PartlyCloudy -> if (isNight) VisualEffectType.MOON else VisualEffectType.SUN
+            windSpeed > 35f && condition !is WeatherCondition.Rain && condition !is WeatherCondition.Thunderstorm -> VisualEffectType.WIND
             condition is WeatherCondition.Rain -> VisualEffectType.RAIN
             condition is WeatherCondition.Thunderstorm -> VisualEffectType.THUNDER
             condition is WeatherCondition.Snow -> VisualEffectType.SNOW
             condition is WeatherCondition.Fog -> VisualEffectType.FOG
+            condition is WeatherCondition.Clear -> if (isNight) VisualEffectType.MOON else VisualEffectType.SUN
+            condition is WeatherCondition.MostlySunny || condition is WeatherCondition.PartlyCloudy -> if (isNight) VisualEffectType.MOON else VisualEffectType.SUN
             else -> VisualEffectType.NONE
         }
 
-        // 3. Density & Focus
+        // 3. Density & Focus - Balanced for initial screen load
         val cloudDensity = when (condition) {
             is WeatherCondition.Clear -> 0
             is WeatherCondition.MostlySunny -> 2
@@ -115,8 +116,8 @@ object WeatherStyleResolver {
             else -> Offset(0.82f, 0.22f)
         }
 
-        // Text Color Logic: Automatic selection based on background brightness
-        val isBrightBackground = (isDay || isDawn) && (condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || condition is WeatherCondition.Snow || condition is WeatherCondition.PartlyCloudy)
+        // Text Color Logic: Improved for visibility in rainy day/snow
+        val isBrightBackground = (isDay || isDawn) && (condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || condition is WeatherCondition.Snow)
         val isDark = !isBrightBackground
 
         val textColor = if (isDark) Color.White else Color(0xFF0F172A)
@@ -158,7 +159,8 @@ object WeatherStyleResolver {
                 isDark = isDark,
                 cloudColor = cloudColor,
                 isEvening = isEvening,
-                isNight = isNight
+                isNight = isNight,
+                isDawn = isDawn
             ), theme
         )
     }
@@ -295,16 +297,16 @@ fun LiveBackgroundLayer(spec: WeatherCardVisualSpec) {
         }
 
         // Ambient glows - more dramatic
-        val scatteringColor = if (spec.isEvening) Color(0xFFFF7A3D) else if (spec.isNight) Color(0xFF1E1B4B) else Color(0xFFFFD166)
+        val scatteringColor = if (spec.isEvening) Color(0xFFFF7A3D) else if (spec.isNight) Color(0xFF1E1B4B) else if (spec.isDawn) Color(0xFFFFD1D1) else Color(0xFFFFD166)
         drawCircle(
             brush = Brush.radialGradient(
-                0.0f to scatteringColor.copy(0.15f),
+                0.0f to scatteringColor.copy(0.18f),
                 1.0f to Color.Transparent,
                 center = sunCenter,
-                radius = size.width * 1.5f
+                radius = size.width * 1.6f
             ),
             center = sunCenter,
-            radius = size.width * 1.5f
+            radius = size.width * 1.6f
         )
     }
 }
@@ -370,9 +372,19 @@ fun PremiumSunEffect(spec: WeatherCardVisualSpec) {
     val energy by infiniteTransition.animateFloat(1f, 1.015f, infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_energy")
 
     val isEvening = spec.isEvening
-    val sunRadiusBase = if (isEvening) 46.dp else 36.dp
-    val coreColors = if (isEvening) listOf(Color(0xFFFFF9C4), Color(0xFFFFB74D), Color(0xFFF97316)) else listOf(Color(0xFFFFFDF0), Color(0xFFFFF3C4), Color(0xFFFFD166))
-    val atmosphereColor = if (isEvening) Color(0xFFE85D75) else Color(0xFFFFB703)
+    val isDawn = spec.isDawn
+
+    val sunRadiusBase = if (isEvening || isDawn) 46.dp else 36.dp
+    val coreColors = when {
+        isEvening -> listOf(Color(0xFFFFF9C4), Color(0xFFFFB74D), Color(0xFFF97316))
+        isDawn -> listOf(Color(0xFFFFFDF0), Color(0xFFFFE4E1), Color(0xFFFFC0CB))
+        else -> listOf(Color(0xFFFFFDF0), Color(0xFFFFF3C4), Color(0xFFFFD166))
+    }
+    val atmosphereColor = when {
+        isEvening -> Color(0xFFE85D75)
+        isDawn -> Color(0xFFFFB6C1)
+        else -> Color(0xFFFFB703)
+    }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
@@ -436,10 +448,10 @@ fun CloudDriftEffect(count: Int, color: Color) {
     val clouds = remember(count) {
         List(count) { i ->
             CloudState(
-                x = (i.toFloat() / count), // Evenly distribute initial positions 0..1
-                y = Random.nextFloat() * 0.4f + 0.05f,
-                scale = 0.6f + Random.nextFloat() * 1.0f,
-                speed = 0.3f + Random.nextFloat() * 0.7f,
+                x = (i.toFloat() / count) + (Random.nextFloat() * 0.1f), // Better distribution spread
+                y = (i % 3) * 0.12f + 0.05f + (Random.nextFloat() * 0.05f), // Layered Y distribution
+                scale = 0.7f + Random.nextFloat() * 1.0f,
+                speed = 0.25f + Random.nextFloat() * 0.5f, // Slightly slower for more premium feel
                 opacity = if (i % 2 == 0) 0.35f else 0.22f
             )
         }
@@ -521,20 +533,25 @@ fun FogHazeEffect() {
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        // Background haze layer
-        drawRect(Color.White.copy(alpha = 0.15f))
+        // 1. Background haze layer - Base for depth
+        drawRect(Color.White.copy(alpha = 0.18f))
 
+        // 2. Horizontal fog bands - Multi-layered
         repeat(5) { i ->
-            val xBase = -100f + d * (i + 1) * 0.3f
-            val yPos = size.height * (0.2f + i * 0.15f)
-            val h = (40.dp + (20.dp * i)).toPx()
+            val xBase = -150f + d * (i + 1) * 0.4f
+            val yPos = size.height * (0.15f + i * 0.18f)
+            val h = (50.dp + (25.dp * i)).toPx()
 
             drawRect(
                 Brush.verticalGradient(
-                    listOf(Color.Transparent, Color.White.copy(alpha = 0.1f * (i+1) * op), Color.Transparent)
+                    listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.12f * (i+1) * op),
+                        Color.Transparent
+                    )
                 ),
                 Offset(xBase, yPos),
-                Size(size.width + 300f, h)
+                Size(size.width + 400f, h)
             )
         }
     }

@@ -17,9 +17,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
 
-    private val repository: WeatherRepository by lazy {
-        WeatherRepository(weatherDao = dao)
-    }
+    private val repository = WeatherRepository.getInstance(application)
 
     private val apiService = NetworkModule.apiService
 

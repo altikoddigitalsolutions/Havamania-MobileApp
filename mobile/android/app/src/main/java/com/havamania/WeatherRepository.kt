@@ -1,7 +1,11 @@
 package com.havamania
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -13,6 +17,23 @@ class WeatherRepository(
     private val weatherDao: WeatherDao
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    private val _currentWeatherState = MutableStateFlow<WeatherData?>(null)
+    val currentWeatherState: StateFlow<WeatherData?> = _currentWeatherState.asStateFlow()
+
+    companion object {
+        @Volatile
+        private var INSTANCE: WeatherRepository? = null
+
+        fun getInstance(application: android.app.Application): WeatherRepository {
+            return INSTANCE ?: synchronized(this) {
+                val database = WeatherDatabase.getDatabase(application)
+                val instance = WeatherRepository(weatherDao = database.weatherDao())
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 
     suspend fun clearCache(cityName: String) {
         try {
@@ -37,23 +58,25 @@ class WeatherRepository(
     /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker
      */
-    fun getWeatherData(lat: Double, lon: Double, cityName: String, districtName: String? = null): Flow<WeatherData> = flow {
+    fun getWeatherData(lat: Double, lon: Double, cityName: String, districtName: String? = null, forceRefresh: Boolean = false): Flow<WeatherData> = flow {
         var hasEmitted = false
         // unique key for cache
         val cacheKey = if (districtName != null) "$cityName-$districtName" else cityName
 
-        // 1. Cache'den oku
-        val cachedEntity = weatherDao.getCachedWeather(cacheKey)
-        if (cachedEntity != null) {
-            try {
-                val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
-                // Eğer kritik veriler null değilse cache'i dön
-                if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
-                    emit(cachedData)
-                    hasEmitted = true
+        // 1. Cache'den oku (unless forceRefresh)
+        if (!forceRefresh) {
+            val cachedEntity = weatherDao.getCachedWeather(cacheKey)
+            if (cachedEntity != null) {
+                try {
+                    val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
+                    // Eğer kritik veriler null değilse cache'i dön
+                    if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
+                        emit(cachedData)
+                        hasEmitted = true
+                    }
+                } catch (e: Exception) {
+                    // Cache bozuksa görmezden gel
                 }
-            } catch (e: Exception) {
-                // Cache bozuksa görmezden gel
             }
         }
 
@@ -81,5 +104,5 @@ class WeatherRepository(
             // Eğer hiçbir veri dönemediysek hata fırlat
             if (!hasEmitted) throw e
         }
-    }
+    }.onEach { _currentWeatherState.value = it }
 }

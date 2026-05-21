@@ -41,15 +41,18 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     .collect { list ->
                         Log.d("Notifications", "collected size=${list.size}")
 
-                        if (list.isEmpty() && !didSeedInThisSession) {
-                            didSeedInThisSession = true
-                            Log.d("Notifications", "Collected list is empty. Triggering seed...")
-                            withContext(Dispatchers.IO) {
-                                repository.seedInitialDataIfNeeded()
+                        if (list.isEmpty()) {
+                            Log.d("Notifications", "List is truly empty. Forcing DefaultNotifications UI fallback.")
+                            updateStateWithList(DefaultNotifications.create())
+
+                            if (!didSeedInThisSession) {
+                                didSeedInThisSession = true
+                                withContext(Dispatchers.IO) {
+                                    repository.seedInitialDataIfNeeded()
+                                }
                             }
                         } else {
-                            val finalList = if (list.isEmpty()) DefaultNotifications.create() else list
-                            updateStateWithList(finalList)
+                            updateStateWithList(list)
                         }
                     }
             } catch (e: Exception) {

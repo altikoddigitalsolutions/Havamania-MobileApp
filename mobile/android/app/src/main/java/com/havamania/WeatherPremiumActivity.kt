@@ -109,7 +109,6 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 composable(Routes.AI) {
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
-                                        weatherData = activeWeatherData,
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()

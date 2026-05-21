@@ -16,7 +16,18 @@ object RecommendationEngine {
         val todayDaily = weatherData.dailyForecast.firstOrNull { it.isToday } ?: weatherData.dailyForecast.firstOrNull()
         val tempMin = todayDaily?.minTemp ?: 10
         val tempMax = todayDaily?.maxTemp ?: 20
-        val condition = weatherData.condition.lowercase()
+
+        // Refined condition normalization to match visual system
+        val rawCondition = weatherData.condition.lowercase()
+        val condition = when {
+            rawCondition.contains("yağmur") || rawCondition.contains("sağanak") -> "yağmurlu"
+            rawCondition.contains("bulut") && rawCondition.contains("parça") -> "parçalı bulutlu"
+            rawCondition.contains("bulut") -> "bulutlu"
+            rawCondition.contains("güneş") || rawCondition.contains("açık") -> "açık ve güneşli"
+            rawCondition.contains("sis") -> "sisli"
+            else -> rawCondition
+        }
+
         val city = weatherData.cityName
 
         val uvIndex = weatherData.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() }?.toIntOrNull() ?: 0
@@ -131,7 +142,7 @@ object RecommendationEngine {
         val prompt = userPrompt.lowercase()
 
         if (weatherData == null) {
-            return "AI bağlantısında kısa bir sorun yaşadım. Şu an güncel hava durumu verilerine de ulaşamıyorum. Lütfen internet bağlantını kontrol edip tekrar dene."
+            return "Hava durumu bilgilerini şu an tam olarak alamadım. Lütfen daha sonra tekrar dene."
         }
 
         val city = weatherData.cityName
@@ -142,7 +153,7 @@ object RecommendationEngine {
         val wind = weatherData.windSpeed ?: 0.0
         val uv = weatherData.uvIndex ?: 0
 
-        val baseHeader = "AI bağlantısında kısa bir sorun yaşadım ama mevcut hava verilerine göre yardımcı olayım. "
+        val baseHeader = "Son güncellenen hava verisine göre yardımcı olayım: "
         val currentStatus = "$city’da şu an hava $cond, sıcaklık $temp ve hissedilen $feelsLike. "
 
         return when {

@@ -145,7 +145,6 @@ class WeatherActivity : ComponentActivity() {
                                 ) {
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
-                                        weatherData = activeWeatherData,
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()

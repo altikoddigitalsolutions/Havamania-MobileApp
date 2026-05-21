@@ -359,12 +359,12 @@ object WeatherMapper {
 
         return when {
             // DAWN: sunrise ± 60 dakika
-            current.isAfter(sunrise.minusMinutes(60)) && current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.DAWN
+            !current.isBefore(sunrise.minusMinutes(60)) && current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.DAWN
             // EVENING: sunset ± 90 dakika
-            current.isAfter(sunset.minusMinutes(90)) && current.isBefore(sunset.plusMinutes(90)) -> DayPhase.EVENING
-            // DAY: Sunrise sonrası ve sunset öncesi
-            current.isAfter(sunrise.plusMinutes(59)) && current.isBefore(sunset.minusMinutes(89)) -> DayPhase.DAY
-            // NIGHT: Diğer tüm durumlar (Güneş battıktan sonra veya doğmadan önce)
+            !current.isBefore(sunset.minusMinutes(90)) && current.isBefore(sunset.plusMinutes(90)) -> DayPhase.EVENING
+            // DAY: DAWN sonrası ve EVENING öncesi
+            !current.isBefore(sunrise.plusMinutes(60)) && current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
+            // NIGHT: Diğer tüm durumlar
             else -> DayPhase.NIGHT
         }
     }

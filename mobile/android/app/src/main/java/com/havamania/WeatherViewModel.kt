@@ -20,10 +20,7 @@ class WeatherViewModel(
     application: Application
 ) : AndroidViewModel(application) {
 
-    private val repository: WeatherRepository by lazy {
-        val database = WeatherDatabase.getDatabase(application)
-        WeatherRepository(weatherDao = database.weatherDao())
-    }
+    private val repository = WeatherRepository.getInstance(application)
 
     private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
 
