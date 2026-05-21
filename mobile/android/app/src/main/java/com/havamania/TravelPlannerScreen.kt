@@ -65,6 +65,11 @@ fun TravelPlannerScreen(
     val allPlans by viewModel.plans.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
+    val themeColors = HavamaniaTheme.colors
+
+    LaunchedEffect(allPlans.size) {
+        android.util.Log.d("TravelPlannerScreen", "Trip UI list size: ${allPlans.size}")
+    }
 
     val today = LocalDate.now()
     val plans = remember(allPlans, selectedFilter) {
@@ -96,6 +101,13 @@ fun TravelPlannerScreen(
                 title = "Seyahat Takvimi",
                 onBack = onBack,
                 actions = {
+                    IconButton(onClick = { viewModel.seedInitialDataIfNeeded(force = true) }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = "Test Verilerini Yükle",
+                            tint = themeColors.textSecondary
+                        )
+                    }
                     IconButton(onClick = { selectedFilter = TravelFilter.ARCHIVED }) {
                         Icon(
                             imageVector = Icons.Rounded.Archive,
@@ -419,41 +431,146 @@ fun TravelPlanCard(
 @Composable
 fun PastTripDetailDialog(plan: TravelPlan, onDismiss: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
+    val summary = remember(plan) { TravelAiHelper.generateHistorySummary(plan) }
+
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         HavamaniaScreen(
-            topBar = { HavamaniaTopBar(title = "Geçmiş Seyahat Özeti", onBack = onDismiss) }
+            topBar = { HavamaniaTopBar(title = "Seyahat Hava Raporu", onBack = onDismiss) }
         ) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
-                Text(text = plan.city, style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                Text(text = "${plan.startDate} - ${plan.endDate}", style = MaterialTheme.typography.titleMedium, color = themeColors.textSecondary)
-
-                Spacer(Modifier.height(32.dp))
-
-                DetailSection(title = "HAVA DURUMU KAYITLARI", icon = Icons.Rounded.CloudDone) {
-                    Text(
-                        text = "Bu seyahat için kayıtlı detaylı hava geçmişi bulunmuyor. Ancak seyahat notların ve önceki analiz önerilerin saklandı.",
-                        color = themeColors.textSecondary,
-                        lineHeight = 22.sp
-                    )
-                }
-
-                if (!plan.aiSuggestion.isNullOrBlank()) {
-                    Spacer(Modifier.height(16.dp))
-                    DetailSection(title = "AI ANALİZ ÖNERİLERİ", icon = Icons.Rounded.AutoAwesome) {
-                        Text(text = plan.aiSuggestion, color = themeColors.textSecondary, lineHeight = 22.sp)
+                // Header Card
+                HavamaniaGlassCard(modifier = Modifier.fillMaxWidth(), alpha = 0.9f) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(70.dp)
+                                .background(themeColors.accent.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(plan.tripType.icon, null, tint = themeColors.accent, modifier = Modifier.size(36.dp))
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(text = plan.city.uppercase(), style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = themeColors.textPrimary)
+                        Text(text = "${summary.durationDays} Günlük Seyahat", style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary)
+                        Spacer(Modifier.height(8.dp))
+                        val trLocale = Locale("tr")
+                        Text(text = "${plan.startDate.format(DateTimeFormatter.ofPattern("d MMMM", trLocale))} - ${plan.endDate.format(DateTimeFormatter.ofPattern("d MMMM yyyy", trLocale))}", style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
                     }
                 }
 
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(20.dp))
+
+                // Stats Row
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HistoryStatChip(
+                        label = "ORT. SIC.",
+                        value = "${summary.averageTemp}°",
+                        icon = Icons.Rounded.Thermostat,
+                        modifier = Modifier.weight(1f)
+                    )
+                    HistoryStatChip(
+                        label = "KONFOR",
+                        value = "%${summary.comfortScore}",
+                        icon = Icons.Rounded.Verified,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                DetailSection(title = "GENEL HAVA ÖZETİ", icon = Icons.Rounded.AutoAwesome) {
+                    Text(text = summary.summaryText, color = themeColors.textSecondary, lineHeight = 22.sp, style = MaterialTheme.typography.bodyMedium)
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                DetailSection(title = "SICAKLIK ARALIĞI", icon = Icons.Rounded.DeviceThermostat) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            Text("En Düşük", style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
+                            Text("${summary.minTemp}°", style = MaterialTheme.typography.titleLarge, color = Color(0xFF3B82F6), fontWeight = FontWeight.Black)
+                        }
+                        Box(modifier = Modifier.weight(1f).padding(horizontal = 24.dp).height(4.dp).clip(CircleShape).background(themeColors.divider.copy(alpha = 0.2f))) {
+                             Box(modifier = Modifier.fillMaxWidth(0.6f).align(Alignment.Center).height(4.dp).clip(CircleShape).background(themeColors.accent))
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("En Yüksek", style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
+                            Text("${summary.maxTemp}°", style = MaterialTheme.typography.titleLarge, color = Color(0xFFEF4444), fontWeight = FontWeight.Black)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                DetailSection(title = "YAĞIŞ VE BULUTLULUK", icon = Icons.Rounded.Cloud) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        WeatherDistributionRow("Güneşli", summary.sunnyDays, summary.durationDays, Color(0xFFFBBF24))
+                        WeatherDistributionRow("Bulutlu", summary.cloudyDays, summary.durationDays, Color(0xFF94A3B8))
+                        WeatherDistributionRow("Yağmurlu", summary.rainyDays, summary.durationDays, Color(0xFF3B82F6))
+
+                        Spacer(Modifier.height(8.dp))
+                        Text(text = "RİSKLİ GÜN: ${summary.riskDayText}", style = MaterialTheme.typography.labelSmall, color = themeColors.warning, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                DetailSection(title = "VALİZ NOTLARI", icon = Icons.Rounded.WorkOutline) {
+                    Text(text = summary.packingAdvice, color = themeColors.textSecondary, lineHeight = 22.sp)
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                DetailSection(title = "BU ROTAYI TEKRAR PLANLA", icon = Icons.Rounded.TipsAndUpdates) {
+                    Text(text = summary.nextTripAdvice, color = themeColors.textSecondary, lineHeight = 22.sp)
+                }
+
+                Spacer(Modifier.height(32.dp))
+
                 HavamaniaPrimaryButton(
-                    text = "Bu Rotayı Tekrar Planla",
+                    text = "YENİDEN PLANLA",
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Rounded.AddLocationAlt
                 )
+
+                Spacer(Modifier.height(40.dp))
             }
         }
+    }
+}
+
+@Composable
+fun HistoryStatChip(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
+    val themeColors = HavamaniaTheme.colors
+    HavamaniaGlassCard(modifier = modifier, alpha = 0.5f) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.height(8.dp))
+            Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = themeColors.textPrimary)
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
+        }
+    }
+}
+
+@Composable
+fun WeatherDistributionRow(label: String, days: Int, total: Int, color: Color) {
+    val themeColors = HavamaniaTheme.colors
+    val percentage = if (total > 0) days.toFloat() / total else 0f
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text = label, modifier = Modifier.width(70.dp), style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+        Box(modifier = Modifier.weight(1f).height(8.dp).clip(CircleShape).background(color.copy(alpha = 0.1f))) {
+            Box(modifier = Modifier.fillMaxWidth(percentage).fillMaxHeight().clip(CircleShape).background(color))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(text = "$days GÜN", style = MaterialTheme.typography.labelSmall, color = themeColors.textPrimary, fontWeight = FontWeight.Bold)
     }
 }
 

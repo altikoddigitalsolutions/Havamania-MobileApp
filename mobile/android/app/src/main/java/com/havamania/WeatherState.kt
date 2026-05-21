@@ -77,7 +77,7 @@ data class WeatherDetailData(
     val isSelected: Boolean = false
 )
 
-enum class DayPhase { NIGHT, SUNRISE, DAY, SUNSET }
+enum class DayPhase { NIGHT, DAWN, DAY, EVENING }
 
 sealed class WeatherCondition {
     object Clear : WeatherCondition()

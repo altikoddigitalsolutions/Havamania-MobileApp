@@ -19,6 +19,19 @@ enum class NotificationCategory(val label: String) {
     UPDATE("Güncelleme")
 }
 
+enum class NotificationActionType {
+    WEATHER_HOME,
+    TRAVEL_CALENDAR,
+    TRAVEL_DETAIL,
+    HOURLY_FORECAST,
+    DAILY_FORECAST,
+    UV_DETAIL,
+    WEATHER_ALERT,
+    WEEKLY_SUMMARY,
+    APP_UPDATE,
+    NONE
+}
+
 @Entity(tableName = "notifications")
 data class NotificationItem(
     @PrimaryKey
@@ -28,6 +41,8 @@ data class NotificationItem(
     val category: NotificationCategory = NotificationCategory.GENERAL,
     val createdAt: Long = System.currentTimeMillis(),
     val isRead: Boolean = false,
+    val actionType: NotificationActionType = NotificationActionType.NONE,
+    val targetId: String? = null,
     val deepLinkTarget: String? = null,
     val relatedTripId: String? = null,
     val actionLabel: String? = null,
@@ -39,7 +54,7 @@ data class NotificationItem(
 }
 
 enum class NotificationFilter {
-    ALL, UNREAD, TRAVEL, RAIN, UV, WARNING, SUMMARY, UPDATE, GENERAL
+    ALL, UNREAD, TRAVEL, RAIN, UV, WARNING, SUMMARY, UPDATE, GENERAL, SYSTEM
 }
 
 fun NotificationCategory.getIcon(): ImageVector {

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -14,13 +15,14 @@ data class NotificationUiState(
     val unreadCount: Int = 0,
     val selectedIds: Set<String> = emptySet(),
     val isSelectionMode: Boolean = false,
-    val activeFilter: NotificationCategory? = null,
+    val activeFilter: NotificationFilter = NotificationFilter.ALL,
     val isLoading: Boolean = false
 )
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "NotificationVM"
     private val repository: NotificationRepository
+    private var didSeedInThisSession = false
 
     private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
@@ -29,24 +31,43 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         val database = NotificationDatabase.getDatabase(application)
         repository = NotificationRepository(database.notificationDao())
 
-        // Observe all notifications from Room
         viewModelScope.launch {
-            repository.allNotifications
-                .catch { e ->
-                    Log.e(TAG, "Failed to fetch notifications", e)
-                    emit(emptyList())
-                }
-                .collect { list ->
-                    updateStateWithList(list)
-                }
+            try {
+                repository.allNotifications
+                    .catch { e ->
+                        Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting defaults.", e)
+                        emit(DefaultNotifications.create())
+                    }
+                    .collect { list ->
+                        Log.d("Notifications", "collected size=${list.size}")
+
+                        if (list.isEmpty() && !didSeedInThisSession) {
+                            didSeedInThisSession = true
+                            Log.d("Notifications", "Collected list is empty. Triggering seed...")
+                            withContext(Dispatchers.IO) {
+                                repository.seedInitialDataIfNeeded()
+                            }
+                        } else {
+                            val finalList = if (list.isEmpty()) DefaultNotifications.create() else list
+                            updateStateWithList(finalList)
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Fatal error in collect chain. Forcing defaults.", e)
+                updateStateWithList(DefaultNotifications.create())
+            }
+        }
+    }
+
+    fun ensureSeeded() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.seedInitialDataIfNeeded()
         }
     }
 
     private fun updateStateWithList(list: List<NotificationItem>) {
         _uiState.update { current ->
-            val filtered = list.filter { item ->
-                current.activeFilter == null || item.category == current.activeFilter
-            }
+            val filtered = filterNotifications(list, current.activeFilter)
             current.copy(
                 notifications = list,
                 filteredNotifications = filtered,
@@ -57,13 +78,26 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun setFilter(category: NotificationCategory?) {
+    private fun filterNotifications(list: List<NotificationItem>, filter: NotificationFilter): List<NotificationItem> {
+        return when (filter) {
+            NotificationFilter.ALL -> list
+            NotificationFilter.UNREAD -> list.filter { !it.isRead }
+            NotificationFilter.TRAVEL -> list.filter { it.category == NotificationCategory.TRAVEL }
+            NotificationFilter.RAIN -> list.filter { it.category == NotificationCategory.RAIN }
+            NotificationFilter.UV -> list.filter { it.category == NotificationCategory.UV }
+            NotificationFilter.WARNING -> list.filter { it.category == NotificationCategory.WARNING }
+            NotificationFilter.SUMMARY -> list.filter { it.category == NotificationCategory.SUMMARY }
+            NotificationFilter.UPDATE -> list.filter { it.category == NotificationCategory.UPDATE }
+            NotificationFilter.GENERAL -> list.filter { it.category == NotificationCategory.GENERAL }
+            NotificationFilter.SYSTEM -> list.filter { it.category == NotificationCategory.SYSTEM }
+        }
+    }
+
+    fun setFilter(filter: NotificationFilter) {
         _uiState.update { current ->
-            val filtered = current.notifications.filter { item ->
-                category == null || item.category == category
-            }
+            val filtered = filterNotifications(current.notifications, filter)
             current.copy(
-                activeFilter = category,
+                activeFilter = filter,
                 filteredNotifications = filtered,
                 selectedIds = if (current.isSelectionMode) emptySet() else current.selectedIds,
                 isSelectionMode = false

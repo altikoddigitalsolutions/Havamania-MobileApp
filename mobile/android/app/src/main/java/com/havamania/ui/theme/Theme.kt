@@ -144,13 +144,19 @@ fun HavamaniaTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = animatedColors.gradientPrimary[0].toArgb()
-            window.navigationBarColor = animatedColors.gradientPrimary.last().toArgb()
+            val context = view.context
+            val activity = if (context is Activity) context
+                          else if (context is android.content.ContextWrapper) context.baseContext as? Activity
+                          else null
 
-            val insetsController = WindowCompat.getInsetsController(window, view)
-            insetsController.isAppearanceLightStatusBars = !animatedColors.isDark
-            insetsController.isAppearanceLightNavigationBars = !animatedColors.isDark
+            activity?.window?.let { window ->
+                window.statusBarColor = animatedColors.gradientPrimary[0].toArgb()
+                window.navigationBarColor = animatedColors.gradientPrimary.last().toArgb()
+
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !animatedColors.isDark
+                insetsController.isAppearanceLightNavigationBars = !animatedColors.isDark
+            }
         }
     }
 

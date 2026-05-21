@@ -50,6 +50,70 @@ fun NotificationCenterScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // To prevent double clicks/crashes during rapid navigation
+    val processingIds = remember { mutableStateListOf<String>() }
+
+    val handleNotificationClick = remember(onNavigateToDetail) {
+        { notification: NotificationItem ->
+            if (!processingIds.contains(notification.id)) {
+                processingIds.add(notification.id)
+                viewModel.markAsRead(notification.id)
+
+                try {
+                    when (notification.actionType) {
+                        NotificationActionType.WEATHER_HOME,
+                        NotificationActionType.HOURLY_FORECAST,
+                        NotificationActionType.DAILY_FORECAST,
+                        NotificationActionType.UV_DETAIL,
+                        NotificationActionType.WEATHER_ALERT -> {
+                            onNavigateToDetail(Routes.WEATHER, null)
+                        }
+                        NotificationActionType.TRAVEL_CALENDAR -> {
+                            onNavigateToDetail(Routes.CALENDAR, null)
+                        }
+                        NotificationActionType.TRAVEL_DETAIL -> {
+                            val tripId = notification.targetId
+                            if (!tripId.isNullOrBlank()) {
+                                onNavigateToDetail("${Routes.CALENDAR}?focusId=$tripId", mapOf("focusId" to tripId))
+                            } else {
+                                onNavigateToDetail(Routes.CALENDAR, null)
+                            }
+                        }
+                        NotificationActionType.WEEKLY_SUMMARY -> {
+                            onNavigateToDetail(Routes.AI, null)
+                        }
+                        NotificationActionType.APP_UPDATE -> {
+                            onNavigateToDetail(Routes.PROFILE, null)
+                        }
+                        NotificationActionType.NONE -> {
+                            // If there's a deepLinkTarget as fallback
+                            notification.deepLinkTarget?.let { target ->
+                                 onNavigateToDetail(target, notification.relatedTripId?.let { mapOf("tripId" to it) })
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NotificationCenter", "Navigation failed", e)
+                    onNavigateToDetail(Routes.WEATHER, null)
+                } finally {
+                    // Small delay to prevent instant re-clicks
+                    scope.launch {
+                        kotlinx.coroutines.delay(500)
+                        processingIds.remove(notification.id)
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(state.notifications.size) {
+        android.util.Log.d("NotificationScreen", "Notification UI list size: ${state.notifications.size}")
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.ensureSeeded()
+    }
+
     if (showDeleteAllDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAllDialog = false },
@@ -128,34 +192,39 @@ fun NotificationCenterScreen(
                 onFilterChange = { viewModel.setFilter(it) }
             )
 
-            if (state.filteredNotifications.isEmpty() && !state.isLoading) {
-                EmptyNotificationState(
-                    hasAnyNotifications = state.notifications.isNotEmpty(),
-                    onResetFilter = { viewModel.setFilter(null) }
-                )
+            if (state.isLoading && state.notifications.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = themeColors.accent)
+                }
             } else {
+                val displayNotifications = remember(state.filteredNotifications) {
+                    if (state.filteredNotifications.isEmpty() && state.activeFilter == NotificationFilter.ALL) {
+                         DefaultNotifications.create()
+                    } else {
+                        state.filteredNotifications
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(state.filteredNotifications, key = { it.id }) { notification ->
+                    items(displayNotifications, key = { it.id }) { notification ->
                         val isSelected = state.selectedIds.contains(notification.id)
 
                         SwipeableNotificationItem(
                             notification = notification,
                             isSelected = isSelected,
                             isSelectionMode = state.isSelectionMode,
-                            onClick = {
-                                viewModel.markAsRead(notification.id)
-                                notification.deepLinkTarget?.let { target ->
-                                    onNavigateToDetail(target, notification.relatedTripId?.let { mapOf("tripId" to it) })
-                                }
-                            },
+                            onClick = { handleNotificationClick(notification) },
                             onLongClick = { viewModel.toggleSelection(notification.id) },
                             onDelete = { viewModel.deleteNotification(notification.id) },
                             onToggleRead = { viewModel.toggleReadStatus(notification.id) },
-                            onToggleSelection = { viewModel.toggleSelection(notification.id) }
+                            onToggleSelection = { viewModel.toggleSelection(notification.id) },
+                            onNavigateToDetail = { screen, params ->
+                                handleNotificationClick(notification)
+                            }
                         )
                     }
                 }
@@ -174,7 +243,8 @@ fun SwipeableNotificationItem(
     onLongClick: () -> Unit,
     onDelete: () -> Unit,
     onToggleRead: () -> Unit,
-    onToggleSelection: () -> Unit
+    onToggleSelection: () -> Unit,
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -312,7 +382,8 @@ fun SwipeableNotificationItem(
                 notification = notification,
                 isSelected = isSelected,
                 isSelectionMode = isSelectionMode,
-                onToggleSelection = onToggleSelection
+                onToggleSelection = onToggleSelection,
+                onNavigateToDetail = onNavigateToDetail
             )
         }
     }
@@ -323,7 +394,8 @@ fun NotificationCard(
     notification: NotificationItem,
     isSelected: Boolean,
     isSelectionMode: Boolean,
-    onToggleSelection: () -> Unit
+    onToggleSelection: () -> Unit,
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
     val dateFormat = remember { SimpleDateFormat("HH:mm", Locale("tr")) }
@@ -412,7 +484,7 @@ fun NotificationCard(
                 if (notification.actionLabel != null) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Surface(
-                        onClick = { /* Handled by parent click or deepLink */ },
+                        onClick = { onNavigateToDetail("", null) },
                         shape = CircleShape,
                         color = themeColors.accent.copy(alpha = 0.08f),
                         border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
@@ -451,10 +523,10 @@ fun NotificationCard(
 
 @Composable
 fun NotificationFilterRow(
-    activeFilter: NotificationCategory?,
-    onFilterChange: (NotificationCategory?) -> Unit
+    activeFilter: NotificationFilter,
+    onFilterChange: (NotificationFilter) -> Unit
 ) {
-    val categories = remember { NotificationCategory.entries.filter { it != NotificationCategory.SYSTEM } }
+    val filters = remember { NotificationFilter.entries }
     val themeColors = HavamaniaTheme.colors
 
     LazyRow(
@@ -462,11 +534,20 @@ fun NotificationFilterRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
-            FilterChip(isSelected = activeFilter == null, label = "Tümü", onClick = { onFilterChange(null) })
-        }
-        items(categories) { category ->
-            FilterChip(isSelected = activeFilter == category, label = category.label, onClick = { onFilterChange(category) })
+        items(filters) { filter ->
+            val label = when (filter) {
+                NotificationFilter.ALL -> "Tümü"
+                NotificationFilter.UNREAD -> "Okunmamış"
+                NotificationFilter.TRAVEL -> "Seyahat"
+                NotificationFilter.RAIN -> "Yağmur"
+                NotificationFilter.UV -> "UV"
+                NotificationFilter.WARNING -> "Uyarı"
+                NotificationFilter.SUMMARY -> "Özet"
+                NotificationFilter.UPDATE -> "Güncelleme"
+                NotificationFilter.GENERAL -> "Genel"
+                NotificationFilter.SYSTEM -> "Sistem"
+            }
+            FilterChip(isSelected = activeFilter == filter, label = label, onClick = { onFilterChange(filter) })
         }
     }
 }

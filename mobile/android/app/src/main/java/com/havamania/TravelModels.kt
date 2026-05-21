@@ -69,6 +69,22 @@ data class TravelNotificationData(
     val recommendedItems: List<String> = emptyList()
 )
 
+@Serializable
+data class TravelHistorySummary(
+    val averageTemp: Int?,
+    val minTemp: Int?,
+    val maxTemp: Int?,
+    val rainyDays: Int,
+    val sunnyDays: Int,
+    val cloudyDays: Int,
+    val riskDayText: String,
+    val comfortScore: Int,
+    val summaryText: String,
+    val packingAdvice: String,
+    val nextTripAdvice: String,
+    val durationDays: Int
+)
+
 data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
     val city: String,

@@ -158,7 +158,16 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     NotificationCenterScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToDetail = { screen, params ->
-                                            navController.navigate(screen)
+                                            try {
+                                                navController.navigate(screen) {
+                                                    launchSingleTop = true
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("Nav", "Failed to navigate to $screen", e)
+                                                navController.navigate(Routes.WEATHER) {
+                                                    launchSingleTop = true
+                                                }
+                                            }
                                         }
                                     )
                                 }

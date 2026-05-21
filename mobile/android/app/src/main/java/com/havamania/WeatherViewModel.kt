@@ -64,6 +64,7 @@ class WeatherViewModel(
     }
 
     val unreadNotificationCount: StateFlow<Int> = notificationRepository.unreadCount
+        .catch { emit(0) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

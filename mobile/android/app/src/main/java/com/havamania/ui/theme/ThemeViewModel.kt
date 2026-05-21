@@ -51,6 +51,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _liveEffectsEnabled = MutableStateFlow(true)
     val liveEffectsEnabled: StateFlow<Boolean> = _liveEffectsEnabled.asStateFlow()
 
+    private val _isSafeMode = MutableStateFlow(false)
+    val isSafeMode: StateFlow<Boolean> = _isSafeMode.asStateFlow()
+
     private val _userEffectIntensity = MutableStateFlow(com.havamania.WeatherEffectIntensity.MEDIUM)
     val userEffectIntensity: StateFlow<com.havamania.WeatherEffectIntensity> = _userEffectIntensity.asStateFlow()
 

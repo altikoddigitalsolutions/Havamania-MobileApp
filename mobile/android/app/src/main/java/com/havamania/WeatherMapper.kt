@@ -343,13 +343,14 @@ object WeatherMapper {
                     else -> "$base Gece"
                 }
             }
-            DayPhase.SUNSET -> {
+            DayPhase.EVENING -> {
                 if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
             }
-            DayPhase.SUNRISE -> {
+            DayPhase.DAWN -> {
                 if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
             }
             DayPhase.DAY -> base
+            else -> base
         }
     }
 
@@ -357,10 +358,13 @@ object WeatherMapper {
         val current = now.toLocalTime()
 
         return when {
-            current.isBefore(sunrise.minusMinutes(45)) -> DayPhase.NIGHT
-            current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.SUNRISE
-            current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
-            current.isBefore(sunset.plusMinutes(45)) -> DayPhase.SUNSET
+            // DAWN: sunrise ± 60 dakika
+            current.isAfter(sunrise.minusMinutes(60)) && current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.DAWN
+            // EVENING: sunset ± 90 dakika
+            current.isAfter(sunset.minusMinutes(90)) && current.isBefore(sunset.plusMinutes(90)) -> DayPhase.EVENING
+            // DAY: Sunrise sonrası ve sunset öncesi
+            current.isAfter(sunrise.plusMinutes(59)) && current.isBefore(sunset.minusMinutes(89)) -> DayPhase.DAY
+            // NIGHT: Diğer tüm durumlar (Güneş battıktan sonra veya doğmadan önce)
             else -> DayPhase.NIGHT
         }
     }

@@ -12,6 +12,12 @@ interface NotificationDao {
     @Query("SELECT * FROM notifications ORDER BY createdAt DESC")
     fun getAllNotifications(): Flow<List<NotificationItem>>
 
+    @Query("SELECT * FROM notifications LIMIT 1")
+    suspend fun getAllNotificationsFirst(): List<NotificationItem>
+
+    @Query("SELECT COUNT(*) FROM notifications")
+    suspend fun getTotalCountFirst(): Int
+
     @Query("SELECT COUNT(*) FROM notifications WHERE isRead = 0")
     fun getUnreadCount(): Flow<Int>
 
@@ -48,15 +54,25 @@ abstract class NotificationDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): NotificationDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    NotificationDatabase::class.java,
-                    "notification_database"
-                )
-                .fallbackToDestructiveMigration()
-                .build()
-                INSTANCE = instance
-                instance
+                try {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        NotificationDatabase::class.java,
+                        "notification_database"
+                    )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    INSTANCE = instance
+                    instance
+                } catch (e: Exception) {
+                    // Critical fallback if DB is totally corrupted
+                    context.deleteDatabase("notification_database")
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        NotificationDatabase::class.java,
+                        "notification_database"
+                    ).build()
+                }
             }
         }
     }
@@ -69,7 +85,25 @@ class NotificationConverters {
     fun fromCategory(category: NotificationCategory): String = category.name
 
     @TypeConverter
-    fun toCategory(value: String): NotificationCategory = NotificationCategory.valueOf(value)
+    fun toCategory(value: String): NotificationCategory {
+        return try {
+            NotificationCategory.valueOf(value)
+        } catch (e: Exception) {
+            NotificationCategory.GENERAL
+        }
+    }
+
+    @TypeConverter
+    fun fromActionType(actionType: NotificationActionType): String = actionType.name
+
+    @TypeConverter
+    fun toActionType(value: String): NotificationActionType {
+        return try {
+            NotificationActionType.valueOf(value)
+        } catch (e: Exception) {
+            NotificationActionType.NONE
+        }
+    }
 
     @TypeConverter
     fun fromTravelNotificationData(value: TravelNotificationData?): String? {

@@ -102,12 +102,23 @@ class WeatherActivity : ComponentActivity() {
                                     NotificationCenterScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToDetail = { screen: String, params: Map<String, String>? ->
-                                            if (screen == "calendar") {
-                                                val focusId = params?.get("focusId") ?: ""
-                                                val highlight = params?.get("highlight") ?: ""
-                                                navController.navigate("calendar?focusId=$focusId&highlight=$highlight")
-                                            } else {
-                                                navController.navigate(screen)
+                                            try {
+                                                if (screen == "calendar") {
+                                                    val focusId = params?.get("focusId") ?: ""
+                                                    val highlight = params?.get("highlight") ?: ""
+                                                    navController.navigate("calendar?focusId=$focusId&highlight=$highlight") {
+                                                        launchSingleTop = true
+                                                    }
+                                                } else {
+                                                    navController.navigate(screen) {
+                                                        launchSingleTop = true
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("Nav", "Failed to navigate to $screen", e)
+                                                navController.navigate("weather") {
+                                                    launchSingleTop = true
+                                                }
                                             }
                                         }
                                     )

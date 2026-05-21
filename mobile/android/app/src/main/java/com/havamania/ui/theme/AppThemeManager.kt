@@ -123,7 +123,11 @@ object ThemeManager {
     suspend fun saveTempUnit(context: Context, unit: TemperatureUnit) = context.dataStore.edit { it[TEMP_UNIT_KEY] = unit.name }
 
     fun getTempUnit(context: Context): Flow<TemperatureUnit> = context.dataStore.data.map {
-        TemperatureUnit.valueOf(it[TEMP_UNIT_KEY] ?: TemperatureUnit.CELSIUS.name)
+        try {
+            TemperatureUnit.valueOf(it[TEMP_UNIT_KEY] ?: TemperatureUnit.CELSIUS.name)
+        } catch (e: Exception) {
+            TemperatureUnit.CELSIUS
+        }
     }
 
     suspend fun saveLanguage(context: Context, lang: String) = context.dataStore.edit { it[LANGUAGE_KEY] = lang }

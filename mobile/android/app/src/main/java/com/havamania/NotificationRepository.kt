@@ -2,11 +2,19 @@ package com.havamania
 
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class NotificationRepository(private val dao: NotificationDao) {
     private val TAG = "NotificationRepo"
 
-    val allNotifications: Flow<List<NotificationItem>> = dao.getAllNotifications()
+    val allNotifications: Flow<List<NotificationItem>> = dao.getAllNotifications().map { list ->
+        if (list.isEmpty()) {
+            Log.d(TAG, "Flow emission: List is empty. Returning DefaultNotifications.")
+            DefaultNotifications.create()
+        } else {
+            list
+        }
+    }
     val unreadCount: Flow<Int> = dao.getUnreadCount()
 
     suspend fun insert(notification: NotificationItem) {
@@ -82,42 +90,83 @@ class NotificationRepository(private val dao: NotificationDao) {
         }
     }
 
+    suspend fun seedInitialDataIfNeeded() {
+        try {
+            val count = dao.getTotalCountFirst()
+            Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB: $count")
+
+            if (count == 0) {
+                Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating 14 test notifications...")
+                val demoList = createSeedNotifications()
+                Log.d("Notifications", "seed created size=${demoList.size}")
+
+                demoList.forEach {
+                    dao.insert(it)
+                    Log.v(TAG, "✅ SEEDED: ${it.id} (${it.category})")
+                }
+
+                val checkCount = dao.getTotalCountFirst()
+                Log.d(TAG, "📊 SEED DONE: New count: $checkCount")
+            } else {
+                Log.d(TAG, "⏩ SEED SKIP: Database already has items.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ SEED ERROR: Critical failure during seeding", e)
+        }
+    }
+
+    private fun createSeedNotifications(): List<NotificationItem> {
+        val demoList = mutableListOf<NotificationItem>()
+        val now = System.currentTimeMillis()
+
+        NotificationCategory.entries.forEach { category ->
+            val label = category.label
+            val (target, action) = when(category) {
+                NotificationCategory.TRAVEL -> "havamania://app/calendar" to NotificationActionType.TRAVEL_CALENDAR
+                NotificationCategory.RAIN, NotificationCategory.WARNING -> "havamania://app/weather" to NotificationActionType.WEATHER_HOME
+                NotificationCategory.UV -> "havamania://app/weather" to NotificationActionType.WEATHER_HOME
+                NotificationCategory.SUMMARY -> "havamania://app/ai" to NotificationActionType.WEEKLY_SUMMARY
+                NotificationCategory.UPDATE -> "havamania://app/profile" to NotificationActionType.APP_UPDATE
+                NotificationCategory.SYSTEM -> "havamania://app/settings" to NotificationActionType.NONE
+                else -> "havamania://app/weather" to NotificationActionType.WEATHER_HOME
+            }
+
+            // 1. Yeni (Okunmamış) bildirim
+            demoList.add(NotificationItem(
+                id = "seed_${category.name}_new",
+                title = "$label Analizi Hazır",
+                message = "Havamania AI sistemleri $label kategorisinde senin için yeni bir veri seti derledi. Detaylara dokunarak ulaşabilirsin.",
+                category = category,
+                isRead = false,
+                actionType = action,
+                createdAt = now - (1000 * 60 * 10), // 10 dk önce
+                deepLinkTarget = target,
+                actionLabel = "İncele"
+            ))
+
+            // 2. Eski (Okunmuş) bildirim
+            demoList.add(NotificationItem(
+                id = "seed_${category.name}_old",
+                title = "Geçmiş $label Raporu",
+                message = "Dünkü $label verileri arşivlendi. Haftalık özetin içinde bu verilerin etkisini görebilirsin.",
+                category = category,
+                isRead = true,
+                actionType = action,
+                createdAt = now - (1000 * 60 * 60 * 5), // 5 saat önce
+                deepLinkTarget = target,
+                actionLabel = "Özeti Aç"
+            ))
+        }
+        return demoList
+    }
+
     suspend fun refreshDemoNotifications() {
         try {
+            Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
             dao.deleteAll()
-            val demoList = listOf(
-                NotificationItem(
-                    title = "Batman Seyahat Analizi Hazır",
-                    message = "Batman seyahatin için güncel hava analizi hazır. Yağmur ihtimali yüksek görünüyor.",
-                    category = NotificationCategory.TRAVEL,
-                    actionLabel = "Seyahati Aç"
-                ),
-                NotificationItem(
-                    title = "Yağmur Başlıyor",
-                    message = "Bulunduğun konumda 15 dakika içinde hafif yağış başlayacak.",
-                    category = NotificationCategory.RAIN,
-                    actionLabel = "Saatlik Tahmini Aç"
-                ),
-                NotificationItem(
-                    title = "Yüksek UV Endeksi",
-                    message = "Bugün UV seviyesi 7. Öğle saatlerinde güneş kremi ve şapka önerilir.",
-                    category = NotificationCategory.UV,
-                    actionLabel = "UV Detayları"
-                ),
-                NotificationItem(
-                    title = "Kritik Hava Uyarısı",
-                    message = "Önümüzdeki 3 saat içinde kuvvetli rüzgar bekleniyor. Dışarıdaki eşyalarını kontrol et.",
-                    category = NotificationCategory.WARNING,
-                    actionLabel = "Uyarıyı Aç"
-                ),
-                NotificationItem(
-                    title = "Uygulama Güncellendi",
-                    message = "Bildirim Merkezi, seyahat analizleri ve premium hava kartları iyileştirildi.",
-                    category = NotificationCategory.UPDATE,
-                    actionLabel = "Yenilikleri Gör"
-                )
-            )
+            val demoList = createSeedNotifications()
             demoList.forEach { dao.insert(it) }
+            Log.d(TAG, "Manual seed notifications inserted: ${demoList.size}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh demo notifications", e)
         }

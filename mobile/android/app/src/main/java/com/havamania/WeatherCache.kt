@@ -164,16 +164,25 @@ abstract class WeatherDatabase : RoomDatabase() {
 
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    WeatherDatabase::class.java,
-                    "weather_database"
-                )
-                .addMigrations(MIGRATION_5_6)
-                .fallbackToDestructiveMigration() // Backup if migration fails
-                .build()
-                INSTANCE = instance
-                instance
+                try {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        WeatherDatabase::class.java,
+                        "weather_database"
+                    )
+                    .addMigrations(MIGRATION_5_6)
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    INSTANCE = instance
+                    instance
+                } catch (e: Exception) {
+                    context.deleteDatabase("weather_database")
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        WeatherDatabase::class.java,
+                        "weather_database"
+                    ).build()
+                }
             }
         }
     }

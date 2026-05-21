@@ -32,16 +32,134 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
+    private val TAG = "TravelVM"
+
     init {
-        loadPlans()
+        seedInitialDataIfNeeded()
+    }
+
+    fun seedInitialDataIfNeeded(force: Boolean = false) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isLoading.value = true
+            val entities = if (force) emptyList() else dao.getAllTravelPlans()
+            if (entities.isEmpty()) {
+                if (force) dao.clearAllTravelPlans()
+                val today = LocalDate.now()
+                // Yılları dinamik ayarla: Bazıları geçmişte kalsın, bazıları gelecekte
+                val currentYear = today.year
+
+                val seedPlans = listOf(
+                    // Yaklaşanlar (Bugün veya Gelecek)
+                    TravelPlan(
+                        city = "Batman",
+                        latitude = 37.8812,
+                        longitude = 41.1322,
+                        tripType = TripType.EVENT,
+                        startDate = LocalDate.of(currentYear, 5, 15),
+                        endDate = LocalDate.of(currentYear, 5, 16)
+                    ),
+                    TravelPlan(
+                        city = "Bali",
+                        latitude = -8.4095,
+                        longitude = 115.1889,
+                        tripType = TripType.WEEKEND,
+                        startDate = LocalDate.of(currentYear, 5, 28),
+                        endDate = LocalDate.of(currentYear, 5, 30)
+                    ),
+                    TravelPlan(
+                        city = "Trabzon",
+                        latitude = 41.0027,
+                        longitude = 39.7168,
+                        tripType = TripType.SHOPPING,
+                        startDate = LocalDate.of(currentYear, 5, 18),
+                        endDate = LocalDate.of(currentYear, 5, 21)
+                    ),
+                    // Geçmiş (Bitiş tarihi bugünden önce) - Tarihleri bugüne göre ayarla
+                    TravelPlan(
+                        city = "İzmir",
+                        latitude = 38.4192,
+                        longitude = 27.1287,
+                        tripType = TripType.SHOPPING,
+                        startDate = today.minusMonths(2),
+                        endDate = today.minusMonths(2).plusDays(15),
+                        lastForecastSnapshot = ForecastSnapshot(
+                            precipitationProbability = 10,
+                            minTemp = 14.0,
+                            maxTemp = 26.0,
+                            windSpeed = 12.0,
+                            uvIndex = 5.0,
+                            conditionSummary = "Güneşli"
+                        )
+                    ),
+                    TravelPlan(
+                        city = "Balıkesir",
+                        latitude = 39.6484,
+                        longitude = 27.8826,
+                        tripType = TripType.VACATION,
+                        startDate = today.minusMonths(1),
+                        endDate = today.minusMonths(1).plusDays(9),
+                        lastForecastSnapshot = ForecastSnapshot(
+                            precipitationProbability = 45,
+                            minTemp = 10.0,
+                            maxTemp = 18.0,
+                            windSpeed = 22.0,
+                            uvIndex = 3.0,
+                            conditionSummary = "Hafif Yağmurlu"
+                        )
+                    ),
+                    TravelPlan(
+                        city = "Ankara",
+                        latitude = 39.9334,
+                        longitude = 32.8597,
+                        tripType = TripType.ROAD_TRIP,
+                        startDate = today.minusDays(20),
+                        endDate = today.minusDays(18),
+                        lastForecastSnapshot = ForecastSnapshot(
+                            precipitationProbability = 5,
+                            minTemp = 6.0,
+                            maxTemp = 15.0,
+                            windSpeed = 8.0,
+                            uvIndex = 2.0,
+                            conditionSummary = "Açık"
+                        )
+                    ),
+                    // Arşiv
+                    TravelPlan(
+                        city = "Çankırı",
+                        latitude = 40.6013,
+                        longitude = 33.6134,
+                        tripType = TripType.CAMPING,
+                        startDate = LocalDate.of(currentYear, 5, 8),
+                        endDate = LocalDate.of(currentYear, 5, 9),
+                        isArchived = true,
+                        lastForecastSnapshot = ForecastSnapshot(
+                            precipitationProbability = 60,
+                            minTemp = 8.0,
+                            maxTemp = 16.0,
+                            windSpeed = 28.0,
+                            uvIndex = 4.0,
+                            conditionSummary = "Gök Gürültülü Sağanak"
+                        )
+                    )
+                )
+
+                seedPlans.forEach { plan ->
+                    dao.insertTravelPlan(plan.toEntity())
+                }
+                android.util.Log.d(TAG, "Seed trips inserted: ${seedPlans.size}")
+            }
+            loadPlans()
+        }
     }
 
     fun loadPlans() {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _isLoading.value = true
             val entities = dao.getAllTravelPlans()
-            _plans.value = entities.map { it.toDomain() }.sortedBy { it.startDate }
+            val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
+            _plans.value = domainPlans
             _isLoading.value = false
+            android.util.Log.d(TAG, "Trip UI list size: ${domainPlans.size}")
         }
     }
 

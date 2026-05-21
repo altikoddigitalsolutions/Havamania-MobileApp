@@ -34,6 +34,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    android.util.Log.d("HavamaniaApp", "Application onCreate - Starting initialization...")
     SoLoader.init(this, false)
 
     // Schedule daily travel weather analysis

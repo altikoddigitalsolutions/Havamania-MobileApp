@@ -170,4 +170,64 @@ object TravelAiHelper {
             else -> "Şehir merkezindeki tarihi ve doğal noktaları seyahat tipine göre planına ekleyebilirsin."
         }
     }
+
+    fun generateHistorySummary(plan: TravelPlan): TravelHistorySummary {
+        val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
+        val snapshot = plan.lastForecastSnapshot
+
+        // Base values from snapshot or estimation
+        val minT = snapshot?.minTemp?.toInt() ?: 12
+        val maxT = snapshot?.maxTemp?.toInt() ?: 24
+        val avgT = (minT + maxT) / 2
+
+        // Estimation for distribution based on duration and weather condition summary
+        val cond = snapshot?.conditionSummary?.lowercase() ?: "parçalı bulutlu"
+        val prob = snapshot?.precipitationProbability ?: 20
+
+        val rainy = if (cond.contains("yağmur") || prob > 50) (duration * 0.4).toInt().coerceAtLeast(1) else (duration * 0.1).toInt()
+        val sunny = if (cond.contains("güneş") || cond.contains("açık")) (duration * 0.6).toInt().coerceAtLeast(1) else (duration * 0.3).toInt()
+        val cloudy = (duration - rainy - sunny).coerceAtLeast(0)
+
+        val comfort = when {
+            rainy > duration / 2 -> 65
+            maxT > 32 || minT < 5 -> 75
+            else -> 88
+        }
+
+        val riskDay = if (rainy > 0) "Seyahatin orta dönemlerinde beklenen kuvvetli yağış en riskli gündü." else "Genel olarak stabil bir hava hakim olsa da rüzgar geçişleri dikkate değerdi."
+
+        val summaryText = "${plan.city} seyahatin $duration gün sürdü. Bu rota ${getSeason(plan.startDate)} dönemine denk geldiği için genel olarak ${if(avgT > 20) "ılık ve keyifli" else "serin ve dengeli"}, ${if(rainy > 0) "ara ara yağış geçişleri içeren" else "açık havaya uygun"} bir hava profili gözlemlendi. ${plan.lastWeatherAnalysisText ?: ""}"
+
+        val packingText = if (avgT > 22) {
+            "İnce, pamuklu ve açık renkli kıyafetler konforun için en iyisiydi. Akşamları deniz esintisine karşı ince bir hırka yeterli olmuş olmalı."
+        } else {
+            "Katmanlı giyinme ve orta kalınlıkta bir ceket bu seyahatin kurtarıcısıydı. Mevsim geçişi nedeniyle kapalı ayakkabı tercihi doğru bir karardı."
+        }
+
+        val nextTripText = "Gelecek seyahatini yine bu tarihlerde planlayacaksan, ${if(rainy > 0) "yağış ihtimaline karşı daha esnek kapalı alan rotaları" else "açık hava etkinliklerini artıracak şekilde"} bir program oluşturmanı öneririm."
+
+        return TravelHistorySummary(
+            averageTemp = avgT,
+            minTemp = minT,
+            maxTemp = maxT,
+            rainyDays = rainy,
+            sunnyDays = sunny,
+            cloudyDays = cloudy,
+            riskDayText = riskDay,
+            comfortScore = comfort,
+            summaryText = summaryText,
+            packingAdvice = packingText,
+            nextTripAdvice = nextTripText,
+            durationDays = duration
+        )
+    }
+
+    private fun getSeason(date: java.time.LocalDate): String {
+        return when (date.monthValue) {
+            3, 4, 5 -> "ilkbahar"
+            6, 7, 8 -> "yaz"
+            9, 10, 11 -> "sonbahar"
+            else -> "kış"
+        }
+    }
 }
