@@ -214,6 +214,7 @@ fun WeatherSuccessContent(
                 onCityClick = onCityClick,
                 onNotificationsClick = onNotificationsClick,
                 time = displayTime,
+                fullTime = selectedHourlyWeather?.fullTime,
                 sunriseTime = data.sunriseTime,
                 sunsetTime = data.sunsetTime,
                 parallaxOffset = scrollState.value * 0.12f,

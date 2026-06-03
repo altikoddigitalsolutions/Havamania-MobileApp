@@ -7,9 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 
 import java.time.temporal.ChronoUnit
 
@@ -20,6 +22,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = WeatherRepository.getInstance(application)
 
     private val apiService = NetworkModule.apiService
+    private val aiService = AltikodChatFactory.create()
+    private val botId = "1"
 
     private val _plans = MutableStateFlow<List<TravelPlan>>(emptyList())
     val plans: StateFlow<List<TravelPlan>> = _plans.asStateFlow()
@@ -163,18 +167,48 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     fun analyzeTravelWeather(plan: TravelPlan) {
         viewModelScope.launch {
-            // Set status to LOADING immediately in the list
+            var attempts = 0
+            val maxAttempts = 3
+            var success = false
+            var finalPlan = plan
+
+            // Set status to LOADING immediately for UI feedback
             _plans.value = _plans.value.map {
                 if (it.id == plan.id) it.copy(isAnalyzing = true, weatherAnalysisStatus = TravelWeatherAnalysisStatus.LOADING) else it
             }
 
-            val updatedPlan = performAnalysis(plan)
+            while (attempts < maxAttempts && !success) {
+                attempts++
+                android.util.Log.d(TAG, "[TravelAnalysis] Analyzing plan for ${plan.city}, attempt $attempts/$maxAttempts")
 
-            // Save updated plan to DB
-            dao.insertTravelPlan(updatedPlan.toEntity())
+                val result = performAnalysis(plan)
 
-            // Refresh the entire list from DB to ensure UI is in sync
-            loadPlans()
+                if (result.weatherAnalysisStatus == TravelWeatherAnalysisStatus.ANALYZED &&
+                    !result.analysis.isNullOrBlank()) {
+                    finalPlan = result
+                    success = true
+                    android.util.Log.i(TAG, "[TravelAnalysis] Success for ${plan.city} at attempt $attempts")
+                } else {
+                    finalPlan = result
+                    if (attempts < maxAttempts) {
+                        android.util.Log.w(TAG, "[TravelAnalysis] Attempt $attempts failed, retrying in 2s...")
+                        delay(2000) // Wait before retry
+                    }
+                }
+            }
+
+            // Save final result to DB
+            try {
+                dao.insertTravelPlan(finalPlan.toEntity())
+                android.util.Log.d(TAG, "[TravelAnalysis] Final plan state saved to database for ${plan.city}")
+                loadPlans()
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "[TravelRepositoryError] Failed to save analysis result to database: ${e.message}", e)
+            }
+
+            if (!success) {
+                android.util.Log.e(TAG, "[TravelAnalysis] Analysis failed after $maxAttempts attempts for ${plan.city}")
+            }
         }
     }
 
@@ -197,15 +231,51 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return plan.copy(
                 isAnalyzing = false,
                 weatherAnalysisStatus = TravelWeatherAnalysisStatus.ANALYZED,
-                lastWeatherAnalysisText = "Bu seyahat geçmişte tamamlandı.",
+                lastWeatherAnalysisText = suggestion,
                 aiSuggestion = suggestion,
                 lastWeatherAnalysisDate = System.currentTimeMillis()
             )
         }
 
-        // Case: More than 15 days until trip
+        // Case: Within 15 days (Current Data) or more (15-day rule)
+        val snapshot = if (daysUntil <= 15) {
+            try {
+                val response = apiService.getFullWeather(
+                    lat = plan.latitude,
+                    lon = plan.longitude,
+                    days = 16
+                )
+                val daily = response.daily
+                if (daily != null) {
+                    val tripDates = daily.time.map { LocalDate.parse(it) }
+                    val overlapIndices = tripDates.indices.filter { i ->
+                        val date = tripDates[i]
+                        !date.isBefore(plan.startDate) && !date.isAfter(plan.endDate)
+                    }
+
+                    if (overlapIndices.isNotEmpty()) {
+                        ForecastSnapshot(
+                            precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
+                            minTemp = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.minOrNull(),
+                            maxTemp = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.maxOrNull(),
+                            windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
+                            uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
+                            conditionSummary = WeatherMapper.getWeatherCondition(
+                                overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
+                            ),
+                            generatedAt = System.currentTimeMillis()
+                        )
+                    } else null
+                } else null
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Weather fetch failed for analysis: ${e.message}")
+                null
+            }
+        } else null
+
+        // 15-day rule check: Only perform AI analysis if trip is within 15 days
         if (daysUntil > 15) {
-            val suggestion = TravelAiHelper.generateTravelAiSuggestion(
+             val suggestion = TravelAiHelper.generateTravelAiSuggestion(
                 city = plan.city,
                 tripType = plan.tripType,
                 forecastSnapshot = null,
@@ -215,132 +285,122 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return plan.copy(
                 isAnalyzing = false,
                 weatherAnalysisStatus = TravelWeatherAnalysisStatus.TOO_EARLY,
-                lastWeatherAnalysisText = "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım.",
-                aiSuggestion = suggestion,
+                lastWeatherAnalysisText = suggestion,
+                analysis = suggestion,
+                aiSuggestion = null, // Clear aiSuggestion to avoid double text
                 lastWeatherAnalysisDate = System.currentTimeMillis()
             )
         }
 
-        // Case: Within 15 days (or past)
+        // Trigger Real AI Analysis via Altikod service
         return try {
-            if (plan.latitude == 0.0 && plan.longitude == 0.0) {
-                return plan.copy(
-                    isAnalyzing = false,
-                    weatherAnalysisStatus = TravelWeatherAnalysisStatus.ERROR,
-                    lastWeatherAnalysisText = "Şehir koordinatları bulunamadı. Lütfen şehri listeden seçerek tekrar ekleyin.",
-                    lastWeatherAnalysisDate = System.currentTimeMillis()
-                )
+            val prompt = buildAnalysisPrompt(plan, snapshot, daysUntil)
+            android.util.Log.d(TAG, "[AI_REQUEST] Sending prompt for ${plan.city}: $prompt")
+
+            val response = aiService.sendMessage(botId, AltikodChatRequest(prompt, UUID.randomUUID().toString()))
+            val rawAnswer = response.answer
+
+            // Clean up AI response
+            var cleanAnswer = rawAnswer.replace(Regex("\\*|_|#|-"), "").trim()
+
+            // "Lütfen geçerli bir soru sorunuz" gibi chatbot hata mesajlarını filtrele
+            if (cleanAnswer.contains("geçerli bir soru", ignoreCase = true) || cleanAnswer.isBlank()) {
+                android.util.Log.e(TAG, "[AI_FILTER] AI returned invalid question error or blank: $cleanAnswer")
+                throw Exception("Invalid AI response")
             }
 
-            // Open-Meteo free tier provides up to 16 days forecast
-            val response = apiService.getFullWeather(
-                lat = plan.latitude,
-                lon = plan.longitude,
-                days = 16
-            )
+            android.util.Log.d(TAG, "[AI_RESPONSE] Received for ${plan.city}: $cleanAnswer")
 
-            val daily = response.daily ?: return plan.copy(
+            plan.copy(
                 isAnalyzing = false,
-                weatherAnalysisStatus = TravelWeatherAnalysisStatus.ERROR,
-                lastWeatherAnalysisText = "Hava verisi şu an alınamıyor.",
-                lastWeatherAnalysisDate = System.currentTimeMillis()
+                lastWeatherAnalysisText = cleanAnswer,
+                analysis = cleanAnswer, // Kalıcı analiz alanına kaydet
+                aiSuggestion = null, // Clear aiSuggestion to avoid double text
+                lastWeatherAnalysisDate = System.currentTimeMillis(),
+                lastForecastSnapshot = snapshot ?: plan.lastForecastSnapshot,
+                previousForecastSnapshot = if (snapshot != null) plan.lastForecastSnapshot else plan.previousForecastSnapshot,
+                weatherAnalysisStatus = TravelWeatherAnalysisStatus.ANALYZED
             )
-            val tripDates = daily.time.map { LocalDate.parse(it) }
-
-            // Find indices that overlap with trip duration
-            val overlapIndices = tripDates.indices.filter { i ->
-                val date = tripDates[i]
-                !date.isBefore(plan.startDate) && !date.isAfter(plan.endDate)
+        } catch (e: Exception) {
+            val errorType = when (e) {
+                is java.net.UnknownHostException, is java.net.ConnectException -> "NETWORK_ERROR"
+                is retrofit2.HttpException -> "API_ERROR_${e.code()}"
+                is kotlinx.serialization.SerializationException -> "PARSE_ERROR"
+                else -> "UNKNOWN_ERROR"
             }
 
-            if (overlapIndices.isEmpty()) {
-                val suggestion = TravelAiHelper.generateTravelAiSuggestion(
-                    city = plan.city,
-                    tripType = plan.tripType,
-                    forecastSnapshot = null,
-                    previousSnapshot = null,
-                    daysUntilTrip = daysUntil
-                )
-                return plan.copy(
-                    isAnalyzing = false,
-                    weatherAnalysisStatus = TravelWeatherAnalysisStatus.ERROR,
-                    lastWeatherAnalysisText = "Güncel hava verisi şu anda alınamadı.",
-                    aiSuggestion = suggestion,
-                    lastWeatherAnalysisDate = System.currentTimeMillis()
-                )
+            val errorDetail = when (e) {
+                is retrofit2.HttpException -> "Status: ${e.code()}, Message: ${e.message()}"
+                else -> e.message ?: "No error message"
             }
 
-            // Generate snapshot
-            val currentSnapshot = ForecastSnapshot(
-                precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
-                minTemp = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.minOrNull(),
-                maxTemp = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.maxOrNull(),
-                windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
-                uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
-                conditionSummary = WeatherMapper.getWeatherCondition(
-                    overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
-                ),
-                generatedAt = System.currentTimeMillis()
-            )
+            android.util.Log.e(TAG, "[TravelAnalysisError] [$errorType] ${plan.city}: $errorDetail", e)
 
-            val start = plan.startDate
-            val end = plan.endDate
-
-            val tripStatusText = when {
-                end.isBefore(today) -> "Bu seyahat tamamlandı."
-                start.isBefore(today) && !end.isBefore(today) -> "Seyahatiniz devam ediyor."
-                start.isEqual(today) -> "Seyahatiniz bugün başlıyor."
-                start.isEqual(today.plusDays(1)) -> "Seyahatinize yarın çıkıyorsunuz."
-                start.isAfter(today) -> "Seyahatinize ${ChronoUnit.DAYS.between(today, start)} gün kaldı."
-                else -> ""
-            }
-
-            val analysisText = "$tripStatusText Tahminlere göre hava '${currentSnapshot.conditionSummary}', " +
-                    "yağmur ihtimali %${currentSnapshot.precipitationProbability ?: 0}, " +
-                    "sıcaklık ${currentSnapshot.minTemp?.toInt() ?: 0}-${currentSnapshot.maxTemp?.toInt() ?: 0}° aralığında."
-
-            val aiSuggestion = TravelAiHelper.generateTravelAiSuggestion(
+            // Local Fallback if AI fails
+            val fallbackSuggestion = TravelAiHelper.generateTravelAiSuggestion(
                 city = plan.city,
                 tripType = plan.tripType,
-                forecastSnapshot = currentSnapshot,
+                forecastSnapshot = snapshot,
                 previousSnapshot = plan.lastForecastSnapshot,
                 daysUntilTrip = daysUntil
             )
 
             plan.copy(
                 isAnalyzing = false,
-                lastWeatherAnalysisText = analysisText,
-                aiSuggestion = aiSuggestion,
-                lastWeatherAnalysisDate = System.currentTimeMillis(),
-                previousForecastSnapshot = plan.lastForecastSnapshot,
-                lastForecastSnapshot = currentSnapshot,
-                weatherAnalysisStatus = if (plan.lastForecastSnapshot == null) TravelWeatherAnalysisStatus.ANALYZED else TravelWeatherAnalysisStatus.UPDATED
-            )
-        } catch (e: Exception) {
-            android.util.Log.e("TravelViewModel", "Hava durumu analizi başarısız", e)
-
-            val errorMessage = when {
-                e is java.net.UnknownHostException -> "İnternet bağlantısı kurulamadı."
-                e.message?.contains("API") == true || e.message?.contains("weather") == true -> "Bu tarih için güncel hava verisi henüz alınamadı."
-                else -> "Gelişmiş analiz şu an hazırlanamadı. Temel seyahat önerilerini yine de görüntüleyebilirsin."
-            }
-
-            plan.copy(
-                isAnalyzing = false,
-                weatherAnalysisStatus = TravelWeatherAnalysisStatus.ERROR,
-                lastWeatherAnalysisText = errorMessage,
+                weatherAnalysisStatus = TravelWeatherAnalysisStatus.ANALYZED, // Error olsa bile fallback ile ANALYZED gösteriyoruz ki kullanıcıya temiz metin gitsin
+                lastWeatherAnalysisText = fallbackSuggestion,
+                analysis = fallbackSuggestion,
+                aiSuggestion = null, // Clear aiSuggestion to avoid double text
                 lastWeatherAnalysisDate = System.currentTimeMillis()
             )
         }
     }
 
+    private fun buildAnalysisPrompt(plan: TravelPlan, snapshot: ForecastSnapshot?, daysUntil: Int): String {
+        val dateStr = "${plan.startDate.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM"))} - ${plan.endDate.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM"))}"
+        val weatherInfo = if (snapshot != null) {
+            """
+            HAVA TAHMİNİ VERİLERİ:
+            Durum: ${snapshot.conditionSummary}
+            Sıcaklık: ${snapshot.minTemp?.toInt() ?: "?"}-${snapshot.maxTemp?.toInt() ?: "?"}°C
+            Yağış İhtimali: %${snapshot.precipitationProbability ?: 0}
+            Rüzgar: ${snapshot.windSpeed ?: 0} km/s
+            UV İndeksi: ${snapshot.uvIndex ?: 0}
+            """.trimIndent()
+        } else {
+            "Hava durumu verisi henüz net değil (Seyahate $daysUntil gün var)."
+        }
+
+        return """
+            ${plan.city} şehri için $dateStr tarihleri arasında ${plan.tripType.label} amaçlı bir seyahat planlanıyor. Seyahate $daysUntil gün kaldı.
+
+            Aşağıdaki hava durumu verilerini analiz ederek kullanıcıya doğal, premium ve samimi bir dille kısa bir seyahat analizi hazırla:
+
+            $weatherInfo
+
+            TALİMATLAR:
+            1. "Seyahatine $daysUntil gün kaldı" cümlesiyle başla.
+            2. Hava koşullarına göre kıyafet ve valiz önerisi yap.
+            3. ${plan.tripType.label} seyahat tipine uygun aktivite veya dikkat edilmesi gereken bir risk varsa belirt.
+            4. Markdown sembolleri (*, #, _, -) kullanma, sadece düz metin olsun.
+            5. En fazla 4 cümle olsun.
+            6. Yanıtını doğrudan analiz metni olarak ver, "İşte analiziniz" gibi girişler yapma.
+
+            Bu bilgilere dayanarak seyahat için profesyonel bir öneri hazırlar mısın?
+        """.trimIndent()
+    }
+
     fun savePlan(plan: TravelPlan) {
         viewModelScope.launch {
-            // Save the plan to DB
-            dao.insertTravelPlan(plan.toEntity())
+            try {
+                // Save the plan to DB
+                dao.insertTravelPlan(plan.toEntity())
 
-            // Trigger automatic analysis
-            analyzeTravelWeather(plan)
+                // Trigger automatic analysis
+                analyzeTravelWeather(plan)
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Database save hatası: Seyahat planı kaydedilemedi.", e)
+            }
         }
     }
 
@@ -403,7 +463,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY },
-        isArchived = isArchived
+        isArchived = isArchived,
+        analysis = analysis
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -423,6 +484,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = weatherAnalysisStatus.name,
-        isArchived = isArchived
+        isArchived = isArchived,
+        analysis = analysis
     )
 }

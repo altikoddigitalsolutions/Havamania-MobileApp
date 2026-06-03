@@ -13,37 +13,45 @@ object TravelAiHelper {
         isPastTrip: Boolean = false,
         endDate: LocalDate? = null
     ): String {
-        val sb = StringBuilder()
-
         if (isPastTrip) {
             val dateStr = endDate?.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM")) ?: "geçtiğimiz günlerde"
-            return "$city seyahatin $dateStr'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin. Geçmiş hava verisi bu seyahat için artık güncel öneri üretmek amacıyla kullanılmıyor."
+            return "$city seyahatin $dateStr'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Havamania ile yeni rotalar planlamaya ne dersin?"
+        }
+
+        val daysText = when {
+            daysUntilTrip == 0 -> "Seyahatin bugün başlıyor."
+            daysUntilTrip == 1 -> "Seyahatine 1 gün kaldı."
+            else -> "Seyahatine $daysUntilTrip gün kaldı."
         }
 
         if (daysUntilTrip > 15 || forecastSnapshot == null) {
-            sb.append("Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım. ")
-            sb.append(getTripTypeAdvice(tripType, forecastSnapshot, daysUntilTrip))
-            sb.append("\n\n").append(getCitySuggestion(city, tripType))
-            return sb.toString().trim()
+            return "${daysText} Hava tahmini güvenilir aralığın dışında olduğu için şu anda hava bazlı analiz hazırlamıyorum. Seyahatine 15 gün kaldığında hava durumuna göre detaylı seyahat analizini burada görebilirsin."
         }
 
-        // 1. Comparison with previous snapshot
+        val sb = StringBuilder()
+        sb.append(daysText)
+
+        // 1. Weather Summary
+        sb.append("${city} seyahatinde hava '${forecastSnapshot.conditionSummary}' görünüyor. ")
+        sb.append("Sıcaklık ${forecastSnapshot.minTemp?.toInt() ?: 0}° - ${forecastSnapshot.maxTemp?.toInt() ?: 0}° aralığında. ")
+
+        // 2. Comparison with previous snapshot
         if (previousSnapshot != null) {
             val comparison = generateComparisonText(previousSnapshot, forecastSnapshot)
-            if (comparison.isNotBlank()) {
+            if (comparison.isNotBlank() && !comparison.contains("benzer")) {
                 sb.append(comparison).append(" ")
             }
         }
 
-        // 2. Weather based advice
+        // 3. Weather based advice (Wind, UV, etc.)
         val weatherAdvice = getWeatherAdvice(forecastSnapshot)
         sb.append(weatherAdvice).append(" ")
 
-        // 3. Trip type based advice
+        // 4. Trip type based advice
         val tripAdvice = getTripTypeAdvice(tripType, forecastSnapshot, daysUntilTrip)
         sb.append(tripAdvice).append(" ")
 
-        // 4. City specific sightseeing
+        // 5. City specific sightseeing
         sb.append("\n\n").append(getCitySuggestion(city, tripType))
 
         return sb.toString().trim()

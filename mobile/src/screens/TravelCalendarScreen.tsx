@@ -35,7 +35,7 @@ import { useTravelStore, TravelPlan, TravelType } from '../store/travelStore';
 import { TURKEY_CITIES, City } from '../data/cities';
 import { normalizeText } from '../utils/textUtils';
 import { useQuery } from '@tanstack/react-query';
-import { getDailyWeather } from '../services/weatherApi';
+import { travelAnalysisService } from '../services/travelAnalysisService';
 
 const { width } = Dimensions.get('window');
 
@@ -71,6 +71,13 @@ export function TravelCalendarScreen() {
 function TravelScreen() {
   const C = useColors();
   const { plans, addPlan, removePlan, updatePlan, archivePlan, unarchivePlan } = useTravelStore();
+
+  useEffect(() => {
+    // Seyahatleri kontrol et ve bildirimleri/otomatik analizleri yönet
+    if (plans.length > 0) {
+      travelAnalysisService.checkAndNotifyPlans(plans);
+    }
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [filter, setFilter] = useState<'Upcoming' | 'Past' | 'Archived'>('Upcoming');
@@ -151,11 +158,28 @@ function TravelScreen() {
       note,
     };
 
+    let planId = editingId;
     if (editingId) {
       updatePlan(editingId, payload);
     } else {
-      addPlan(payload);
+      planId = addPlan(payload);
     }
+
+    // Yeni rota eklendiğinde veya düzenlendiğinde analizi tetikle
+    setTimeout(async () => {
+      const targetPlan = useTravelStore.getState().plans.find(p => p.id === planId);
+      if (targetPlan) {
+        try {
+          const analysis = await travelAnalysisService.generateAnalysis(targetPlan);
+          if (analysis) {
+            useTravelStore.getState().addAnalysis(targetPlan.id, analysis);
+          }
+        } catch (e) {
+          console.error("Initial analysis failed", e);
+        }
+      }
+    }, 500);
+
     resetForm();
   };
 
@@ -233,7 +257,16 @@ function TravelScreen() {
             onArchive={() => archivePlan(item.id)}
             onUnarchive={() => unarchivePlan(item.id)}
             onShowDetail={() => openDetail(item)}
-            onReAnalyze={() => {}}
+            onReAnalyze={async () => {
+              try {
+                const analysis = await travelAnalysisService.generateAnalysis(item);
+                if (analysis) {
+                  useTravelStore.getState().addAnalysis(item.id, analysis);
+                }
+              } catch (e) {
+                Alert.alert("Hata", "Analiz şu an yapılamıyor. Lütfen internet bağlantınızı kontrol edin.");
+              }
+            }}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -349,7 +382,12 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
     enabled: !isPastTrip && daysUntilStart <= 15 && !isArchived,
   });
 
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const analysis = useMemo(() => {
+    const daysUntilStart = travelAnalysisService.getDaysUntil(plan.startDate);
+    const lastAnalysis = plan.lastAnalysis;
+
     const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
     const formatDate = (dateStr: string) => {
       const [y, m, d] = dateStr.split('-');
@@ -369,29 +407,54 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
 
     if (isActiveTrip) {
       const activeMsg = plan.startDate === today ? "Seyahatiniz bugün başlıyor." : "Seyahatiniz devam ediyor.";
-      if (!weatherData) return { status: 'active', msg: activeMsg, icon: 'navigate-outline', color: C.accent };
-      const dayData = weatherData.items.find(i => i.date === today) || weatherData.items[0];
-      return { status: 'active', msg: activeMsg, temp: dayData ? `${dayData.temp_min}° / ${dayData.temp_max}°` : undefined, icon: 'navigate-outline', color: C.accent };
+      return {
+        status: 'active',
+        msg: lastAnalysis?.text || activeMsg,
+        temp: lastAnalysis ? `${lastAnalysis.tempMin}° / ${lastAnalysis.tempMax}°` : undefined,
+        icon: 'navigate-outline',
+        color: C.accent
+      };
     }
 
-    if (daysUntilStart > 15) return { status: 'far-future', msg: "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım.", icon: 'time-outline', color: C.textMuted };
-    if (!weatherData) return { status: 'future-pending', msg: daysUntilStart === 1 ? "Seyahatinize yarın çıkıyorsunuz." : `Seyahatinize ${daysUntilStart} gün kaldı.`, icon: 'sparkles-outline', color: C.accent };
+    // 15 Gün Kuralı
+    if (daysUntilStart > 15) {
+      return {
+        status: 'far-future',
+        msg: `Seyahatine ${daysUntilStart} gün kaldı. Hava tahmini tutarlılığı için detaylı seyahat analizi, seyahate 15 gün kaldığında hazırlanacaktır.`,
+        icon: 'time-outline',
+        color: C.textMuted
+      };
+    }
 
-    const targetDate = plan.startDate;
-    const dayData = weatherData.items.find(i => i.date === targetDate);
-    if (!dayData) return { status: 'pending', msg: "Güncel hava verisi şu anda alınamadı.", icon: 'time-outline', color: C.textMuted };
+    // Analiz varsa göster
+    if (lastAnalysis) {
+      return {
+        status: 'ready',
+        msg: lastAnalysis.text,
+        temp: `${lastAnalysis.tempMin}° / ${lastAnalysis.tempMax}°`,
+        summary: lastAnalysis.summary,
+        precipProb: lastAnalysis.precipProb,
+        color: lastAnalysis.precipProb > 30 ? "#3B82F6" : C.accent,
+        icon: lastAnalysis.precipProb > 30 ? 'rainy-outline' : 'sunny-outline',
+        packing: lastAnalysis.text.includes("kıyafet") ? "Detaylı öneri metinde" : "Standart"
+      };
+    }
 
-    let advice = "Hava seyahat için oldukça ideal görünüyor.";
-    let packing = ["Rahat ayakkabı"];
-    let color = C.accent;
-    let icon = 'sunny-outline';
+    return {
+      status: 'future-pending',
+      msg: daysUntilStart === 0 ? "Seyahatiniz bugün başlıyor." :
+           daysUntilStart === 1 ? "Seyahatinize yarın çıkıyorsunuz." :
+           `Seyahatinize ${daysUntilStart} gün kaldı.`,
+      icon: 'sparkles-outline',
+      color: C.accent
+    };
+  }, [plan.lastAnalysis, plan.startDate, C, isPastTrip, isActiveTrip, isArchived, today, plan.city, plan.endDate]);
 
-    if (dayData.weather_code >= 51) { advice = "Yağmurlu bir gün bekleniyor, şemsiye ve yağmurluk almayı unutma."; packing.push("Şemsiye", "Yağmurluk"); color = "#3B82F6"; icon = 'rainy-outline'; }
-    else if (dayData.temp_max > 28) { advice = "Hava oldukça sıcak olacak. İnce kıyafetler ve güneş kremi tercih et."; packing.push("Güneş kremi", "Gözlük", "İnce kıyafetler"); color = "#F59E0B"; icon = 'thermometer-outline'; }
-    else if (dayData.temp_min < 10) { advice = "Hava serin olabilir, yanına kalın bir mont veya hırka almalısın."; packing.push("Mont", "Atkı"); color = "#10B981"; icon = 'snow-outline'; }
-
-    return { status: 'ready', msg: advice, packing, temp: `${dayData.temp_min}° / ${dayData.temp_max}°`, summary: dayData.precipitation_probability > 30 ? 'Yağış İhtimali' : 'Açık', color, icon };
-  }, [weatherData, plan.startDate, C, isPastTrip, isActiveTrip, isArchived, daysUntilStart, today, plan.city, plan.endDate]);
+  const handleReAnalyzeClick = async () => {
+    setIsAnalyzing(true);
+    await onReAnalyze();
+    setIsAnalyzing(false);
+  };
 
   const diffDays = Math.ceil(Math.abs(new Date(plan.endDate).getTime() - new Date(plan.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
@@ -412,14 +475,20 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         <View style={styles.weatherSummary}>{analysis?.temp && <><Text style={[styles.cardTemp, { color: C.text }]}>{analysis.temp}</Text><Icon name={analysis.icon as any} size={18} color={analysis.color} /></>}</View>
       </View>
 
-      <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} isPast={isPastTrip || isArchived} />
+      <TravelAiRecommendationSection analysis={analysis} isFetching={isAnalyzing} isPast={isPastTrip || isArchived} />
 
       <View style={styles.cardFooter}>
         <View style={styles.footerLeft}><Icon name={typeInfo.icon} size={14} color={C.textMuted} /><Text style={[styles.footerTypeText, { color: C.textMuted }]}>{typeInfo.label}</Text></View>
         <View style={styles.cardActions}>
           <TouchableOpacity style={styles.actionBtn} onPress={onEdit}><Icon name="pencil" size={16} color={C.textSecondary} /><Text style={[styles.actionBtnText, { color: C.textSecondary }]}>Düzenle</Text></TouchableOpacity>
           {(!isPastTrip && !isArchived) ? (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { refetch(); onReAnalyze(); }}><Icon name="sparkles" size={16} color={C.accent} /><Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleReAnalyzeClick} disabled={isAnalyzing}>
+              {isAnalyzing ? (
+                <Text style={[styles.actionBtnText, { color: C.textMuted }]}>Analiz ediliyor...</Text>
+              ) : (
+                <><Icon name="sparkles" size={16} color={C.accent} /><Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text></>
+              )}
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.actionBtn} onPress={onShowDetail}><Icon name="stats-chart-outline" size={16} color={C.accent} /><Text style={[styles.actionBtnText, { color: C.accent }]}>Geçmiş Özeti</Text></TouchableOpacity>
           )}

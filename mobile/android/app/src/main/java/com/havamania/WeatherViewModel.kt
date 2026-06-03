@@ -179,6 +179,7 @@ class WeatherViewModel(
 
     fun selectHour(hour: HourlyWeather?) {
         _selectedHourlyWeather.value = hour
+        updateRecommendation()
     }
 
     fun updateRecommendation(interests: Set<String>? = null) {
@@ -189,11 +190,18 @@ class WeatherViewModel(
         val currentUiState = _uiState.value
         if (currentUiState is WeatherUiState.Success) {
             val weather = currentUiState.data
+            val selectedHour = _selectedHourlyWeather.value?.time?.let {
+                try {
+                    val hourStr = if (it == "24:00") "0" else it.split(":")[0]
+                    java.time.LocalTime.of(hourStr.toInt(), 0)
+                } catch (e: Exception) { null }
+            }
 
             viewModelScope.launch {
                 _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
                     weatherData = weather,
-                    userInterests = currentUserInterests
+                    userInterests = currentUserInterests,
+                    selectedHour = selectedHour
                 )
             }
         }

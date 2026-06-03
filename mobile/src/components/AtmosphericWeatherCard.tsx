@@ -35,6 +35,7 @@ export enum WeatherCondition {
 }
 
 export enum TimeOfDay {
+  DAWN = 'DAWN',
   MORNING = 'MORNING',
   DAY = 'DAY',
   EVENING = 'EVENING',
@@ -61,10 +62,16 @@ const getRawCondition = (code: number): WeatherCondition => {
   return WeatherCondition.SUNNY;
 };
 
-const getTimeOfDay = (hour: number): TimeOfDay => {
-  if (hour >= 6 && hour < 11) return TimeOfDay.MORNING;
+const getTimeOfDay = (hour: number, isDay: boolean): TimeOfDay => {
+  // Gece Zorlaması: 21:00 sonrası veya isDay false ise (gece yarısı civarı)
+  if (hour >= 21 || hour < 5) return TimeOfDay.NIGHT;
+  if (!isDay && (hour >= 18 || hour < 6)) return TimeOfDay.NIGHT;
+
+  if (hour >= 5 && hour < 7) return TimeOfDay.DAWN;
+  if (hour >= 7 && hour < 11) return TimeOfDay.MORNING;
   if (hour >= 11 && hour < 17) return TimeOfDay.DAY;
-  if (hour >= 17 && hour < 19) return TimeOfDay.EVENING;
+  if (hour >= 17 && hour < 21) return TimeOfDay.EVENING;
+
   return TimeOfDay.NIGHT;
 };
 
@@ -105,86 +112,99 @@ const resolveWeatherCardStyle = (
 
   switch (condition) {
     case WeatherCondition.SUNNY:
-      if (timeOfDay === TimeOfDay.MORNING) {
-        style = { gradients: ['#BDEBFF', '#FFD6A5', '#FFF3B0'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'SUNNY_MORNING' };
+    case WeatherCondition.CLEAR:
+      if (timeOfDay === TimeOfDay.DAWN) {
+        style = { gradients: ['#A5C9CA', '#E7F6F2', '#FFEFBA'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'SUNNY_DAWN' };
+      } else if (timeOfDay === TimeOfDay.MORNING) {
+        style = { gradients: ['#8ECAE6', '#CFE7F3', '#FBFAFF'], effect: 'sunny', isWhiteText: false, accent: '#FFB703', name: 'SUNNY_MORNING' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
-        style = { gradients: ['#FFB86B', '#FF7E67', '#7F5A83'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'SUNNY_EVENING' };
+        style = { gradients: ['#FFB703', '#FB8500', '#8E44AD'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'SUNNY_EVENING' };
+      } else if (timeOfDay === TimeOfDay.NIGHT) {
+        style = { gradients: ['#023047', '#051923', '#000814'], effect: 'night', isWhiteText: true, accent: '#FFF', name: 'CLEAR_NIGHT' };
       } else {
-        style = { gradients: ['#67D1FF', '#7EDBFF', '#B8EDFF'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'SUNNY_DAY' };
+        style = { gradients: ['#0096C7', '#48CAE4', '#90E0EF'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'SUNNY_DAY' };
       }
       break;
 
     case WeatherCondition.MOSTLY_SUNNY:
-      if (timeOfDay === TimeOfDay.MORNING) {
-        style = { gradients: ['#B5E5F9', '#D9E9F2'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'MOSTLY_SUNNY_MORNING' };
+      if (timeOfDay === TimeOfDay.DAWN) {
+        style = { gradients: ['#B5E5F9', '#D9E9F2', '#FFF5E1'], effect: 'sunny', isWhiteText: false, accent: '#FFE29A', name: 'MOSTLY_SUNNY_DAWN' };
+      } else if (timeOfDay === TimeOfDay.MORNING) {
+        style = { gradients: ['#A9DDF8', '#E3F2FD'], effect: 'sunny', isWhiteText: false, accent: '#FFB703', name: 'MOSTLY_SUNNY_MORNING' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
-        style = { gradients: ['#F2994A', '#F2C94C', '#A9DDF8'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'MOSTLY_SUNNY_EVENING' };
+        style = { gradients: ['#F39C12', '#D35400', '#2C3E50'], effect: 'sunny', isWhiteText: true, accent: '#FFB703', name: 'MOSTLY_SUNNY_EVENING' };
+      } else if (timeOfDay === TimeOfDay.NIGHT) {
+        style = { gradients: ['#1A2A6C', '#23395B', '#000000'], effect: 'night', isWhiteText: true, accent: '#FFF', name: 'MOSTLY_SUNNY_NIGHT' };
       } else {
-        style = { gradients: ['#5EC6F2', '#A9DDF8'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'MOSTLY_SUNNY_DAY' };
+        style = { gradients: ['#0077B6', '#00B4D8', '#CAF0F8'], effect: 'sunny', isWhiteText: true, accent: '#FFD166', name: 'MOSTLY_SUNNY_DAY' };
       }
       break;
 
     case WeatherCondition.CLEAR_NIGHT:
-      style = { gradients: ['#071B33', '#0B2748', '#142F5F'], effect: 'night', isWhiteText: true, accent: '#FFF', name: 'CLEAR_NIGHT' };
+      style = { gradients: ['#000814', '#001D3D', '#003566'], effect: 'night', isWhiteText: true, accent: '#FFD60A', name: 'CLEAR_NIGHT' };
       break;
 
     case WeatherCondition.RAIN:
     case WeatherCondition.RAIN_NIGHT:
       if (timeOfDay === TimeOfDay.NIGHT) {
-        style = { gradients: ['#071B33', '#0A233D', '#102F55'], effect: 'rain', isWhiteText: true, accent: '#60A5FA', name: 'RAIN_NIGHT' };
+        style = { gradients: ['#0B132B', '#1C2541', '#3A506B'], effect: 'rain', isWhiteText: true, accent: '#60A5FA', name: 'RAIN_NIGHT' };
       } else {
-        style = { gradients: ['#2D6CDF', '#174C8A', '#0F2E4D'], effect: 'rain', isWhiteText: true, accent: '#60A5FA', name: 'RAIN_DAY' };
+        style = { gradients: ['#1B4965', '#5FA8D3', '#62B6CB'], effect: 'rain', isWhiteText: true, accent: '#BEE9E8', name: 'RAIN_DAY' };
       }
       break;
 
     case WeatherCondition.CLOUDY:
     case WeatherCondition.CLOUDY_NIGHT:
-      if (timeOfDay === TimeOfDay.MORNING) {
-        style = { gradients: ['#D8E2EC', '#B7C7D8', '#8DA1B5'], effect: 'cloudy', isWhiteText: false, accent: '#FFF', name: 'CLOUDY_MORNING' };
+      if (timeOfDay === TimeOfDay.DAWN) {
+        style = { gradients: ['#BDC3C7', '#EBEFEF'], effect: 'cloudy', isWhiteText: false, accent: '#FFF', name: 'CLOUDY_DAWN' };
+      } else if (timeOfDay === TimeOfDay.MORNING) {
+        style = { gradients: ['#D7E1EC', '#FFFFFF'], effect: 'cloudy', isWhiteText: false, accent: '#FFF', name: 'CLOUDY_MORNING' };
       } else if (timeOfDay === TimeOfDay.DAY) {
-        style = { gradients: ['#C6D3DF', '#9BAEC1', '#6F8499'], effect: 'cloudy', isWhiteText: false, accent: '#FFF', name: 'CLOUDY_DAY' };
+        style = { gradients: ['#7F8C8D', '#BDC3C7', '#ECF0F1'], effect: 'cloudy', isWhiteText: false, accent: '#FFF', name: 'CLOUDY_DAY' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
-        style = { gradients: ['#B8AFC6', '#8C8FA6', '#627386'], effect: 'cloudy', isWhiteText: true, accent: '#FFF', name: 'CLOUDY_EVENING' };
+        style = { gradients: ['#485563', '#29323C'], effect: 'cloudy', isWhiteText: true, accent: '#FFF', name: 'CLOUDY_EVENING' };
       } else {
-        style = { gradients: ['#182433', '#233449', '#30485F'], effect: 'cloudy', isWhiteText: true, accent: '#FFF', name: 'CLOUDY_NIGHT' };
+        style = { gradients: ['#141E30', '#243B55'], effect: 'cloudy', isWhiteText: true, accent: '#FFF', name: 'CLOUDY_NIGHT' };
       }
       break;
 
     case WeatherCondition.PARTLY_CLOUDY:
     case WeatherCondition.PARTLY_CLOUDY_NIGHT:
-      if (timeOfDay === TimeOfDay.MORNING || timeOfDay === TimeOfDay.DAY) {
-        style = { gradients: ['#A9DDF5', '#7FB8D8', '#EDEFF2'], effect: 'partly_cloudy', isWhiteText: false, accent: '#FFF', name: 'PARTLY_CLOUDY_DAY' };
+      if (timeOfDay === TimeOfDay.DAWN) {
+        style = { gradients: ['#A9DDF5', '#F8F9FA'], effect: 'sunny', isWhiteText: false, accent: '#FFF', name: 'PARTLY_CLOUDY_DAWN' };
+      } else if (timeOfDay === TimeOfDay.MORNING || timeOfDay === TimeOfDay.DAY) {
+        style = { gradients: ['#48CAE4', '#CAF0F8', '#F8F9FA'], effect: 'sunny', isWhiteText: false, accent: '#FFF', name: 'PARTLY_CLOUDY_DAY' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
-        style = { gradients: ['#F2A65A', '#B887A6', '#637A96'], effect: 'partly_cloudy', isWhiteText: true, accent: '#F2A65A', name: 'PARTLY_CLOUDY_EVENING' };
+        style = { gradients: ['#F2994A', '#F2C94C', '#2C3E50'], effect: 'sunny', isWhiteText: true, accent: '#F2A65A', name: 'PARTLY_CLOUDY_EVENING' };
       } else {
-        style = { gradients: ['#142238', '#243B55', '#34495E'], effect: 'partly_cloudy', isWhiteText: true, accent: '#FFF', name: 'PARTLY_CLOUDY_NIGHT' };
+        style = { gradients: ['#0F2027', '#203A43', '#2C5364'], effect: 'partly_cloudy', isWhiteText: true, accent: '#FFF', name: 'PARTLY_CLOUDY_NIGHT' };
       }
       break;
 
     case WeatherCondition.SNOW:
     case WeatherCondition.SNOW_NIGHT:
       if (timeOfDay === TimeOfDay.NIGHT) {
-        style = { gradients: ['#102538', '#1C3A54', '#A9D6E5'], effect: 'snow', isWhiteText: true, accent: '#A9D6E5', name: 'SNOW_NIGHT' };
+        style = { gradients: ['#0F2027', '#E0EAFC'], effect: 'snow', isWhiteText: true, accent: '#A9D6E5', name: 'SNOW_NIGHT' };
       } else {
-        style = { gradients: ['#EAF8FF', '#BFE3F6', '#7DB7D9'], effect: 'snow', isWhiteText: false, accent: '#7DB7D9', name: 'SNOW_DAY' };
+        style = { gradients: ['#E0EAFC', '#CFDEF3'], effect: 'snow', isWhiteText: false, accent: '#7DB7D9', name: 'SNOW_DAY' };
       }
       break;
 
     case WeatherCondition.FOG:
     case WeatherCondition.FOG_NIGHT:
       if (timeOfDay === TimeOfDay.NIGHT) {
-        style = { gradients: ['#1F2933', '#2F3E4D', '#4B5A68'], effect: 'fog', isWhiteText: true, accent: '#FFF', name: 'FOG_NIGHT' };
+        style = { gradients: ['#232526', '#414345'], effect: 'fog', isWhiteText: true, accent: '#FFF', name: 'FOG_NIGHT' };
       } else {
-        style = { gradients: ['#D0D7DE', '#AAB6C2', '#7B8998'], effect: 'fog', isWhiteText: false, accent: '#FFF', name: 'FOG_DAY' };
+        style = { gradients: ['#D7D2CC', '#304352'], effect: 'fog', isWhiteText: false, accent: '#FFF', name: 'FOG_DAY' };
       }
       break;
 
     case WeatherCondition.THUNDERSTORM:
-      style = { gradients: ['#101B3D', '#27275F', '#4B2E83'], effect: 'thunder', isWhiteText: true, accent: '#A78BFA', name: 'THUNDERSTORM' };
+      style = { gradients: ['#0F0C29', '#302B63', '#24243E'], effect: 'thunder', isWhiteText: true, accent: '#A78BFA', name: 'THUNDERSTORM' };
       break;
 
     case WeatherCondition.WIND:
-      style = { gradients: ['#8EC5FC', '#7FB3D5', '#5D7890'], effect: 'wind', isWhiteText: false, accent: '#FFF', name: 'WIND_DAY' };
+      style = { gradients: ['#3A6073', '#162221'], effect: 'wind', isWhiteText: true, accent: '#FFF', name: 'WIND_DAY' };
       break;
 
     default:
@@ -231,6 +251,13 @@ const getDisplayTitle = (condition: WeatherCondition, timeOfDay: TimeOfDay, orig
       case WeatherCondition.FOG:
       case WeatherCondition.FOG_NIGHT:
         return 'Sisli Gece';
+    }
+  }
+
+  // Şafak Koşulları
+  if (timeOfDay === TimeOfDay.DAWN) {
+    if (condition === WeatherCondition.SUNNY || condition === WeatherCondition.CLEAR) {
+      return 'Açık Şafak';
     }
   }
 
@@ -333,7 +360,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
   // LOGIC FIX: Resolve Time and Normalized Condition
   const parsedHour = useMemo(() => parseHour(time), [time]);
-  const timeOfDay = useMemo(() => getTimeOfDay(parsedHour), [parsedHour]);
+  const timeOfDay = useMemo(() => getTimeOfDay(parsedHour, isDay), [parsedHour, isDay]);
   const rawCondition = useMemo(() => getRawCondition(weatherCode), [weatherCode]);
   const displayCondition = useMemo(() => normalizeConditionForDisplay(rawCondition, timeOfDay), [rawCondition, timeOfDay]);
   const style = useMemo(() => resolveWeatherCardStyle(displayCondition, timeOfDay, theme), [displayCondition, timeOfDay, theme]);
@@ -427,16 +454,17 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
       case 'sunny':
         const isMostlySunny = displayCondition === WeatherCondition.MOSTLY_SUNNY;
         const isEvening = timeOfDay === TimeOfDay.EVENING;
+        const isDawn = timeOfDay === TimeOfDay.DAWN;
         const isPartly = displayCondition === WeatherCondition.PARTLY_CLOUDY;
 
         return (
           <View style={StyleSheet.absoluteFill}>
             {/* 1. OUTER ATMOSPHERIC GLOW */}
             <Animated.View style={[styles.premiumSunSceneGlow, {
-              backgroundColor: isEvening ? '#FF8A3D' : '#FFB703',
+              backgroundColor: isEvening ? '#FF8A3D' : (isDawn ? '#FFEFBA' : '#FFB703'),
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0.22, 0.32]
+                outputRange: [isDawn ? 0.15 : 0.22, isDawn ? 0.25 : 0.32]
               }),
               transform: [{ scale: 1.2 }]
             }]} />
@@ -444,7 +472,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
             {/* 2. INNER GLOW */}
             <Animated.View style={[styles.premiumSunSceneGlow, {
               width: 150, height: 150, borderRadius: 75,
-              backgroundColor: '#FFD166',
+              backgroundColor: isDawn ? '#FFF5E1' : '#FFD166',
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0.30, 0.40]
@@ -526,8 +554,23 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
         return (
           <View style={StyleSheet.absoluteFill}>
             {particles.stars.map((p, i) => (
-              <View key={i} style={[styles.star, {
+              <Animated.View key={i} style={[styles.star, {
                 left: p.left,
+                top: p.top,
+                width: p.size,
+                height: p.size,
+                opacity: pulseAnim.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [p.opacity, p.opacity * 1.5, p.opacity]
+                })
+              }]} />
+            ))}
+            <View style={styles.moonContainer}>
+              <View style={styles.moonMain} />
+              <View style={[styles.moonShadow, { backgroundColor: style.gradients[0] }]} />
+            </View>
+          </View>
+        );
                 top: p.top,
                 width: p.size,
                 height: p.size,
@@ -560,12 +603,13 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
       case 'partly_cloudy':
         return (
           <Animated.View style={[StyleSheet.absoluteFill, {
-            transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] }) }]
+            transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 20] }) }]
           }]}>
-            <View style={[styles.cloudHaze, { top: 40, left: -20, width: 220, height: 140, opacity: 0.06 }]} />
-            <View style={[styles.cloudHaze, { bottom: 60, right: -40, width: 280, height: 160, opacity: 0.1 }]} />
+            <View style={[styles.cloudHaze, { top: 30, left: -20, width: 250, height: 150, opacity: 0.08 }]} />
+            <View style={[styles.cloudHaze, { bottom: 40, right: -40, width: 300, height: 180, opacity: 0.12 }]} />
+            <View style={[styles.cloudHaze, { top: 100, right: 20, width: 180, height: 90, opacity: 0.05 }]} />
             {style.effect === 'partly_cloudy' && (
-              <View style={[styles.sunGlowMini, { backgroundColor: style.accent, opacity: 0.15 }]} />
+              <View style={[styles.sunGlowMini, { backgroundColor: style.accent, opacity: 0.2 }]} />
             )}
           </Animated.View>
         );
@@ -764,9 +808,35 @@ const styles = StyleSheet.create({
   sunGlowMini: { position: 'absolute', top: 30, right: 30, width: 80, height: 80, borderRadius: 40 },
   moonGlow: { position: 'absolute', top: 40, right: 40, width: 100, height: 100, borderRadius: 50 },
   star: { position: 'absolute', backgroundColor: '#FFF', borderRadius: 5 },
-  rainLine: { position: 'absolute', width: 1, height: 22, backgroundColor: '#FFF' },
+  rainLine: { position: 'absolute', width: 0.8, height: 25, backgroundColor: 'rgba(255,255,255,0.4)' },
   snowFlake: { position: 'absolute', backgroundColor: '#FFF', borderRadius: 10 },
-  cloudHaze: { position: 'absolute', backgroundColor: '#FFF', borderRadius: 100 },
+  cloudHaze: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 100 },
   fogLayer: { ...StyleSheet.absoluteFillObject },
   windLine: { position: 'absolute', height: 1, backgroundColor: '#FFF' },
+  moonContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 50,
+    width: 60,
+    height: 60,
+  },
+  moonMain: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F8F9FA',
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  moonShadow: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    top: -5,
+    left: 15,
+  },
 });

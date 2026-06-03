@@ -179,12 +179,7 @@ fun TravelPlannerScreen(
                                 onUnarchive = { viewModel.unarchiveTrip(plan.id) },
                                 onShowDetail = { selectedPlanForDetail = plan },
                                 onReanalyze = {
-                                    val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), plan.startDate)
-                                    if (daysUntil > 15) {
-                                        Toast.makeText(context, "Bu seyahat için güvenilir hava analizi seyahate 15 gün kala yapılabilir.", Toast.LENGTH_LONG).show()
-                                    } else {
-                                        viewModel.analyzeTravelWeather(plan)
-                                    }
+                                    viewModel.analyzeTravelWeather(plan)
                                 }
                             )
                         }
@@ -360,10 +355,11 @@ fun TravelPlanCard(
                 Spacer(Modifier.width(12.dp))
                 val weatherText = when {
                     isArchived -> "Bu seyahat arşivlendi. Tüm analiz notların ve hava durumu geçmişi burada saklanıyor."
-                    isPast -> "Bu seyahat tamamlandı. Trabzon seyahatinizdeki hava koşulları ve önceki analiz notları arşivlenmeye hazır."
-                    plan.isAnalyzing -> "Hava durumu verileri analiz ediliyor..."
-                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.ERROR -> plan.lastWeatherAnalysisText ?: "Analiz sırasında bir hata oluştu."
-                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.TOO_EARLY -> "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım."
+                    isPast -> "Bu seyahat tamamlandı. ${plan.city} seyahatinizdeki hava koşulları ve önceki analiz notları arşivlenmeye hazır."
+                    plan.isAnalyzing -> "Seyahat analizi hazırlanıyor..."
+                    plan.analysis != null -> plan.analysis
+                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.ERROR -> plan.lastWeatherAnalysisText ?: "Gelişmiş seyahat analizi şu an hazırlanamadı."
+                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.TOO_EARLY -> plan.lastWeatherAnalysisText ?: "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım."
                     else -> plan.lastWeatherAnalysisText ?: "Hava verisi henüz analiz edilmedi."
                 }
                 Text(
@@ -372,19 +368,6 @@ fun TravelPlanCard(
                     color = themeColors.textPrimary.copy(alpha = 0.9f),
                     overflow = TextOverflow.Visible
                 )
-            }
-
-            if (!isArchived && !isPast && plan.aiSuggestion != null) {
-                Spacer(Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.padding(top = 2.dp).size(16.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = plan.aiSuggestion,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, lineHeight = 22.sp),
-                        color = themeColors.textSecondary
-                    )
-                }
             }
 
             Spacer(Modifier.height(24.dp))

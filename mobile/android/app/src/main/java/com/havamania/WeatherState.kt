@@ -4,6 +4,32 @@ import kotlinx.serialization.Serializable
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
+ * Weather State Enums & Sealed Classes
+ */
+enum class DayPhase {
+    NIGHT,
+    DAWN,
+    MORNING,
+    DAY,
+    GOLDEN_HOUR,
+    DUSK,
+    EVENING
+}
+
+sealed class WeatherCondition {
+    object Clear : WeatherCondition()
+    object MostlySunny : WeatherCondition()
+    object PartlyCloudy : WeatherCondition()
+    object Cloudy : WeatherCondition()
+    object Overcast : WeatherCondition()
+    object Rain : WeatherCondition()
+    object Thunderstorm : WeatherCondition()
+    object Snow : WeatherCondition()
+    object Fog : WeatherCondition()
+    object NightClear : WeatherCondition()
+}
+
+/**
  * Ana Hava Durumu Veri Modeli - Cache için Serializable yapıldı
  */
 @Serializable
@@ -76,20 +102,6 @@ data class WeatherDetailData(
     val progress: Float? = null,
     val isSelected: Boolean = false
 )
-
-enum class DayPhase { NIGHT, DAWN, DAY, EVENING }
-
-sealed class WeatherCondition {
-    object Clear : WeatherCondition()
-    object MostlySunny : WeatherCondition()
-    object PartlyCloudy : WeatherCondition()
-    object Cloudy : WeatherCondition()
-    object Rain : WeatherCondition()
-    object Thunderstorm : WeatherCondition()
-    object Snow : WeatherCondition()
-    object Fog : WeatherCondition()
-    object NightClear : WeatherCondition()
-}
 
 /**
  * Recommendation Models

@@ -97,11 +97,12 @@ data class TravelPlan(
     val weatherSummary: String? = null,
     val aiSuggestion: String? = null,
     val isAnalyzing: Boolean = false,
-    val lastWeatherAnalysisText: String? = null,
+    val lastWeatherAnalysisText: String? = null, // UI'da gösterilen ana metin
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.TOO_EARLY,
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
+    val analysis: String? = null // Yeni kalıcı analiz alanı
 )

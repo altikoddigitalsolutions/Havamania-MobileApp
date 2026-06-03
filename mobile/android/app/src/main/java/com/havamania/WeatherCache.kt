@@ -85,7 +85,8 @@ data class TravelPlanEntity(
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: String = "TOO_EARLY",
     @ColumnInfo(defaultValue = "0")
-    val isArchived: Boolean = false
+    val isArchived: Boolean = false,
+    val analysis: String? = null
 )
 
 /**
@@ -145,7 +146,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 7, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 8, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -164,25 +165,16 @@ abstract class WeatherDatabase : RoomDatabase() {
 
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
-                try {
-                    val instance = Room.databaseBuilder(
-                        context.applicationContext,
-                        WeatherDatabase::class.java,
-                        "weather_database"
-                    )
-                    .addMigrations(MIGRATION_5_6)
-                    .fallbackToDestructiveMigration()
-                    .build()
-                    INSTANCE = instance
-                    instance
-                } catch (e: Exception) {
-                    context.deleteDatabase("weather_database")
-                    Room.databaseBuilder(
-                        context.applicationContext,
-                        WeatherDatabase::class.java,
-                        "weather_database"
-                    ).build()
-                }
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    WeatherDatabase::class.java,
+                    "weather_database"
+                )
+                .addMigrations(MIGRATION_5_6)
+                .fallbackToDestructiveMigration() // Şema değiştiğinde DB'yi sıfırla
+                .build()
+                INSTANCE = instance
+                instance
             }
         }
     }

@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -112,16 +115,16 @@ fun HourlyForecastItem(
         label = "scale"
     )
 
-    val phase = remember(data.time, sunriseTime, sunsetTime) {
+    val phase = remember(data.time, data.fullTime, sunriseTime, sunsetTime) {
         val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
         val timeObj = try { LocalTime.parse(data.time) } catch (e: Exception) { LocalTime.of(data.time.split(":")[0].toInt(), 0) }
-        val ldt = LocalDateTime.now().with(timeObj)
-        WeatherMapper.getDayPhase(ldt, sunrise, sunset)
+        val dateTime = try { LocalDateTime.parse(data.fullTime) } catch (e: Exception) { LocalDateTime.now().with(timeObj) }
+        WeatherMapper.getDayPhase(dateTime, sunrise, sunset)
     }
 
-    val condition = remember(data.weatherCode, data.isDay) {
-        WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, data.isDay)
+    val condition = remember(data.weatherCode, phase) {
+        WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, phase != DayPhase.NIGHT)
     }
 
     val spec = WeatherStyleResolver.resolveSpec(condition, phase, currentTheme)
@@ -132,7 +135,7 @@ fun HourlyForecastItem(
         label = "itemAlpha"
     )
 
-    // Premium Blue/Cyan Gradient for Selected State
+    // Premium Blue Gradient for Selected State
     val selectedGradient = remember {
         Brush.verticalGradient(listOf(Color(0xFF32BDF2), Color(0xFF1298D6)))
     }
@@ -148,6 +151,17 @@ fun HourlyForecastItem(
                 scaleY = scale * pressScale
                 alpha = itemAlpha
             }
+            .then(
+                if (isSelected) {
+                    Modifier.graphicsLayer {
+                        shadowElevation = 12.dp.toPx()
+                        shape = RoundedCornerShape(28.dp)
+                        clip = true
+                        ambientShadowColor = Color(0xFF1298D6)
+                        spotShadowColor = Color(0xFF32BDF2)
+                    }
+                } else Modifier
+            )
             .clip(RoundedCornerShape(28.dp))
             .background(if (isSelected) selectedGradient else Brush.linearGradient(listOf(unselectedBackground, unselectedBackground)))
             .border(
@@ -161,23 +175,29 @@ fun HourlyForecastItem(
                 onClick = onClick
             )
     ) {
-        // Subtle glow for selected
+        // 1. Kart Arka Planı (Modifier background ile halledildi)
+
+        // 2. Glow / Gradient overlay (İçerik katmanının altında kalmalı)
         if (isSelected) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
+                    .zIndex(0f)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-                            radius = 180f
+                            center = Offset(0f, 0f),
+                            radius = 250f
                         )
                     )
             )
         }
 
+        // 3. İçerik Katmanı (En üstte olmalı)
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .zIndex(1f)
                 .padding(vertical = 16.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -242,8 +262,6 @@ fun HourlyForecastItem(
                                 color = if (isSelected) Color.White else themeColors.accent
                             )
                         }
-                    } else {
-                        Spacer(Modifier.fillMaxSize())
                     }
                 }
             }

@@ -50,13 +50,17 @@ object WeatherMapper {
         val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { LocalTime.of(19, 30) }
 
+        // Use our own logic for isDay to ensure consistency with hourly/phase calculations
+        val now = LocalTime.now()
+        val calculatedIsDay = !now.isBefore(sunriseLocalTime) && now.isBefore(sunsetLocalTime)
+
         return WeatherData(
             cityName = cityName,
             districtName = districtName,
             temperature = "${current?.temperature?.roundToInt() ?: 0}°",
             condition = getWeatherCondition(current?.weatherCode ?: 0),
             weatherCode = current?.weatherCode ?: 0,
-            isDay = current?.isDay == 1,
+            isDay = calculatedIsDay,
             high = "${tempMax}°",
             low = "${tempMin}°",
             feelsLike = "${feelsLike}°",
@@ -168,13 +172,15 @@ object WeatherMapper {
             var hourLabel = fullTime.split("T").last()
             val timeObj = try { LocalTime.parse(hourLabel) } catch (e: Exception) { LocalTime.of(hourLabel.split(":").first().toInt(), 0) }
 
+            val calculatedIsDay = !timeObj.isBefore(sunrise) && timeObj.isBefore(sunset)
+
             HourlyWeather(
                 time = hourLabel,
                 fullTime = fullTime,
-                iconName = getWeatherIconName(hourly.weatherCode[i]),
+                iconName = getWeatherIconName(hourly.weatherCode[i], calculatedIsDay),
                 condition = getWeatherCondition(hourly.weatherCode[i]),
                 weatherCode = hourly.weatherCode[i],
-                isDay = !timeObj.isBefore(sunrise) && timeObj.isBefore(sunset),
+                isDay = calculatedIsDay,
                 temp = "${hourly.temperature[i].toInt()}°",
                 precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
                 isSelected = fullTime == currentHourStr
@@ -188,7 +194,7 @@ object WeatherMapper {
             DailyForecast(
                 day = getDayName(time),
                 date = time,
-                iconName = getWeatherIconName(daily.weatherCode[index]),
+                iconName = getWeatherIconName(daily.weatherCode[index], true), // Daily icons are usually Day icons
                 weatherCode = daily.weatherCode[index],
                 minTemp = daily.tempMin[index].toInt(),
                 maxTemp = daily.tempMax[index].toInt(),
@@ -288,9 +294,9 @@ object WeatherMapper {
 
     private data class MoonPhaseInfo(val label: String, val illumination: Int)
 
-    fun getWeatherIconName(code: Int): String = when (code) {
-        0, 1 -> "Sun"
-        2, 3, 45, 48 -> "Cloudy"
+    fun getWeatherIconName(code: Int, isDay: Boolean = true): String = when (code) {
+        0, 1 -> if (isDay) "Sun" else "Brightness3"
+        2, 3, 45, 48 -> if (isDay) "Cloudy" else "Cloud"
         51, 53, 55, 61, 63, 65 -> "Rain"
         71, 73, 75, 77, 85, 86 -> "Snow"
         80, 81, 82, 95, 96, 99 -> "Thunderstorm"
@@ -331,7 +337,7 @@ object WeatherMapper {
         val base = getWeatherCondition(code)
 
         return when (phase) {
-            DayPhase.NIGHT -> {
+            DayPhase.NIGHT, DayPhase.DUSK, DayPhase.EVENING -> {
                 when (code) {
                     0, 1 -> "Açık Gece"
                     2 -> "Parçalı Bulutlu Gece"
@@ -343,10 +349,13 @@ object WeatherMapper {
                     else -> "$base Gece"
                 }
             }
-            DayPhase.EVENING -> {
+            DayPhase.GOLDEN_HOUR -> {
                 if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
             }
             DayPhase.DAWN -> {
+                if (code == 0 || code == 1) "Açık Şafak" else "$base Şafak"
+            }
+            DayPhase.MORNING -> {
                 if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
             }
             DayPhase.DAY -> base
@@ -358,14 +367,26 @@ object WeatherMapper {
         val current = now.toLocalTime()
 
         return when {
-            // DAWN: sunrise ± 60 dakika
-            !current.isBefore(sunrise.minusMinutes(60)) && current.isBefore(sunrise.plusMinutes(60)) -> DayPhase.DAWN
-            // EVENING: sunset ± 90 dakika
-            !current.isBefore(sunset.minusMinutes(90)) && current.isBefore(sunset.plusMinutes(90)) -> DayPhase.EVENING
-            // DAY: DAWN sonrası ve EVENING öncesi
-            !current.isBefore(sunrise.plusMinutes(60)) && current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
-            // NIGHT: Diğer tüm durumlar
-            else -> DayPhase.NIGHT
+            // NIGHT: Before dawn or late night
+            current.isBefore(sunrise.minusMinutes(45)) || current.isAfter(LocalTime.of(22, 0)) -> DayPhase.NIGHT
+
+            // DAWN: 45 min before sunrise until sunrise
+            current.isBefore(sunrise) -> DayPhase.DAWN
+
+            // MORNING: sunrise until 10:30
+            current.isBefore(LocalTime.of(10, 30)) -> DayPhase.MORNING
+
+            // DAY: 10:30 until 90 min before sunset
+            current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
+
+            // GOLDEN_HOUR (Akşam): 90 min before sunset until sunset
+            current.isBefore(sunset) -> DayPhase.GOLDEN_HOUR
+
+            // DUSK: sunset until 30 min after sunset
+            current.isBefore(sunset.plusMinutes(30)) -> DayPhase.DUSK
+
+            // EVENING: 30 min after sunset until 22:00
+            else -> DayPhase.EVENING
         }
     }
 
@@ -374,12 +395,12 @@ object WeatherMapper {
             0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
             1 -> if (isDay) WeatherCondition.MostlySunny else WeatherCondition.NightClear
             2 -> WeatherCondition.PartlyCloudy
-            3 -> WeatherCondition.Cloudy
+            3 -> WeatherCondition.Overcast
             45, 48 -> WeatherCondition.Fog
             51, 53, 55, 61, 63, 65, 80, 81, 82 -> WeatherCondition.Rain
             71, 73, 75, 77, 85, 86 -> WeatherCondition.Snow
             95, 96, 99 -> WeatherCondition.Thunderstorm
-            else -> WeatherCondition.Cloudy
+            else -> WeatherCondition.Overcast
         }
     }
 }

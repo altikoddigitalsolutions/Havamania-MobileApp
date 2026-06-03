@@ -1,7 +1,17 @@
 package com.havamania
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -12,6 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.dp
 import com.havamania.ui.theme.HavamaniaTheme
@@ -36,48 +47,49 @@ fun WeatherEffectLayer(
     if (intensity == WeatherEffectIntensity.OFF) return
 
     val theme = HavamaniaTheme.colors
-    val baseOpacity = if (theme.isDark) 0.7f else 0.4f
+    val baseOpacity = if (theme.isDark) 0.65f else 0.45f
 
     // Reduce opacity in LOW intensity
-    val effectiveOpacity = if (intensity == WeatherEffectIntensity.LOW) baseOpacity * 0.6f else baseOpacity
+    val effectiveOpacity = if (intensity == WeatherEffectIntensity.LOW) baseOpacity * 0.5f else baseOpacity
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Atmospheric Transitions Layer
+        AnimatedVisibility(
+            visible = condition is WeatherCondition.Rain || condition is WeatherCondition.Thunderstorm,
+            enter = fadeIn(animationSpec = tween(1000)),
+            exit = fadeOut(animationSpec = tween(1000))
+        ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.12f)))
+        }
+
         when (condition) {
             is WeatherCondition.Clear, is WeatherCondition.NightClear -> {
-                if (phase == DayPhase.NIGHT) {
+                if (phase == DayPhase.NIGHT || phase == DayPhase.DUSK || phase == DayPhase.EVENING) {
                     StarFieldEffect(
                         modifier = Modifier.fillMaxSize(),
                         isAnimationEnabled = isAnimationEnabled,
                         intensity = intensity,
                         parallaxOffset = parallaxOffset
                     )
-                } else {
-                    SunGlowEffect(effectiveOpacity)
                 }
             }
             is WeatherCondition.MostlySunny -> {
-                SunGlowEffect(effectiveOpacity * 0.9f)
-                CloudHazeEffect(effectiveOpacity * 0.3f, intensity = intensity)
+                CloudHazeEffect(effectiveOpacity * 0.25f, intensity = intensity)
             }
             is WeatherCondition.Cloudy -> {
-                CloudHazeEffect(effectiveOpacity, intensity = intensity)
+                CloudHazeEffect(effectiveOpacity * 0.8f, intensity = intensity)
+            }
+            is WeatherCondition.Overcast -> {
+                CloudHazeEffect(effectiveOpacity * 1.1f, intensity = intensity)
             }
             is WeatherCondition.PartlyCloudy -> {
-                CloudHazeEffect(effectiveOpacity * 0.6f, intensity = intensity)
-                if (phase != DayPhase.NIGHT) {
-                    SunGlowEffect(effectiveOpacity * 0.7f)
-                }
+                CloudHazeEffect(effectiveOpacity * 0.45f, intensity = intensity)
             }
             is WeatherCondition.Rain -> {
-                val rainIntensity = when (weatherCode) {
-                    51, 53, 55 -> RainIntensity.DRIZZLE
-                    80, 81, 82 -> RainIntensity.RAIN
-                    else -> RainIntensity.RAIN
-                }
-                RainEffect(effectiveOpacity, intensity = rainIntensity, visualIntensity = intensity, isAnimationEnabled = isAnimationEnabled)
+                LayeredRainEffect(effectiveOpacity, intensity = intensity, isAnimationEnabled = isAnimationEnabled)
             }
             is WeatherCondition.Thunderstorm -> {
-                RainEffect(effectiveOpacity * 1.2f, intensity = RainIntensity.HEAVY, visualIntensity = intensity, isAnimationEnabled = isAnimationEnabled)
+                LayeredRainEffect(effectiveOpacity * 1.3f, intensity = intensity, isAnimationEnabled = isAnimationEnabled)
                 if (intensity != WeatherEffectIntensity.LOW) {
                     ThunderEffect(effectiveOpacity, isAnimationEnabled = isAnimationEnabled)
                 }
@@ -88,6 +100,7 @@ fun WeatherEffectLayer(
             is WeatherCondition.Fog -> {
                 FogEffect(effectiveOpacity)
             }
+            else -> {}
         }
     }
 }
@@ -108,7 +121,7 @@ fun StarFieldEffect(
     intensity: WeatherEffectIntensity = WeatherEffectIntensity.MEDIUM,
     parallaxOffset: Float = 0f
 ) {
-    val starCount = if (intensity == WeatherEffectIntensity.LOW) 10 else 25
+    val starCount = if (intensity == WeatherEffectIntensity.LOW) 20 else 45
 
     // Generate star positions once and remember them
     val stars = remember(starCount) {
@@ -116,9 +129,9 @@ fun StarFieldEffect(
             Star(
                 xRatio = Random.nextFloat(),
                 yRatio = Random.nextFloat(),
-                radius = 0.5f + Random.nextFloat() * 1.0f, // Smaller stars
-                baseAlpha = 0.15f + Random.nextFloat() * 0.4f, // Lower opacity
-                twinkleDelay = Random.nextInt(3000, 7000)
+                radius = 0.4f + Random.nextFloat() * 0.8f, // Smaller stars
+                baseAlpha = 0.1f + Random.nextFloat() * 0.3f, // Lower opacity
+                twinkleDelay = Random.nextInt(2000, 8000)
             )
         }
     }
@@ -126,19 +139,29 @@ fun StarFieldEffect(
     if (isAnimationEnabled) {
         val infiniteTransition = rememberInfiniteTransition(label = "stars")
         val twinkle by infiniteTransition.animateFloat(
-            initialValue = 0.4f,
+            initialValue = 0.3f,
             targetValue = 1.0f,
             animationSpec = infiniteRepeatable(
-                animation = tween(4000, easing = FastOutSlowInEasing),
+                animation = tween(5000, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "twinkle"
         )
 
         Canvas(modifier = modifier) {
+            // Nebula/Galaxy Glow
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF74B9FF).copy(alpha = 0.05f), Color.Transparent),
+                    center = Offset(size.width * 0.5f, size.height * 0.3f),
+                    radius = size.width * 0.6f
+                ),
+                blendMode = BlendMode.Screen
+            )
+
             stars.forEachIndexed { index, star ->
-                val alpha = (star.baseAlpha * if (index % 4 == 0) twinkle else 1f).coerceIn(0.1f, 0.8f)
-                val x = (star.xRatio * size.width + parallaxOffset * (1f + index % 3 * 0.5f)) % size.width
+                val alpha = (star.baseAlpha * if (index % 3 == 0) twinkle else 1f).coerceIn(0.05f, 0.7f)
+                val x = (star.xRatio * size.width + parallaxOffset * (0.8f + index % 5 * 0.2f)) % size.width
 
                 drawCircle(
                     color = Color.White.copy(alpha = alpha),
@@ -148,101 +171,63 @@ fun StarFieldEffect(
             }
         }
     }
-else {
-        Canvas(modifier = modifier) {
-            stars.forEach { star ->
-                drawCircle(
-                    color = Color.White.copy(alpha = star.baseAlpha),
-                    radius = star.radius.dp.toPx(),
-                    center = Offset(star.xRatio * size.width, star.yRatio * size.height)
-                )
-            }
-        }
-    }
 }
 
-// ── RAIN EFFECT ──────────────────────────────────────────────────────────────
-data class RainDrop(
-    val xRatio: Float,
-    val yRatio: Float,
-    val speed: Float,
-    val length: Float,
-    val alpha: Float
-)
-
-enum class RainIntensity { DRIZZLE, RAIN, HEAVY }
-
+// ── LAYERED RAIN EFFECT ───────────────────────────────────────────────────────
 @Composable
-fun RainEffect(
+fun LayeredRainEffect(
     opacity: Float,
-    intensity: RainIntensity = RainIntensity.RAIN,
-    visualIntensity: WeatherEffectIntensity = WeatherEffectIntensity.MEDIUM,
+    intensity: WeatherEffectIntensity = WeatherEffectIntensity.MEDIUM,
     isAnimationEnabled: Boolean = true
 ) {
-    val dropCount = when (intensity) {
-        RainIntensity.DRIZZLE -> 15
-        RainIntensity.RAIN -> 30
-        RainIntensity.HEAVY -> 50
-    }.let { if (visualIntensity == WeatherEffectIntensity.LOW) it / 2 else it }
+    val infiniteTransition = rememberInfiniteTransition(label = "rain_layers")
 
-    // Generate rain drops once and remember them
-    val drops = remember(dropCount) {
-        List(dropCount) {
-            RainDrop(
-                xRatio = Random.nextFloat(),
-                yRatio = Random.nextFloat(),
-                speed = 0.4f + Random.nextFloat() * 0.8f, // Slower for premium feel
-                length = 8f + Random.nextFloat() * 12f,  // More particle-like
-                alpha = 0.08f + Random.nextFloat() * 0.15f
+    val t1 by infiniteTransition.animateFloat(0f, 1f, infiniteRepeatable(tween(2500, easing = LinearEasing)), "l1")
+    val t2 by infiniteTransition.animateFloat(0f, 1f, infiniteRepeatable(tween(3500, easing = LinearEasing)), "l2")
+    val t3 by infiniteTransition.animateFloat(0f, 1f, infiniteRepeatable(tween(5000, easing = LinearEasing)), "l3")
+
+    // Layer 1: Fine drops
+    val l1Drops = remember { List(40) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+    // Layer 2: Medium drops
+    val l2Drops = remember { List(25) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+    // Layer 3: Blurred distant drops
+    val l3Drops = remember { List(15) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        // Layer 3: Distant
+        l3Drops.forEach { d ->
+            val y = (d.y * size.height + t3 * size.height) % size.height
+            drawLine(
+                Color.White.copy(0.08f * opacity),
+                Offset(d.x * size.width, y),
+                Offset(d.x * size.width + 1f, y + 25f),
+                strokeWidth = 2.5f,
+                cap = StrokeCap.Round
             )
         }
-    }
 
-    if (isAnimationEnabled) {
-        val infiniteTransition = rememberInfiniteTransition(label = "rain")
-        val animationOffset by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3500, easing = LinearEasing), // Slower, more elegant
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "offset"
-        )
-
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drops.forEach { drop ->
-                val x = size.width * drop.xRatio
-                val y = (size.height * drop.yRatio + animationOffset * size.height * drop.speed) % size.height
-
-                // Draw as soft particles/lines
-                drawCircle(
-                    color = Color.White.copy(alpha = drop.alpha * opacity),
-                    radius = 0.8.dp.toPx(),
-                    center = Offset(x, y)
-                )
-
-                drawLine(
-                    color = Color.White.copy(alpha = drop.alpha * opacity * 0.5f),
-                    start = Offset(x, y),
-                    end = Offset(x + 2f, y + drop.length),
-                    strokeWidth = 1f
-                )
-            }
+        // Layer 2: Medium
+        l2Drops.forEach { d ->
+            val y = (d.y * size.height + t2 * size.height) % size.height
+            drawLine(
+                Color.White.copy(0.12f * opacity),
+                Offset(d.x * size.width, y),
+                Offset(d.x * size.width + 2f, y + 20f),
+                strokeWidth = 1.2f,
+                cap = StrokeCap.Round
+            )
         }
-    }
-else {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drops.forEach { drop ->
-                val x = size.width * drop.xRatio
-                val y = size.height * drop.yRatio
-                drawLine(
-                    color = Color.White.copy(alpha = drop.alpha * opacity),
-                    start = Offset(x, y),
-                    end = Offset(x + 4f, y + drop.length),
-                    strokeWidth = 1.2f
-                )
-            }
+
+        // Layer 1: Fine
+        l1Drops.forEach { d ->
+            val y = (d.y * size.height + t1 * size.height) % size.height
+            drawLine(
+                Color.White.copy(0.18f * opacity),
+                Offset(d.x * size.width, y),
+                Offset(d.x * size.width + 3f, y + 15f),
+                strokeWidth = 0.8f,
+                cap = StrokeCap.Round
+            )
         }
     }
 }

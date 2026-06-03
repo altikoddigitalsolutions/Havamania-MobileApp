@@ -65,25 +65,23 @@ class TravelNotificationWorker(
                     weatherDao.insertTravelPlan(updatedPlan.toEntity())
                 }
 
-                // Determine notification type
+                // Determine notification type - Strictly once a day for days 0-15
                 val hour = now.hour
-                val isMorning = hour in 7..11
-                val isEvening = hour in 18..22
+                val isMorning = hour in 8..11
 
                 val type = when {
-                    daysUntil == 0 -> "START_DAY"
-                    daysUntil <= 3 && isMorning -> "MORNING"
-                    daysUntil <= 3 && isEvening -> "EVENING"
-                    daysUntil > 3 && isMorning -> "DAILY"
-                    else -> null // Don't send during other times
+                    daysUntil in 0..15 && isMorning -> "DAILY_REPORT"
+                    else -> null
                 }
 
                 if (type != null) {
                     val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                    val notificationId = "travel_${plan.id}_${dateStr}_$type"
+                    val notificationId = "travel_notif_${plan.id}_$dateStr"
 
-                    // Check if already sent (simplified check: hash of ID used for notify,
-                    // we can also check notification DB if needed but room notify handles duplicates if ID is same)
+                    // The notify(id, ...) with same ID will update/suppress if already shown,
+                    // but we check if we already inserted it in our notification log to be sure.
+                    val alreadySent = notificationDao.getNotificationById(notificationId) != null
+                    if (alreadySent) continue
 
                     val travelData = buildNotificationData(updatedPlan, daysUntil)
                     val (title, message) = generateNotificationText(updatedPlan, daysUntil, type, travelData)
@@ -156,42 +154,27 @@ class TravelNotificationWorker(
         type: String,
         data: TravelNotificationData
     ): Pair<String, String> {
-        val title = when(type) {
-            "START_DAY" -> "Seyahatin bugün başlıyor! ✈️"
-            "MORNING" -> if (daysLeft == 1) "Seyahatine yarın çıkıyorsun! 🎒" else "Seyahatine $daysLeft gün kaldı 🎒"
-            "EVENING" -> "Seyahat hazırlıklarını unutma 🎒"
-            else -> "Seyahatin yaklaşıyor"
+        val title = when {
+            daysLeft == 0 -> "${plan.city} seyahatin bugün başlıyor! ✈️"
+            daysLeft == 1 -> "${plan.city} seyahatine 1 gün kaldı! 🎒"
+            else -> "${plan.city} seyahatine $daysLeft gün kaldı 🎒"
         }
 
-        val message = when(type) {
-            "START_DAY" -> {
-                val weather = if (data.weatherSummary != null)
-                    "${plan.city}'da hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
-                    else "${plan.city} seyahatin bugün başlıyor."
-                "$weather Çıkmadan önce son kontrollerini yapmayı unutma!"
-            }
-            "MORNING" -> {
-                val weatherPart = if (data.weatherSummary != null)
-                    "${plan.city} için hava ${data.weatherSummary.lowercase()} görünüyor. "
-                    else ""
-                val itemsPart = if (data.recommendedItems.isNotEmpty())
-                    "${data.recommendedItems.take(2).joinToString(" ve ")} yanına almayı unutma."
-                    else "Hazırlıklarını gözden geçirebilirsin."
-                "Seyahatine $daysLeft gün kaldı. $weatherPart$itemsPart"
-            }
-            "EVENING" -> {
-                "${plan.city} seyahatin yaklaşıyor. Ulaşım saatlerini, konaklama bilgilerini ve çantanı tekrar kontrol etmek iyi olabilir."
-            }
-            else -> {
-                "${plan.city} seyahatin yaklaşıyor: Hava ${data.weatherSummary?.lowercase() ?: "tahmin ediliyor"}. Planlarına göz atmak ister misin?"
-            }
-        }
+        val weatherPart = if (data.weatherSummary != null) {
+            "Bugünkü tahmine göre hava ${data.weatherSummary.lowercase()}. "
+        } else ""
 
-        val finalMessage = if (!data.comparisonText.isNullOrBlank() && type != "EVENING") {
-            "$message ${data.comparisonText}"
-        } else message
+        val comparisonPart = if (!data.comparisonText.isNullOrBlank()) {
+            "${data.comparisonText} "
+        } else ""
 
-        return title to finalMessage
+        val advicePart = if (data.recommendedItems.isNotEmpty()) {
+            "${data.recommendedItems.first()} önerilir."
+        } else "Keyifli yolculuklar!"
+
+        val message = "$title $weatherPart$comparisonPart$advicePart"
+
+        return "Havamania Seyahat Analizi" to message
     }
 
     private fun showSystemNotification(item: NotificationItem) {
@@ -256,7 +239,8 @@ class TravelNotificationWorker(
         previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY },
-        isArchived = isArchived
+        isArchived = isArchived,
+        analysis = analysis
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -276,25 +260,30 @@ class TravelNotificationWorker(
         previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = weatherAnalysisStatus.name,
-        isArchived = isArchived
+        isArchived = isArchived,
+        analysis = analysis
     )
 
     companion object {
         fun schedule(context: Context) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.NOT_REQUIRED) // Run even if offline using last data
-                .build()
+            try {
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.NOT_REQUIRED) // Run even if offline using last data
+                    .build()
 
-            // Run every 4 hours to catch morning/evening windows
-            val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(4, TimeUnit.HOURS)
-                .setConstraints(constraints)
-                .build()
+                // Run every 4 hours to catch morning/evening windows
+                val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(4, TimeUnit.HOURS)
+                    .setConstraints(constraints)
+                    .build()
 
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "travel_notifications_work",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                request
-            )
+                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                    "travel_notifications_work",
+                    ExistingPeriodicWorkPolicy.UPDATE,
+                    request
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("TravelWorker", "Bildirim planlama hatası: WorkManager başlatılamadı.", e)
+            }
         }
     }
 }
