@@ -65,23 +65,33 @@ object WeatherStyleResolver {
         val isDawn = phase == DayPhase.DAWN
         val isDay = phase == DayPhase.DAY
 
-        // 1. Base Colors by Condition & Phase - Refined for premium contrast
+        // 1. Base Colors by Condition & Phase - Refined for premium atmospheric storytelling
         val baseColors = when {
             isEvening -> when (condition) {
-                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm -> listOf(Color(0xFF334155), Color(0xFF1E293B), Color(0xFFF97316), Color(0xFF7C2D12))
+                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm ->
+                    listOf(Color(0xFF334155), Color(0xFF1E293B), Color(0xFF475569), Color(0xFF0F172A))
                 else -> listOf(Color(0xFFFDBA3B), Color(0xFFF97316), Color(0xFFEF5D60), Color(0xFF7C2D12))
             }
-            isNight -> listOf(Color(0xFF07111F), Color(0xFF0F1B33), Color(0xFF1E1B4B), Color(0xFF111827))
+            isNight -> when (condition) {
+                is WeatherCondition.Cloudy -> listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF020617))
+                else -> listOf(Color(0xFF07111F), Color(0xFF0F1B33), Color(0xFF1E1B4B), Color(0xFF111827))
+            }
             isDawn -> when (condition) {
-                is WeatherCondition.Clear, is WeatherCondition.MostlySunny -> listOf(Color(0xFFFFD1D1), Color(0xFFD0E1FF), Color(0xFFBAE6FD))
+                is WeatherCondition.Clear, is WeatherCondition.MostlySunny ->
+                    listOf(Color(0xFFFFD1D1), Color(0xFFD0E1FF), Color(0xFFBAE6FD))
                 else -> listOf(Color(0xFFD8E6F2), Color(0xFFAFC1D2), Color(0xFF7F95AA))
             }
             else -> when (condition) { // DAY
-                is WeatherCondition.Clear, is WeatherCondition.MostlySunny -> listOf(Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFFFFD166))
-                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm -> listOf(Color(0xFF64748B), Color(0xFF708090), Color(0xFF475569)) // Mavi-Gri Premium Gündüz Fırtınası
-                is WeatherCondition.Cloudy, is WeatherCondition.PartlyCloudy -> listOf(Color(0xFF94A3B8), Color(0xFFCBD5E1), Color(0xFFE2E8F0))
-                is WeatherCondition.Snow -> listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFDDD6FE))
-                is WeatherCondition.Fog -> listOf(Color(0xFF94A3B8), Color(0xFFA9B5C1), Color(0xFFD1D9E1)) // Sisli Premium Gradient
+                is WeatherCondition.Clear, is WeatherCondition.MostlySunny ->
+                    listOf(Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFFFFD166))
+                is WeatherCondition.Rain, is WeatherCondition.Thunderstorm ->
+                    listOf(Color(0xFF64748B), Color(0xFF708090), Color(0xFF475569))
+                is WeatherCondition.Cloudy, is WeatherCondition.PartlyCloudy ->
+                    listOf(Color(0xFF94A3B8), Color(0xFFCBD5E1), Color(0xFFE2E8F0))
+                is WeatherCondition.Snow ->
+                    listOf(Color(0xFFE0F2FE), Color(0xFFF1F5F9), Color(0xFFDDD6FE))
+                is WeatherCondition.Fog ->
+                    listOf(Color(0xFF94A3B8), Color(0xFFA9B5C1), Color(0xFFD1D9E1))
                 else -> listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8), Color(0xFF7DD3FC))
             }
         }
@@ -98,7 +108,7 @@ object WeatherStyleResolver {
             else -> VisualEffectType.NONE
         }
 
-        // 3. Density & Focus - Balanced for initial screen load
+        // 3. Density & Focus
         val cloudDensity = when (condition) {
             is WeatherCondition.Clear -> 0
             is WeatherCondition.MostlySunny -> 2
@@ -116,7 +126,6 @@ object WeatherStyleResolver {
             else -> Offset(0.82f, 0.22f)
         }
 
-        // Text Color Logic: Improved for visibility in rainy day/snow
         val isBrightBackground = (isDay || isDawn) && (condition is WeatherCondition.Clear || condition is WeatherCondition.MostlySunny || condition is WeatherCondition.Snow)
         val isDark = !isBrightBackground
 
@@ -247,7 +256,7 @@ fun WeatherHeroCard(
                 this.scaleY = if (isReducedMotion) 1f else scale
             }
             .clip(RoundedCornerShape(32.dp))
-            .border(1.5.dp, Color.White.copy(0.15f), RoundedCornerShape(32.dp))
+            .border(1.2.dp, Color.White.copy(0.12f), RoundedCornerShape(32.dp))
     ) {
         LiveBackgroundLayer(spec = spec)
 
@@ -255,7 +264,11 @@ fun WeatherHeroCard(
             WeatherEffectLayer(spec = spec, isAnimationEnabled = !isReducedMotion)
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(spec.overlayAlpha)))
+        Box(modifier = Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                listOf(Color.Black.copy(alpha = spec.overlayAlpha), Color.Transparent, Color.Black.copy(alpha = spec.overlayAlpha * 0.5f))
+            )
+        ))
 
         Box(modifier = Modifier.fillMaxSize().zIndex(100f)) {
             PremiumWeatherContent(
@@ -296,7 +309,7 @@ fun LiveBackgroundLayer(spec: WeatherCardVisualSpec) {
             drawRect(brush = Brush.linearGradient(spec.gradientColors, start = Offset(move, -move), end = Offset(size.width - move, size.height + move)))
         }
 
-        // Ambient glows - more dramatic
+        // Ambient glows - more dramatic light scattering
         val scatteringColor = if (spec.isEvening) Color(0xFFFF7A3D) else if (spec.isNight) Color(0xFF1E1B4B) else if (spec.isDawn) Color(0xFFFFD1D1) else Color(0xFFFFD166)
         drawCircle(
             brush = Brush.radialGradient(
@@ -374,7 +387,7 @@ fun PremiumSunEffect(spec: WeatherCardVisualSpec) {
     val isEvening = spec.isEvening
     val isDawn = spec.isDawn
 
-    val sunRadiusBase = if (isEvening || isDawn) 46.dp else 36.dp
+    val sunRadiusBase = if (isEvening || isDawn) 40.dp else 30.dp
     val coreColors = when {
         isEvening -> listOf(Color(0xFFFFF9C4), Color(0xFFFFB74D), Color(0xFFF97316))
         isDawn -> listOf(Color(0xFFFFFDF0), Color(0xFFFFE4E1), Color(0xFFFFC0CB))
@@ -389,8 +402,8 @@ fun PremiumSunEffect(spec: WeatherCardVisualSpec) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
         val r = sunRadiusBase.toPx() * energy
-        drawCircle(brush = Brush.radialGradient(0.0f to atmosphereColor.copy(0.18f * drift), 1.0f to Color.Transparent, center = center, radius = 280.dp.toPx()), center = center, radius = 280.dp.toPx())
-        drawCircle(brush = Brush.radialGradient(0.0f to coreColors[0], 0.45f to coreColors[1].copy(0.9f), 1.0f to Color.Transparent, center = center, radius = r * 1.3f), center = center, radius = r * 1.3f, alpha = 0.95f)
+        drawCircle(brush = Brush.radialGradient(0.0f to atmosphereColor.copy(0.12f * drift), 1.0f to Color.Transparent, center = center, radius = 220.dp.toPx()), center = center, radius = 220.dp.toPx())
+        drawCircle(brush = Brush.radialGradient(0.0f to coreColors[0], 0.45f to coreColors[1].copy(0.8f), 1.0f to Color.Transparent, center = center, radius = r * 1.2f), center = center, radius = r * 1.2f, alpha = 0.9f)
     }
 }
 
@@ -401,9 +414,9 @@ fun PremiumMoonEffect(spec: WeatherCardVisualSpec) {
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
-        val r = 26.dp.toPx()
+        val r = 22.dp.toPx()
 
-        drawCircle(brush = Brush.radialGradient(0.0f to Color(0xFFFDE68A).copy(0.18f * glow), 1.0f to Color.Transparent, center = center, radius = 120.dp.toPx()), center = center, radius = 120.dp.toPx())
+        drawCircle(brush = Brush.radialGradient(0.0f to Color(0xFFFDE68A).copy(0.15f * glow), 1.0f to Color.Transparent, center = center, radius = 100.dp.toPx()), center = center, radius = 100.dp.toPx())
 
         val path = Path().apply {
             addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
@@ -506,14 +519,30 @@ fun LightningEffect() {
 fun SnowParticleEffect() {
     val sy by rememberInfiniteTransition().animateFloat(0f, 1000f, infiniteRepeatable(tween(5000, easing = LinearEasing)))
     val p = remember { List(45) { Offset(Random.nextFloat(), Random.nextFloat()) } }
-    Canvas(modifier = Modifier.fillMaxSize()) { p.forEach { dr -> drawCircle(Color.White.copy(0.5f), 2.5.dp.toPx(), Offset(dr.x * size.width + (Math.sin(sy.toDouble() / 80 + dr.x * 15) * 25).toFloat(), (dr.y * size.height + sy) % size.height)) } }
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        p.forEach { dr ->
+            drawCircle(
+                Color.White.copy(0.5f),
+                2.5.dp.toPx(),
+                Offset(dr.x * size.width + (Math.sin(sy.toDouble() / 80 + dr.x * 15) * 25).toFloat(), (dr.y * size.height + sy) % size.height)
+            )
+        }
+    }
 }
 
 @Composable
 fun StarFieldEffect() {
     val tw by rememberInfiniteTransition().animateFloat(0.3f, 1f, infiniteRepeatable(tween(2500), RepeatMode.Reverse))
     val stars = remember { List(60) { Offset(Random.nextFloat(), Random.nextFloat()) } }
-    Canvas(modifier = Modifier.fillMaxSize()) { stars.forEachIndexed { i, s -> drawCircle(Color.White.copy(0.5f * (if (i % 2 == 0) tw else 1.3f - tw)), 1.2.dp.toPx(), Offset(s.x * size.width, s.y * size.height)) } }
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        stars.forEachIndexed { i, s ->
+            drawCircle(
+                Color.White.copy(0.5f * (if (i % 2 == 0) tw else 1.3f - tw)),
+                1.2.dp.toPx(),
+                Offset(s.x * size.width, s.y * size.height)
+            )
+        }
+    }
 }
 
 @Composable
@@ -566,31 +595,51 @@ fun PremiumWeatherContent(
     val secondaryColor = textColor.copy(alpha = 0.7f)
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (spec.isDark) Color.White.copy(0.12f) else Color.Black.copy(0.06f)).clickable { onCityClick() }.padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                .background(if (spec.isDark) Color.White.copy(0.12f) else Color.Black.copy(0.06f))
+                .clickable { onCityClick() }
+                .padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.LocationOn, null, tint = spec.accentColor, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) { Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor)); Icon(Icons.Rounded.KeyboardArrowDown, null, tint = secondaryColor, modifier = Modifier.size(16.dp)) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
+                        Icon(Icons.Rounded.KeyboardArrowDown, null, tint = secondaryColor, modifier = Modifier.size(16.dp))
+                    }
                     Text("Konumu değiştir", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
                 }
             }
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PremiumNotificationButton(unreadCount, spec.isDark, textColor, onNotificationsClick)
-                Spacer(Modifier.width(12.dp)); Icon(spec.mainIcon, null, tint = spec.accentColor, modifier = Modifier.size(36.dp))
+                Spacer(Modifier.width(12.dp))
+                Icon(spec.mainIcon, null, tint = spec.accentColor, modifier = Modifier.size(36.dp))
             }
         }
         Spacer(Modifier.weight(0.5f))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(temperature, style = MaterialTheme.typography.displayLarge.copy(fontSize = 110.sp, fontWeight = FontWeight.W100, letterSpacing = (-6).sp, color = textColor))
+            Text(temperature, style = MaterialTheme.typography.displayLarge.copy(
+                fontSize = 110.sp,
+                fontWeight = FontWeight.W100,
+                letterSpacing = (-6).sp,
+                color = textColor,
+                shadow = Shadow(color = Color.Black.copy(alpha = 0.1f), offset = Offset(0f, 4f), blurRadius = 12f)
+            ))
             Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = textColor))
             Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = secondaryColor))
         }
         Spacer(Modifier.weight(1f))
-        Surface(modifier = Modifier.fillMaxWidth().height(64.dp), color = if (spec.isDark) Color.White.copy(0.1f) else Color.Black.copy(0.05f), shape = RoundedCornerShape(24.dp), border = BorderStroke(0.5.dp, if (spec.isDark) Color.White.copy(0.15f) else Color.Black.copy(0.08f))) {
+        Surface(modifier = Modifier.fillMaxWidth().height(64.dp),
+            color = if (spec.isDark) Color.White.copy(0.1f) else Color.Black.copy(0.05f),
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(0.5.dp, if (spec.isDark) Color.White.copy(0.15f) else Color.Black.copy(0.08f))) {
             Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to "UV $uvIndex").forEach { (icon, valStr) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = textColor.copy(0.6f), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold), color = textColor) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null, tint = textColor.copy(0.6f), modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold), color = textColor)
+                    }
                 }
             }
         }
