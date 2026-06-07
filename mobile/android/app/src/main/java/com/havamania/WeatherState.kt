@@ -12,9 +12,14 @@ enum class DayPhase {
     MORNING,
     DAY,
     GOLDEN_HOUR,
+    SUNSET,
     DUSK,
+    BLUE_HOUR,
+    TWILIGHT,
     EVENING
 }
+
+enum class WeatherEffectIntensity { OFF, LOW, MEDIUM }
 
 sealed class WeatherCondition {
     object Clear : WeatherCondition()

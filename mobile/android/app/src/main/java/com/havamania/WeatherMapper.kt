@@ -42,7 +42,6 @@ object WeatherMapper {
         val sunset = sunsetISO?.split("T")?.last()
         var solarNoon: String? = null
 
-        // Solar noon fallback calculation
         if (sunrise != null && sunset != null) {
             solarNoon = calculateSolarNoon(sunrise, sunset)
         }
@@ -50,7 +49,7 @@ object WeatherMapper {
         val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { LocalTime.of(19, 30) }
 
-        // Use our own logic for isDay to ensure consistency with hourly/phase calculations
+        // Core logic for isDay based on times
         val now = LocalTime.now()
         val calculatedIsDay = !now.isBefore(sunriseLocalTime) && now.isBefore(sunsetLocalTime)
 
@@ -58,7 +57,7 @@ object WeatherMapper {
             cityName = cityName,
             districtName = districtName,
             temperature = "${current?.temperature?.roundToInt() ?: 0}°",
-            condition = getWeatherCondition(current?.weatherCode ?: 0),
+            condition = getDisplayCondition(current?.weatherCode ?: 0, getDayPhase(LocalDateTime.now(), sunriseLocalTime, sunsetLocalTime)),
             weatherCode = current?.weatherCode ?: 0,
             isDay = calculatedIsDay,
             high = "${tempMax}°",
@@ -80,13 +79,13 @@ object WeatherMapper {
             visibilityKm = (current?.visibility ?: 10000.0) / 1000.0,
             humidity = current?.humidity ?: 0,
             pressure = current?.pressure?.toInt() ?: 1013,
-            uvIndex = daily?.uvIndexMax?.firstOrNull()?.toInt() ?: 0,
+            uvIndex = if (calculatedIsDay) (daily?.uvIndexMax?.firstOrNull()?.toInt() ?: 0) else 0,
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
             hourlyForecast = mapHourly(hourly, sunriseLocalTime, sunsetLocalTime),
             dailyForecast = mapDaily(daily),
-            details = mapDetails(current, daily)
+            details = mapDetails(current, daily, calculatedIsDay)
         )
     }
 
@@ -126,7 +125,7 @@ object WeatherMapper {
             warnings.add("güçlü rüzgar")
         }
         val uv = daily?.uvIndexMax?.firstOrNull() ?: 0.0
-        if (uv > 7.0) {
+        if (uv > 7.0 && current.isDay == 1) {
             score -= 15
             warnings.add("yüksek UV")
         }
@@ -178,7 +177,7 @@ object WeatherMapper {
                 time = hourLabel,
                 fullTime = fullTime,
                 iconName = getWeatherIconName(hourly.weatherCode[i], calculatedIsDay),
-                condition = getWeatherCondition(hourly.weatherCode[i]),
+                condition = getDisplayCondition(hourly.weatherCode[i], getDayPhase(LocalDateTime.now().with(timeObj), sunrise, sunset)),
                 weatherCode = hourly.weatherCode[i],
                 isDay = calculatedIsDay,
                 temp = "${hourly.temperature[i].toInt()}°",
@@ -194,7 +193,7 @@ object WeatherMapper {
             DailyForecast(
                 day = getDayName(time),
                 date = time,
-                iconName = getWeatherIconName(daily.weatherCode[index], true), // Daily icons are usually Day icons
+                iconName = getWeatherIconName(daily.weatherCode[index], true),
                 weatherCode = daily.weatherCode[index],
                 minTemp = daily.tempMin[index].toInt(),
                 maxTemp = daily.tempMax[index].toInt(),
@@ -214,10 +213,10 @@ object WeatherMapper {
         }
     }
 
-    private fun mapDetails(current: CurrentWeatherDto?, daily: DailyDto?): List<WeatherDetailData> {
+    private fun mapDetails(current: CurrentWeatherDto?, daily: DailyDto?, isDay: Boolean): List<WeatherDetailData> {
         val precipProb = daily?.precipProbMax?.firstOrNull() ?: 0
         val humidity = current?.humidity ?: 0
-        val uv = daily?.uvIndexMax?.firstOrNull() ?: 0.0
+        val uv = if (isDay) (daily?.uvIndexMax?.firstOrNull() ?: 0.0) else 0.0
         val visibility = current?.visibility ?: 10000.0
         val cloudCover = current?.cloudCover ?: 0
         val windGust = current?.windGusts ?: 0.0
@@ -257,50 +256,15 @@ object WeatherMapper {
         else -> "Kısıtlı görüş"
     }
 
-    private fun getMoonPhase(date: Date): MoonPhaseInfo {
-        val calendar = Calendar.getInstance()
-        calendar.time = date
-        val year = calendar.get(Calendar.YEAR)
-        val month = calendar.get(Calendar.MONTH) + 1
-        val day = calendar.get(Calendar.DAY_OF_MONTH)
-        val jd = 367.0 * year - floor(7.0 * (year + floor((month + 9.0) / 12.0)) / 4.0) + floor(275.0 * month / 9.0) + day + 1721013.5
-        val cycle = (jd - 2451550.1) / 29.530588853
-        val phase = cycle - floor(cycle)
-        val illumination = (50.0 * (1.0 - cos(2.0 * Math.PI * phase))).roundToInt()
-        val label = when {
-            phase < 0.0625 || phase >= 0.9375 -> "Yeni Ay"
-            phase < 0.1875 -> "Hilal"
-            phase < 0.3125 -> "İlk Dördün"
-            phase < 0.4375 -> "Şişen Ay"
-            phase < 0.5625 -> "Dolunay"
-            phase < 0.6875 -> "Küçülen Ay"
-            phase < 0.8125 -> "Son Dördün"
-            else -> "Eski Hilal"
-        }
-        return MoonPhaseInfo(label, illumination)
-    }
-
-    fun getMoonAndSunData(daily: DailyDto?): List<Pair<String, String>> {
-        val list = mutableListOf<Pair<String, String>>()
-        if (daily != null && daily.sunrise.isNotEmpty()) {
-            list.add("Güneş Doğuşu" to daily.sunrise.first().split("T").last())
-            list.add("Güneş Batışı" to daily.sunset.first().split("T").last())
-        }
-        val moon = getMoonPhase(Date())
-        list.add("Ay Fazı" to moon.label)
-        list.add("Aydınlık" to "%${moon.illumination}")
-        return list
-    }
-
-    private data class MoonPhaseInfo(val label: String, val illumination: Int)
-
     fun getWeatherIconName(code: Int, isDay: Boolean = true): String = when (code) {
         0, 1 -> if (isDay) "Sun" else "Brightness3"
-        2, 3, 45, 48 -> if (isDay) "Cloudy" else "Cloud"
+        2 -> if (isDay) "Cloudy" else "Cloud"
+        3 -> "Cloud"
+        45, 48 -> "FilterDrama"
         51, 53, 55, 61, 63, 65 -> "Rain"
         71, 73, 75, 77, 85, 86 -> "Snow"
         80, 81, 82, 95, 96, 99 -> "Thunderstorm"
-        else -> "Cloudy"
+        else -> "Cloud"
     }
 
     fun getIconFromName(name: String): ImageVector = when (name) {
@@ -319,6 +283,7 @@ object WeatherMapper {
         "Umbrella" -> Icons.Rounded.Umbrella
         "Cyclone" -> Icons.Rounded.Cyclone
         "Opacity" -> Icons.Rounded.Opacity
+        "FilterDrama" -> Icons.Rounded.FilterDrama
         else -> Icons.Rounded.Cloud
     }
 
@@ -329,63 +294,36 @@ object WeatherMapper {
         80, 81, 82 -> "Sağanak Yağış"; 95, 96, 99 -> "Fırtınalı"; else -> "Bulutlu"
     }
 
-    /**
-     * UI ekranında görünecek condition metnini günün saatine göre normalize eder.
-     * Gece 22:00'da "Güneşli" yerine "Açık Gece" yazmasını sağlar.
-     */
     fun getDisplayCondition(code: Int, phase: DayPhase): String {
         val base = getWeatherCondition(code)
-
         return when (phase) {
-            DayPhase.NIGHT, DayPhase.DUSK, DayPhase.EVENING -> {
+            DayPhase.NIGHT, DayPhase.DUSK, DayPhase.EVENING, DayPhase.BLUE_HOUR, DayPhase.TWILIGHT -> {
                 when (code) {
                     0, 1 -> "Açık Gece"
                     2 -> "Parçalı Bulutlu Gece"
                     3 -> "Bulutlu Gece"
                     45, 48 -> "Sisli Gece"
-                    51, 53, 55, 61, 63, 65, 80, 81, 82 -> "Yağmurlu Gece"
-                    71, 73, 75, 77, 85, 86 -> "Karlı Gece"
-                    95, 96, 99 -> "Fırtınalı Gece"
                     else -> "$base Gece"
                 }
             }
-            DayPhase.GOLDEN_HOUR -> {
-                if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
-            }
-            DayPhase.DAWN -> {
-                if (code == 0 || code == 1) "Açık Şafak" else "$base Şafak"
-            }
-            DayPhase.MORNING -> {
-                if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
-            }
-            DayPhase.DAY -> base
+            DayPhase.GOLDEN_HOUR, DayPhase.SUNSET -> if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
+            DayPhase.DAWN -> if (code == 0 || code == 1) "Açık Şafak" else "$base Şafak"
+            DayPhase.MORNING -> if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
             else -> base
         }
     }
 
     fun getDayPhase(now: LocalDateTime, sunrise: LocalTime, sunset: LocalTime): DayPhase {
         val current = now.toLocalTime()
-
         return when {
-            // NIGHT: Before dawn or late night
             current.isBefore(sunrise.minusMinutes(45)) || current.isAfter(LocalTime.of(22, 0)) -> DayPhase.NIGHT
-
-            // DAWN: 45 min before sunrise until sunrise
             current.isBefore(sunrise) -> DayPhase.DAWN
-
-            // MORNING: sunrise until 10:30
             current.isBefore(LocalTime.of(10, 30)) -> DayPhase.MORNING
-
-            // DAY: 10:30 until 90 min before sunset
             current.isBefore(sunset.minusMinutes(90)) -> DayPhase.DAY
-
-            // GOLDEN_HOUR (Akşam): 90 min before sunset until sunset
             current.isBefore(sunset) -> DayPhase.GOLDEN_HOUR
-
-            // DUSK: sunset until 30 min after sunset
-            current.isBefore(sunset.plusMinutes(30)) -> DayPhase.DUSK
-
-            // EVENING: 30 min after sunset until 22:00
+            current.isBefore(sunset.plusMinutes(30)) -> DayPhase.SUNSET
+            current.isBefore(sunset.plusMinutes(60)) -> DayPhase.BLUE_HOUR
+            current.isBefore(LocalTime.of(22, 0)) -> DayPhase.TWILIGHT
             else -> DayPhase.EVENING
         }
     }

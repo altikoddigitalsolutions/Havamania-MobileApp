@@ -13,7 +13,7 @@ try {
   );
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export enum WeatherCondition {
   SUNNY = 'SUNNY',
@@ -55,6 +55,8 @@ interface WeatherCardStyle {
   accent: string;
   name: string;
   altitude: number;
+  cloudDensity: number;
+  isNight: boolean;
 }
 
 const getRawCondition = (code: number): WeatherCondition => {
@@ -70,15 +72,12 @@ const getRawCondition = (code: number): WeatherCondition => {
 };
 
 const calculateAltitude = (hour: number): number => {
-  // Very rough simulation: noon is 90, midnight is -18
   if (hour >= 6 && hour <= 18) {
-    // Day
-    const progress = (hour - 6) / 6; // 0 at 6am, 1 at noon, 2 at 6pm
+    const progress = (hour - 6) / 6;
     return 90 * (1 - Math.abs(progress - 1));
   } else {
-    // Night
     const h = hour < 6 ? hour + 24 : hour;
-    const progress = (h - 18) / 6; // 0 at 6pm, 1 at midnight, 2 at 6am
+    const progress = (h - 18) / 6;
     return -18 * (1 - Math.abs(progress - 1));
   }
 };
@@ -104,34 +103,38 @@ const resolveWeatherCardStyle = (
   const isNight = altitude <= 0;
   const isCloudy = condition === WeatherCondition.OVERCAST || condition === WeatherCondition.CLOUDY || condition === WeatherCondition.PARTLY_CLOUDY;
   const isRainy = condition === WeatherCondition.RAIN || condition === WeatherCondition.THUNDERSTORM;
+  const isFoggy = condition === WeatherCondition.FOG;
 
+  // PREMIUM PALETTES
   if (isNight) {
-    if (isCloudy || isRainy) {
-      grads = ['#080C14', '#1E293B', '#334155']; // Deep Desaturated Night
-    } else {
-      grads = ['#020617', '#0F172A', '#1E1B4B']; // Midnight Blue
-    }
+    grads = (isCloudy || isRainy || isFoggy) ? ['#020617', '#0F172A', '#1E293B'] : ['#020617', '#0F172A', '#1E1B4B'];
   } else if (timeOfDay === TimeOfDay.DAWN) {
     grads = isCloudy ? ['#334155', '#475569', '#FBCFE8'] : ['#2D1B69', '#DB2777', '#F59E0B'];
   } else if (timeOfDay === TimeOfDay.SUNSET || timeOfDay === TimeOfDay.GOLDEN_HOUR) {
-    grads = isCloudy ? ['#1F2937', '#374151', '#9CA3AF'] : ['#0F172A', '#7C2D12', '#F97316'];
-  } else if (isRainy) {
-    grads = ['#334155', '#475569', '#64748B'];
+    grads = isCloudy ? ['#2C3E50', '#4A5568', '#FED7AA'] : ['#1E293B', '#7C2D12', '#F97316'];
+  } else if (isRainy || condition === WeatherCondition.THUNDERSTORM) {
+    grads = condition === WeatherCondition.THUNDERSTORM ? ['#0F172A', '#1E1B4B', '#312E81'] : ['#2D3748', '#4A5568', '#718096'];
+  } else if (isFoggy) {
+    grads = ['#718096', '#A0AEC0', '#CBD5E1'];
   } else if (isCloudy) {
-    grads = condition === WeatherCondition.PARTLY_CLOUDY
-      ? ['#0369A1', '#0EA5E9', '#BAE6FD']
-      : ['#475569', '#64748B', '#94A3B8'];
+    grads = condition === WeatherCondition.PARTLY_CLOUDY ? ['#4A5568', '#718096', '#A0AEC0'] : ['#5E6B7D', '#6E7B8B', '#4B5565'];
   } else {
-    grads = temperature > 28 ? ['#0284C7', '#0EA5E9', '#FDE68A'] : ['#0369A1', '#0EA5E9', '#BAE6FD'];
+    grads = temperature > 28 ? ['#0284C7', '#0EA5E9', '#FDE047'] : ['#0369A1', '#0EA5E9', '#7DD3FC'];
   }
+
+  const cloudDensity = condition === WeatherCondition.OVERCAST ? 8 :
+                       condition === WeatherCondition.CLOUDY ? 6 :
+                       condition === WeatherCondition.PARTLY_CLOUDY ? 4 : 2;
 
   const style: WeatherCardStyle = {
     gradients: grads,
     effect: 'sunny',
-    isWhiteText: isNight || isRainy || isCloudy || (altitude < 10),
+    isWhiteText: isNight || isRainy || isCloudy || isFoggy || (altitude < 10),
     accent: isNight ? '#93C5FD' : '#FDE047',
     name: timeOfDay,
-    altitude: altitude
+    altitude: altitude,
+    cloudDensity: cloudDensity,
+    isNight: isNight
   };
 
   if (condition === WeatherCondition.THUNDERSTORM) style.effect = 'thunder';
@@ -189,23 +192,16 @@ const getDisplayEmoji = (condition: WeatherCondition, altitude: number, code: nu
     switch (condition) {
       case WeatherCondition.SUNNY:
       case WeatherCondition.CLEAR:
-      case WeatherCondition.CLEAR_NIGHT:
-        return '🌙';
+      case WeatherCondition.CLEAR_NIGHT: return '🌙';
       case WeatherCondition.PARTLY_CLOUDY:
-        return '☁️'; // Gece bulutlu: ay + bulut
       case WeatherCondition.CLOUDY:
-      case WeatherCondition.OVERCAST:
-        return '☁️';
+      case WeatherCondition.OVERCAST: return '☁️';
       case WeatherCondition.RAIN:
-      case WeatherCondition.RAIN_NIGHT:
-        return '🌧️';
-      case WeatherCondition.THUNDERSTORM:
-        return '⛈️';
+      case WeatherCondition.RAIN_NIGHT: return '🌧️';
+      case WeatherCondition.THUNDERSTORM: return '⛈️';
       case WeatherCondition.SNOW:
-      case WeatherCondition.SNOW_NIGHT:
-        return '🌨️';
-      default:
-        return '☁️';
+      case WeatherCondition.SNOW_NIGHT: return '🌨️';
+      default: return '☁️';
     }
   }
   return getWeatherEmoji(code);
@@ -229,6 +225,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   const masterAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const entryAnim = useRef(new Animated.Value(0)).current;
+  const lightningAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -236,7 +233,6 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
       entryAnim.setValue(1);
       return;
     }
-
     Animated.timing(entryAnim, { toValue: 1, duration: 800, easing: Easing.out(Easing.back(1)), useNativeDriver: true }).start();
     Animated.loop(Animated.timing(masterAnim, { toValue: 1, duration: 300000, easing: Easing.linear, useNativeDriver: true })).start();
     Animated.loop(
@@ -245,27 +241,32 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
         Animated.timing(pulseAnim, { toValue: 0, duration: 8000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
       ])
     ).start();
-  }, [reducedMotion]);
 
-  const particles = useMemo(() => ({
-    rain: [...Array(40)].map((_, i) => ({
-      left: `${Math.random() * 100}%`,
-      opacity: 0.1 + Math.random() * 0.2,
-      speed: 0.8 + Math.random() * 0.5,
-    })),
-    stars: [...Array(35)].map((_, i) => ({
-      left: `${Math.random() * 100}%`,
-      top: `${Math.random() * 100}%`,
-      size: 0.5 + Math.random() * 1.5,
-      opacity: 0.1 + Math.random() * 0.4,
-    })),
-    snow: [...Array(40)].map((_, i) => ({
-      left: `${Math.random() * 100}%`,
-      size: 2 + Math.random() * 3,
-      speed: 0.3 + Math.random() * 0.4,
-      drift: Math.random() * 40 - 20,
-    }))
-  }), []);
+    if (style.effect === 'thunder') {
+        const triggerLightning = () => {
+            const delay = Math.random() * 10000 + 5000;
+            setTimeout(() => {
+                Animated.sequence([
+                    Animated.timing(lightningAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+                    Animated.timing(lightningAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+                    Animated.timing(lightningAnim, { toValue: 0.5, duration: 50, useNativeDriver: true }),
+                    Animated.timing(lightningAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+                ]).start(() => triggerLightning());
+            }, delay);
+        };
+        triggerLightning();
+    }
+  }, [reducedMotion, style.effect]);
+
+  const particles = useMemo(() => {
+    const starCount = style.isNight ? Math.max(5, 45 - (style.cloudDensity * 5)) : 0;
+    return {
+      rainFront: [...Array(35)].map((_, i) => ({ left: `${Math.random() * 100}%`, opacity: 0.25 + Math.random() * 0.15, speed: 1.2, height: 45, width: 1.0 })),
+      rainBack: [...Array(25)].map((_, i) => ({ left: `${Math.random() * 100}%`, opacity: 0.1 + Math.random() * 0.1, speed: 0.8, height: 25, width: 0.6 })),
+      stars: [...Array(starCount)].map((_, i) => ({ left: `${Math.random() * 100}%`, top: `${Math.random() * 75}%`, size: 0.5 + Math.random() * 0.8, opacity: 0.1 + Math.random() * 0.3 })),
+      snow: [...Array(35)].map((_, i) => ({ left: `${Math.random() * 100}%`, size: 2 + Math.random() * 3, speed: 0.3 + Math.random() * 0.4, drift: Math.random() * 40 - 20 }))
+    };
+  }, [style.cloudDensity, style.isNight]);
 
   const textColor = style.isWhiteText ? '#FFF' : '#0F172A';
   const secondaryColor = style.isWhiteText ? 'rgba(255,255,255,0.75)' : 'rgba(15,23,42,0.65)';
@@ -273,163 +274,113 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
   const renderEffect = () => {
     if (reducedMotion) return null;
-
     const sunY = 70 - ((Math.max(0, altitude) / 90) * 55);
-    const isNight = altitude < 0;
+    const isNight = style.isNight;
 
     return (
       <View style={StyleSheet.absoluteFill}>
-        {/* Layer 1: Atmosphere Base Glow */}
-        <Animated.View style={[styles.hazeLayer, {
-          backgroundColor: isNight ? '#1E293B' : style.accent,
-          opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.03, 0.08] })
-        }]} />
+        {/* LIGHTNING FLASH (Storm Only) */}
+        {style.effect === 'thunder' && (
+            <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#BBDEFB', opacity: lightningAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.25] }), zIndex: 10 }]} />
+        )}
 
-        {/* Layer 2: Stars/Particles (Night/Global) */}
+        {/* ATMOSPHERE BASE PULSE */}
+        <Animated.View style={[styles.hazeLayer, { backgroundColor: isNight ? '#1E293B' : style.accent, opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.03, 0.08] }) }]} />
+
+        {/* STARS */}
         {isNight && particles.stars.map((p, i) => (
-          <Animated.View key={i} style={[styles.star, {
-            left: p.left, top: p.top, width: p.size, height: p.size,
-            opacity: pulseAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [p.opacity, p.opacity * 2.5, p.opacity]
-            })
-          }]} />
+          <Animated.View key={i} style={[styles.star, { left: p.left, top: p.top, width: p.size, height: p.size, opacity: pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [p.opacity, p.opacity * 2.5, p.opacity] }) }]} />
         ))}
 
-        {/* Layer 3: Clouds */}
-        <CloudLayer count={['cloudy', 'rain', 'thunder'].includes(style.effect) ? 6 : 2} color={isNight ? '#334155' : '#FFF'} />
-
-        {/* Celestial Body (Sun or Moon) */}
+        {/* CELESTIAL BODY */}
         {(() => {
           if (isNight) {
             return (
               <View style={styles.moonContainer}>
-                <Animated.View style={[styles.moonGlow, {
-                  backgroundColor: '#94A3B8',
-                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.3] }),
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.5, 2.2] }) }]
-                }]} />
-                <Animated.View style={[styles.moonMain, {
-                  shadowOpacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] }),
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }]
-                }]} />
+                <Animated.View style={[styles.moonGlow, { backgroundColor: '#94A3B8', opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }), transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.3, 1.8] }) }] }]} />
+                <Animated.View style={[styles.moonMain, { shadowOpacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.6] }), transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }]} />
                 <View style={[styles.moonShadow, { backgroundColor: style.gradients[0] }]} />
               </View>
             );
-          } else if (['sunny', 'partly_cloudy', 'sunset', 'dawn'].includes(style.effect)) {
+          } else if (['sunny', 'partly_cloudy', 'sunset', 'dawn'].includes(style.effect) && style.cloudDensity < 8) {
             return (
               <>
-                <Animated.View style={[styles.premiumSunSceneGlow, {
-                  top: sunY - 45,
-                  backgroundColor: style.accent,
-                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.25] }),
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.2, 1.5] }) }]
-                }]} />
-                <Animated.View style={[styles.premiumSunSceneGlow, {
-                  top: sunY - 30,
-                  backgroundColor: style.accent,
-                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.35] }),
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.1] }) }]
-                }]} />
-                <Animated.View style={[styles.premiumSunSceneDisk, {
-                  top: sunY,
-                  backgroundColor: style.accent,
-                  opacity: 1,
-                  transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }]
-                }]} />
+                <Animated.View style={[styles.premiumSunSceneGlow, { top: sunY - 40, right: 15, width: 130, height: 130, borderRadius: 65, backgroundColor: style.accent, opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.06, 0.12] }), transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.05] }) }] }]} />
+                <Animated.View style={[styles.premiumSunSceneDisk, { top: sunY, backgroundColor: '#FEFCE8', shadowColor: style.accent, opacity: 0.85, transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }]} />
               </>
             );
           }
           return null;
         })()}
 
-        {/* Weather Specific Particle Layers */}
+        {/* FOG EFFECT (Specific Redesign) */}
+        {style.effect === 'fog' && (
+            <View style={StyleSheet.absoluteFill}>
+                {[...Array(3)].map((_, i) => (
+                    <Animated.View
+                        key={i}
+                        style={[styles.fogStrip, {
+                            top: 40 + i * 80,
+                            opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1 + i * 0.05, 0.2 + i * 0.05] }),
+                            transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-SCREEN_WIDTH, SCREEN_WIDTH] }) }]
+                        }]}
+                    />
+                ))}
+            </View>
+        )}
+
+        {/* PARTICLES */}
         {(() => {
           switch (style.effect) {
-            case 'rain':
             case 'thunder':
+            case 'rain':
               return (
                 <>
-                  {particles.rain.map((p, i) => (
-                    <Animated.View key={i} style={[styles.rainLine, {
-                      left: p.left, opacity: p.opacity,
-                      transform: [{ translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-200, 1500 * p.speed] }) }]
-                    }]} />
+                  {particles.rainBack.map((p, i) => (
+                    <Animated.View key={`b${i}`} style={[styles.rainLine, { left: p.left, opacity: p.opacity, transform: [{ translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-200, 1000 * p.speed] }) }] }]} />
                   ))}
-                  {style.effect === 'thunder' && (
-                    <Animated.View style={[StyleSheet.absoluteFill, {
-                      backgroundColor: '#FFF',
-                      opacity: masterAnim.interpolate({
-                        inputRange: [0, 0.1, 0.11, 0.12, 0.2, 0.48, 0.49, 0.5, 0.51, 0.52, 0.8, 0.81, 0.82, 1],
-                        outputRange: [0, 0, 0.4, 0, 0, 0, 0.6, 0, 0.3, 0, 0, 0.5, 0, 0]
-                      })
-                    }]} />
-                  )}
+                  {particles.rainFront.map((p, i) => (
+                    <Animated.View key={`f${i}`} style={[styles.rainLine, { left: p.left, opacity: p.opacity, transform: [{ translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-200, 1400 * p.speed] }) }] }]} />
+                  ))}
                 </>
               );
             case 'snow':
               return particles.snow.map((p, i) => (
-                <Animated.View key={i} style={[styles.snowParticle, {
-                  left: p.left, opacity: 0.6, width: p.size, height: p.size,
-                  transform: [
-                    { translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-200, 1200 * p.speed] }) },
-                    { translateX: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [-p.drift, p.drift] }) }
-                  ]
-                }]} />
+                <Animated.View key={i} style={[styles.snowParticle, { left: p.left, opacity: 0.6, width: p.size, height: p.size, transform: [{ translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-200, 1000 * p.speed] }) }, { translateX: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [-p.drift, p.drift] }) }] }]} />
               ));
             default: return null;
           }
         })()}
+
+        {/* VOLUMETRIC CLOUDS */}
+        {style.cloudDensity > 0 && <CloudLayer count={style.cloudDensity} color={isNight ? '#334155' : (style.effect === 'thunder' ? '#475569' : '#E2E8F0')} />}
       </View>
     );
   };
 
   return (
-    <Animated.View style={[styles.outerContainer, {
-      opacity: entryAnim,
-      transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }]
-    }]}>
-      <LinearGradient colors={style.gradients} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.card}>
+    <Animated.View style={[styles.outerContainer, { opacity: entryAnim, transform: [{ scale: entryAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }] }]}>
+      <LinearGradient colors={style.gradients} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={styles.card}>
         <View style={StyleSheet.absoluteFill}>{renderEffect()}</View>
-
-        {/* Subtle Horizon Haze Overlay */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.05)', 'transparent', 'rgba(0,0,0,0.15)']}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
+        <LinearGradient colors={['rgba(255,255,255,0.02)', 'transparent', 'rgba(0,0,0,0.12)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={styles.content}>
           <View style={styles.headerRow}>
             <View>
               <Text style={[styles.cityText, { color: secondaryColor }]}>{city.toUpperCase()}</Text>
               <Text style={[styles.conditionText, { color: textColor }]}>{displayTitle.toUpperCase()}</Text>
             </View>
-            <View style={styles.iconContainer}>
-              <Text style={styles.weatherEmoji}>{displayEmoji}</Text>
-            </View>
+            <View style={styles.iconContainer}><Text style={styles.weatherEmoji}>{displayEmoji}</Text></View>
           </View>
-
           <View style={styles.mainInfo}>
             <Text style={[styles.tempText, { color: textColor }]}>{Math.round(temperature)}°</Text>
             <Text style={[styles.feelsLikeText, { color: secondaryColor }]}>HİSSEDİLEN {Math.round(feelsLike)}°</Text>
           </View>
-
           <View style={styles.glassBar}>
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: secondaryColor }]}>NEM</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>%65</Text>
-            </View>
+            <View style={styles.infoItem}><Text style={[styles.infoLabel, { color: secondaryColor }]}>NEM</Text><Text style={[styles.infoValue, { color: textColor }]}>%65</Text></View>
             <View style={styles.infoDivider} />
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: secondaryColor }]}>RÜZGAR</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>12 KM/S</Text>
-            </View>
+            <View style={styles.infoItem}><Text style={[styles.infoLabel, { color: secondaryColor }]}>RÜZGAR</Text><Text style={[styles.infoValue, { color: textColor }]}>12 KM/S</Text></View>
             <View style={styles.infoDivider} />
-            <View style={styles.infoItem}>
-              <Text style={[styles.infoLabel, { color: secondaryColor }]}>UV</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>{uvIcon} 4</Text>
-            </View>
+            <View style={styles.infoItem}><Text style={[styles.infoLabel, { color: secondaryColor }]}>UV</Text><Text style={[styles.infoValue, { color: textColor }]}>{uvIcon} {style.isNight ? '0' : '4'}</Text></View>
           </View>
         </View>
       </LinearGradient>
@@ -439,120 +390,64 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
 const CloudLayer = ({ count, color }: { count: number, color: string }) => {
     const clouds = useMemo(() => [...Array(count)].map((_, i) => ({
-        top: 10 + (Math.random() * 60),
-        scale: 1.0 + Math.random() * 2.0,
-        opacity: 0.08 + Math.random() * 0.15,
-        leftOffset: Math.random() * 400 - 200,
-        width: 140 + Math.random() * 100,
-        height: 70 + Math.random() * 60,
-        rotation: (Math.random() - 0.5) * 5,
-        floatRange: 5 + Math.random() * 10,
-        duration: 120000 + Math.random() * 40000,
-        delay: Math.random() * -100000, // Random start phase
+        top: 5 + (Math.random() * 55),
+        scale: 1.2 + Math.random() * 1.8,
+        opacity: 0.12 + Math.random() * 0.15,
+        leftOffset: Math.random() * 600 - 300,
+        duration: 180000 + Math.random() * 60000,
+        delay: Math.random() * -150000,
     })), [count]);
-
-    return clouds.map((c, i) => (
-        <IndividualCloud key={i} cloud={c} color={color} />
-    ));
+    return clouds.map((c, i) => <IndividualCloud key={i} cloud={c} color={color} />);
 };
 
 const IndividualCloud = ({ cloud, color }: { cloud: any, color: string }) => {
     const drift = useRef(new Animated.Value(0)).current;
     const float = useRef(new Animated.Value(0)).current;
-
     useEffect(() => {
-        const startDrift = () => {
-            drift.setValue(0);
-            Animated.timing(drift, {
-                toValue: 1,
-                duration: cloud.duration,
-                easing: Easing.linear,
-                useNativeDriver: true
-            }).start(() => startDrift());
-        };
-
-        // Offset the start time
-        const timeout = setTimeout(() => {
-            startDrift();
-        }, cloud.delay < 0 ? 0 : cloud.delay);
-
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(float, { toValue: 1, duration: 25000 + Math.random() * 15000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-                Animated.timing(float, { toValue: 0, duration: 25000 + Math.random() * 15000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-            ])
-        ).start();
-
-        return () => {
-            clearTimeout(timeout);
-            drift.stopAnimation();
-            float.stopAnimation();
-        };
+        const startDrift = () => { drift.setValue(0); Animated.timing(drift, { toValue: 1, duration: cloud.duration, easing: Easing.linear, useNativeDriver: true }).start(() => startDrift()); };
+        const timeout = setTimeout(() => startDrift(), cloud.delay < 0 ? 0 : cloud.delay);
+        Animated.loop(Animated.sequence([Animated.timing(float, { toValue: 1, duration: 40000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }), Animated.timing(float, { toValue: 0, duration: 40000, easing: Easing.inOut(Easing.sine), useNativeDriver: true })])).start();
+        return () => { clearTimeout(timeout); drift.stopAnimation(); float.stopAnimation(); };
     }, []);
 
-    // Build organic cloud mass with overlapping soft circles
     return (
-        <Animated.View style={[styles.cloudWrapper, {
-            top: cloud.top,
-            transform: [
-                { translateX: drift.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-600 + cloud.leftOffset, SCREEN_WIDTH + 400 + cloud.leftOffset]
-                }) },
-                { translateY: float.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-cloud.floatRange, cloud.floatRange]
-                }) },
-                { scale: cloud.scale },
-                { rotate: `${cloud.rotation}deg` }
-            ]
-        }]}>
-            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity, width: 140, height: 70, borderRadius: 70 }]} />
-            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity * 0.7, width: 100, height: 60, borderRadius: 60, left: -40, top: 5 }]} />
-            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity * 0.8, width: 110, height: 65, borderRadius: 65, right: -30, top: -10 }]} />
-            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity * 0.4, width: 80, height: 50, borderRadius: 50, top: -20, left: 20 }]} />
+        <Animated.View style={[styles.cloudWrapper, { top: cloud.top, transform: [{ translateX: drift.interpolate({ inputRange: [0, 1], outputRange: [-800 + cloud.leftOffset, SCREEN_WIDTH + 400 + cloud.leftOffset] }) }, { translateY: float.interpolate({ inputRange: [0, 1], outputRange: [-15, 15] }) }, { scale: cloud.scale }] }]}>
+            {/* VOLUMETRIC PUFFS */}
+            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity, width: 140, height: 75, borderRadius: 70 }]} />
+            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity * 0.8, width: 110, height: 65, borderRadius: 60, left: -45, top: 10 }]} />
+            <View style={[styles.cloudPuff, { backgroundColor: color, opacity: cloud.opacity * 0.9, width: 120, height: 70, borderRadius: 65, right: -40, top: -15 }]} />
+            {/* INNER LIGHTING EFFECT */}
+            <View style={[styles.cloudPuff, { backgroundColor: '#FFF', opacity: 0.15, width: 80, height: 35, borderRadius: 40, top: -5 }]} />
         </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
   outerContainer: { marginHorizontal: Spacing.md, marginBottom: Spacing.lg, borderRadius: 32, elevation: 12 },
-  card: { height: 320, borderRadius: 32, overflow: 'hidden', padding: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  card: { height: 320, borderRadius: 32, overflow: 'hidden', padding: 28, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)' },
   content: { flex: 1, justifyContent: 'space-between', zIndex: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cityText: { fontSize: 12, fontWeight: '800', letterSpacing: 1.8 },
-  conditionText: { fontSize: 22, fontWeight: '900', marginTop: 2, letterSpacing: 1.2 },
-  iconContainer: { width: 46, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)' },
-  weatherEmoji: { fontSize: 22 },
+  conditionText: { fontSize: 24, fontWeight: '900', marginTop: 2, letterSpacing: 1.2 },
+  iconContainer: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  weatherEmoji: { fontSize: 24 },
   mainInfo: { alignItems: 'center' },
   tempText: { fontSize: 105, fontWeight: '100', letterSpacing: -5, lineHeight: 115 },
   feelsLikeText: { fontSize: 14, fontWeight: '800', marginTop: -5 },
-  glassBar: {
-    height: 68,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16
-  },
+  glassBar: { height: 68, backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: 28, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12 },
   infoItem: { flex: 1, alignItems: 'center' },
   infoLabel: { fontSize: 9, fontWeight: '900' },
   infoValue: { fontSize: 16, fontWeight: '900', marginTop: 2 },
-  infoDivider: { width: 1, height: 22, backgroundColor: 'rgba(255,255,255,0.15)' },
-  premiumSunSceneDisk: { position: 'absolute', right: 55, width: 38, height: 38, borderRadius: 19, zIndex: 3, shadowColor: '#FFF', shadowRadius: 10, shadowOpacity: 0.4 },
-  premiumSunSceneGlow: { position: 'absolute', right: 10, width: 120, height: 120, borderRadius: 60, zIndex: 1 },
+  infoDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.15)' },
+  premiumSunSceneDisk: { position: 'absolute', right: 55, width: 42, height: 42, borderRadius: 21, zIndex: 3, shadowRadius: 20, shadowOpacity: 0.5 },
+  premiumSunSceneGlow: { position: 'absolute', zIndex: 1 },
   star: { position: 'absolute', backgroundColor: '#FFF', borderRadius: 10 },
-  rainLine: { position: 'absolute', width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.35)', zIndex: 6 },
+  rainLine: { position: 'absolute', width: 0.9, height: 45, backgroundColor: 'rgba(255,255,255,0.3)', zIndex: 6 },
   cloudWrapper: { position: 'absolute', zIndex: 4, alignItems: 'center', justifyContent: 'center' },
   cloudPuff: { position: 'absolute' },
   snowParticle: { position: 'absolute', backgroundColor: '#FFF', borderRadius: 12, zIndex: 6 },
   hazeLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  fogStrip: { position: 'absolute', width: SCREEN_WIDTH * 2, height: 120, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 100, blur: 40 },
   moonContainer: { position: 'absolute', top: 55, right: 65, width: 42, height: 42, zIndex: 3 },
   moonGlow: { position: 'absolute', width: 42, height: 42, borderRadius: 21, zIndex: 1 },
   moonMain: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F1F5F9', shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 0 }, shadowRadius: 20, elevation: 8 },

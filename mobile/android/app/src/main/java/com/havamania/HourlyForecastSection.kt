@@ -123,11 +123,16 @@ fun HourlyForecastItem(
         WeatherMapper.getDayPhase(dateTime, sunrise, sunset)
     }
 
-    val condition = remember(data.weatherCode, phase) {
-        WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, phase != DayPhase.NIGHT)
+    val tempVal = remember(data.temp) { data.temp.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 20f }
+    val altitude = when (phase) {
+        DayPhase.NIGHT -> -15f
+        DayPhase.DAWN, DayPhase.SUNSET -> 0f
+        DayPhase.GOLDEN_HOUR -> 5f
+        DayPhase.MORNING -> 20f
+        DayPhase.DAY -> 45f
+        else -> -10f
     }
-
-    val spec = WeatherStyleResolver.resolveSpec(condition, phase, currentTheme)
+    val spec = WeatherStyleResolver.resolveSpec(data.weatherCode, data.isDay, phase, altitude, tempVal, currentTheme)
 
     val itemAlpha by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.88f,
@@ -143,31 +148,25 @@ fun HourlyForecastItem(
 
     Box(
         modifier = Modifier
-            .width(88.dp)
-            .height(160.dp)
+            .width(82.dp)
+            .height(148.dp)
             .graphicsLayer {
-                val pressScale = if (isPressed) 0.96f else 1f
+                val pressScale = if (isPressed) 0.97f else 1f
                 scaleX = scale * pressScale
                 scaleY = scale * pressScale
                 alpha = itemAlpha
             }
-            .then(
-                if (isSelected) {
-                    Modifier.graphicsLayer {
-                        shadowElevation = 12.dp.toPx()
-                        shape = RoundedCornerShape(28.dp)
-                        clip = true
-                        ambientShadowColor = Color(0xFF1298D6)
-                        spotShadowColor = Color(0xFF32BDF2)
-                    }
-                } else Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                if (isSelected)
+                    Brush.verticalGradient(listOf(Color(0xFF32BDF2).copy(0.9f), Color(0xFF1298D6).copy(0.9f)))
+                else
+                    Brush.linearGradient(listOf(unselectedBackground, unselectedBackground))
             )
-            .clip(RoundedCornerShape(28.dp))
-            .background(if (isSelected) selectedGradient else Brush.linearGradient(listOf(unselectedBackground, unselectedBackground)))
             .border(
-                width = if (isSelected) 1.5.dp else 0.5.dp,
-                color = if (isSelected) Color.White.copy(alpha = 0.35f) else if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(28.dp)
+                width = if (isSelected) 1.2.dp else 0.8.dp,
+                color = if (isSelected) Color.White.copy(alpha = 0.4f) else if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(24.dp)
             )
             .clickable(
                 interactionSource = interactionSource,
