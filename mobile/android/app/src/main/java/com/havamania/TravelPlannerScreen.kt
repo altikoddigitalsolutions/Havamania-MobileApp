@@ -152,7 +152,21 @@ fun TravelPlannerScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(plans, selectedFilter) {
+        android.util.Log.d("TravelCalendarDebug", "=== Travel Calendar Render Update ===")
+        android.util.Log.d("TravelCalendarDebug", "Filter: $selectedFilter, Count: ${plans.size}")
+        plans.forEach { plan ->
+            android.util.Log.d("TravelCalendarDebug",
+                "TravelId=${plan.id} City=${plan.city} " +
+                "Start=${plan.startDate} End=${plan.endDate} " +
+                "Status=${plan.weatherAnalysisStatus} " +
+                "Error=${plan.lastWeatherAnalysisText} " +
+                "LastAnalysis=${plan.lastWeatherAnalysisDate}"
+            )
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
                 if (isLoading && allPlans.isEmpty()) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = HavamaniaTheme.colors.accent)
                 } else if (plans.isEmpty()) {
@@ -179,7 +193,12 @@ fun TravelPlannerScreen(
                                 onUnarchive = { viewModel.unarchiveTrip(plan.id) },
                                 onShowDetail = { selectedPlanForDetail = plan },
                                 onReanalyze = {
-                                    viewModel.analyzeTravelWeather(plan)
+                                    val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), plan.startDate)
+                                    if (daysUntil > 15) {
+                                        Toast.makeText(context, "Bu seyahat için güvenilir hava analizi seyahate 15 gün kala yapılabilir.", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        viewModel.analyzeTravelWeather(plan)
+                                    }
                                 }
                             )
                         }
@@ -345,29 +364,116 @@ fun TravelPlanCard(
             Spacer(Modifier.height(20.dp))
 
             // Analysis Section
+            val latestAnalysis = plan.analyses.lastOrNull()
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
-                    if (isPast || isArchived) Icons.Rounded.Info else Icons.Rounded.WbSunny,
+                    if (isPast || isArchived) Icons.Rounded.Info else Icons.Rounded.Analytics,
                     null,
                     tint = if (isArchived) themeColors.textMuted else themeColors.accent,
                     modifier = Modifier.padding(top = 2.dp).size(16.dp)
                 )
                 Spacer(Modifier.width(12.dp))
-                val weatherText = when {
-                    isArchived -> "Bu seyahat arşivlendi. Tüm analiz notların ve hava durumu geçmişi burada saklanıyor."
-                    isPast -> "Bu seyahat tamamlandı. ${plan.city} seyahatinizdeki hava koşulları ve önceki analiz notları arşivlenmeye hazır."
-                    plan.isAnalyzing -> "Seyahat analizi hazırlanıyor..."
-                    plan.analysis != null -> plan.analysis
-                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.ERROR -> plan.lastWeatherAnalysisText ?: "Gelişmiş seyahat analizi şu an hazırlanamadı."
-                    plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.TOO_EARLY -> plan.lastWeatherAnalysisText ?: "Bu seyahat için güvenilir hava tahmini henüz erken. Seyahate 15 gün kala hava analizini başlatacağım."
-                    else -> plan.lastWeatherAnalysisText ?: "Hava verisi henüz analiz edilmedi."
+                Column {
+                    val statusText = when (plan.weatherAnalysisStatus) {
+                        TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW -> "Analiz zamanı bekleniyor"
+                        TravelWeatherAnalysisStatus.LOADING -> "Hava verisi alınıyor..."
+                        TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY -> "Gelişmiş analiz hazır"
+                        TravelWeatherAnalysisStatus.WEATHER_READY_AI_FAILED -> "Hava analizi hazır (AI kısıtlı)"
+                        TravelWeatherAnalysisStatus.WEATHER_PARTIAL_READY -> "Temel hava analizi hazır"
+                        TravelWeatherAnalysisStatus.WEATHER_FAILED -> "Hava verisi alınamadı"
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (isArchived) "Analiz Arşivlendi" else if (isPast) "Seyahat Tamamlandı" else statusText,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                            color = if (plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_FAILED) themeColors.error
+                                    else if (plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) themeColors.textMuted
+                                    else themeColors.accent
+                        )
+                        if (latestAnalysis != null && !isPast && !isArchived) {
+                            latestAnalysis.comparisonText?.let {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "• $it",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = themeColors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    val weatherText = when {
+                        isArchived -> "Bu seyahat arşivlendi. Tüm analiz notların ve hava durumu geçmişi burada saklanıyor."
+                        isPast -> "Bu seyahat tamamlandı. ${plan.city} seyahatinizdeki hava koşulları aşağıda özetlenmiştir."
+                        plan.isAnalyzing -> "Hava durumu verileri analiz ediliyor..."
+                        plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW ->
+                            "Bu seyahat için detaylı hava analizi, seyahate 15 gün kaldığında otomatik hazırlanacak. Uzun vadeli hava tahminleri güvenilir olmadığı için şu anda analiz oluşturulmuyor."
+                        plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_READY_AI_FAILED ->
+                            "Hava verisi başarıyla alındı, ancak AI seyahat analizi geçici olarak hazırlanamadı. Mevcut tahminleri aşağıda görebilirsin."
+                        else -> plan.lastWeatherAnalysisText ?: "Hava verisi henüz analiz edilmedi."
+                    }
+                    Text(
+                        text = weatherText,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                        color = themeColors.textPrimary.copy(alpha = 0.8f)
+                    )
+
+                    if (latestAnalysis != null && !isPast && !isArchived) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column {
+                                Text("SEYAHAT SKORU", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                Text("%${latestAnalysis.travelScore}", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.accent)
+                            }
+                            Column {
+                                Text("YAĞIŞ RİSKİ", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                val rainText = latestAnalysis.rainRiskPercent?.let { "%$it" } ?: "Bilinmiyor"
+                                Text(rainText, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = if((latestAnalysis.rainRiskPercent ?: 0) > 40) themeColors.error else themeColors.textPrimary)
+                            }
+                            Column {
+                                Text("ORT. SICAKLIK", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                Text("${latestAnalysis.averageTemperature.toInt()}°", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                            }
+                        }
+                    }
+
+                    if (isPast || isArchived) {
+                        val history = remember(plan) { TravelAiHelper.generateHistorySummary(plan) }
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column {
+                                Text("ORTALAMA", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                Text("${history.averageTemp}°", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                            }
+                            Column {
+                                Text("YAĞIŞLI GÜN", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                Text("${history.rainyDays} Gün", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = if(history.rainyDays > 0) Color(0xFF3B82F6) else themeColors.textPrimary)
+                            }
+                            Column {
+                                Text("GÜNEŞLİ GÜN", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = themeColors.textMuted)
+                                Text("${history.sunnyDays} Gün", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = if(history.sunnyDays > 0) Color(0xFFFBBF24) else themeColors.textPrimary)
+                            }
+                        }
+                    }
                 }
-                Text(
-                    text = weatherText,
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                    color = themeColors.textPrimary.copy(alpha = 0.9f),
-                    overflow = TextOverflow.Visible
-                )
+            }
+
+            if (!isArchived && !isPast && plan.aiSuggestion != null && plan.weatherAnalysisStatus != TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) {
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.padding(top = 2.dp).size(16.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = plan.aiSuggestion,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, lineHeight = 22.sp),
+                        color = themeColors.textSecondary
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -387,7 +493,7 @@ fun TravelPlanCard(
                     if (isArchived) {
                         ActionIconButton(icon = Icons.Rounded.Unarchive, text = "Geri Al", color = themeColors.textMuted, onClick = onUnarchive)
                     } else if (isPast) {
-                        ActionIconButton(icon = Icons.Rounded.Archive, text = "Arşivle", color = Color(0xFF60A5FA), onClick = onArchive)
+                        ActionIconButton(icon = Icons.Rounded.Archive, text = "Arşivle", color = Color(0xFF3B82F6), onClick = onArchive)
                     }
 
                     if (isPast || isArchived) {
@@ -398,12 +504,32 @@ fun TravelPlanCard(
                             icon = Icons.Rounded.Analytics
                         )
                     } else {
-                        HavamaniaPrimaryButton(
-                            text = if (plan.isAnalyzing) "Analiz..." else "Yeniden Analiz",
-                            onClick = onReanalyze,
-                            modifier = Modifier.width(150.dp).height(44.dp),
-                            icon = Icons.Rounded.AutoAwesome
-                        )
+                        val daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), plan.startDate)
+                        if (daysUntil > 15) {
+                            Surface(
+                                color = themeColors.textMuted.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(0.5.dp, themeColors.textMuted.copy(alpha = 0.2f)),
+                                modifier = Modifier.height(44.dp).padding(horizontal = 4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                ) {
+                                    Icon(Icons.Rounded.LockClock, null, tint = themeColors.textMuted, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("15 GÜN KALA HAZIRLANACAK", fontSize = 9.sp, fontWeight = FontWeight.Black, color = themeColors.textMuted)
+                                }
+                            }
+                        } else {
+                            HavamaniaPrimaryButton(
+                                text = "Yeniden Analiz",
+                                onClick = onReanalyze,
+                                modifier = Modifier.width(150.dp).height(44.dp),
+                                icon = Icons.Rounded.AutoAwesome,
+                                isLoading = plan.isAnalyzing
+                            )
+                        }
                     }
                 }
             }

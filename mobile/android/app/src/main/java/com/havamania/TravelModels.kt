@@ -33,12 +33,12 @@ enum class TripType(val label: String, val icon: ImageVector) {
 }
 
 enum class TravelWeatherAnalysisStatus {
-    TOO_EARLY,
-    READY,
+    WAITING_FOR_WINDOW,
     LOADING,
-    ANALYZED,
-    UPDATED,
-    ERROR
+    WEATHER_READY_ANALYSIS_READY,
+    WEATHER_READY_AI_FAILED,
+    WEATHER_PARTIAL_READY,
+    WEATHER_FAILED
 }
 
 @Serializable
@@ -85,6 +85,22 @@ data class TravelHistorySummary(
     val durationDays: Int
 )
 
+@Serializable
+data class TravelWeatherAnalysis(
+    val id: String = UUID.randomUUID().toString(),
+    val tripId: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val travelScore: Int,
+    val rainRiskPercent: Int? = null,
+    val windRiskPercent: Int? = null,
+    val uvRiskPercent: Int? = null,
+    val averageTemperature: Double,
+    val summary: String,
+    val recommendation: String,
+    val comparisonText: String? = null,
+    val previousAnalysisId: String? = null
+)
+
 data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
     val city: String,
@@ -97,12 +113,13 @@ data class TravelPlan(
     val weatherSummary: String? = null,
     val aiSuggestion: String? = null,
     val isAnalyzing: Boolean = false,
-    val lastWeatherAnalysisText: String? = null, // UI'da gösterilen ana metin
+    val lastWeatherAnalysisText: String? = null,
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
-    val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.TOO_EARLY,
+    val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
     val isArchived: Boolean = false,
-    val analysis: String? = null // Yeni kalıcı analiz alanı
+    val analyses: List<TravelWeatherAnalysis> = emptyList(),
+    val lastDailyNotificationDate: String? = null // YYYY-MM-DD
 )

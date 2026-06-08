@@ -23,9 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -115,24 +112,19 @@ fun HourlyForecastItem(
         label = "scale"
     )
 
-    val phase = remember(data.time, data.fullTime, sunriseTime, sunsetTime) {
+    val phase = remember(data.time, sunriseTime, sunsetTime) {
         val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
         val timeObj = try { LocalTime.parse(data.time) } catch (e: Exception) { LocalTime.of(data.time.split(":")[0].toInt(), 0) }
-        val dateTime = try { LocalDateTime.parse(data.fullTime) } catch (e: Exception) { LocalDateTime.now().with(timeObj) }
-        WeatherMapper.getDayPhase(dateTime, sunrise, sunset)
+        val ldt = LocalDateTime.now().with(timeObj)
+        WeatherMapper.getDayPhase(ldt, sunrise, sunset)
     }
 
-    val tempVal = remember(data.temp) { data.temp.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 20f }
-    val altitude = when (phase) {
-        DayPhase.NIGHT -> -15f
-        DayPhase.DAWN, DayPhase.SUNSET -> 0f
-        DayPhase.GOLDEN_HOUR -> 5f
-        DayPhase.MORNING -> 20f
-        DayPhase.DAY -> 45f
-        else -> -10f
+    val condition = remember(data.weatherCode, data.isDay) {
+        WeatherMapper.mapWeatherCodeToCondition(data.weatherCode, data.isDay)
     }
-    val spec = WeatherStyleResolver.resolveSpec(data.weatherCode, data.isDay, phase, altitude, tempVal, currentTheme)
+
+    val spec = WeatherStyleResolver.resolveSpec(condition, phase, currentTheme)
 
     val itemAlpha by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.88f,
@@ -140,7 +132,7 @@ fun HourlyForecastItem(
         label = "itemAlpha"
     )
 
-    // Premium Blue Gradient for Selected State
+    // Premium Blue/Cyan Gradient for Selected State
     val selectedGradient = remember {
         Brush.verticalGradient(listOf(Color(0xFF32BDF2), Color(0xFF1298D6)))
     }
@@ -148,25 +140,20 @@ fun HourlyForecastItem(
 
     Box(
         modifier = Modifier
-            .width(82.dp)
-            .height(148.dp)
+            .width(88.dp)
+            .height(160.dp)
             .graphicsLayer {
-                val pressScale = if (isPressed) 0.97f else 1f
+                val pressScale = if (isPressed) 0.96f else 1f
                 scaleX = scale * pressScale
                 scaleY = scale * pressScale
                 alpha = itemAlpha
             }
-            .clip(RoundedCornerShape(24.dp))
-            .background(
-                if (isSelected)
-                    Brush.verticalGradient(listOf(Color(0xFF32BDF2).copy(0.9f), Color(0xFF1298D6).copy(0.9f)))
-                else
-                    Brush.linearGradient(listOf(unselectedBackground, unselectedBackground))
-            )
+            .clip(RoundedCornerShape(28.dp))
+            .background(if (isSelected) selectedGradient else Brush.linearGradient(listOf(unselectedBackground, unselectedBackground)))
             .border(
-                width = if (isSelected) 1.2.dp else 0.8.dp,
-                color = if (isSelected) Color.White.copy(alpha = 0.4f) else if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(24.dp)
+                width = if (isSelected) 1.5.dp else 0.5.dp,
+                color = if (isSelected) Color.White.copy(alpha = 0.35f) else if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(28.dp)
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -174,29 +161,23 @@ fun HourlyForecastItem(
                 onClick = onClick
             )
     ) {
-        // 1. Kart Arka Planı (Modifier background ile halledildi)
-
-        // 2. Glow / Gradient overlay (İçerik katmanının altında kalmalı)
+        // Subtle glow for selected
         if (isSelected) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .zIndex(0f)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-                            center = Offset(0f, 0f),
-                            radius = 250f
+                            radius = 180f
                         )
                     )
             )
         }
 
-        // 3. İçerik Katmanı (En üstte olmalı)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .zIndex(1f)
                 .padding(vertical = 16.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
@@ -261,6 +242,8 @@ fun HourlyForecastItem(
                                 color = if (isSelected) Color.White else themeColors.accent
                             )
                         }
+                    } else {
+                        Spacer(Modifier.fillMaxSize())
                     }
                 }
             }

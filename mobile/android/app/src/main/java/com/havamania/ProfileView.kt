@@ -154,7 +154,6 @@ fun ProfileScreen(
                 onMyTravels = onNavigateToTravels,
                 onChooseTheme = onNavigateToSettings,
                 onEditProfile = onNavigateToEditProfile,
-                onNotifications = onNavigateToNotifications,
                 onPremium = {
                     comingSoonTitle = "Havamania yakında hizmetinizde olacak."
                     showComingSoonDialog = true
@@ -651,7 +650,6 @@ fun QuickActionsGrid(
     onMyTravels: () -> Unit,
     onChooseTheme: () -> Unit,
     onEditProfile: () -> Unit,
-    onNotifications: () -> Unit,
     onPremium: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -664,10 +662,9 @@ fun QuickActionsGrid(
             QuickActionItem("Tema Seç", Icons.Rounded.Palette, Modifier.weight(1f), onChooseTheme)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionItem("Bildirimler", Icons.Rounded.Notifications, Modifier.weight(1f), onNotifications)
             QuickActionItem("Premium", Icons.Rounded.WorkspacePremium, Modifier.weight(1f), onPremium)
+            QuickActionItem("Profili Düzenle", Icons.Rounded.AccountCircle, Modifier.weight(1f), onEditProfile)
         }
-        QuickActionItem("Profili Düzenle", Icons.Rounded.AccountCircle, Modifier.fillMaxWidth(), onEditProfile)
     }
 }
 

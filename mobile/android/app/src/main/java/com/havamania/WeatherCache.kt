@@ -51,6 +51,20 @@ class ChatTypeConverters {
             try { json.decodeFromString(TravelNotificationData.serializer(), it) } catch(e: Exception) { null }
         }
     }
+
+    @TypeConverter
+    fun fromTravelWeatherAnalysisList(value: List<TravelWeatherAnalysis>): String {
+        return json.encodeToString(ListSerializer(TravelWeatherAnalysis.serializer()), value)
+    }
+
+    @TypeConverter
+    fun toTravelWeatherAnalysisList(value: String): List<TravelWeatherAnalysis> {
+        return try {
+            json.decodeFromString(ListSerializer(TravelWeatherAnalysis.serializer()), value)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 }
 
 /**
@@ -86,7 +100,8 @@ data class TravelPlanEntity(
     val weatherAnalysisStatus: String = "TOO_EARLY",
     @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean = false,
-    val analysis: String? = null
+    val analyses: List<TravelWeatherAnalysis> = emptyList(),
+    val lastDailyNotificationDate: String? = null
 )
 
 /**
@@ -165,16 +180,25 @@ abstract class WeatherDatabase : RoomDatabase() {
 
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    WeatherDatabase::class.java,
-                    "weather_database"
-                )
-                .addMigrations(MIGRATION_5_6)
-                .fallbackToDestructiveMigration() // Şema değiştiğinde DB'yi sıfırla
-                .build()
-                INSTANCE = instance
-                instance
+                try {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        WeatherDatabase::class.java,
+                        "weather_database"
+                    )
+                    .addMigrations(MIGRATION_5_6)
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    INSTANCE = instance
+                    instance
+                } catch (e: Exception) {
+                    context.deleteDatabase("weather_database")
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        WeatherDatabase::class.java,
+                        "weather_database"
+                    ).build()
+                }
             }
         }
     }

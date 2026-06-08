@@ -19,6 +19,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
+import com.havamania.NotificationItem
+import com.havamania.NotificationCategory
 
 class TravelNotificationWorker(
     context: Context,
@@ -65,23 +67,26 @@ class TravelNotificationWorker(
                     weatherDao.insertTravelPlan(updatedPlan.toEntity())
                 }
 
-                // Determine notification type - Strictly once a day for days 0-15
+                // Determine notification type
                 val hour = now.hour
-                val isMorning = hour in 8..11
+                val isMorning = hour in 7..11
+                val isEvening = hour in 18..22
 
                 val type = when {
-                    daysUntil in 0..15 && isMorning -> "DAILY_REPORT"
-                    else -> null
+                    daysUntil == 0 -> "START_DAY"
+                    daysUntil <= 3 && isMorning -> "MORNING"
+                    daysUntil <= 3 && isEvening -> "EVENING"
+                    daysUntil > 3 && isMorning -> "DAILY"
+                    else -> null // Don't send during other times
                 }
 
                 if (type != null) {
                     val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                    val notificationId = "travel_notif_${plan.id}_$dateStr"
 
-                    // The notify(id, ...) with same ID will update/suppress if already shown,
-                    // but we check if we already inserted it in our notification log to be sure.
-                    val alreadySent = notificationDao.getNotificationById(notificationId) != null
-                    if (alreadySent) continue
+                    // Rule 7: Don't send more than once per day
+                    if (plan.lastDailyNotificationDate == dateStr) continue
+
+                    val notificationId = "travel_${plan.id}_${dateStr}_$type"
 
                     val travelData = buildNotificationData(updatedPlan, daysUntil)
                     val (title, message) = generateNotificationText(updatedPlan, daysUntil, type, travelData)
@@ -103,6 +108,9 @@ class TravelNotificationWorker(
 
                     // Show system notification
                     showSystemNotification(notificationItem)
+
+                    // Rule 7: Mark as sent today
+                    weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
                 }
             }
         }
@@ -154,27 +162,48 @@ class TravelNotificationWorker(
         type: String,
         data: TravelNotificationData
     ): Pair<String, String> {
-        val title = when {
-            daysLeft == 0 -> "${plan.city} seyahatin bugün başlıyor! ✈️"
-            daysLeft == 1 -> "${plan.city} seyahatine 1 gün kaldı! 🎒"
-            else -> "${plan.city} seyahatine $daysLeft gün kaldı 🎒"
+        val latestAnalysis = plan.analyses.lastOrNull()
+
+        val title = when(type) {
+            "START_DAY" -> "Seyahatin bugün başlıyor! ✈️"
+            "MORNING" -> if (daysLeft == 1) "Seyahatine yarın çıkıyorsun! 🎒" else "Seyahatine $daysLeft gün kaldı 🎒"
+            "EVENING" -> "Seyahat hazırlıklarını unutma 🎒"
+            else -> "Seyahatin yaklaşıyor"
         }
 
-        val weatherPart = if (data.weatherSummary != null) {
-            "Bugünkü tahmine göre hava ${data.weatherSummary.lowercase()}. "
-        } else ""
+        val message = when(type) {
+            "START_DAY" -> {
+                val weather = if (data.weatherSummary != null)
+                    "${plan.city}'da hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
+                    else "${plan.city} seyahatin bugün başlıyor."
+                "$weather Çıkmadan önce son kontrollerini yapmayı unutma!"
+            }
+            "MORNING" -> {
+                val base = if (latestAnalysis != null) {
+                    "${plan.city} seyahatin için bugünkü hava analizi hazır. "
+                } else {
+                    val weatherPart = if (data.weatherSummary != null)
+                        "${plan.city} için hava ${data.weatherSummary.lowercase()} görünüyor. "
+                        else ""
+                    "Seyahatine $daysLeft gün kaldı. $weatherPart"
+                }
 
-        val comparisonPart = if (!data.comparisonText.isNullOrBlank()) {
-            "${data.comparisonText} "
-        } else ""
+                val comparison = latestAnalysis?.comparisonText ?: ""
+                val itemsPart = if (data.recommendedItems.isNotEmpty())
+                    "${data.recommendedItems.take(2).joinToString(" ve ")} yanına almayı unutma."
+                    else "Hazırlıklarını gözden geçirebilirsin."
 
-        val advicePart = if (data.recommendedItems.isNotEmpty()) {
-            "${data.recommendedItems.first()} önerilir."
-        } else "Keyifli yolculuklar!"
+                "$base$comparison$itemsPart"
+            }
+            "EVENING" -> {
+                "${plan.city} seyahatin yaklaşıyor. Ulaşım saatlerini, konaklama bilgilerini ve çantanı tekrar kontrol etmek iyi olabilir."
+            }
+            else -> {
+                "${plan.city} seyahatin yaklaşıyor: Hava ${data.weatherSummary?.lowercase() ?: "tahmin ediliyor"}. Planlarına göz atmak ister misin?"
+            }
+        }
 
-        val message = "$title $weatherPart$comparisonPart$advicePart"
-
-        return "Havamania Seyahat Analizi" to message
+        return title to message
     }
 
     private fun showSystemNotification(item: NotificationItem) {
@@ -220,8 +249,6 @@ class TravelNotificationWorker(
         notificationManager.notify(item.id.hashCode(), notification)
     }
 
-    // Helper extensions duplicated here for self-containment in worker if needed,
-    // but better to use them from where they are defined if possible.
     private fun TravelPlanEntity.toDomain() = TravelPlan(
         id = id,
         city = city,
@@ -238,9 +265,10 @@ class TravelNotificationWorker(
         lastForecastSnapshot = lastForecastSnapshot,
         previousForecastSnapshot = previousForecastSnapshot,
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
-        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.TOO_EARLY },
+        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
         isArchived = isArchived,
-        analysis = analysis
+        analyses = analyses,
+        lastDailyNotificationDate = lastDailyNotificationDate
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -261,29 +289,26 @@ class TravelNotificationWorker(
         nextAnalysisEligibleDate = nextAnalysisEligibleDate,
         weatherAnalysisStatus = weatherAnalysisStatus.name,
         isArchived = isArchived,
-        analysis = analysis
+        analyses = analyses,
+        lastDailyNotificationDate = lastDailyNotificationDate
     )
 
     companion object {
         fun schedule(context: Context) {
-            try {
-                val constraints = Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.NOT_REQUIRED) // Run even if offline using last data
-                    .build()
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.NOT_REQUIRED) // Run even if offline using last data
+                .build()
 
-                // Run every 4 hours to catch morning/evening windows
-                val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(4, TimeUnit.HOURS)
-                    .setConstraints(constraints)
-                    .build()
+            // Run every 4 hours to catch morning/evening windows
+            val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(4, TimeUnit.HOURS)
+                .setConstraints(constraints)
+                .build()
 
-                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                    "travel_notifications_work",
-                    ExistingPeriodicWorkPolicy.UPDATE,
-                    request
-                )
-            } catch (e: Exception) {
-                android.util.Log.e("TravelWorker", "Bildirim planlama hatası: WorkManager başlatılamadı.", e)
-            }
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "travel_notifications_work",
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request
+            )
         }
     }
 }

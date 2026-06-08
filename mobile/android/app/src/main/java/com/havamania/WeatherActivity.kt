@@ -64,8 +64,13 @@ class WeatherActivity : ComponentActivity() {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route ->
+                                        android.util.Log.d("Nav", "BottomBar: Tab clicked=$route, Current=$currentRoute")
+
                                         navController.navigate(route) {
-                                            popUpTo("weather") { saveState = true }
+                                            // Ensure we always pop up to start destination to avoid stack accumulation
+                                            popUpTo("weather") {
+                                                saveState = true
+                                            }
                                             launchSingleTop = true
                                             restoreState = true
                                         }

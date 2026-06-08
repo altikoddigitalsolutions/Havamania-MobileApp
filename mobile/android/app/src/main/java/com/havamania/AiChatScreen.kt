@@ -468,6 +468,8 @@ fun AiChatScreen(
                                 cityName = null
                             )
                         }
+                        // Navigate back or reset state to ensure bottom bar remains functional
+                        onBack()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
                 ) {

@@ -21,9 +21,6 @@ interface NotificationDao {
     @Query("SELECT COUNT(*) FROM notifications WHERE isRead = 0")
     fun getUnreadCount(): Flow<Int>
 
-    @Query("SELECT * FROM notifications WHERE id = :id LIMIT 1")
-    suspend fun getNotificationById(id: String): NotificationItem?
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(notification: NotificationItem)
 

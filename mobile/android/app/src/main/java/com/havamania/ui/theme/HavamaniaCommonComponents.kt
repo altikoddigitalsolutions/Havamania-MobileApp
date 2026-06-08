@@ -126,7 +126,8 @@ fun HavamaniaPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isLoading: Boolean = false
 ) {
     val colors = HavamaniaTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
@@ -134,17 +135,17 @@ fun HavamaniaPrimaryButton(
     val isPressed = isPressedState.value
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
+        targetValue = if (isPressed && !isLoading) 0.96f else 1f,
         animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "buttonScale"
     )
 
     val glowAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.6f else 0.2f,
+        targetValue = if (isPressed && !isLoading) 0.6f else 0.2f,
         label = "glow"
     )
 
-    val backgroundBrush = if (enabled) {
+    val backgroundBrush = if (enabled && !isLoading) {
         if (colors.buttonGradient != null) {
             Brush.linearGradient(colors.buttonGradient)
         } else {
@@ -155,14 +156,14 @@ fun HavamaniaPrimaryButton(
     }
 
     Surface(
-        onClick = onClick,
-        enabled = enabled,
+        onClick = if (!isLoading) onClick else ({}),
+        enabled = enabled && !isLoading,
         modifier = modifier
             .scale(scale)
             .height(56.dp)
             .fillMaxWidth()
             .drawBehind {
-                if (enabled) {
+                if (enabled && !isLoading) {
                     drawRoundRect(
                         color = colors.accent.copy(alpha = glowAlpha * 0.3f),
                         cornerRadius = CornerRadius(18.dp.toPx()),
@@ -181,23 +182,31 @@ fun HavamaniaPrimaryButton(
                 .background(backgroundBrush),
             contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                if (icon != null) {
-                    Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                }
-                Text(
-                    text = text.uppercase(),
-                    style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp,
-                        letterSpacing = 1.sp,
-                        color = colors.onAccent
-                    )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = colors.onAccent,
+                    strokeWidth = 2.dp
                 )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (icon != null) {
+                        Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Text(
+                        text = text.uppercase(),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            letterSpacing = 1.sp,
+                            color = colors.onAccent
+                        )
+                    )
+                }
             }
         }
     }

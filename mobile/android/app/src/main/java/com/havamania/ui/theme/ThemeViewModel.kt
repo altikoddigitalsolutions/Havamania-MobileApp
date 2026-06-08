@@ -7,8 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.havamania.WeatherEffectIntensity
-import kotlinx.coroutines.flow.collect
 
 class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentTheme = MutableStateFlow(AppTheme.DARK)
@@ -56,8 +54,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSafeMode = MutableStateFlow(false)
     val isSafeMode: StateFlow<Boolean> = _isSafeMode.asStateFlow()
 
-    private val _userEffectIntensity = MutableStateFlow<WeatherEffectIntensity>(WeatherEffectIntensity.MEDIUM)
-    val userEffectIntensity: StateFlow<WeatherEffectIntensity> = _userEffectIntensity.asStateFlow()
+    private val _userEffectIntensity = MutableStateFlow(com.havamania.WeatherEffectIntensity.MEDIUM)
+    val userEffectIntensity: StateFlow<com.havamania.WeatherEffectIntensity> = _userEffectIntensity.asStateFlow()
 
     init {
         loadSettings()
@@ -109,9 +107,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             ThemeManager.getEffectIntensity(getApplication()).collect { intensityStr ->
                 _userEffectIntensity.value = try {
-                    WeatherEffectIntensity.valueOf(intensityStr)
+                    com.havamania.WeatherEffectIntensity.valueOf(intensityStr)
                 } catch (e: Exception) {
-                    WeatherEffectIntensity.MEDIUM
+                    com.havamania.WeatherEffectIntensity.MEDIUM
                 }
             }
         }
@@ -232,7 +230,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setEffectIntensity(intensity: WeatherEffectIntensity) {
+    fun setEffectIntensity(intensity: com.havamania.WeatherEffectIntensity) {
         viewModelScope.launch {
             ThemeManager.saveEffectIntensity(getApplication(), intensity.name)
             _userEffectIntensity.value = intensity

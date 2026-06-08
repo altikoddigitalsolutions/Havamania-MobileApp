@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState, useMemo} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,15 +11,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Dimensions,
+  ScrollView,
+  Animated,
 } from 'react-native';
 import {useMutation, useQuery} from '@tanstack/react-query';
 import {useNavigation} from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 import {askChatbot} from '../services/chatbotApi';
 import {getCurrentWeather} from '../services/weatherApi';
-import {DarkColors, FontSize, LightColors, Radius, Spacing, getWeatherEmoji, getWeatherLabel} from '../theme';
+import {Spacing, Radius, FontSize, useColors, getWeatherEmoji, getWeatherLabel} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
+
+// Safe import for LinearGradient
+let LinearGradient: any;
+try {
+  LinearGradient = require('react-native-linear-gradient').default;
+} catch (e) {
+  LinearGradient = ({ children, colors, style }: any) => (
+    <View style={[style, { backgroundColor: colors[0] }]}>{children}</View>
+  );
+}
+
+const { width } = Dimensions.get('window');
 
 // ── Tip ──────────────────────────────────────────────────────────────────────
 type Message = {
@@ -32,65 +48,57 @@ type Message = {
 // ── Varsayılan Konum ─────────────────────────────────────────────────────────
 const DEFAULT_LAT = 41.0082;
 const DEFAULT_LON = 28.9784;
-const DEFAULT_CITY = 'İstanbul, TR';
+const DEFAULT_CITY = 'İstanbul';
 
-// ── Hızlı Chip'ler ───────────────────────────────────────────────────────────
-const QUICK_CHIPS = [
-  'Ne giymeliyim?',
-  'UV İndeksi raporu',
-  'Hafta sonu tahmini',
-  'Yürüyüş için uygun mu?',
+// ── Hızlı Aksiyonlar ───────────────────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { id: 'wear', label: 'Ne giymeliyim?', icon: 'shirt-outline', color: '#60A5FA' },
+  { id: 'travel', label: 'Seyahat planla', icon: 'map-outline', color: '#10B981' },
+  { id: 'picnic', label: 'Piknik uygun mu?', icon: 'basket-outline', color: '#F59E0B' },
+  { id: 'photo', label: 'Fotoğraf saati', icon: 'camera-outline', color: '#EC4899' },
+];
+
+const SUGGESTIONS = [
+  'Bugün yağmur yağacak mı?',
+  'Hafta sonu planı için hava nasıl?',
+  'Dışarıda spor yapmak için en iyi saat?',
+  'UV İndeksi raporu verir misin?',
 ];
 
 export function ChatbotScreen(): React.JSX.Element {
   const navigation = useNavigation();
+  const C = useColors();
   const {theme} = useThemeStore();
-  const {isGuest} = useAuthStore();
-  const C = theme === 'dark' ? DarkColors : LightColors;
+  const {isGuest, user} = useAuthStore();
   const flatRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [initialized, setInitialized] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
-  // Mevcut hava durumunu çek
   const weatherQuery = useQuery({
     queryKey: ['weather', 'current', DEFAULT_LAT, DEFAULT_LON],
     queryFn: () => getCurrentWeather(DEFAULT_LAT, DEFAULT_LON),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Karşılama mesajını ekle
-  useEffect(() => {
-    if (!initialized && weatherQuery.data) {
-      const wd = weatherQuery.data;
-      const greeting: Message = {
-        id: 'welcome',
-        role: 'assistant',
-        content: `Merhaba! Ben Havamania. ${DEFAULT_CITY} için tahmini kontrol ettim — şu an hava ${getWeatherLabel(wd.weather_code).toLowerCase()} ve sıcaklık ${wd.temperature}°C. Gününüzü planlamanıza nasıl yardımcı olabilirim?`,
-      };
-      setMessages([greeting]);
-      setInitialized(true);
-    }
-  }, [weatherQuery.data, initialized]);
-
-  // Chatbot mutation
   const askMutation = useMutation({
     mutationFn: (question: string) => {
       if (isGuest) {
-        return Promise.resolve(buildLocalAnswer(question, weatherQuery.data));
+        return new Promise((resolve) => {
+            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data)), 1000);
+        });
       }
       return askChatbot(question);
     },
+    onMutate: () => setIsTyping(true),
     onSuccess: (data: any, question: string) => {
+      setIsTyping(false);
       const answer = data?.answer ?? data?.content ?? String(data);
       const isWeatherQ = /hava|tahmin|sıcaklık|yağmur|güneş|rüzgar|uv/i.test(question);
 
       setMessages(prev => {
         const next = [...prev];
-        const typingIdx = next.findIndex(m => m.id === 'typing');
-        if (typingIdx >= 0) next.splice(typingIdx, 1);
-
         next.push({
           id: `${Date.now()}-assistant`,
           role: 'assistant',
@@ -109,29 +117,25 @@ export function ChatbotScreen(): React.JSX.Element {
       });
     },
     onError: () => {
-      setMessages(prev => {
-        const next = prev.filter(m => m.id !== 'typing');
-        return [
-          ...next,
-          {
-            id: `${Date.now()}-err`,
-            role: 'assistant',
-            content:
-              'Şu an bağlanamıyorum. Lütfen internet bağlantınızı kontrol edin veya misafir modunu kullanın.',
-          },
-        ];
-      });
+      setIsTyping(false);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `${Date.now()}-err`,
+          role: 'assistant',
+          content: 'Şu an bir sorun oluştu. Lütfen tekrar deneyin.',
+        },
+      ]);
     },
   });
 
   const send = (text?: string) => {
     const question = (text ?? input).trim();
-    if (!question || askMutation.isPending) return;
+    if (!question || isTyping) return;
 
     setMessages(prev => [
       ...prev,
       {id: `${Date.now()}-user`, role: 'user', content: question},
-      {id: 'typing', role: 'assistant', content: '...'},
     ]);
     setInput('');
     askMutation.mutate(question);
@@ -141,411 +145,292 @@ export function ChatbotScreen(): React.JSX.Element {
     if (messages.length > 0) {
       setTimeout(() => flatRef.current?.scrollToEnd({animated: true}), 100);
     }
-  }, [messages]);
-
-  const s = makeStyles(C);
+  }, [messages, isTyping]);
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar
-        barStyle={theme === 'dark' ? 'light-content' : 'dark-content'}
-        backgroundColor={C.bg}
-      />
+    <SafeAreaView style={[styles.container, {backgroundColor: C.bg}]}>
+      <StatusBar barStyle={theme === 'light' ? 'dark-content' : 'light-content'} />
 
-      <View style={s.header}>
-        <TouchableOpacity
-          onPress={() => navigation.canGoBack() && navigation.goBack()}
-          style={s.backBtn}>
-          <Text style={s.backArrow}>‹</Text>
+      {/* Header */}
+      <View style={[styles.header, {borderBottomColor: C.divider}]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="chevron-back" size={28} color={C.text} />
         </TouchableOpacity>
-        <View style={s.headerCenter}>
-          <Text style={s.headerTitle}>Havamania AI</Text>
-          <View style={s.onlineRow}>
-            <View style={s.onlineDot} />
-            <Text style={s.onlineText}>ÇEVRİMİÇİ</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.headerTitle, {color: C.text}]}>Havamania AI</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, {backgroundColor: '#10B981'}]} />
+            <Text style={[styles.statusText, {color: '#10B981'}]}>AKTİF</Text>
           </View>
         </View>
-        <TouchableOpacity style={s.infoBtn}>
-          <Text style={s.infoBtnText}>ⓘ</Text>
+        <TouchableOpacity style={styles.historyButton}>
+          <Icon name="time-outline" size={24} color={C.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
         style={{flex: 1}}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
 
-        <FlatList
-          ref={flatRef}
-          data={messages}
-          keyExtractor={item => item.id}
-          contentContainerStyle={s.messageList}
-          showsVerticalScrollIndicator={false}
-          renderItem={({item}) => {
-            if (item.role === 'weather-card' && item.weatherData) {
-              return <WeatherCard data={item.weatherData} C={C} city={DEFAULT_CITY} />;
-            }
-            return (
-              <MessageBubble
-                message={item}
-                C={C}
-                isTyping={item.id === 'typing'}
-              />
-            );
-          }}
-          ListEmptyComponent={
-            weatherQuery.isLoading ? (
-              <View style={s.emptyState}>
-                <ActivityIndicator color={C.accent} />
-              </View>
-            ) : null
-          }
-        />
-
-        <View>
+        {messages.length === 0 ? (
+          <WelcomeView
+            userName={user?.name || 'Gezgin'}
+            onAction={send}
+            onSuggestion={send}
+            C={C}
+          />
+        ) : (
           <FlatList
-            horizontal
-            data={QUICK_CHIPS}
-            keyExtractor={item => item}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.chipsContainer}
-            renderItem={({item}) => (
-              <TouchableOpacity
-                style={s.chip}
-                onPress={() => send(item)}
-                disabled={askMutation.isPending}>
-                <Text style={s.chipText}>{item}</Text>
-              </TouchableOpacity>
-            )}
+            ref={flatRef}
+            data={messages}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.messageList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({item}) => {
+              if (item.role === 'weather-card' && item.weatherData) {
+                return <WeatherCard data={item.weatherData} C={C} city={DEFAULT_CITY} />;
+              }
+              return <MessageBubble message={item} C={C} />;
+            }}
+            ListFooterComponent={isTyping ? <TypingIndicator C={C} /> : null}
           />
-        </View>
+        )}
 
-        <View style={s.inputBar}>
-          <TouchableOpacity style={s.addBtn}>
-            <Text style={s.addBtnText}>+</Text>
-          </TouchableOpacity>
-          <TextInput
-            style={s.input}
-            placeholder="Hava durumu hakkında bir şey sor..."
-            placeholderTextColor={C.textMuted}
-            value={input}
-            onChangeText={setInput}
-            onSubmitEditing={() => send()}
-            returnKeyType="send"
-            multiline={false}
-          />
-          <TouchableOpacity
-            style={[s.sendBtn, (!input.trim() || askMutation.isPending) && s.sendBtnDisabled]}
-            onPress={() => send()}
-            disabled={!input.trim() || askMutation.isPending}>
-            <Text style={s.sendBtnIcon}>▶</Text>
-          </TouchableOpacity>
+        {/* Input Area */}
+        <View style={[styles.inputContainer, {backgroundColor: C.bgSecondary, borderTopColor: C.divider}]}>
+          <View style={[styles.inputWrapper, {backgroundColor: theme === 'dark' ? '#1F2937' : '#F3F4F6'}]}>
+            <TouchableOpacity style={styles.attachBtn}>
+              <Icon name="add-circle-outline" size={24} color={C.textSecondary} />
+            </TouchableOpacity>
+            <TextInput
+              style={[styles.input, {color: C.text}]}
+              placeholder="Hava durumunu sor..."
+              placeholderTextColor={C.textMuted}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxHeight={100}
+            />
+            <TouchableOpacity
+              onPress={() => send()}
+              disabled={!input.trim() || isTyping}
+              style={[styles.sendButton, {backgroundColor: input.trim() ? C.accent : C.textMuted + '40'}]}
+            >
+              <Icon name="arrow-up" size={20} color="#FFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function MessageBubble({
-  message,
-  C,
-  isTyping,
-}: {
-  message: Message;
-  C: typeof DarkColors;
-  isTyping?: boolean;
-}) {
+function WelcomeView({ userName, onAction, onSuggestion, C }: { userName: string, onAction: (s: string) => void, onSuggestion: (s: string) => void, C: any }) {
+  return (
+    <ScrollView contentContainerStyle={styles.welcomeContainer} showsVerticalScrollIndicator={false}>
+      <View style={styles.welcomeHeader}>
+        <View style={[styles.aiIcon, {backgroundColor: C.accent + '20'}]}>
+          <Icon name="sparkles" size={40} color={C.accent} />
+        </View>
+        <Text style={[styles.welcomeTitle, {color: C.text}]}>Merhaba, {userName}</Text>
+        <Text style={[styles.welcomeSubtitle, {color: C.textSecondary}]}>Hava durumuna göre gününü planlamana nasıl yardımcı olabilirim?</Text>
+      </View>
+
+      <Text style={[styles.sectionLabel, {color: C.textSecondary}]}>HIZLI AKSİYONLAR</Text>
+      <View style={styles.actionsGrid}>
+        {QUICK_ACTIONS.map(action => (
+          <TouchableOpacity
+            key={action.id}
+            style={[styles.actionCard, {backgroundColor: C.bgSecondary, borderColor: C.divider}]}
+            onPress={() => onAction(action.label)}
+          >
+            <View style={[styles.actionIconBox, {backgroundColor: action.color + '15'}]}>
+              <Icon name={action.icon} size={22} color={action.color} />
+            </View>
+            <Text style={[styles.actionLabel, {color: C.text}]}>{action.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={[styles.sectionLabel, {color: C.textSecondary, marginTop: Spacing.lg}]}>ÖNERİLEN SORULAR</Text>
+      <View style={styles.suggestionsList}>
+        {SUGGESTIONS.map((suggestion, idx) => (
+          <TouchableOpacity
+            key={idx}
+            style={[styles.suggestionItem, {borderColor: C.divider}]}
+            onPress={() => onSuggestion(suggestion)}
+          >
+            <Text style={[styles.suggestionText, {color: C.text}]}>{suggestion}</Text>
+            <Icon name="chevron-forward" size={16} color={C.textMuted} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+function MessageBubble({ message, C }: { message: Message, C: any }) {
   const isUser = message.role === 'user';
-
   return (
-    <View style={[bubbleStyles(C).wrapper, isUser ? bubbleStyles(C).wrapperUser : bubbleStyles(C).wrapperBot]}>
+    <View style={[styles.bubbleWrapper, isUser ? styles.userBubbleWrapper : styles.botBubbleWrapper]}>
       {!isUser && (
-        <View style={bubbleStyles(C).avatar}>
-          <Text style={{fontSize: 18}}>☁️</Text>
+        <View style={[styles.botAvatar, {backgroundColor: C.accent}]}>
+          <Icon name="sparkles" size={14} color="#FFF" />
         </View>
       )}
-      <View style={[bubbleStyles(C).bubble, isUser ? bubbleStyles(C).bubbleUser : bubbleStyles(C).bubbleBot]}>
-        {!isUser && !isTyping && (
-          <Text style={bubbleStyles(C).senderLabel}>HAVAMANIA AI</Text>
-        )}
-        {isTyping ? (
-          <ActivityIndicator size="small" color={C.textSecondary} />
-        ) : (
-          <Text style={[bubbleStyles(C).text, isUser && bubbleStyles(C).textUser]}>
-            {message.content}
-          </Text>
-        )}
-      </View>
-      {isUser && (
-        <View style={bubbleStyles(C).userAvatar}>
-          <Text style={{fontSize: 16}}>👤</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-const bubbleStyles = (C: typeof DarkColors) =>
-  StyleSheet.create({
-    wrapper: {flexDirection: 'row', marginBottom: Spacing.md, alignItems: 'flex-end', gap: Spacing.sm},
-    wrapperBot: {paddingLeft: Spacing.md},
-    wrapperUser: {paddingRight: Spacing.md, flexDirection: 'row-reverse'},
-    avatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: C.bgCard,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: C.border,
-    },
-    userAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: C.bgCard,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    bubble: {
-      maxWidth: '75%',
-      borderRadius: Radius.lg,
-      padding: Spacing.md,
-    },
-    bubbleBot: {
-      backgroundColor: C.bgCard,
-      borderBottomLeftRadius: 4,
-    },
-    bubbleUser: {
-      backgroundColor: C.accentBtn,
-      borderBottomRightRadius: 4,
-    },
-    senderLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: '800',
-      color: C.textMuted,
-      letterSpacing: 0.8,
-      marginBottom: 4,
-    },
-    text: {
-      fontSize: FontSize.md,
-      color: C.text,
-      lineHeight: 22,
-    },
-    textUser: {color: '#FFFFFF'},
-  });
-
-function WeatherCard({
-  data,
-  C,
-  city,
-}: {
-  data: any;
-  C: typeof DarkColors;
-  city: string;
-}) {
-  return (
-    <View style={[cardStyles(C).wrapper]}>
-      <View style={cardStyles(C).card}>
-        <View style={cardStyles(C).cardHeader}>
-          <Text style={cardStyles(C).cardLabel}>MEVCUT HAVA DURUMU</Text>
-        </View>
-        <View style={cardStyles(C).cardBody}>
-          <View style={{flex: 1}}>
-            <Text style={cardStyles(C).cardTemp}>{data.temperature}°C</Text>
-            <Text style={cardStyles(C).cardDesc}>{getWeatherLabel(data.weather_code)}</Text>
-            <Text style={cardStyles(C).cardCity}>{city}</Text>
-          </View>
-          <View style={cardStyles(C).cardIconBox}>
-            <Text style={{fontSize: 36}}>{getWeatherEmoji(data.weather_code)}</Text>
-          </View>
-        </View>
-        <View style={cardStyles(C).statsRow}>
-          <StatItem label="Nem" value={`${data.humidity}%`} C={C} />
-          <StatItem label="Rüzgar" value={`${data.wind_speed}km/h`} C={C} />
-          <StatItem label="Hissedilen" value={`${data.feels_like}°`} C={C} />
-        </View>
+      <View style={[
+        styles.bubble,
+        isUser ? [styles.userBubble, {backgroundColor: C.accent}] : [styles.botBubble, {backgroundColor: C.bgSecondary, borderColor: C.divider}]
+      ]}>
+        <Text style={[styles.bubbleText, {color: isUser ? '#FFF' : C.text}]}>{message.content}</Text>
       </View>
     </View>
   );
 }
 
-function StatItem({label, value, C}: {label: string; value: string; C: typeof DarkColors}) {
+function TypingIndicator({ C }: { C: any }) {
   return (
-    <View style={{alignItems: 'center', flex: 1}}>
-      <Text style={{fontSize: FontSize.xs, color: C.textMuted}}>{label}</Text>
-      <Text style={{fontSize: FontSize.sm, fontWeight: '700', color: C.text}}>{value}</Text>
+    <View style={styles.botBubbleWrapper}>
+      <View style={[styles.botAvatar, {backgroundColor: C.accent}]}>
+        <Icon name="sparkles" size={14} color="#FFF" />
+      </View>
+      <View style={[styles.bubble, styles.botBubble, {backgroundColor: C.bgSecondary, borderColor: C.divider, paddingVertical: 12}]}>
+        <ActivityIndicator size="small" color={C.accent} />
+      </View>
     </View>
   );
 }
 
-const cardStyles = (C: typeof DarkColors) =>
-  StyleSheet.create({
-    wrapper: {
-      paddingHorizontal: Spacing.md,
-      paddingLeft: 36 + Spacing.md + Spacing.sm + Spacing.md,
-      marginBottom: Spacing.md,
-    },
-    card: {
-      backgroundColor: C.bgSecondary,
-      borderRadius: Radius.lg,
-      padding: Spacing.md,
-      borderWidth: 1,
-      borderColor: C.border,
-    },
-    cardHeader: {marginBottom: Spacing.xs},
-    cardLabel: {
-      fontSize: FontSize.xs,
-      fontWeight: '800',
-      color: C.textMuted,
-      letterSpacing: 1,
-    },
-    cardBody: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: Spacing.sm,
-    },
-    cardTemp: {fontSize: FontSize.xxl + 8, fontWeight: '800', color: C.text},
-    cardDesc: {fontSize: FontSize.md, color: C.accent, fontWeight: '600'},
-    cardCity: {fontSize: FontSize.sm, color: C.textSecondary},
-    cardIconBox: {
-      width: 64,
-      height: 64,
-      borderRadius: Radius.md,
-      backgroundColor: '#FF9800',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    statsRow: {
-      flexDirection: 'row',
-      paddingTop: Spacing.sm,
-      borderTopWidth: 0.5,
-      borderTopColor: C.divider,
-    },
-  });
+function WeatherCard({ data, C, city }: { data: any, C: any, city: string }) {
+  return (
+    <View style={styles.cardWrapper}>
+      <LinearGradient colors={[C.accent, C.accentDark]} style={styles.weatherCard} start={{x:0, y:0}} end={{x:1, y:1}}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardLabel}>HAVA DURUMU RAPORU</Text>
+          <Text style={styles.cardCity}>{city}</Text>
+        </View>
+        <View style={styles.cardMain}>
+          <Text style={styles.cardTemp}>{data.temperature}°</Text>
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardDesc}>{getWeatherLabel(data.weather_code)}</Text>
+            <Text style={styles.cardFeels}>Hissedilen: {data.feels_like}°</Text>
+          </View>
+          <Text style={styles.cardEmoji}>{getWeatherEmoji(data.weather_code)}</Text>
+        </View>
+        <View style={styles.cardStats}>
+          <View style={styles.cardStat}><Text style={styles.statVal}>%{data.humidity}</Text><Text style={styles.statLabel}>NEM</Text></View>
+          <View style={styles.cardStat}><Text style={styles.statVal}>{data.wind_speed}</Text><Text style={styles.statLabel}>RÜZGAR</Text></View>
+          <View style={styles.cardStat}><Text style={styles.statVal}>{data.uv_index}</Text><Text style={styles.statLabel}>UV</Text></View>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
 
 function buildLocalAnswer(question: string, weather: any): {answer: string} {
   if (!weather) return {answer: 'Hava durumu bilgisi yükleniyor, lütfen bekle.'};
   const q = question.toLowerCase();
   const temp = weather.temperature;
   const desc = getWeatherLabel(weather.weather_code);
-  const wind = weather.wind_speed;
-  const humidity = weather.humidity;
 
   if (/wear|giy|kıyafet/i.test(q)) {
-    if (temp > 25) return {answer: `${temp}°C ile güneşli bir hava! Hafif giysiler ve güneş kremi öneririm. 😎`};
-    if (temp > 15) return {answer: `${temp}°C ve ${desc.toLowerCase()}. Hafif bir ceket yeterli olur. 👕`};
-    return {answer: `${temp}°C oldukça serin. Mont ve katmanlı giysiler giyin! 🧥`};
+    if (temp > 25) return {answer: `Hava **${temp}°C** ve güneşli! İnce pamuklu kıyafetler, şapka ve güneş gözlüğü harika olur. Güneş kremi sürmeyi de unutma. 😎`};
+    if (temp > 15) return {answer: `Sıcaklık **${temp}°C** civarında. Şık bir sweatshirt veya ince bir ceket işini görecektir. 👕`};
+    return {answer: `Hava **${temp}°C**, biraz serin. Kalın bir ceket veya mont giymeni öneririm. 🧥`};
   }
-  if (/hike|yürüyüş|outdoor|dışarı/i.test(q)) {
-    if (wind < 20 && temp > 10 && weather.weather_code < 60) {
-      return {answer: `${desc} ve ${wind} km/h rüzgar ile yürüyüş için harika bir gün! Güneş kremi unutma. 🥾`};
-    }
-    return {answer: `Bugün yürüyüş için ideal değil — ${desc.toLowerCase()} ve ${wind} km/h rüzgar var. Dikkatli ol!`};
+  if (/travel|seyahat/i.test(q)) {
+    return {answer: `Seyahat planlamak için harika bir zaman! Şu an ${DEFAULT_CITY} için hava seyahat dostu görünüyor. Daha detaylı bir rota için "Seyahat Takvimi" bölümünü de kullanabilirsin. ✈️`};
   }
   if (/picnic|piknik/i.test(q)) {
-    if (weather.weather_code < 3 && wind < 20) {
-      return {answer: `Harika bir piknik günü! ${temp}°C, ${desc.toLowerCase()} ve hafif rüzgar. Güneş kremin yanında olsun. 🧺`};
+    if (weather.weather_code < 3 && weather.wind_speed < 20) {
+      return {answer: `Bugün piknik için **mükemmel** bir gün! Hava ${desc.toLowerCase()}, rüzgar ise hafif. Sepetini hazırla! 🧺`};
     }
-    return {answer: `Bugün piknik için biraz riskli — ${desc.toLowerCase()}. Yarın tekrar kontrol et!`};
+    return {answer: `Bugün piknik için pek uygun değil gibi. Hava ${desc.toLowerCase()} ve rüzgarlı olabilir. 💨`};
   }
-  if (/uv|güneş/i.test(q)) {
-    const uv = weather.uv_index ?? 3;
-    const level = uv <= 2 ? 'Düşük' : uv <= 5 ? 'Orta' : uv <= 7 ? 'Yüksek' : 'Çok Yüksek';
-    return {answer: `UV İndeksi şu an ${uv} — ${level}. ${uv > 3 ? '30+ SPF güneş kremi kullan! ☀️' : 'Güvenli bir seviye.'}`};
-  }
-  if (/weekend|hafta sonu/i.test(q)) {
-    return {answer: `Hafta sonu tahminine bakmak için ana sayfadaki "Tam Tahmini Gör" bağlantısına tıkla! 📅`};
+  if (/photo|fotoğraf/i.test(q)) {
+    return {answer: `Fotoğraf çekimi için bugün **18:45 - 19:30** arası "Golden Hour" zamanı. Yumuşak ışık yakalamak için harika! 📸`};
   }
 
   return {
-    answer: `Şu an ${DEFAULT_LAT === 41.0082 ? 'İstanbul' : 'konumunuzda'} hava ${desc.toLowerCase()}, sıcaklık ${temp}°C. Nem %${humidity}, rüzgar ${wind} km/h. Daha fazlası için giriş yap! 🌤️`,
+    answer: `Anladım. Şu an ${DEFAULT_CITY} için hava **${desc.toLowerCase()}**, sıcaklık ise **${temp}°C**. Başka bir konuda yardımcı olabilir miyim? 🌤️`,
   };
 }
 
-const makeStyles = (C: typeof DarkColors) =>
-  StyleSheet.create({
-    safe: {flex: 1, backgroundColor: C.bg},
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderBottomWidth: 0.5,
-      borderBottomColor: C.divider,
-    },
-    backBtn: {width: 36},
-    backArrow: {fontSize: 32, color: C.text, lineHeight: 36},
-    headerCenter: {flex: 1, alignItems: 'center'},
-    headerTitle: {fontSize: FontSize.lg, fontWeight: '700', color: C.text},
-    onlineRow: {flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1},
-    onlineDot: {width: 7, height: 7, borderRadius: 4, backgroundColor: '#4CAF50'},
-    onlineText: {fontSize: FontSize.xs, color: '#4CAF50', fontWeight: '600', letterSpacing: 0.5},
-    infoBtn: {width: 36, alignItems: 'flex-end'},
-    infoBtnText: {fontSize: 20, color: C.textSecondary},
-    messageList: {
-      paddingVertical: Spacing.md,
-      flexGrow: 1,
-    },
-    emptyState: {flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40},
-    chipsContainer: {
-      paddingHorizontal: Spacing.md,
-      paddingBottom: Spacing.sm,
-      gap: Spacing.sm,
-    },
-    chip: {
-      backgroundColor: C.bgCard,
-      borderRadius: Radius.full,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderWidth: 1,
-      borderColor: C.border,
-    },
-    chipText: {
-      fontSize: FontSize.sm,
-      color: C.text,
-      fontWeight: '500',
-    },
-    inputBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderTopWidth: 0.5,
-      borderTopColor: C.divider,
-      gap: Spacing.sm,
-      backgroundColor: C.bg,
-    },
-    addBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      borderWidth: 1.5,
-      borderColor: C.border,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    addBtnText: {fontSize: 22, color: C.textSecondary, lineHeight: 26},
-    input: {
-      flex: 1,
-      backgroundColor: C.bgCard,
-      borderRadius: Radius.full,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 10,
-      fontSize: FontSize.md,
-      color: C.text,
-      borderWidth: 1,
-      borderColor: C.border,
-    },
-    sendBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: C.accentBtn,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    sendBtnDisabled: {opacity: 0.5},
-    sendBtnIcon: {color: '#FFFFFF', fontSize: 14, marginLeft: 2},
-  });
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 0.5,
+  },
+  backButton: { width: 40 },
+  headerTitleContainer: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: FontSize.lg, fontWeight: '800' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  historyButton: { width: 40, alignItems: 'flex-end' },
+
+  welcomeContainer: { padding: Spacing.lg, paddingBottom: 100 },
+  welcomeHeader: { alignItems: 'center', marginVertical: Spacing.xl },
+  aiIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md },
+  welcomeTitle: { fontSize: 28, fontWeight: '800', marginBottom: Spacing.xs },
+  welcomeSubtitle: { fontSize: 16, textAlign: 'center', lineHeight: 22, paddingHorizontal: Spacing.md },
+
+  sectionLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: Spacing.md },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  actionCard: {
+    width: (width - Spacing.lg * 2 - 12) / 2,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    alignItems: 'flex-start'
+  },
+  actionIconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.sm },
+  actionLabel: { fontSize: 14, fontWeight: '700' },
+
+  suggestionsList: { gap: 10 },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1
+  },
+  suggestionText: { fontSize: 14, fontWeight: '600' },
+
+  messageList: { padding: Spacing.md, paddingBottom: 20 },
+  bubbleWrapper: { marginBottom: Spacing.lg, maxWidth: '85%' },
+  userBubbleWrapper: { alignSelf: 'flex-end' },
+  botBubbleWrapper: { alignSelf: 'flex-start', flexDirection: 'row', gap: 8 },
+  botAvatar: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
+  bubble: { padding: Spacing.md, borderRadius: 20 },
+  userBubble: { borderBottomRightRadius: 4 },
+  botBubble: { borderBottomLeftRadius: 4, borderWidth: 1 },
+  bubbleText: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
+
+  inputContainer: { padding: Spacing.md, paddingBottom: Platform.OS === 'ios' ? Spacing.lg : Spacing.md, borderTopWidth: 0.5 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 30 },
+  attachBtn: { padding: 4 },
+  input: { flex: 1, paddingHorizontal: 12, paddingVertical: 8, fontSize: 16 },
+  sendButton: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+
+  cardWrapper: { paddingHorizontal: Spacing.sm, marginBottom: Spacing.lg, marginLeft: 36 },
+  weatherCard: { borderRadius: 24, padding: 20, overflow: 'hidden' },
+  cardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  cardCity: { color: '#FFF', fontSize: 16, fontWeight: '800', marginTop: 2 },
+  cardMain: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
+  cardTemp: { color: '#FFF', fontSize: 48, fontWeight: '200' },
+  cardInfo: { flex: 1, marginLeft: 12 },
+  cardDesc: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  cardFeels: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' },
+  cardEmoji: { fontSize: 40 },
+  cardStats: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: 12 },
+  cardStat: { alignItems: 'center' },
+  statVal: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  statLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 8, fontWeight: '900' },
+});
