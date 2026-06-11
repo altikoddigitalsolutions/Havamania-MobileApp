@@ -149,10 +149,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val feelsLike = data.feelsLike
         val cond = data.condition
         val city = data.cityName
-        val humidity = data.humidity ?: "Bilinmiyor"
+        val humidity = WeatherUtils.formatRainProbability(data.humidity)
         val wind = data.windSpeed ?: "Bilinmiyor"
         val uv = data.uvIndex ?: "Bilinmiyor"
-        val precip = data.precipitationProbability ?: 0
+        val precip = WeatherUtils.formatRainProbability(data.precipitationProbability)
 
         val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
         val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
@@ -162,10 +162,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             Şehir: $city
             Sıcaklık: $temp, Hissedilen: $feelsLike
             Durum: $cond
-            Nem: %$humidity
+            Nem: $humidity
             Rüzgar: $wind km/s
             UV İndeksi: $uv
-            Yağış İhtimali: %$precip
+            Yağış İhtimali: $precip
             Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
             Günlük Tahmin (Gelecek 3 gün): $dailySummary
 

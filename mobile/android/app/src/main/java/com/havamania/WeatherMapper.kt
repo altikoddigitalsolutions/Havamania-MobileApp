@@ -227,15 +227,15 @@ object WeatherMapper {
         return listOf(
             WeatherDetailData("Hissedilen", "${current?.apparentTemperature?.roundToInt() ?: 0}°", "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
             WeatherDetailData("Rüzgar Soğutma", if (windChill != null) "${windChill.roundToInt()}°" else "Düşük", if (windChill != null) "Rüzgar etkisi dahil" else "Rüzgar etkisi düşük", "AcUnit", "#38BDF8"),
-            WeatherDetailData("Yağış Olasılığı", "%$precipProb", precipLabel, "WaterDrop", "#60A5FA"),
+            WeatherDetailData("Yağış Olasılığı", WeatherUtils.formatRainProbability(precipProb), precipLabel, "WaterDrop", "#60A5FA"),
             WeatherDetailData("Yağış Miktarı", "${current?.precipitation ?: 0.0} mm", "Son 1 saat", "Umbrella", "#0EA5E9"),
             WeatherDetailData("Rüzgar", "${windSpd.roundToInt()} km/s", "Anlık hız", "Air", "#34D399"),
             WeatherDetailData("Rüzgar Hamlesi", "${windGust.roundToInt()} km/s", "Maksimum hız", "Cyclone", "#10B981"),
             WeatherDetailData("UV İndeksi", "${uv.toInt()}", getUVDescription(uv), "Sun", "#FBBF24", uv.toFloat() / 12f),
-            WeatherDetailData("Bulutluluk", "%$cloudCover", "Gökyüzü kapalılığı", "Cloud", "#64748B"),
+            WeatherDetailData("Bulutluluk", WeatherUtils.formatRainProbability(cloudCover), "Gökyüzü kapalılığı", "Cloud", "#64748B"),
             WeatherDetailData("Görüş", "${(visibility / 1000).toInt()} km", getVisibilityDescription(visibility), "Visibility", "#10B981"),
             WeatherDetailData("Basınç", "${current?.pressure?.toInt() ?: 1013} hPa", "Yüzey basıncı", "Compress", "#A78BFA"),
-            WeatherDetailData("Nem", "%$humidity", "Bağıl nem oranı", "Opacity", "#06B6D4")
+            WeatherDetailData("Nem", WeatherUtils.formatRainProbability(humidity), "Bağıl nem oranı", "Opacity", "#06B6D4")
         )
     }
 
@@ -284,7 +284,7 @@ object WeatherMapper {
         }
         val moon = getMoonPhase(Date())
         list.add("Ay Fazı" to moon.label)
-        list.add("Aydınlık" to "%${moon.illumination}")
+        list.add("Aydınlık" to WeatherUtils.formatRainProbability(moon.illumination))
         return list
     }
 

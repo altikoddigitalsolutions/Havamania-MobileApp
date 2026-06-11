@@ -92,6 +92,8 @@ data class TravelPlanEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val weatherSummary: String? = null,
     val aiSuggestion: String? = null,
+    val userNote: String? = null,
+    val userRating: Int? = 0,
     val lastWeatherAnalysisText: String? = null,
     val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
@@ -161,7 +163,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 8, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 9, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao

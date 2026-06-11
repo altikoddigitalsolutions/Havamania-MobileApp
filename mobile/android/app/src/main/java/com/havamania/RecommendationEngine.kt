@@ -165,7 +165,8 @@ object RecommendationEngine {
                     tempVal < 25 -> "Hava ılık ve rahat; hafif bir ceket veya sweatshirt yeterli olur."
                     else -> "Hava sıcak; ince, pamuklu ve ferah kıyafetler tercih etmelisin."
                 }
-                val rainAdvice = if (precip > 30) " Ayrıca %$precip yağış ihtimali var, şemsiyeni sakın unutma." else ""
+                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
+                val rainAdvice = if (precip > 30) " Ayrıca $formattedPrecip yağış ihtimali var, şemsiyeni sakın unutma." else ""
                 val uvAdvice = if (uv > 5) " UV indeksi $uv olduğu için güneş koruyucu kullanmanı öneririm." else ""
                 baseHeader + currentStatus + advice + rainAdvice + uvAdvice
             }
@@ -179,8 +180,9 @@ object RecommendationEngine {
                 baseHeader + currentStatus + advice
             }
             prompt.contains("yağmur") || prompt.contains("yağış") || prompt.contains("şemsiye") -> {
+                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
                 val advice = if (precip > 20) {
-                    "Bugün $city için %$precip oranında bir yağış ihtimali bulunuyor. Tedbirli olup şemsiye taşıman akıllıca olur."
+                    "Bugün $city için $formattedPrecip oranında bir yağış ihtimali bulunuyor. Tedbirli olup şemsiye taşıman akıllıca olur."
                 } else {
                     "Bugün için belirgin bir yağış beklenmiyor, gökyüzü genellikle $cond."
                 }
@@ -206,7 +208,8 @@ object RecommendationEngine {
                 baseHeader + "Hafta sonu detaylarına AI erişimim şu an kısıtlı ama genel tabloya göre planlarına kapalı alan alternatifleri eklemeni öneririm."
             }
             else -> {
-                val extraInfo = "Yağış ihtimali %$precip, rüzgar $wind km/s ve UV indeksi $uv seviyesinde."
+                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
+                val extraInfo = "Yağış ihtimali $formattedPrecip, rüzgar $wind km/s ve UV indeksi $uv seviyesinde."
                 baseHeader + currentStatus + extraInfo + " Başka bir konuda sorunuz olursa buradayım!"
             }
         }

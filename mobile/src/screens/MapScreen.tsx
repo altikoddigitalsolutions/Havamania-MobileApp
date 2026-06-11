@@ -18,6 +18,7 @@ import Geolocation from 'react-native-geolocation-service';
 
 import {getCurrentWeather, getDailyWeather, getHourlyWeather} from '../services/weatherApi';
 import {AppColors, DarkColors, FontSize, LightColors, Radius, Spacing, getWeatherEmoji, getWeatherLabel, formatHour} from '../theme';
+import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 
 // ── Bölgeler (Mercury Weather gibi çoklu bölge karşılaştırması) ───────────────
@@ -101,8 +102,8 @@ export function MapScreen(): React.JSX.Element {
       case 'temperature': return `${data.temperature}°`;
       case 'precipitation': return `${data.precipitation ?? 0}mm`;
       case 'wind': return `${data.wind_speed}km/h`;
-      case 'cloud': return `${data.cloud_cover}%`;
-      case 'humidity': return `${data.humidity}%`;
+      case 'cloud': return formatPrecipitationProbability(data.cloud_cover); // Reuse formatter for percent
+      case 'humidity': return formatPrecipitationProbability(data.humidity); // Reuse formatter for percent
     }
   };
 
@@ -276,7 +277,7 @@ function LocationCard({
           <View style={[cardStyles(C).barFill, {width: `${barVal * 100}%`, backgroundColor: barColor}]} />
         </View>
         {data && (
-          <Text style={cardStyles(C).extra}>💧{data.humidity}% · {data.wind_speed}km/h</Text>
+          <Text style={cardStyles(C).extra}>{formatPrecipitationProbability(data.humidity)} · {data.wind_speed}km/h</Text>
         )}
       </View>
     </View>

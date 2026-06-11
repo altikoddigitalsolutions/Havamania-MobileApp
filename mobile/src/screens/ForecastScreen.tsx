@@ -18,6 +18,7 @@ import {useTranslation} from 'react-i18next';
 import {getDailyWeather} from '../services/weatherApi';
 import {searchCity, GeoResult, formatSunTime} from '../services/openMeteoApi';
 import {AppColors, FontSize, Radius, Spacing, formatDayShort, getWeatherEmoji, useColors} from '../theme';
+import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
@@ -208,7 +209,7 @@ function ForecastRow({
 
       {/* Yağış olasılığı + miktar */}
       <View style={s.precipCol}>
-        <Text style={s.precip}>💧{item.precipitation_probability}%</Text>
+        <Text style={s.precip}>💧{formatPrecipitationProbability(item.precipitation_probability)}</Text>
         {item.precipitation_sum > 0 && (
           <Text style={s.precipSum}>{item.precipitation_sum}mm</Text>
         )}
@@ -315,8 +316,9 @@ function buildAiInsight(items: any[], t: any): string {
   if (i18next.language === 'tr') {
     parts.push(`Bu hafta sıcaklıklar ${minTemp}° ile ${maxTemp}° arasında seyredecek.`);
     if (rainyDay) {
+        const formattedProb = formatPrecipitationProbability(rainyDay.precipitation_probability);
         parts.push(
-            `${formatDayShort(rainyDay.date)} günü %${rainyDay.precipitation_probability} yağış ihtimali var, şemsiyenizi yanınıza alın.`
+            `${formatDayShort(rainyDay.date)} günü ${formattedProb} yağış ihtimali var, şemsiyenizi yanınıza alın.`
         );
     }
     if (niceWeekend) {
@@ -325,8 +327,9 @@ function buildAiInsight(items: any[], t: any): string {
   } else {
     parts.push(`Expect temperatures between ${minTemp}° and ${maxTemp}° this week.`);
     if (rainyDay) {
+        const formattedProb = formatPrecipitationProbability(rainyDay.precipitation_probability);
         parts.push(
-        `Keep an umbrella handy for ${formatDayShort(rainyDay.date)} with ${rainyDay.precipitation_probability}% chance of rain.`,
+        `Keep an umbrella handy for ${formatDayShort(rainyDay.date)} with ${formattedProb} chance of rain.`,
         );
     }
     if (niceWeekend) {

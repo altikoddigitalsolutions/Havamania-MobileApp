@@ -1,8 +1,77 @@
 package com.havamania
 
 import java.time.LocalDate
+import java.util.Locale
 
 object TravelAiHelper {
+
+    private data class CityDetails(
+        val description: String,
+        val visitPlace: String,
+        val localDish: String,
+        val localAdvice: String,
+        val cityTip: String,
+        val friendGreeting: String
+    )
+
+    private val CITY_DATA = mapOf(
+        "istanbul" to CityDetails(
+            description = "İki kıtanın birleştiği büyüleyici metropol",
+            visitPlace = "Galata Kulesi civarındaki ara sokakları keşfedip vapurla karşıya geçmeyi unutma. Boğaz havası her zaman iyi gelir.",
+            localDish = "Karaköy'de taze bir balık ekmek and ardından meşhur bir baklava harika bir ikili olur.",
+            localAdvice = "Beşiktaş'tan Ortaköy'e uzanan sahil şeridinde sabah yürüyüşü yapıp boğazın keyfini çıkar.",
+            cityTip = "Vapur seyahatlerini gün batımına denk getirirsen İstanbul'un o eşsiz silüeti eşliğinde harika fotoğraflar yakalayabilirsin.",
+            friendGreeting = "İstanbul seni o bitmek bilmeyen enerjisi ve büyüleyici manzarasıyla bekliyor."
+        ),
+        "ankara" to CityDetails(
+            description = "Cumhuriyetin kalbi ve bozkırın modern yüzü",
+            visitPlace = "Anıtkabir'in huzurlu atmosferini ve ardından Hamamönü'nün tarihi dokusunu mutlaka gör.",
+            localDish = "Ankara Kalesi civarında gerçek bir Ankara döneri denemeden dönme, farkı hemen anlayacaksın.",
+            localAdvice = "Kuğulu Park'ta kuğuları izleyerek kahveni yudumlayıp şehrin temposuna kısa bir mola ver.",
+            cityTip = "Eymir Gölü'nde sabah saatlerinde kısa bir yürüyüş yapmak Ankara'nın o resmi havasını bir anda dağıtabilir.",
+            friendGreeting = "Başkentin o ağırbaşlı ama bir o kadar da samimi atmosferine hoş geldin."
+        ),
+        "izmir" to CityDetails(
+            description = "Ege'nin incisi ve özgürlüğün şehri",
+            visitPlace = "İzmir'e gitmişken gün batımında Kordon'da kısa bir yürüyüş yapmadan dönme. Özellikle akşam saatlerinde manzara çok keyifli oluyor.",
+            localDish = "Sabah fırından yeni çıkmış çıtır bir boyoz ve yanına haşlanmış yumurta İzmir klasiğidir, mutlaka denemelisin.",
+            localAdvice = "Kemeraltı Çarşısı'nın tarihi dokusunda kaybolup Kızlarağası Hanı'nda kumda kahve keyfi yap.",
+            cityTip = "Vaktin olursa Alaçatı'nın dar sokaklarında kaybolmayı veya Pasaport'ta çay keyfi yapmayı unutma.",
+            friendGreeting = "Ege'nin incisi İzmir, o rahat ve güler yüzlü havasıyla seni karşılamaya hazır."
+        ),
+        "antalya" to CityDetails(
+            description = "Güneşin, tarihin ve masmavi denizin buluşma noktası",
+            visitPlace = "Kaleiçi'nin o daracık, tarih kokan sokaklarını ve Hadrian Kapısı'nı keşfetmelisin. Her köşe ayrı bir hikaye.",
+            localDish = "Yöreye özgü tahinli piyaz ve şiş köfte ikilisini denemeni öneririm, Antalya'nın imza lezzetidir.",
+            localAdvice = "Konyaaltı sahilinde yürüyüş yapıp falezlerin üzerinden denizi izlemek ruhuna iyi gelecek.",
+            cityTip = "Düden Şelalesi'nin denize döküldüğü noktada güneşin batışını izlemek sana tüm yorgunluğunu unutturacak.",
+            friendGreeting = "Akdeniz'in masmavi denizi ve iç ısıtan güneşi seyahatine eşlik edecek."
+        ),
+        "balikesir" to CityDetails(
+            description = "Doğa ve denizin kucaklaştığı huzurlu rota",
+            visitPlace = "Kaz Dağları'nın bol oksijenli havasını solumak veya Ayvalık Cunda'nın renkli sokaklarında gezmek harika bir seçim olur.",
+            localDish = "Meşhur Balıkesir höşmerim tatlısını ve zeytinyağlıları denemeden ayrılma, tadı damağında kalacak.",
+            localAdvice = "Ayvalık'ta gün batımını Şeytan Sofrası'nda izlemek bu seyahatin en unutulmaz anı olabilir.",
+            cityTip = "Sabah saatlerinde Kaz Dağları'nın temiz havasını solumak oldukça keyifli bir deneyim olacaktır.",
+            friendGreeting = "Balıkesir seyahatin için doğanın tüm renkleriyle iç içe bir rota planlayabilirsin."
+        ),
+        "mardin" to CityDetails(
+            description = "Tarih ve kültürün taşa işlendiği masalsı şehir",
+            visitPlace = "Eski Mardin sokaklarında adımlarken tarihin sesini duyacaksın. Zinciriye Medresesi'nin manzarası seni büyüleyecek.",
+            localDish = "Kaburga dolmasını denemeden dönme, Mardin mutfağının zirve noktasıdır. Yanına bir de mırra kahvesi yakışır.",
+            localAdvice = "Deyrulzafaran Manastırı'nın huzurlu bahçesinde kısa bir mola verip tarihi atmosferin tadını çıkar.",
+            cityTip = "Eski Mardin sokaklarında kaybolurken fotoğraf çekmek için sabahın erken saatlerini tercih etmeni öneririm.",
+            friendGreeting = "Mardin seyahatin için hava verisi sınırlı olsa bile planını rahatça oluşturabilirsin."
+        ),
+        "gaziantep" to CityDetails(
+            description = "Gastronominin başkenti ve tarihin lezzet durağı",
+            visitPlace = "Zeugma Mozaik Müzesi'ndeki o eşsiz eserleri görüp ardından Bakırcılar Çarşısı'nın ritmine kapılmalısın.",
+            localDish = "Gaziantep'te tatlı için yer ayır. Özellikle iyi bir baklava ve katmer deneyimi seyahatin en unutulmaz kısmı olabilir.",
+            localAdvice = "Sabah erkenden meşhur bir Beyran içerek güne Antep usulü enerjik bir başlangıç yap.",
+            cityTip = "Sabah saatlerini müze ve çarşı için ayır; öğleden sonra yemek ve kısa yürüyüş planı daha rahat olur.",
+            friendGreeting = "Gastronominin başkenti Gaziantep, lezzet dolu sokakları ve derin tarihiyle seni bekliyor."
+        )
+    )
 
     fun generateTravelAiSuggestion(
         city: String,
@@ -13,158 +82,83 @@ object TravelAiHelper {
         isPastTrip: Boolean = false,
         endDate: LocalDate? = null
     ): String {
-        val sb = StringBuilder()
-
         if (isPastTrip) {
             val dateStr = endDate?.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM")) ?: "geçtiğimiz günlerde"
-            return "$city seyahatin $dateStr'da tamamlandı. Bu seyahat geçmiş rotaların arasında saklanıyor. Dilersen notlarını güncelleyebilir, seyahati silebilir veya arşivde tutabilirsin. Geçmiş hava verisi bu seyahat için artık güncel öneri üretmek amacıyla kullanılmıyor."
+            return "HAVA ÖZETİ|Bu seyahat $dateStr tarihinde tamamlandı. Geçmiş rotaların arasında güvenle saklanıyor. [SEP] VALİZ TAVSİYESİ|Geçmiş seyahat verisi için valiz önerisi sunulmuyor. [SEP] MUTLAKA GÖR|Şehirdeki anılarını tazelemek için eski fotoğraflarına göz atabilirsin. [SEP] DENEMEDEN DÖNME|Bir sonraki rotan için yerel lezzet duraklarını şimdiden keşfetmeye başla. [SEP] YEREL TAVSİYE|Seyahat geçmişin, gelecek planların için harika bir rehber olacak."
         }
 
-        if (daysUntilTrip > 15 || forecastSnapshot == null) {
-            return "Hava durumu verileri seyahat tarihinize 15 gün kala analiz edilecektir. Şu anda uzun vadeli tahminler hazırlık aşamasındadır."
+        if (daysUntilTrip > 15) {
+            return "HAVA ÖZETİ|Hava durumu verileri seyahatinize 15 gün kala analiz edilecektir. [SEP] VALİZ TAVSİYESİ|Tahminler netleştiğinde en uygun kıyafet önerilerini burada bulacaksın. [SEP] MUTLAKA GÖR|Gideceğin şehir için en popüler mekanları o tarihlerde senin için listeleyeceğiz. [SEP] DENEMEDEN DÖNME|Yöresel lezzetlerin en tazelerini mevsime göre önereceğiz. [SEP] YEREL TAVSİYE|Şu an için sadece rotanın heyecanını yaşa, detayları bize bırak."
         }
 
-        // 1. Comparison with previous snapshot
-        if (previousSnapshot != null) {
-            val comparison = generateComparisonText(previousSnapshot, forecastSnapshot)
-            if (comparison.isNotBlank()) {
-                sb.append(comparison).append(" ")
+        val normalizedCity = city.lowercase(Locale("tr")).trim()
+            .replace('ç', 'c').replace('ğ', 'g').replace('ı', 'i')
+            .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
+
+        val cityInfo = CITY_DATA.entries.find { normalizedCity.contains(it.key) }?.value ?: CityDetails(
+            description = "Keşfedilmeyi bekleyen bir durak",
+            visitPlace = "$city sokaklarını ve yerel parklarını keşfetmek her zaman iyi bir fikirdir. Şehrin ruhunu hissetmeye çalış.",
+            localDish = "Bu şehre özel en meşhur yerel yemeği denemeden dönme, lezzet duraklarını yerlilere sormayı unutma.",
+            localAdvice = "Merkezden biraz uzaklaşıp yerel halkın vakit geçirdiği kafelerde bir çay molası ver.",
+            cityTip = "Plansız bir şekilde yürümek bazen en güzel keşiflerin kapısını açar, şehrin sesini dinle.",
+            friendGreeting = "$city seyahatin için her şey hazır, keşfetmenin heyecanını yaşamaya başla!"
+        )
+
+        val weatherBlock = if (forecastSnapshot != null) {
+            val precip = forecastSnapshot.precipitationProbability ?: 0
+            val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
+            val code = forecastSnapshot.weatherCode ?: 0
+            val cond = (forecastSnapshot.conditionSummary ?: "Açık").lowercase(Locale("tr"))
+
+            val formattedPrecip = WeatherUtils.formatRainProbability(precip)
+
+            when {
+                code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
+                code >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
+                precip > 60 -> "Gideceğin tarihlerde gökyüzü biraz ağlamaklı görünüyor, $formattedPrecip yağmur ihtimali var. Hava yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
+                maxTemp > 30 -> "$maxTemp° ile güneşin cömert olduğu, pırıl pırıl bir gökyüzü seni bekliyor. Tam bir yaz havası var, yağmur riski ise yok denecek kadar az."
+                maxTemp < 10 -> "Hava biraz sert ve serin olacak, termometreler $maxTemp° civarında gezecek. Güneş yüzünü pek göstermeyebilir, kalın bir şeyler almanı öneririm."
+                else -> "Tam gezmelik, harika bir hava seni bekliyor! $maxTemp° derece ve $cond gökyüzü seyahatine ayrı bir keyif katacak. Yağmur ihtimali $formattedPrecip."
             }
+        } else {
+            "Şu an hava servisine ulaşılamadı ama mevsim normallerine göre plan yapabilirsin. Genel olarak seyahat için elverişli ve güzel bir dönem."
         }
 
-        // 2. Weather based advice
-        val weatherAdvice = getWeatherAdvice(forecastSnapshot)
-        sb.append(weatherAdvice).append(" ")
+        val packingBlock = if (forecastSnapshot != null) {
+            val precip = forecastSnapshot.precipitationProbability ?: 0
+            val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
+            when {
+                precip > 50 -> "Yağmura karşı şık bir yağmurluk and su geçirmeyen bir ayakkabı hayat kurtarır. Valizine mutlaka bir şemsiye eklemelisin."
+                maxTemp > 28 -> "Pamuklu and ferah kıyafetler seçmeni öneririm. Güneş gözlüğün and koruyucu kremin bu seyahatin olmazsa olmazı."
+                maxTemp < 12 -> "Kalın bir mont and atkı/bere ikilisini valizine eklemelisin. Kat kat giyinmek seni gün boyu soğuktan koruyacaktır."
+                else -> "Hafif bir ceket veya sweatshirt yanına almak mantıklı olur. Akşam serinliği için tedarikli olmakta fayda var."
+            }
+        } else {
+            "Rahat bir yürüyüş ayakkabısı and her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
+        }
 
-        // 3. Trip type based advice
-        val tripAdvice = getTripTypeAdvice(tripType, forecastSnapshot, daysUntilTrip)
-        sb.append(tripAdvice).append(" ")
+        val tripAdvice = when(tripType) {
+            TripType.BUSINESS -> "İş görüşmeleri arasında kısa bir yürüyüş yapmak enerjini tazeler. Zihnini boşaltmak için yerel bir kahve durağına uğra."
+            TripType.VACATION -> "Telefonunu bir kenara bırakıp anın tadını çıkar. Bazen sadece izlemek and dinlemek en güzel hatıradır."
+            else -> cityInfo.cityTip
+        }
 
-        // 4. City specific sightseeing
-        sb.append("\n\n").append(getCitySuggestion(city, tripType))
+        return "HAVA ÖZETİ|$weatherBlock [SEP] VALİZ TAVSİYESİ|$packingBlock [SEP] MUTLAKA GÖR|${cityInfo.visitPlace} [SEP] DENEMEDEN DÖNME|${cityInfo.localDish} [SEP] YEREL TAVSİYE|${cityInfo.localAdvice}"
+    }
 
-        return sb.toString().trim()
+    fun getCityDescription(city: String): String {
+        val normalizedCity = city.lowercase(Locale("tr")).trim()
+            .replace('ç', 'c').replace('ğ', 'g').replace('ı', 'i')
+            .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
+        return CITY_DATA.entries.find { normalizedCity.contains(it.key) }?.value?.description ?: "Keşfedilmeyi bekleyen harika bir rota"
     }
 
     fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot): String {
-        val changes = mutableListOf<String>()
-
-        val precipDiff = (new.precipitationProbability ?: 0) - (old.precipitationProbability ?: 0)
-        if (precipDiff >= 20) {
-            changes.add("Yağmur ihtimali önceki analize göre %$precipDiff arttı (Toplam %${new.precipitationProbability}). Planlarını kapalı alanlara göre revize etmeni öneririm.")
-        } else if (precipDiff <= -20) {
-            changes.add("Yağmur ihtimali %${old.precipitationProbability}'den %${new.precipitationProbability}'ye düştü, hava düzeliyor.")
-        }
-
         val tempDiff = (new.maxTemp ?: 0.0) - (old.maxTemp ?: 0.0)
-        if (tempDiff >= 5) {
-            changes.add("Hava beklediğimden daha sıcak olacak (${new.maxTemp?.toInt()}°).")
-        } else if (tempDiff <= -5) {
-            changes.add("Hava beklediğimden daha serin olacak (${new.maxTemp?.toInt()}°).")
-        }
-
-        if (changes.isEmpty()) {
-            return "Hava tahmini önceki analizle benzer görünüyor."
-        }
-
-        return changes.joinToString(" ")
-    }
-
-    private fun getWeatherAdvice(snapshot: ForecastSnapshot): String {
-        val precip = snapshot.precipitationProbability ?: 0
-        val maxTemp = snapshot.maxTemp ?: 20.0
-        val wind = snapshot.windSpeed ?: 0.0
-        val uv = snapshot.uvIndex ?: 0.0
-
         return when {
-            precip > 70 && maxTemp < 15 -> "Yağmur ve serin hava birlikte görünüyor. Kaygan zeminlere dikkat et, kapalı alan alternatifi planlamak iyi olabilir."
-            precip > 50 -> "Yağmur ihtimali yüksek görünüyor. Şemsiyeni ve su geçirmez bir ayakkabıyı yanına almanı öneririm."
-            maxTemp < 10 -> "Hava oldukça soğuk olabilir. Kalın kıyafetler ve bere/atkı almanı öneririm."
-            maxTemp < 18 -> "Hava serin olabilir. Akşam saatleri için ince mont veya sweatshirt iyi olur."
-            maxTemp > 30 -> "Sıcaklık yüksek görünüyor. Hafif kıyafet, bol su ve güneş koruması iyi olur."
-            uv > 6 -> "Güneş güçlü olabilir. Güneş kremi, şapka ve bol su iyi fikir."
-            wind > 35 -> "Rüzgar belirgin olabilir. Açık alan planlarında dikkatli olmanı öneririm."
-            else -> "Hava durumu seyahat için oldukça elverişli görünüyor."
-        }
-    }
-
-    private fun getTripTypeAdvice(type: TripType, snapshot: ForecastSnapshot?, daysUntil: Int): String {
-        val hasForecast = snapshot != null
-        val precip = snapshot?.precipitationProbability ?: 0
-        val maxTemp = snapshot?.maxTemp ?: 20.0
-        val minTemp = snapshot?.minTemp ?: 10.0
-        val uv = snapshot?.uvIndex ?: 0.0
-        val wind = snapshot?.windSpeed ?: 0.0
-
-        return when (type) {
-            TripType.CAMPING -> {
-                if (!hasForecast) "Kamp için ekipmanlarını (uyku tulumu, çadır zemini) şimdiden kontrol etmelisin."
-                else if (precip > 40) "Yağış ihtimali yüksekse çadır zemini ve su geçirmez ekipmanı mutlaka kontrol et."
-                else if (minTemp < 10) "Gece sıcaklığı düşük olacağından kalın bir uyku tulumu ve termal katmanlar almanı öneririm."
-                else "Kamp için hava oldukça uygun görünüyor, rüzgar durumuna göre çadır yerini seçebilirsin."
-            }
-            TripType.CULTURE -> {
-                if (!hasForecast) "Kültür gezisi için müze kartını kontrol etmeyi ve yürüyüş ayakkabılarını hazırlamayı unutma."
-                else if (precip > 30) "Yağmur ihtimali varsa kapalı müze ve tarihi çarşı rotalarını öne alabilirsin."
-                else "Açık hava müzelerini ve antik kentleri gezmek için harika bir hava."
-            }
-            TripType.GASTRONOMY -> {
-                if (!hasForecast) "Popüler yerel restoranlar için şimdiden rezervasyon yapmanı öneririm."
-                else "Hava nasıl olursa olsun, akşam saatlerinde yerel lezzet duraklarını planına ekleyebilirsin."
-            }
-            TripType.BEACH -> {
-                if (!hasForecast) "Güneş kremi ve deniz malzemelerini valizine eklemeyi unutma."
-                else if (uv > 6) "UV endeksi yüksek görünüyor, şapka ve güneş kremi kullanımına dikkat etmelisin."
-                else if (wind > 30) "Rüzgar deniz keyfini biraz etkileyebilir, korunaklı koyları tercih edebilirsin."
-                else "Deniz ve güneşin tadını çıkarmak için ideal bir hava."
-            }
-            TripType.WINTER -> {
-                if (!hasForecast) "Kayak takımlarını ve kışlık kıyafetlerini hazırlamaya başlayabilirsin."
-                else if (maxTemp < 0) "Dondurucu soğuklara ve buzlanmaya karşı dikkatli ol, kış ekipmanlarını tam al."
-                else "Kar durumunu takip ederek kış sporlarının tadını çıkarabilirsin."
-            }
-            TripType.PHOTOGRAPHY -> {
-                if (!hasForecast) "Tripod ve yedek pillerini hazırlamayı unutma."
-                else if (precip < 20 && uv < 5) "Bulutlu hava, yumuşak ışık ve dramatik fotoğraflar için harika bir fırsat sunabilir."
-                else "Gün doğumu ve gün batımı saatlerini takip ederek en iyi kareleri yakalayabilirsin."
-            }
-            TripType.ROAD_TRIP -> {
-                if (!hasForecast) "Aracının bakımını yaptırmayı ve rotanı önceden belirlemeyi unutma."
-                else if (precip > 50) "Yağmur ihtimali artarsa uzun yolda takip mesafesini artır ve mola planı yap."
-                else "Yolculuk için görüş mesafesi ve hava şartları oldukça uygun."
-            }
-            TripType.FAMILY -> {
-                if (!hasForecast) "Çocuklar için esnek bir plan ve yanına alacağın atıştırmalıklar hayat kurtarabilir."
-                else "Çocuklar için yedek kıyafet ve hem açık hem de kapalı alan alternatifleri planlamak iyi olur."
-            }
-            TripType.BUSINESS -> "İş seyahatinde ulaşım gecikmelerine karşı planına biraz esneklik payı bırakmanı öneririm."
-            TripType.VACATION -> "Rahat ayakkabı ve hava durumuna uygun kıyafetler seyahat konforunu artıracaktır."
-            TripType.NATURE -> "Doğa yürüyüşü için uygun ayakkabı ve katmanlı giyinme seyahatini kolaylaştıracaktır."
-            TripType.ROMANTIC -> "Akşam yemeği ve gün batımı izleme noktaları için şimdiden plan yapabilirsin."
-            TripType.ADVENTURE -> "Macera dolu bir gezi için güvenlik ekipmanlarını ve sigortanı kontrol etmeyi unutma."
-            TripType.SHOPPING -> "Yerel pazarlar ve alışveriş merkezleri için valizinde boş yer bıraktığından emin ol."
-            TripType.WEEKEND -> "Kısa süreli bu kaçamakta zamanı verimli kullanmak için rotanı önceden netleştir."
-            TripType.HEALTH -> "Spa ve sağlık aktiviteleri için randevularını önceden almanı öneririm."
-            TripType.EVENT -> "Etkinlik biletlerini ve giriş saatlerini tekrar kontrol etmeyi unutma."
-            else -> "Seyahat tarihine yaklaştıkça valizini son bir kez gözden geçirmeyi unutma."
-        }
-    }
-
-    fun getCitySuggestion(city: String, tripType: TripType): String {
-        val c = city.lowercase()
-        return when {
-            c.contains("istanbul") -> "İstanbul'da Sultanahmet, Galata, Boğaz ve Kadıköy rotası her zaman klasiktir."
-            c.contains("izmir") -> "İzmir'de Kordon, Alsancak, Efes ve Şirince'yi mutlaka görmelisin."
-            c.contains("antalya") -> "Antalya'da Kaleiçi, Düden Şelalesi, Konyaaltı ve Side antik kenti harika noktalardır."
-            c.contains("şanlıurfa") || c.contains("urfa") -> "Şanlıurfa'da Balıklıgöl, Göbeklitepe ve Halfeti tekne turunu planına eklemelisin."
-            c.contains("batman") -> "Batman'da Hasankeyf ve Malabadi Köprüsü çevresini gezebilirsin."
-            c.contains("çankırı") -> "Çankırı'da Ilgaz Dağı Milli Parkı'nı ve meşhur Çankırı Tuz Mağarası'nı mutlaka ziyaret et."
-            c.contains("ankara") -> "Ankara'da Anıtkabir, Hamamönü ve Eymir Gölü huzurlu bir rota sunar."
-            c.contains("trabzon") -> "Trabzon'da Uzungöl, Sümela Manastırı ve Boztepe'de çay keyfi yapmadan dönme."
-            c.contains("muğla") -> "Muğla'da Bodrum, Fethiye, Marmaris ve Akyaka'nın eşsiz koylarını keşfetmelisin."
-            c.contains("nevşehir") || c.contains("kapadokya") || c.contains("göreme") ->
-                "Kapadokya'da Göreme, Uçhisar, Derinkuyu yeraltı şehri ve balon izleme noktalarını kaçırma."
-            else -> "Şehir merkezindeki tarihi ve doğal noktaları seyahat tipine göre planına ekleyebilirsin."
+            tempDiff >= 4 -> "Küçük bir not: Son güncellemeye göre hava beklediğimizden daha sıcak olacak, planlarını buna göre revize edebilirsin."
+            tempDiff <= -4 -> "Hava tahmini biraz değişti, beklediğimizden daha serin bir yolculuk bizi bekliyor, ceketini yanına almayı unutma."
+            else -> "Hava durumu tahminleri hala benzer çizgide ilerliyor, büyük bir değişiklik yok."
         }
     }
 
@@ -172,59 +166,58 @@ object TravelAiHelper {
         val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
         val snapshot = plan.lastForecastSnapshot
 
-        // Base values from snapshot or estimation
-        val minT = snapshot?.minTemp?.toInt() ?: 12
-        val maxT = snapshot?.maxTemp?.toInt() ?: 24
-        val avgT = (minT + maxT) / 2
+        // Hava verisi varsa işle, yoksa null/default dön
+        val hasData = snapshot != null
+        val minT = snapshot?.minTemp?.toInt() ?: 0
+        val maxT = snapshot?.maxTemp?.toInt() ?: 0
+        val avgT = if (hasData) (minT + maxT) / 2 else null
 
-        // Estimation for distribution based on duration and weather condition summary
-        val cond = snapshot?.conditionSummary?.lowercase() ?: "parçalı bulutlu"
-        val prob = snapshot?.precipitationProbability ?: 20
+        val cond = snapshot?.conditionSummary?.lowercase() ?: "bilinmiyor"
+        val prob = snapshot?.precipitationProbability ?: 0
 
-        val rainy = if (cond.contains("yağmur") || prob > 50) (duration * 0.4).toInt().coerceAtLeast(1) else (duration * 0.1).toInt()
-        val sunny = if (cond.contains("güneş") || cond.contains("açık")) (duration * 0.6).toInt().coerceAtLeast(1) else (duration * 0.3).toInt()
+        val rainy = if (!hasData) 0 else if (cond.contains("yağmur") || prob > 50) (duration * 0.4).toInt().coerceAtLeast(1) else (duration * 0.1).toInt()
+        val sunny = if (!hasData) 0 else if (cond.contains("güneş") || cond.contains("açık")) (duration * 0.6).toInt().coerceAtLeast(1) else (duration * 0.3).toInt()
         val cloudy = (duration - rainy - sunny).coerceAtLeast(0)
 
-        val comfort = when {
-            rainy > duration / 2 -> 65
-            maxT > 32 || minT < 5 -> 75
-            else -> 88
-        }
+        val summaryText = if (hasData) {
+            val weatherTone = when {
+                rainy > (duration / 2) -> "Hava çoğunlukla yağışlı geçmiş"
+                sunny > (duration * 0.7) -> "Pırıl pırıl, güneşli bir gökyüzü eşlik etmiş"
+                avgT ?: 0 > 28 -> "Sıcak ve tam bir yaz havası hakimmiş"
+                else -> "Hava genel olarak dengeli görünmüş"
+            }
+            val comfortNote = if (rainy == 0) "Yağışlı gün sayısı düşük olduğu için açık hava planları açısından rahat bir dönem olmuş." else "Yağışa rağmen seyahat temposu korunmuş gibi görünüyor."
 
-        val riskDay = if (rainy > 0) "Seyahatin orta dönemlerinde beklenen kuvvetli yağış en riskli gündü." else "Genel olarak stabil bir hava hakim olsa da rüzgar geçişleri dikkate değerdi."
-
-        val summaryText = "${plan.city} seyahatin $duration gün sürdü. Bu rota ${getSeason(plan.startDate)} dönemine denk geldiği için genel olarak ${if(avgT > 20) "ılık ve keyifli" else "serin ve dengeli"}, ${if(rainy > 0) "ara ara yağış geçişleri içeren" else "açık havaya uygun"} bir hava profili gözlemlendi. ${plan.lastWeatherAnalysisText ?: ""}"
-
-        val packingText = if (avgT > 22) {
-            "İnce, pamuklu ve açık renkli kıyafetler konforun için en iyisiydi. Akşamları deniz esintisine karşı ince bir hırka yeterli olmuş olmalı."
+            "${plan.city} seyahatin $duration gün sürdü. $weatherTone; sıcaklık çok bunaltıcı seviyeye çıkmamış. $comfortNote"
         } else {
-            "Katmanlı giyinme ve orta kalınlıkta bir ceket bu seyahatin kurtarıcısıydı. Mevsim geçişi nedeniyle kapalı ayakkabı tercihi doğru bir karardı."
+            "${plan.city} seyahatin tamamlandı. Bu döneme ait detaylı hava verisi geçmiş kayıtlarda bulunamadı ancak seyahat notlarını aşağıda saklayabilirsin."
         }
 
-        val nextTripText = "Gelecek seyahatini yine bu tarihlerde planlayacaksan, ${if(rainy > 0) "yağış ihtimaline karşı daha esnek kapalı alan rotaları" else "açık hava etkinliklerini artıracak şekilde"} bir program oluşturmanı öneririm."
+        val packingAdvice = when {
+            avgT ?: 0 > 25 -> "Benzer hava koşullarında hafif kıyafet, rahat ayakkabı ve güneş koruması yeterli olur."
+            avgT ?: 0 < 12 -> "Kalın mont, termal içlik ve su geçirmeyen botlar bir sonraki sefer için hayat kurtarıcı olabilir."
+            else -> "Kat kat giyinmek (sweatshirt + hafif ceket) değişken hava koşulları için en iyi strateji."
+        }
+
+        val destinationTip = when {
+            plan.city.contains("Bali", true) -> "Bali gibi nemli bölgelerde sabah saatlerini açık hava planları için ayırmak daha rahat olabilir."
+            plan.city.contains("İstanbul", true) -> "İstanbul seyahatlerinde vapur saatlerini gün batımına denk getirmek her zaman iyi bir fikirdir."
+            else -> "${plan.city} seyahatinde yerel lezzet duraklarını keşfetmek için ara sokaklara dalmaktan çekinme."
+        }
 
         return TravelHistorySummary(
             averageTemp = avgT,
             minTemp = minT,
             maxTemp = maxT,
-            rainyDays = rainy,
-            sunnyDays = sunny,
-            cloudyDays = cloudy,
-            riskDayText = riskDay,
-            comfortScore = comfort,
+            rainyDays = if (hasData) rainy else -1,
+            sunnyDays = if (hasData) sunny else -1,
+            cloudyDays = if (hasData) cloudy else -1,
+            riskDayText = "Bu seyahat kısa ama yoğun bir rota gibi görünüyor.",
+            comfortScore = if (hasData) (80 + (Math.random() * 15).toInt()) else 0,
             summaryText = summaryText,
-            packingAdvice = packingText,
-            nextTripAdvice = nextTripText,
+            packingAdvice = packingAdvice,
+            nextTripAdvice = destinationTip,
             durationDays = duration
         )
-    }
-
-    private fun getSeason(date: java.time.LocalDate): String {
-        return when (date.monthValue) {
-            3, 4, 5 -> "ilkbahar"
-            6, 7, 8 -> "yaz"
-            9, 10, 11 -> "sonbahar"
-            else -> "kış"
-        }
     }
 }

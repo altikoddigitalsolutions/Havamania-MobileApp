@@ -434,7 +434,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
             </View>
-            <Text style={[styles.cardPrecip, { color: C.textSecondary }]}>Yağış %{analysis.maxPrecipProbability}</Text>
+            <Text style={[styles.cardPrecip, { color: C.textSecondary }]}>Yağış: {analysis.precipitationRiskText}</Text>
           </View>
         ) : (
           <View style={styles.weatherSummary}>

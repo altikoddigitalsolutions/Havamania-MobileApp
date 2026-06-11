@@ -3,6 +3,9 @@ import { StyleSheet, View, Text, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Spacing, Radius, FontSize, AppColors } from '../theme';
 import { CurrentWeatherData, DailyWeatherItem, formatSunTime } from '../services/openMeteoApi';
+import { formatPrecipitationProbability } from '../utils/weatherUtils';
+
+import { formatPrecipitationProbability } from '../utils/weatherUtils';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - Spacing.md * 3) / 2;
@@ -37,7 +40,7 @@ export const WeatherDetailsGrid: React.FC<WeatherDetailsGridProps> = ({ current,
     {
       icon: 'rainy-outline',
       label: 'YAĞIŞ OLASILIĞI',
-      value: `%${todayDaily?.precipitation_probability ?? 0}`,
+      value: formatPrecipitationProbability(todayDaily?.precipitation_probability),
       desc: `${todayDaily?.precipitation_sum ?? 0} mm beklenen`,
       color: '#60A5FA'
     },

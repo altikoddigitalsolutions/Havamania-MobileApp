@@ -39,6 +39,7 @@ import {
   getWeatherLabel,
   useColors,
 } from '../theme';
+import { formatPrecipitationProbability } from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {WeatherAnimBox} from '../components/WeatherAnimBox';
 import {AtmosphericWeatherCard} from '../components/AtmosphericWeatherCard';
@@ -248,7 +249,7 @@ export function HomeScreen(): React.JSX.Element {
                 <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
                 <Text style={s.hourTemp}>{item.temperature}°</Text>
                 {item.precipitation_probability > 20 && (
-                  <Text style={s.hourPrecip}>💧{item.precipitation_probability}%</Text>
+                  <Text style={s.hourPrecip}>💧{formatPrecipitationProbability(item.precipitation_probability)}</Text>
                 )}
               </TouchableOpacity>
             )}

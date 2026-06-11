@@ -14,6 +14,7 @@ import {useQuery} from '@tanstack/react-query';
 
 import {getHourlyWeather} from '../services/weatherApi';
 import {AppColors, FontSize, Radius, Spacing, formatHour, getWeatherEmoji, useColors} from '../theme';
+import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
 import {getProfile} from '../services/profileApi';
@@ -134,7 +135,7 @@ export function HourlyScreen({route, navigation}: Props): React.JSX.Element {
                         <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
                         {item.precipitation_probability > 0 && (
                           <Text style={s.hourPrecip}>
-                            💧{item.precipitation_probability}%
+                            💧{formatPrecipitationProbability(item.precipitation_probability)}
                           </Text>
                         )}
                         <Text style={s.hourWind}>{item.wind_speed}km/h</Text>
