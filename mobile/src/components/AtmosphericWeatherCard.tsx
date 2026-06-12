@@ -106,7 +106,8 @@ const resolveWeatherCardStyle = (
   switch (condition) {
     case WeatherCondition.SUNNY:
       if (timeOfDay === TimeOfDay.MORNING) {
-        style = { gradients: ['#93C5FD', '#FDBA74', '#FEF3C7'], effect: 'sunny', isWhiteText: false, accent: '#F59E0B', name: 'SUNNY_MORNING' };
+        // Refined Morning: Very light blue-grey, warm cream, sunrise gold
+        style = { gradients: ['#E2E8F0', '#FFFBEB', '#FDE68A'], effect: 'sunny', isWhiteText: false, accent: '#F59E0B', name: 'SUNNY_MORNING' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
         style = { gradients: ['#F97316', '#7C2D12', '#431407'], effect: 'sunny', isWhiteText: true, accent: '#FB923C', name: 'SUNNY_EVENING' };
       } else {
@@ -153,7 +154,8 @@ const resolveWeatherCardStyle = (
     case WeatherCondition.PARTLY_CLOUDY:
     case WeatherCondition.PARTLY_CLOUDY_NIGHT:
       if (timeOfDay === TimeOfDay.MORNING || timeOfDay === TimeOfDay.DAY) {
-        style = { gradients: ['#BAE6FD', '#7DD3FC', '#F8FAFC'], effect: 'partly_cloudy', isWhiteText: false, accent: '#F8FAFC', name: 'PARTLY_CLOUDY_DAY' };
+        // Refined Partly Cloudy: Light blue, turquoise, warm gold
+        style = { gradients: ['#BAE6FD', '#CFFAFE', '#FEF3C7'], effect: 'partly_cloudy', isWhiteText: false, accent: '#F8FAFC', name: 'PARTLY_CLOUDY_DAY' };
       } else if (timeOfDay === TimeOfDay.EVENING) {
         style = { gradients: ['#FB923C', '#475569', '#1E293B'], effect: 'partly_cloudy', isWhiteText: true, accent: '#FB923C', name: 'PARTLY_CLOUDY_EVENING' };
       } else {
@@ -174,13 +176,17 @@ const resolveWeatherCardStyle = (
     case WeatherCondition.FOG_NIGHT:
       if (timeOfDay === TimeOfDay.NIGHT) {
         style = { gradients: ['#1E293B', '#334155', '#475569'], effect: 'fog', isWhiteText: true, accent: '#F8FAFC', name: 'FOG_NIGHT' };
+      } else if (timeOfDay === TimeOfDay.MORNING) {
+        // Refined Foggy Morning (06:00 - 11:00): Cold blue-grey, light lavender
+        style = { gradients: ['#94A3B8', '#B1B1D8', '#E2E8F0'], effect: 'fog', isWhiteText: false, accent: '#94A3B8', name: 'FOG_MORNING' };
       } else {
         style = { gradients: ['#CBD5E1', '#94A3B8', '#64748B'], effect: 'fog', isWhiteText: false, accent: '#F8FAFC', name: 'FOG_DAY' };
       }
       break;
 
     case WeatherCondition.THUNDERSTORM:
-      style = { gradients: ['#1E1B4B', '#312E81', '#1E1B4B'], effect: 'thunder', isWhiteText: true, accent: '#818CF8', name: 'THUNDERSTORM' };
+      // Dramatic Storm: Deep Navy and Dark Purple
+      style = { gradients: ['#0F172A', '#1E1B4B', '#2E1065'], effect: 'thunder', isWhiteText: true, accent: '#A855F7', name: 'THUNDERSTORM' };
       break;
 
     case WeatherCondition.WIND:
@@ -397,20 +403,23 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   }, [reducedMotion]);
 
   const particles = useMemo(() => ({
-    rain: [...Array(40)].map((_, i) => ({
-      left: `${Math.random() * 100}%`,
-      opacity: 0.1 + Math.random() * 0.4,
-      speed: 0.6 + Math.random() * 1.5,
-      length: 15 + Math.random() * 25,
-      width: 0.5 + Math.random() * 1,
-      offset: Math.random()
-    })),
-    stars: [...Array(40)].map((_, i) => ({
+    rain: [...Array(40)].map((_, i) => {
+      const type = i % 3; // 0: short, 1: medium, 2: long
+      return {
+        left: `${Math.random() * 100}%`,
+        opacity: type === 0 ? 0.15 : type === 1 ? 0.25 : 0.4,
+        speed: 0.8 + Math.random() * 1.2,
+        length: type === 0 ? 6 : type === 1 ? 18 : 32,
+        width: 0.7,
+        offset: Math.random()
+      };
+    }),
+    stars: [...Array(25)].map((_, i) => ({ // Reduced count from 40 to 25
       left: `${Math.random() * 100}%`,
       top: `${Math.random() * 100}%`,
-      size: 0.5 + Math.random() * 1.5,
-      opacity: 0.2 + Math.random() * 0.6,
-      blinkSpeed: 2000 + Math.random() * 3000
+      size: 0.3 + Math.random() * 0.8, // Smaller stars
+      opacity: 0.1 + Math.random() * 0.4, // Lower opacity
+      blinkSpeed: 3000 + Math.random() * 4000
     })),
     snow: [...Array(40)].map((_, i) => ({
       left: `${Math.random() * 100}%`,
@@ -421,20 +430,53 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
     })),
     clouds: [...Array(6)].map((_, i) => ({
         top: 20 + Math.random() * 120,
-        left: -50 + Math.random() * 150,
-        width: 150 + Math.random() * 200,
-        height: 60 + Math.random() * 100,
-        opacity: 0.05 + Math.random() * 0.15,
-        speed: 0.05 + Math.random() * 0.1,
-        layer: i % 3 // 0: back, 1: mid, 2: front
+        left: -80 + Math.random() * 180, // Wider range
+        width: (150 + Math.random() * 200) * 0.85,
+        height: (60 + Math.random() * 100) * 0.85,
+        opacity: Math.min((0.05 + Math.random() * 0.15) * 1.1, 0.4),
+        speed: 0.02 + (i % 3) * 0.03, // Defined speeds for parallax
+        layer: i % 3 // 0: back (slowest), 1: mid, 2: front (fastest)
     }))
   }), []);
 
   const textColor = style.isWhiteText ? '#FFF' : '#0F172A';
   const secondaryColor = style.isWhiteText ? 'rgba(255,255,255,0.75)' : 'rgba(15,23,42,0.65)';
 
+  const sunOpacity = useMemo(() => {
+    if (timeOfDay !== TimeOfDay.EVENING) return 1;
+    // Sunset transition: 18:00 - 20:00 fade
+    if (parsedHour >= 20) return 0;
+    if (parsedHour >= 18) {
+      return 1 - (parsedHour - 18) / 2;
+    }
+    return 1;
+  }, [parsedHour, timeOfDay]);
+
+  const renderAurora = (color: string, intensity: number = 1) => {
+    if (reducedMotion) return null;
+    return (
+      <Animated.View style={[styles.auroraLayer, {
+        backgroundColor: color,
+        opacity: pulseAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.005 * intensity, 0.015 * intensity] // Even lower default
+        }),
+        transform: [
+          { scale: 1.8 },
+          { translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-40, 40] }) }
+        ]
+      }]} />
+    );
+  };
+
   const renderEffect = () => {
     if (reducedMotion) return null;
+
+    // Overlay Intensity Calculation
+    let auroraIntensity = 1;
+    if (style.effect === 'rain' || style.effect === 'thunder' || style.effect === 'night') {
+        auroraIntensity = 0.3; // Much weaker for these conditions
+    }
 
     switch (style.effect) {
       case 'sunny':
@@ -444,37 +486,40 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
         return (
           <View style={StyleSheet.absoluteFill}>
+            {/* 0. AURORA LAYER */}
+            {renderAurora(isEvening ? '#FB923C' : '#7DD3FC', auroraIntensity)}
+
             {/* 1. OUTER ATMOSPHERIC GLOW */}
             <Animated.View style={[styles.premiumSunSceneGlow, {
               backgroundColor: isEvening ? '#EA580C' : '#FBBF24',
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0.15, 0.25]
+                outputRange: [0.12, 0.2] // Reduced slightly
               }),
-              transform: [{ scale: 1.5 }]
+              transform: [{ scale: 1.8 }] // Bigger glow
             }]} />
 
             {/* 2. DYNAMIC LIGHT BLOOM */}
             <Animated.View style={[styles.premiumSunSceneGlow, {
-              width: 200, height: 200, borderRadius: 100,
-              backgroundColor: '#FDE68A',
+              width: 240, height: 240, borderRadius: 120,
+              backgroundColor: isEvening ? '#FB923C' : '#FDE68A',
               opacity: pulseAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0.1, 0.2]
+                outputRange: [0.05, 0.15]
               }),
-              transform: [{ scale: 1.2 }]
+              transform: [{ scale: 1.3 }]
             }]} />
 
             {/* 3. ROTATING RAYS */}
             <Animated.View style={[styles.premiumSunSceneRaysContainer, {
-              opacity: isPartly ? 0.15 : 0.3,
+              opacity: (isPartly ? 0.1 : 0.2) * sunOpacity,
               transform: [
                 { rotate: masterAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
               ]
             }]}>
                {[...Array(12)].map((_, i) => (
                  <View key={i} style={[styles.premiumSunSceneRay, {
-                   backgroundColor: '#FEF3C7',
+                   backgroundColor: isEvening ? '#FDBA74' : '#FEF3C7',
                    height: 24,
                    transform: [{ rotate: `${i * 30}deg` }, { translateY: 50 }]
                  }]} />
@@ -482,38 +527,41 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
             </Animated.View>
 
             {/* 4. SUN DISK */}
-            <Animated.View style={[styles.premiumSunSceneDisk, {
-              backgroundColor: isEvening ? '#FB923C' : '#FCD34D',
-              transform: [
-                { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }
-              ]
-            }]}>
-              <View style={[styles.premiumSunSceneInnerHighlight, {
-                backgroundColor: '#FFFBEB',
-                opacity: 0.5,
-                position: 'absolute',
-                top: '10%',
-                left: '10%',
-                width: '40%',
-                height: '40%',
-                borderRadius: 20
-              }]} />
-            </Animated.View>
+            {sunOpacity > 0 && (
+              <Animated.View style={[styles.premiumSunSceneDisk, {
+                backgroundColor: isEvening ? '#FB923C' : '#FCD34D',
+                opacity: sunOpacity,
+                transform: [
+                  { scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }
+                ]
+              }]}>
+                <View style={[styles.premiumSunSceneInnerHighlight, {
+                  backgroundColor: '#FFFBEB',
+                  opacity: 0.4, // Softer center
+                  position: 'absolute',
+                  top: '15%',
+                  left: '15%',
+                  width: '35%',
+                  height: '35%',
+                  borderRadius: 20
+                }]} />
+              </Animated.View>
+            )}
 
-            {/* 5. ATMOSPHERIC CLOUDS - DEPTH LAYERING */}
-            {(isMostlySunny || isPartly) && particles.clouds.map((c, i) => (
+            {/* 5. ATMOSPHERIC CLOUDS - PARALLAX MOTION */}
+            {(isMostlySunny || isPartly) && particles.clouds.slice(0, 3).map((c, i) => (
                 <Animated.View key={i} style={[styles.cloudHaze, {
                     top: c.top,
                     width: c.width,
                     height: c.height,
-                    opacity: c.opacity * (c.layer + 1),
+                    opacity: c.opacity * (c.layer + 1.2),
                     zIndex: c.layer + 1,
                     transform: [
                         { translateX: masterAnim.interpolate({
                             inputRange: [0, 1],
-                            outputRange: [c.left, c.left + (50 * c.speed)]
+                            outputRange: [c.left, c.left + (80 * c.speed)] // More motion
                         }) },
-                        { scale: 0.8 + (c.layer * 0.2) }
+                        { scale: 0.8 + (c.layer * 0.15) }
                     ]
                 }]} />
             ))}
@@ -523,6 +571,9 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
       case 'rain':
         return (
           <View style={StyleSheet.absoluteFill}>
+            {/* 0. AURORA LAYER */}
+            {renderAurora('#1E40AF', auroraIntensity)}
+
             {particles.rain.map((p, i) => (
               <Animated.View key={i} style={[styles.rainLine, {
                 left: p.left,
@@ -538,21 +589,25 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
                 ]
               }]} />
             ))}
-            {/* Background Clouds for Rain */}
+            {/* Parallax Clouds for Rain */}
             {particles.clouds.slice(0, 3).map((c, i) => (
                 <Animated.View key={i} style={[styles.cloudHaze, {
                     top: c.top, width: c.width, height: c.height,
                     backgroundColor: '#1E293B',
                     opacity: 0.2,
-                    transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [c.left, c.left + 20] }) }]
+                    transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [c.left, c.left + (40 * c.speed)] }) }]
                 }]} />
             ))}
           </View>
         );
 
       case 'night':
+        const isClearNight = displayCondition === WeatherCondition.CLEAR_NIGHT;
         return (
           <View style={StyleSheet.absoluteFill}>
+            {/* 0. AURORA LAYER */}
+            {renderAurora('#1E3A8A', auroraIntensity)}
+
             {particles.stars.map((p, i) => (
               <Animated.View key={i} style={[styles.star, {
                 left: p.left,
@@ -561,7 +616,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
                 height: p.size,
                 opacity: pulseAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [p.opacity * 0.5, p.opacity]
+                    outputRange: [p.opacity * 0.4, p.opacity] // Subtle twinkle
                 })
               }]} />
             ))}
@@ -570,9 +625,9 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
                 backgroundColor: '#F8FAFC',
                 opacity: pulseAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [0.03, 0.08]
+                    outputRange: [0.02, 0.05]
                 }),
-                transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) }]
+                transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }]
             }]} />
           </View>
         );
@@ -585,7 +640,7 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
                 left: p.left,
                 width: p.size,
                 height: p.size,
-                opacity: 0.7,
+                opacity: 0.6,
                 transform: [
                   { translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 340 * p.speed] }) },
                   { translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [0, p.drift] }) }
@@ -599,65 +654,108 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
       case 'partly_cloudy':
         return (
           <View style={StyleSheet.absoluteFill}>
-            {particles.clouds.map((c, i) => (
+            {/* 0. AURORA LAYER */}
+            {renderAurora(style.isWhiteText ? '#334155' : '#7DD3FC', auroraIntensity)}
+
+            {/* 3 Parallax Cloud Layers */}
+            {particles.clouds.slice(0, 3).map((c, i) => (
                 <Animated.View key={i} style={[styles.cloudHaze, {
                     top: c.top,
                     width: c.width,
                     height: c.height,
-                    opacity: c.opacity * (c.layer + 1.5),
+                    opacity: c.opacity * 1.5,
                     backgroundColor: style.isWhiteText ? '#F8FAFC' : '#CBD5E1',
                     transform: [
                         { translateX: masterAnim.interpolate({
                             inputRange: [0, 1],
-                            outputRange: [c.left, c.left + (30 * c.speed)]
+                            outputRange: [c.left, c.left + (60 * c.speed)] // Defined Parallax
                         }) },
-                        { scale: 0.9 + (c.layer * 0.1) }
+                        { scale: 0.85 + (c.layer * 0.1) }
                     ]
                 }]} />
             ))}
             {style.effect === 'partly_cloudy' && (
               <Animated.View style={[styles.sunGlowMini, {
                   backgroundColor: style.accent,
-                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.15] })
+                  opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.03, 0.1] })
               }]} />
             )}
           </View>
         );
 
       case 'fog':
+        const isFogNight = timeOfDay === TimeOfDay.NIGHT;
+        const isFogMorning = timeOfDay === TimeOfDay.MORNING;
         return (
             <View style={StyleSheet.absoluteFill}>
-                {[0.03, 0.05, 0.07].map((op, i) => (
+                {/* 0. AURORA LAYER */}
+                {renderAurora(isFogNight ? '#1E293B' : (isFogMorning ? '#B1B1D8' : '#94A3B8'), auroraIntensity)}
+
+                {/* Stars for Foggy Night - Reduced Density */}
+                {isFogNight && particles.stars.slice(0, 12).map((p, i) => (
+                  <Animated.View key={i} style={[styles.star, {
+                    left: p.left, top: p.top, width: p.size, height: p.size,
+                    opacity: pulseAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [p.opacity * 0.2, p.opacity * 0.3]
+                    })
+                  }]} />
+                ))}
+
+                {[0.04, 0.06].map((op, i) => (
                     <Animated.View key={i} style={[styles.fogLayer, {
-                        backgroundColor: '#F1F5F9',
+                        backgroundColor: isFogNight ? '#1E293B' : (isFogMorning ? '#D1D1E8' : '#F1F5F9'),
                         opacity: op,
                         transform: [{ translateX: masterAnim.interpolate({
                             inputRange: [0, 1],
-                            outputRange: [i * -20, i * 20]
+                            outputRange: [i * -40, i * 40]
                         }) }]
                     }]} />
                 ))}
+
+                {/* BOTTOM FOG LAYER */}
+                <Animated.View style={[styles.fogLayer, {
+                    backgroundColor: isFogNight ? '#334155' : (isFogMorning ? '#B1B1D8' : '#CBD5E1'),
+                    opacity: 0.08,
+                    top: '80%',
+                    transform: [{ translateY: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 8] }) }]
+                }]} />
             </View>
         );
 
       case 'thunder':
         return (
           <View style={StyleSheet.absoluteFill}>
-            {/* Background Storm Clouds */}
-            {particles.clouds.slice(0, 4).map((c, i) => (
+            {/* 0. AURORA LAYER */}
+            {renderAurora('#4C1D95', auroraIntensity)}
+
+            {/* Background Storm Clouds - Parallax */}
+            {particles.clouds.slice(0, 3).map((c, i) => (
                 <Animated.View key={i} style={[styles.cloudHaze, {
                     top: c.top, width: c.width, height: c.height,
                     backgroundColor: '#1E1B4B',
-                    opacity: 0.4,
-                    transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [c.left, c.left + 15] }) }]
+                    opacity: 0.5,
+                    transform: [{ translateX: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [c.left, c.left + (30 * c.speed)] }) }]
                 }]} />
             ))}
-            {/* Lightning Flashes */}
+            {/* Stronger Rain for Storm */}
+            {particles.rain.slice(0, 30).map((p, i) => (
+              <Animated.View key={i} style={[styles.rainLine, {
+                left: p.left, width: p.width * 1.5, height: p.length * 1.2,
+                backgroundColor: '#CBD5E1',
+                opacity: p.opacity * 1.5,
+                transform: [
+                    { translateY: masterAnim.interpolate({ inputRange: [0, 1], outputRange: [-100, 450 * p.speed] }) },
+                    { rotate: '20deg' }
+                ]
+              }]} />
+            ))}
+            {/* Lightning Flashes - Rare and Subtle */}
             <Animated.View style={[StyleSheet.absoluteFill, {
-              backgroundColor: '#818CF8', // Subtle purple flash
+              backgroundColor: '#DDD6FE',
               opacity: masterAnim.interpolate({
-                inputRange: [0, 0.1, 0.12, 0.14, 0.45, 0.47, 0.49, 0.7, 0.72, 1],
-                outputRange: [0, 0.15, 0, 0.1, 0, 0.2, 0, 0.12, 0, 0]
+                inputRange: [0, 0.4, 0.41, 0.42, 0.8, 0.81, 0.82, 1],
+                outputRange: [0, 0, 0.12, 0, 0, 0.15, 0, 0]
               })
             }]} />
           </View>
@@ -697,7 +795,11 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
               <Text style={[styles.cityText, { color: secondaryColor }]}>{city.toUpperCase()}</Text>
               <Text style={[styles.conditionText, { color: textColor }]}>{displayTitle}</Text>
             </View>
-            <View style={[styles.iconContainer, isSunnyScene && { opacity: 0.2, backgroundColor: 'transparent', borderColor: 'transparent' }]}>
+            <View style={[
+              styles.iconContainer,
+              isSunnyScene && { opacity: 0.2, backgroundColor: 'transparent', borderColor: 'transparent' },
+              displayCondition === WeatherCondition.THUNDERSTORM && { transform: [{ scale: 0.9 }] } // 10% smaller lightning icon
+            ]}>
               <Text style={styles.weatherEmoji}>{displayEmoji}</Text>
             </View>
           </View>
@@ -801,18 +903,18 @@ const styles = StyleSheet.create({
   // --- PREMIUM SUN SCENE STYLES ---
   premiumSunSceneDisk: {
     position: 'absolute',
-    top: 76,
-    right: '20%',
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    top: 60, // Higher
+    right: -10, // Bleed off right edge
+    width: 50, // Reduced by 20%
+    height: 50,
+    borderRadius: 25,
     zIndex: 10,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#FBBF24',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 20,
+    shadowOpacity: 0.7,
+    shadowRadius: 40, // Increased glow area
     elevation: 10
   },
   premiumSunSceneInnerHighlight: {
@@ -824,9 +926,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 30,
     right: '10%',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 220, // Larger glow
+    height: 220,
+    borderRadius: 110,
     zIndex: 1,
   },
   premiumSunSceneRaysContainer: {
@@ -845,8 +947,19 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
+  auroraLayer: {
+    position: 'absolute',
+    width: SCREEN_WIDTH,
+    height: 240,
+    borderRadius: 120,
+    top: 40,
+    left: -20,
+    zIndex: 0,
+    opacity: 0.05
+  },
+
   sunGlowMini: { position: 'absolute', top: 30, right: 30, width: 80, height: 80, borderRadius: 40 },
-  moonGlow: { position: 'absolute', top: 50, right: '20%', width: 100, height: 100, borderRadius: 50, shadowColor: '#FFF', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.5, shadowRadius: 30 },
+  moonGlow: { position: 'absolute', top: 50, right: '20%', width: 85, height: 85, borderRadius: 42.5, shadowColor: '#FFF', shadowOffset: {width: 0, height: 0}, shadowOpacity: 0.5, shadowRadius: 30 },
   star: { position: 'absolute', backgroundColor: '#F8FAFC', borderRadius: 5 },
   rainLine: { position: 'absolute', width: 1, backgroundColor: '#F1F5F9', borderRadius: 1 },
   snowFlake: { position: 'absolute', backgroundColor: '#F8FAFC', borderRadius: 10 },
