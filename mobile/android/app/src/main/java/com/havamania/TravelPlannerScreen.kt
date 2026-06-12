@@ -488,12 +488,12 @@ fun TravelPlanCard(
     val isPast = plan.endDate.isBefore(today)
     val isArchived = plan.isArchived
     var isExpanded by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
 
     val formatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
-    val fullDateFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr"))
     val dateRange = "${plan.startDate.format(formatter)} - ${plan.endDate.format(formatter)}"
-    val duration = ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
     val cityDesc = TravelAiHelper.getCityDescription(plan.city)
+    val latestAnalysis = plan.analyses.lastOrNull()
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
@@ -502,33 +502,33 @@ fun TravelPlanCard(
 
     Surface(
         color = themeColors.surface.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(24.dp),
-        shadowElevation = 6.dp,
+        shape = RoundedCornerShape(20.dp), // Slightly smaller radius for professional look
+        shadowElevation = 4.dp,
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .alpha(if (isPast && !isArchived) 0.9f else 1f)
-            .then(if (isFocused) Modifier.border(2.dp, themeColors.accent, RoundedCornerShape(24.dp)) else Modifier)
+            .alpha(if (isPast && !isArchived) 0.85f else 1f)
+            .then(if (isFocused) Modifier.border(1.5.dp, themeColors.accent, RoundedCornerShape(20.dp)) else Modifier)
             .clickable {
                 if (!isPast && !isArchived) isExpanded = !isExpanded
                 else onShowDetail()
             }
     ) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) { // Reduced padding
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.padding(14.dp).fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp) // Smaller icon box
+                        .size(40.dp)
                         .background(
                             Brush.linearGradient(
                                 colors = if (isArchived) listOf(themeColors.textMuted, themeColors.textMuted.copy(0.6f))
                                 else themeColors.buttonGradient ?: listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.6f))
                             ),
-                            RoundedCornerShape(14.dp)
+                            RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(if (isArchived) Icons.Rounded.Archive else plan.tripType.icon, null, tint = themeColors.onAccent, modifier = Modifier.size(24.dp))
+                    Icon(if (isArchived) Icons.Rounded.Archive else plan.tripType.icon, null, tint = themeColors.onAccent, modifier = Modifier.size(20.dp))
                 }
 
                 Spacer(Modifier.width(12.dp))
@@ -536,60 +536,160 @@ fun TravelPlanCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = plan.city,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 18.sp),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = themeColors.textPrimary
                     )
                     Text(
-                        text = if (isArchived) "📦 Seyahat Arşivde" else if (isPast) "✅ Tamamlandı" else "📍 $cityDesc",
+                        text = dateRange,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (isArchived) themeColors.textMuted else if (isPast) Color(0xFF10B981) else themeColors.accent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = themeColors.textSecondary
                     )
                 }
 
+                if (latestAnalysis != null && !isArchived) {
+                    val scoreColor = when {
+                        latestAnalysis.travelScore >= 80 -> Color(0xFF10B981)
+                        latestAnalysis.travelScore >= 60 -> Color(0xFFFBBF24)
+                        else -> Color(0xFFEF4444)
+                    }
+                    Surface(
+                        color = scoreColor.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "%${latestAnalysis.travelScore}",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                            color = scoreColor
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.padding(start = 4.dp)) {
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Rounded.MoreVert, null, tint = themeColors.textMuted, modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = themeColors.surface
+                    ) {
+                        if (!isPast && !isArchived) {
+                            DropdownMenuItem(
+                                text = { Text("Düzenle", color = themeColors.textPrimary) },
+                                onClick = { onEdit(); showMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, null, modifier = Modifier.size(18.dp)) }
+                            )
+                        }
+                        if (isArchived) {
+                            DropdownMenuItem(
+                                text = { Text("Aktifleştir", color = themeColors.textPrimary) },
+                                onClick = { onUnarchive(); showMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Unarchive, null, modifier = Modifier.size(18.dp)) }
+                            )
+                        } else if (isPast) {
+                            DropdownMenuItem(
+                                text = { Text("Arşivle", color = themeColors.textPrimary) },
+                                onClick = { onArchive(); showMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Archive, null, modifier = Modifier.size(18.dp)) }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Arşivle", color = themeColors.textPrimary) },
+                                onClick = { onArchive(); showMenu = false },
+                                leadingIcon = { Icon(Icons.Rounded.Archive, null, modifier = Modifier.size(18.dp)) }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Sil", color = themeColors.error) },
+                            onClick = { onDelete(); showMenu = false },
+                            leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.error, modifier = Modifier.size(18.dp)) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Chips Row
+            if (latestAnalysis != null && !isArchived) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactInfoChip(
+                        Icons.Rounded.WaterDrop,
+                        "Yağış: %${latestAnalysis.rainRiskPercent ?: 0}",
+                        if ((latestAnalysis.rainRiskPercent ?: 0) > 40) themeColors.error else themeColors.accent
+                    )
+                    CompactInfoChip(
+                        Icons.Rounded.Thermostat,
+                        "${latestAnalysis.averageTemperature?.toInt() ?: "--"}°C",
+                        themeColors.textSecondary
+                    )
+                    val statusLabel = if (isPast) "Tamamlandı" else if (plan.isAnalyzing) "Analiz ediliyor" else "Planlandı"
+                    CompactInfoChip(
+                        if (isPast) Icons.Rounded.CheckCircle else Icons.Rounded.Event,
+                        statusLabel,
+                        if (isPast) Color(0xFF10B981) else themeColors.accent
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            if (!isArchived) {
                 Text(
-                    text = dateRange,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = themeColors.textSecondary
+                    text = latestAnalysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = themeColors.textPrimary.copy(alpha = 0.8f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = "Bu seyahat arşivde saklanıyor.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = themeColors.textMuted
                 )
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // Content Section based on state
-            val latestAnalysis = plan.analyses.lastOrNull()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!isArchived && !isPast && ChronoUnit.DAYS.between(today, plan.startDate) <= 15) {
+                    TextButton(
+                        onClick = onReanalyze,
+                        enabled = !plan.isAnalyzing,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(if (plan.isAnalyzing) Icons.Rounded.Sync else Icons.Rounded.Refresh, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Güncelle", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
 
-            if (isArchived) {
-                ArchiveContent(plan, latestAnalysis, duration, fullDateFormatter)
-            } else if (isPast) {
-                PastTripContent(plan, latestAnalysis, duration)
-            } else {
-                UpcomingTripContent(plan, latestAnalysis, isExpanded) { isExpanded = !isExpanded }
+                HavamaniaPrimaryButton(
+                    text = if (isPast || isArchived) "Raporu Gör" else "Detaylar",
+                    onClick = { if (isPast || isArchived) onShowDetail() else isExpanded = !isExpanded },
+                    modifier = Modifier.height(34.dp).width(110.dp)
+                )
             }
 
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = themeColors.divider.copy(alpha = 0.05f))
-            Spacer(Modifier.height(12.dp))
-
-            // Actions
-            ActionRow(
-                isPast = isPast,
-                isArchived = isArchived,
-                isAnalyzing = plan.isAnalyzing,
-                daysUntilTrip = ChronoUnit.DAYS.between(today, plan.startDate),
-                onDelete = onDelete,
-                onEdit = onEdit,
-                onArchive = onArchive,
-                onUnarchive = onUnarchive,
-                onShowDetail = onShowDetail,
-                onReanalyze = onReanalyze
-            )
+            AnimatedVisibility(visible = isExpanded) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
+                }
+            }
         }
     }
 }
+
 
 @Composable
 fun PastTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, duration: Int) {

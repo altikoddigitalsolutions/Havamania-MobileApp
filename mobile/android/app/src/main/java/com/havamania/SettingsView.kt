@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -315,11 +316,10 @@ fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
             .padding(horizontal = 24.dp)
-            .padding(bottom = 16.dp)
+            .padding(bottom = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             "TEMA SEÇİN",
             style = MaterialTheme.typography.titleLarge.copy(
@@ -335,26 +335,39 @@ fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -
         )
         Spacer(modifier = Modifier.height(24.dp))
 
-        LazyColumn(
+        // 2-Column Grid Layout
+        val rows = displayThemes.chunked(2)
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(displayThemes) { theme ->
-                ThemeCardPremium(
-                    theme = theme,
-                    isSelected = selectedTheme == theme,
-                    onClick = { onThemeSelected(theme) }
-                )
+            rows.forEach { rowThemes ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowThemes.forEach { theme ->
+                        ThemeCardPremium(
+                            theme = theme,
+                            isSelected = selectedTheme == theme,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onThemeSelected(theme) }
+                        )
+                    }
+                    if (rowThemes.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) {
+fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val themeStyleColors = ThemeFactory.createColors(theme)
     val displayName = when(theme) {
@@ -362,86 +375,89 @@ fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, onClick: () -> Unit) 
         AppTheme.SUMMER_DAY -> "Yaz"
         AppTheme.AUTUMN_DAY -> "Sonbahar"
         AppTheme.WINTER_DAY -> "Kış"
+        AppTheme.AUTO -> "Otomatik"
+        AppTheme.LIGHT -> "Açık"
+        AppTheme.DARK -> "Koyu"
         else -> theme.title
     }
 
+    val isRecommended = theme == AppTheme.AUTO
+
     HavamaniaGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 24.dp,
-        alpha = if (isSelected) 0.95f else 0.45f,
+        modifier = modifier.height(140.dp),
+        cornerRadius = 20.dp,
+        alpha = if (isSelected) 0.9f else 0.4f,
         onClick = onClick
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        displayName,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 18.sp
-                        ),
-                        color = if (isSelected) themeColors.accent else themeColors.textPrimary
-                    )
-                    Text(
-                        getThemeDesc(theme),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
-                        ),
-                        color = themeColors.textSecondary,
-                        modifier = Modifier.padding(top = 4.dp),
-                        softWrap = true
-                    )
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            displayName,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 15.sp
+                            ),
+                            color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isSelected) {
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Rounded.CheckCircle, null, tint = themeColors.accent, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    if (isRecommended) {
+                        Surface(
+                            color = themeColors.accent.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Text(
+                                "ÖNERİLEN",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Black),
+                                color = themeColors.accent
+                            )
+                        }
+                    }
                 }
 
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(start = 8.dp)) {
-                    if (isSelected) {
-                        Icon(
-                            Icons.Rounded.CheckCircle,
-                            null,
-                            tint = themeColors.accent,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    } else {
+                // Gradient Preview
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val previewColors = themeStyleColors.gradientPrimary
+                    previewColors.take(3).forEach { color ->
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .border(1.5.dp, themeColors.textMuted.copy(0.3f), CircleShape)
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(color)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Gradient Preview
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                val previewColors = themeStyleColors.gradientPrimary
-                previewColors.forEach { color ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(12.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .border(0.5.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                    )
-                }
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(1.5.dp, themeColors.accent, RoundedCornerShape(20.dp))
+                )
             }
         }
     }
 }
+
 
 fun getThemeDesc(theme: AppTheme): String = when(theme) {
     AppTheme.AUTO -> "Mevsime ve günün saatine göre otomatik değişir"

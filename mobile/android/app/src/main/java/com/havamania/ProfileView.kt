@@ -126,27 +126,9 @@ fun ProfileScreen(
                 onEditClick = onNavigateToEditProfile
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // 2. Kendinden Bahset (Premium Card)
-            SectionHeader("KİŞİSEL ANALİZ")
-            PremiumAboutMeCard(
-                text = aboutMe,
-                onClick = { showAboutMeSheet = true }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 3. Premium Kategori Bazlı İlgi Alanları
-            SectionHeader("HAVA TERCİHLERİ & İLGİ ALANLARI")
-            PremiumInterestsSection(
-                selectedInterests = userInterests,
-                onInterestToggle = { themeViewModel.toggleInterest(it) }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 4. Quick Actions
+            // 2. Quick Actions - MOVED HIGHER
             SectionHeader("HIZLI İŞLEMLER")
             QuickActionsGrid(
                 onManageCities = onNavigateToCities,
@@ -158,6 +140,24 @@ fun ProfileScreen(
                     comingSoonTitle = "Havamania yakında hizmetinizde olacak."
                     showComingSoonDialog = true
                 }
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // 3. Kendinden Bahset (Premium Card)
+            SectionHeader("KİŞİSEL ANALİZ")
+            PremiumAboutMeCard(
+                text = aboutMe,
+                onClick = { showAboutMeSheet = true }
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // 4. Premium Kategori Bazlı İlgi Alanları
+            SectionHeader("HAVA TERCİHLERİ & İLGİ ALANLARI")
+            PremiumInterestsSection(
+                selectedInterests = userInterests,
+                onInterestToggle = { themeViewModel.toggleInterest(it) }
             )
 
             Spacer(modifier = Modifier.height(100.dp))
@@ -381,15 +381,39 @@ fun PremiumInterestsSection(
     selectedInterests: Set<String>,
     onInterestToggle: (String) -> Unit
 ) {
-    val categories = InterestsData.categories
+    val allCategories = InterestsData.categories
+    val mainCategories = listOf("Hava & Atmosfer", "Ulaşım & Yol", "Outdoor & Macera")
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        categories.forEach { category ->
+    val prioritized = allCategories.filter { mainCategories.contains(it.title) }
+    val others = allCategories.filter { !mainCategories.contains(it.title) }
+
+    var showOthers by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        prioritized.forEach { category ->
             PremiumInterestCategoryCard(
                 category = category,
                 selectedInterests = selectedInterests,
                 onInterestToggle = onInterestToggle
             )
+        }
+
+        if (!showOthers) {
+            TextButton(
+                onClick = { showOthers = true },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                Text("DAHA FAZLA GÖSTER", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp), color = HavamaniaTheme.colors.accent)
+            }
+        } else {
+            others.forEach { category ->
+                PremiumInterestCategoryCard(
+                    category = category,
+                    selectedInterests = selectedInterests,
+                    onInterestToggle = onInterestToggle
+                )
+            }
         }
     }
 }

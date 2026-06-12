@@ -378,16 +378,33 @@ fun AiChatScreen(
                 // Başlangıç Ekranı (Empty State)
                 Column(
                     modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Top
                 ) {
+                    Spacer(Modifier.height(12.dp))
                     WelcomeCard(config?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?", themeColors)
 
                     if (aboutMe.isNotBlank() || userInterests.isNotEmpty()) {
                         PersonalizedContextCard(aboutMe, themeColors)
                     }
 
-                    Spacer(Modifier.height(24.dp))
+                    // --- BUGÜN İÇİN ÖNERİLER ---
+                    if (currentWeatherData != null) {
+                        TodaySuggestionsSection(currentWeatherData!!, themeColors) { prompt ->
+                            val context = buildPersonalizedContext(aboutMe, userInterests)
+                            viewModel.sendMessage(prompt, systemContext = context)
+                        }
+                    }
 
+                    AssistantSectionLabel("HIZLI SORULAR")
+                    QuickSuggestions(
+                        onSuggestionClick = { prompt ->
+                            val context = buildPersonalizedContext(aboutMe, userInterests)
+                            viewModel.sendMessage(prompt, systemContext = context)
+                        },
+                        themeColors = themeColors
+                    )
+
+                    AssistantSectionLabel("ÖZELLİKLER")
                     FeatureCards(
                         themeColors = themeColors,
                         onCardClick = { prompt ->
@@ -396,15 +413,7 @@ fun AiChatScreen(
                         }
                     )
 
-                    Spacer(Modifier.height(16.dp))
-
-                    QuickSuggestions(
-                        onSuggestionClick = { prompt ->
-                            val context = buildPersonalizedContext(aboutMe, userInterests)
-                            viewModel.sendMessage(prompt, systemContext = context)
-                        },
-                        themeColors = themeColors
-                    )
+                    Spacer(Modifier.height(32.dp))
                 }
             } else {
                 LazyColumn(
@@ -496,6 +505,71 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 }
 
 @Composable
+fun AssistantSectionLabel(text: String) {
+    val themeColors = HavamaniaTheme.colors
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.5.sp),
+        color = themeColors.textPrimary.copy(alpha = 0.4f),
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+    )
+}
+
+@Composable
+fun TodaySuggestionsSection(weather: WeatherData, themeColors: HavamaniaColors, onSuggestionClick: (String) -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+        AssistantSectionLabel("BUGÜN İÇİN ÖNERİLER")
+
+        Surface(
+            modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+            color = themeColors.surfaceGlass.copy(alpha = 0.3f),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(36.dp).background(themeColors.accent.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
+                        Text(WeatherUtils.getWeatherEmoji(weather.weatherCode), fontSize = 18.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("${weather.cityName}: ${weather.temperature}°C", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                        Text(weather.condition, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SuggestionChip("Giyim Önerisi", Icons.Rounded.Checkroom, themeColors) {
+                        onSuggestionClick("Bugün ${weather.cityName}'da hava ${weather.temperature} derece ve ${weather.condition}. Ne giymeliyim?")
+                    }
+                    SuggestionChip("Aktivite", Icons.Rounded.Event, themeColors) {
+                        onSuggestionClick("Bugün ${weather.cityName}'da dışarı çıkmak için uygun mu? Neler yapabilirim?")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SuggestionChip(label: String, icon: ImageVector, themeColors: HavamaniaColors, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        color = themeColors.accent.copy(alpha = 0.1f),
+        shape = CircleShape,
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.2f))
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
+        }
+    }
+}
+
+@Composable
 fun PersonalizedContextCard(aboutMe: String, themeColors: HavamaniaColors) {
     Surface(
         modifier = Modifier.padding(horizontal = 24.dp).padding(top = 16.dp).fillMaxWidth(),
@@ -563,22 +637,22 @@ fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
     val features = remember {
         listOf(
             AssistantFeature(
-                title = "Akıllı Giysi Önerisi",
-                desc = "Hava durumuna göre ne giyeceğinizi söyler.",
+                title = "Giyim Önerisi",
+                desc = "Hava durumuna göre stil tavsiyesi.",
                 icon = Icons.Rounded.Checkroom,
                 prompt = "Bugünkü hava durumuna göre ne giymeliyim? Sıcaklık, rüzgar, yağış ve UV durumuna göre pratik kıyafet önerisi ver.",
                 type = AssistantFeatureType.CLOTHING
             ),
             AssistantFeature(
-                title = "Aktivite Analizi",
-                desc = "Dışarı çıkmak için en iyi zamanı belirler.",
+                title = "Aktivite",
+                desc = "Dışarı çıkmak için en iyi zaman.",
                 icon = Icons.Rounded.DirectionsRun,
                 prompt = "Bugün dışarı çıkmak, yürüyüş yapmak, spor yapmak veya açık hava aktivitesi için uygun mu? Hava durumuna göre en uygun saatleri ve dikkat etmem gerekenleri söyle.",
                 type = AssistantFeatureType.ACTIVITY
             ),
             AssistantFeature(
-                title = "Seyahat Planlama",
-                desc = "Rotalarınız için özel hava tavsiyeleri verir.",
+                title = "Seyahat",
+                desc = "Rotalarınız için özel tavsiyeler.",
                 icon = Icons.Rounded.Route,
                 prompt = "Yaklaşan seyahatlerim ve mevcut hava durumuna göre bana seyahat planlama önerisi verir misin? Valiz, ulaşım, rota ve hava riskleri açısından tavsiye ver.",
                 type = AssistantFeatureType.TRAVEL
@@ -589,7 +663,7 @@ fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
