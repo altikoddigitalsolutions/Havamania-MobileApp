@@ -34,85 +34,70 @@ class TravelNotificationWorker(
         val weatherDao = weatherDb.weatherDao()
         val notificationDao = notificationDb.notificationDao()
 
-        // Check if notifications are enabled
+        // Bildirimlerin açık olup olmadığını kontrol et
         val notificationsEnabled = ThemeManager.getNotificationsEnabled(application).first()
         if (!notificationsEnabled) return Result.success()
 
         val plans = weatherDao.getAllTravelPlans()
-        val now = LocalDateTime.now()
         val today = LocalDate.now()
+        val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
         val travelViewModel = TravelViewModel(application)
 
         for (entity in plans) {
+            // Arşivlenmiş seyahatleri atla
             if (entity.isArchived) continue
 
             val plan = entity.toDomain()
             val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
             val isOver = today.isAfter(plan.endDate)
 
+            // Geçmiş seyahatleri atla
             if (isOver) continue
 
-            // 1. Rule: Within 15 days
+            // KURAL: Seyahate 15 gün veya daha az kaldıysa (seyahat günü dahil)
             if (daysUntil in 0..15) {
-                // Try to update analysis if possible (Internet dependency handled by TravelViewModel)
+                // KURAL: Günde maksimum 1 bildirim gönder
+                if (plan.lastDailyNotificationDate == dateStr) continue
+
+                // Önce analizi güncelle (İnternet bağımlılığı TravelViewModel tarafından yönetilir)
                 val updatedPlan = try {
                     travelViewModel.performAnalysis(plan)
                 } catch (e: Exception) {
-                    plan // Use last saved data if analysis fails
+                    plan // Analiz başarısızsa eski veriyi kullan
                 }
 
-                // Save updated plan if changed
+                // Analiz güncellendiyse kaydet
                 if (updatedPlan != plan) {
                     weatherDao.insertTravelPlan(updatedPlan.toEntity())
                 }
 
-                // Determine notification type
-                val hour = now.hour
-                val isMorning = hour in 7..11
-                val isEvening = hour in 18..22
+                val travelData = buildNotificationData(updatedPlan, daysUntil)
+                val (title, message) = generateNotificationText(updatedPlan, daysUntil, travelData)
 
-                val type = when {
-                    daysUntil == 0 -> "START_DAY"
-                    daysUntil <= 3 && isMorning -> "MORNING"
-                    daysUntil <= 3 && isEvening -> "EVENING"
-                    daysUntil > 3 && isMorning -> "DAILY"
-                    else -> null // Don't send during other times
-                }
+                val notificationId = "travel_${plan.id}_$dateStr"
 
-                if (type != null) {
-                    val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                val notificationItem = NotificationItem(
+                    id = notificationId,
+                    title = title,
+                    message = message,
+                    category = NotificationCategory.TRAVEL,
+                    createdAt = System.currentTimeMillis(),
+                    eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                    deepLinkTarget = "havamania://app/calendar?focusId=${plan.id}",
+                    relatedTripId = plan.id,
+                    actionLabel = "Analizi Gör",
+                    travelData = travelData
+                )
 
-                    // Rule 7: Don't send more than once per day
-                    if (plan.lastDailyNotificationDate == dateStr) continue
+                // Yerel bildirim listesine ekle
+                notificationDao.insert(notificationItem)
 
-                    val notificationId = "travel_${plan.id}_${dateStr}_$type"
+                // Sistem bildirimini göster
+                showSystemNotification(notificationItem)
 
-                    val travelData = buildNotificationData(updatedPlan, daysUntil)
-                    val (title, message) = generateNotificationText(updatedPlan, daysUntil, type, travelData)
-
-                    val notificationItem = NotificationItem(
-                        id = notificationId,
-                        title = title,
-                        message = message,
-                        category = NotificationCategory.TRAVEL,
-                        createdAt = System.currentTimeMillis(),
-                        eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-                        deepLinkTarget = "havamania://app/calendar?focusId=${plan.id}",
-                        relatedTripId = plan.id,
-                        actionLabel = "Detayları Gör",
-                        travelData = travelData
-                    )
-
-                    // Save to local notification list
-                    notificationDao.insert(notificationItem)
-
-                    // Show system notification
-                    showSystemNotification(notificationItem)
-
-                    // Rule 7: Mark as sent today
-                    weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
-                }
+                // KURAL: Bugün bildirim gönderildi olarak işaretle
+                weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
             }
         }
 
@@ -160,47 +145,30 @@ class TravelNotificationWorker(
     private fun generateNotificationText(
         plan: TravelPlan,
         daysLeft: Int,
-        type: String,
         data: TravelNotificationData
     ): Pair<String, String> {
         val latestAnalysis = plan.analyses.lastOrNull()
+        val dateFormatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
+        val dateRange = "${plan.startDate.format(dateFormatter)} - ${plan.endDate.format(dateFormatter)}"
 
-        val title = when(type) {
-            "START_DAY" -> "Seyahatin bugün başlıyor! ✈️"
-            "MORNING" -> if (daysLeft == 1) "Seyahatine yarın çıkıyorsun! 🎒" else "Seyahatine $daysLeft gün kaldı 🎒"
-            "EVENING" -> "Seyahat hazırlıklarını unutma 🎒"
-            else -> "Seyahatin yaklaşıyor"
-        }
+        // KURAL 13: Başlık formatı "Şehir • Tarih Aralığı"
+        val title = "${plan.city} • $dateRange"
 
-        val message = when(type) {
-            "START_DAY" -> {
+        val message = when {
+            daysLeft == 0 -> {
                 val weather = if (data.weatherSummary != null)
-                    "${plan.city}'da hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
-                    else "${plan.city} seyahatin bugün başlıyor."
-                "$weather Çıkmadan önce son kontrollerini yapmayı unutma!"
+                    "Hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
+                    else "Seyahatin bugün başlıyor."
+                "Seyahatin bugün başlıyor! $weather Çıkmadan önce son kontrollerini yapmayı unutma! ✈️"
             }
-            "MORNING" -> {
-                val base = if (latestAnalysis != null) {
-                    "${plan.city} seyahatin için bugünkü hava analizi hazır. "
-                } else {
-                    val weatherPart = if (data.weatherSummary != null)
-                        "${plan.city} için hava ${data.weatherSummary.lowercase()} görünüyor. "
-                        else ""
-                    "Seyahatine $daysLeft gün kaldı. $weatherPart"
-                }
-
-                val comparison = latestAnalysis?.comparisonText ?: ""
-                val itemsPart = if (data.recommendedItems.isNotEmpty())
-                    "${data.recommendedItems.take(2).joinToString(" ve ")} yanına almayı unutma."
-                    else "Hazırlıklarını gözden geçirebilirsin."
-
-                "$base$comparison$itemsPart"
-            }
-            "EVENING" -> {
-                "${plan.city} seyahatin yaklaşıyor. Ulaşım saatlerini, konaklama bilgilerini ve çantanı tekrar kontrol etmek iyi olabilir."
-            }
+            daysLeft == 1 -> "Seyahatine yarın çıkıyorsun! Bugünkü güncel hava analizi ve valiz önerilerin hazır. 🎒"
             else -> {
-                "${plan.city} seyahatin yaklaşıyor: Hava ${data.weatherSummary?.lowercase() ?: "tahmin ediliyor"}. Planlarına göz atmak ister misin?"
+                val base = if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
+                    "Hava tahminlerinde bazı değişiklikler var. Güncel analizi inceleyebilirsin."
+                } else {
+                    "Seyahatine $daysLeft gün kaldı. Hava durumuna göre hazırlıklarını gözden geçir."
+                }
+                "$base 🎒"
             }
         }
 
@@ -301,16 +269,30 @@ class TravelNotificationWorker(
     companion object {
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.NOT_REQUIRED) // Run even if offline using last data
+                .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            // Run every 4 hours to catch morning/evening windows
-            val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(4, TimeUnit.HOURS)
+            // Saat 09:00 için gecikmeyi hesapla
+            val currentDate = LocalDateTime.now()
+            var dueDate = LocalDateTime.now()
+                .withHour(9)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+
+            if (currentDate.isAfter(dueDate)) {
+                dueDate = dueDate.plusDays(1)
+            }
+
+            val initialDelay = ChronoUnit.MILLIS.between(currentDate, dueDate)
+
+            val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(24, TimeUnit.HOURS)
                 .setConstraints(constraints)
+                .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "travel_notifications_work",
+                "travel_notifications_daily",
                 ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
