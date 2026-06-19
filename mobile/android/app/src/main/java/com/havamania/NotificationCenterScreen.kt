@@ -415,8 +415,11 @@ fun NotificationCard(
     onNavigateToDetail: (String, Map<String, String>?) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val timeStr = remember(notification.eventAt, notification.createdAt) {
-        NotificationDateFormatter.formatEventTime(notification.eventAt ?: notification.createdAt)
+    val timeStr = remember(notification.createdAt) {
+        NotificationDateFormatter.formatCreatedAt(notification.createdAt)
+    }
+    val eventTimeStr = remember(notification.eventAt) {
+        notification.eventAt?.let { NotificationDateFormatter.formatEventTime(it) }
     }
 
     val cardBgColor = if (isSelected) {
@@ -498,6 +501,15 @@ fun NotificationCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (eventTimeStr != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Etkinlik Zamanı: $eventTimeStr",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = themeColors.accent.copy(alpha = 0.7f)
+                    )
+                }
 
                 if (notification.actionLabel != null) {
                     Spacer(modifier = Modifier.height(14.dp))

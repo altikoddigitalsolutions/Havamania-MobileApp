@@ -189,10 +189,6 @@ class TravelNotificationWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Tarih formatını ekle
-        val eventTimeStr = NotificationDateFormatter.formatEventTime(item.eventAt ?: item.createdAt)
-        val displayMessage = if (eventTimeStr.isNotEmpty()) "$eventTimeStr • ${item.message}" else item.message
-
         // Deep link intent
         val intent = Intent(
             Intent.ACTION_VIEW,
@@ -213,8 +209,8 @@ class TravelNotificationWorker(
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher) // Use valid icon
             .setContentTitle(item.title)
-            .setContentText(displayMessage)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(displayMessage))
+            .setContentText(item.message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

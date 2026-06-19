@@ -41,15 +41,11 @@ class WeatherNotificationWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Merkezi tarih formatlayıcıyı kullan
-        val eventTimeStr = NotificationDateFormatter.formatEventTime(System.currentTimeMillis())
-        val displayMessage = if (eventTimeStr.isNotEmpty()) "$eventTimeStr • $message" else message
-
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_day) // Özelleştirilebilir
             .setContentTitle(title)
-            .setContentText(displayMessage)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(displayMessage))
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
