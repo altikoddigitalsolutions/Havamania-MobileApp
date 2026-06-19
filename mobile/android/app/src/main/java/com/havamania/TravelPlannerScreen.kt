@@ -682,9 +682,9 @@ fun TravelPlanCard(
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
-                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
+                    if (analysis?.comparisonText != null && !analysis.comparisonText.contains("ilk analiz")) {
                         Spacer(Modifier.height(12.dp))
-                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
+                        ComparisonSection(analysis.comparisonText, analysis.previousAnalysisId != null)
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -815,9 +815,9 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
-                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
+                    if (analysis?.comparisonText != null && !analysis.comparisonText.contains("ilk analiz")) {
                         Spacer(Modifier.height(12.dp))
-                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
+                        ComparisonSection(analysis.comparisonText, analysis.previousAnalysisId != null)
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -921,6 +921,15 @@ fun CompactInfoChip(icon: ImageVector, text: String, color: Color) {
             Spacer(Modifier.width(6.dp))
             Text(text, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = color)
         }
+    }
+}
+
+@Composable
+fun ArchiveStatItem(label: String, value: String) {
+    val themeColors = HavamaniaTheme.colors
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = themeColors.textMuted)
+        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
     }
 }
 
