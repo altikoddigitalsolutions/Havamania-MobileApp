@@ -682,9 +682,9 @@ fun TravelPlanCard(
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
-                    if (analysis?.comparisonText != null && !analysis.comparisonText.contains("ilk analiz")) {
+                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
                         Spacer(Modifier.height(12.dp))
-                        ComparisonSection(analysis.comparisonText, analysis.previousAnalysisId != null)
+                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
                     }
 
                     Spacer(Modifier.height(12.dp))
