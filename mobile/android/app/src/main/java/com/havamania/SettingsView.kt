@@ -121,7 +121,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
             Text(
-                text = "Havamania v1.2.0-Premium",
+                text = "Havamania v1.2.0",
                 modifier = Modifier.align(Alignment.CenterHorizontally),
                 style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
                 color = themeColors.textMuted.copy(alpha = 0.4f)

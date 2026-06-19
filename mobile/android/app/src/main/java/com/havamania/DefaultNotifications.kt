@@ -10,7 +10,7 @@ object DefaultNotifications {
             // SEYAHAT
             NotificationItem(
                 id = "def_travel_1",
-                title = "İzmir Seyahati Hazırlığı",
+                title = "Seyahat Güncellemesi",
                 message = "İzmir seyahatin için UV seviyesi yüksek görünüyor. Güneş koruyucu ve şapka almanı öneririm.",
                 category = NotificationCategory.TRAVEL,
                 isRead = false,
@@ -22,7 +22,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_travel_2",
-                title = "Rota Önerisi: Batman",
+                title = "Seyahat Güncellemesi",
                 message = "Hasankeyf ve çevresindeki tarihi dokuyu keşfetmek için önümüzdeki günler oldukça elverişli.",
                 category = NotificationCategory.TRAVEL,
                 isRead = true,
@@ -35,7 +35,7 @@ object DefaultNotifications {
             // YAĞMUR
             NotificationItem(
                 id = "def_rain_1",
-                title = "Yağış Uyarısı: İstanbul",
+                title = "Yağış Bilgilendirmesi",
                 message = "Yağış ihtimali %20'den %65'e yükseldi. Şemsiyeni yanına almalısın.",
                 category = NotificationCategory.RAIN,
                 isRead = false,
@@ -47,7 +47,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_rain_2",
-                title = "Haftalık Yağış Raporu",
+                title = "Yağış Bilgilendirmesi",
                 message = "Hafif yağış geçişleri ve açık hava etkinliklerine uygun günler sizi bekliyor.",
                 category = NotificationCategory.RAIN,
                 isRead = true,
@@ -60,7 +60,7 @@ object DefaultNotifications {
             // UV
             NotificationItem(
                 id = "def_uv_1",
-                title = "Yüksek UV İndeksi",
+                title = "UV Uyarısı",
                 message = "UV indeksi 8 seviyesine ulaşacak. Koruyucu kullanmayı unutma.",
                 category = NotificationCategory.UV,
                 isRead = false,
@@ -72,7 +72,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_uv_2",
-                title = "Güneşli Gün Önerisi",
+                title = "UV Uyarısı",
                 message = "Açık hava aktiviteleri için hava koşulları ve UV seviyesi oldukça uygun görünüyor.",
                 category = NotificationCategory.UV,
                 isRead = true,
@@ -85,7 +85,7 @@ object DefaultNotifications {
             // UYARI
             NotificationItem(
                 id = "def_warn_1",
-                title = "Ani Sıcaklık Düşüşü",
+                title = "Hava Durumu Uyarısı",
                 message = "Sıcaklık hızlı düşecek. Dışarıdaysan hafif ceket alman konforunu artıracaktır.",
                 category = NotificationCategory.WARNING,
                 isRead = false,
@@ -97,7 +97,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_warn_2",
-                title = "Rüzgar Hamlesi Uyarısı",
+                title = "Hava Durumu Uyarısı",
                 message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/s hıza ulaşabilir. Dikkatli olunmalıdır.",
                 category = NotificationCategory.WARNING,
                 isRead = true,
@@ -110,7 +110,7 @@ object DefaultNotifications {
             // ÖZET
             NotificationItem(
                 id = "def_sum_1",
-                title = "Günün Hava Özeti",
+                title = "Hava Durumu Özeti",
                 message = "Sabah sisli, öğleden sonra parçalı bulutlu bir gökyüzü bekleniyor.",
                 category = NotificationCategory.SUMMARY,
                 isRead = false,
@@ -122,7 +122,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_sum_2",
-                title = "Haftalık Seyahat Analizi",
+                title = "Hava Durumu Özeti",
                 message = "Planladığın rotalar için en uygun hava koşulları yaklaşıyor.",
                 category = NotificationCategory.SUMMARY,
                 isRead = true,
@@ -135,7 +135,7 @@ object DefaultNotifications {
             // GÜNCELLEME
             NotificationItem(
                 id = "def_upd_1",
-                title = "Yeni Özellik: Rüzgar Çizgileri",
+                title = "Uygulama Güncellemesi",
                 message = "Hava kartlarına rüzgar şiddetine göre değişen premium animasyonlar eklendi. Hemen keşfet!",
                 category = NotificationCategory.UPDATE,
                 isRead = false,
@@ -147,7 +147,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_upd_2",
-                title = "Performans İyileştirmesi",
+                title = "Uygulama Güncellemesi",
                 message = "Atmosferik efektler ve geçiş animasyonları daha düşük pil tüketimi için optimize edildi.",
                 category = NotificationCategory.UPDATE,
                 isRead = true,
@@ -160,7 +160,7 @@ object DefaultNotifications {
             // GENEL
             NotificationItem(
                 id = "def_gen_1",
-                title = "Havamania Premium",
+                title = "Havamania'ya Hoş Geldin",
                 message = "Tüm hava durumlarına özel astronomik fazlarla zenginleştirilmiş seyahat deneyimine hoş geldin.",
                 category = NotificationCategory.GENERAL,
                 isRead = false,
@@ -172,8 +172,8 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_gen_2",
-                title = "İlgi Alanlarını Güncelle",
-                message = "Sana daha iyi öneriler sunabilmemiz için profilindeki ilgi alanlarını güncel tutabilirsin.",
+                title = "Havamania",
+                message = "Sana daha iyi öneriler sunabilmemiz için profilindeki ilgi alanlarını (kamp, spor, fotoğrafçılık vb.) güncel tutabilirsin.",
                 category = NotificationCategory.GENERAL,
                 isRead = true,
                 actionType = NotificationActionType.APP_UPDATE,

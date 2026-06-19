@@ -19,8 +19,9 @@ class WeatherNotificationWorker(
     override suspend fun doWork(): Result {
         // Burada normalde API'den güncel veri çekilir
         // Şimdilik örnek bir bildirim gönderiyoruz
+        // Standart başlık kullanımı
         showNotification(
-            "Bugün Hava Nasıl?",
+            "Hava Durumu Özeti",
             "İstanbul'da bugün hava parçalı bulutlu ve 12°. Şemsiyeni almayı unutma!"
         )
         return Result.success()

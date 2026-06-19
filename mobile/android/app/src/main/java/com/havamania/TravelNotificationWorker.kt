@@ -152,24 +152,25 @@ class TravelNotificationWorker(
         val dateFormatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
         val dateRange = "${plan.startDate.format(dateFormatter)} - ${plan.endDate.format(dateFormatter)}"
 
-        // KURAL 13: Başlık formatı "Şehir • Tarih Aralığı"
-        val title = "${plan.city} • $dateRange"
+        // KURAL 13: Başlık formatı kategori bazlı standartlaştırıldı
+        val title = "Seyahat Güncellemesi"
+        val cityLabel = "${plan.city} • $dateRange"
 
         val message = when {
             daysLeft == 0 -> {
                 val weather = if (data.weatherSummary != null)
                     "Hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
                     else "Seyahatin bugün başlıyor."
-                "Seyahatin bugün başlıyor! $weather Çıkmadan önce son kontrollerini yapmayı unutma! ✈️"
+                "$cityLabel: Seyahatin bugün başlıyor! $weather Çıkmadan önce son kontrollerini yapmayı unutma! ✈️"
             }
-            daysLeft == 1 -> "Seyahatine yarın çıkıyorsun! Bugünkü güncel hava analizi ve valiz önerilerin hazır. 🎒"
+            daysLeft == 1 -> "$cityLabel: Seyahatine yarın çıkıyorsun! Bugünkü güncel hava analizi ve valiz önerilerin hazır. 🎒"
             else -> {
                 val base = if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
                     "Hava tahminlerinde bazı değişiklikler var. Güncel analizi inceleyebilirsin."
                 } else {
                     "Seyahatine $daysLeft gün kaldı. Hava durumuna göre hazırlıklarını gözden geçir."
                 }
-                "$base 🎒"
+                "$cityLabel: $base 🎒"
             }
         }
 

@@ -96,7 +96,7 @@ class NotificationRepository(private val dao: NotificationDao) {
             Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB: $count")
 
             if (count == 0) {
-                Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating premium test notifications...")
+                Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating default test notifications...")
                 val demoList = DefaultNotifications.create()
                 Log.d("Notifications", "seed created size=${demoList.size}")
 
