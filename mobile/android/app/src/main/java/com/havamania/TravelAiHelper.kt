@@ -154,11 +154,71 @@ object TravelAiHelper {
     }
 
     fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot): String {
-        val tempDiff = (new.maxTemp ?: 0.0) - (old.maxTemp ?: 0.0)
+        val changes = mutableListOf<String>()
+
+        // 1. Skor Karşılaştırması (Skor farkı >= 5 puan)
+        if (old.travelScore != null && new.travelScore != null) {
+            val scoreDiff = new.travelScore - old.travelScore
+            if (Math.abs(scoreDiff) >= 5) {
+                if (scoreDiff > 0) {
+                    changes.add("Seyahat uygunluk skoru %${old.travelScore}'den %${new.travelScore}'e yükseldi, koşullar iyileşiyor.")
+                } else {
+                    changes.add("Seyahat uygunluk skoru %${old.travelScore}'den %${new.travelScore}'e düştü. Planlarını tekrar gözden geçirmek isteyebilirsin.")
+                }
+            }
+        }
+
+        // 2. Yağış Karşılaştırması (Yağış farkı >= %10)
+        val oldPrecip = old.precipitationProbability ?: 0
+        val newPrecip = new.precipitationProbability ?: 0
+        if (Math.abs(newPrecip - oldPrecip) >= 10) {
+            if (newPrecip > oldPrecip) {
+                changes.add("Dünkü analizde yağış olasılığı %$oldPrecip görünüyordu, bugün %$newPrecip'e yükseldi. Yağmur riski artmış.")
+            } else {
+                changes.add("Yağış ihtimali %$oldPrecip'ten %$newPrecip'e geriledi, daha açık bir hava bekleniyor.")
+            }
+        }
+
+        // 3. Sıcaklık Karşılaştırması (Sıcaklık farkı >= 2°C)
+        if (old.maxTemp != null && new.maxTemp != null) {
+            val tempDiff = new.maxTemp - old.maxTemp
+            if (Math.abs(tempDiff) >= 2.0) {
+                if (tempDiff > 0) {
+                    changes.add("Önceki tahminde maksimum sıcaklık ${old.maxTemp.toInt()}°C idi, şimdi ${new.maxTemp.toInt()}°C. Daha sıcak bir gün bekleniyor.")
+                } else {
+                    changes.add("Maksimum sıcaklık ${old.maxTemp.toInt()}°C'den ${new.maxTemp.toInt()}°C'ye düştü, hava serinliyor.")
+                }
+            }
+        }
+
+        // 4. Rüzgar Karşılaştırması (Rüzgar farkı >= 8 km/s)
+        if (old.windSpeed != null && new.windSpeed != null) {
+            val windDiff = new.windSpeed - old.windSpeed
+            if (Math.abs(windDiff) >= 8.0) {
+                if (windDiff > 0) {
+                    changes.add("Rüzgar beklentisi ${old.windSpeed.toInt()} km/s'den ${new.windSpeed.toInt()} km/s'ye çıktı, açık hava planları için dikkatli olunmalı.")
+                } else {
+                    changes.add("Rüzgar hızı azalıyor (${old.windSpeed.toInt()} → ${new.windSpeed.toInt()} km/s), daha sakin bir hava hakim olacak.")
+                }
+            }
+        }
+
+        // 5. Hissedilen Sıcaklık (Fark >= 2°C)
+        if (old.feelsLike != null && new.feelsLike != null) {
+            val feelsDiff = new.feelsLike - old.feelsLike
+            if (Math.abs(feelsDiff) >= 2.0) {
+                if (feelsDiff > 0) {
+                    changes.add("Hissedilen sıcaklık artışta (${old.feelsLike.toInt()}°C → ${new.feelsLike.toInt()}°C).")
+                } else {
+                    changes.add("Hava daha serin hissedilecek (${old.feelsLike.toInt()}°C → ${new.feelsLike.toInt()}°C).")
+                }
+            }
+        }
+
         return when {
-            tempDiff >= 4 -> "Küçük bir not: Son güncellemeye göre hava beklediğimizden daha sıcak olacak, planlarını buna göre revize edebilirsin."
-            tempDiff <= -4 -> "Hava tahmini biraz değişti, beklediğimizden daha serin bir yolculuk bizi bekliyor, ceketini yanına almayı unutma."
-            else -> "Hava durumu tahminleri hala benzer çizgide ilerliyor, büyük bir değişiklik yok."
+            changes.isEmpty() -> "Genel hava koşulları önceki analize göre benzer seyrediyor, büyük bir değişiklik yok."
+            changes.size == 1 -> changes.first()
+            else -> "Önceki analize göre bazı değişiklikler var: " + changes.joinToString(" ")
         }
     }
 

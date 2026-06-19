@@ -682,6 +682,11 @@ fun TravelPlanCard(
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
+                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
+                        Spacer(Modifier.height(12.dp))
+                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
                 }
@@ -810,6 +815,11 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
+                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
+                        Spacer(Modifier.height(12.dp))
+                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
                 }
@@ -915,11 +925,60 @@ fun CompactInfoChip(icon: ImageVector, text: String, color: Color) {
 }
 
 @Composable
-fun ArchiveStatItem(label: String, value: String) {
+fun ComparisonSection(comparisonText: String, hasHistory: Boolean) {
     val themeColors = HavamaniaTheme.colors
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = themeColors.textMuted)
-        Text(value, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+
+    Surface(
+        color = themeColors.accent.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Rounded.CompareArrows,
+                    contentDescription = null,
+                    tint = themeColors.accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "ÖNCEKİ ANALİZE GÖRE DEĞİŞİM",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp),
+                    color = themeColors.accent
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+
+            val changes = if (comparisonText.contains(": ")) {
+                 comparisonText.split(": ").last().split(". ").filter { it.isNotBlank() }
+            } else {
+                 listOf(comparisonText)
+            }
+
+            if (changes.size > 1 || (changes.size == 1 && changes[0].contains("→") || changes[0].contains("yükseldi") || changes[0].contains("düştü"))) {
+                changes.forEach { change ->
+                    Row(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text("•", color = themeColors.accent, modifier = Modifier.padding(end = 8.dp))
+                        Text(
+                            text = change.trim().let { if (it.endsWith(".")) it else "$it." },
+                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                            color = themeColors.textPrimary
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = comparisonText,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                    color = themeColors.textPrimary
+                )
+            }
+        }
     }
 }
 

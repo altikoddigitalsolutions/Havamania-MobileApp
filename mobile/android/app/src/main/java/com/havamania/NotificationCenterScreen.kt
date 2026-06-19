@@ -415,8 +415,9 @@ fun NotificationCard(
     onNavigateToDetail: (String, Map<String, String>?) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val dateFormat = remember { SimpleDateFormat("HH:mm", Locale("tr")) }
-    val timeStr = remember(notification.createdAt) { dateFormat.format(Date(notification.createdAt)) }
+    val timeStr = remember(notification.eventAt, notification.createdAt) {
+        NotificationDateFormatter.formatEventTime(notification.eventAt ?: notification.createdAt)
+    }
 
     val cardBgColor = if (isSelected) {
         themeColors.accent.copy(alpha = 0.15f)

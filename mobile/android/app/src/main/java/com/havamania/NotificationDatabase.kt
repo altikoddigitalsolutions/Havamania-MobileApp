@@ -43,7 +43,7 @@ interface NotificationDao {
     suspend fun deleteAll()
 }
 
-@Database(entities = [NotificationItem::class], version = 2, exportSchema = false)
+@Database(entities = [NotificationItem::class], version = 3, exportSchema = false)
 @TypeConverters(NotificationConverters::class)
 abstract class NotificationDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao

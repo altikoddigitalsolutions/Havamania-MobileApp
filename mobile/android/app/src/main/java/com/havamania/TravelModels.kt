@@ -43,13 +43,16 @@ enum class TravelWeatherAnalysisStatus {
 
 @Serializable
 data class ForecastSnapshot(
-    val precipitationProbability: Int?,
-    val minTemp: Double?,
-    val maxTemp: Double?,
-    val windSpeed: Double?,
-    val uvIndex: Double?,
-    val conditionSummary: String?,
+    val precipitationProbability: Int? = null,
+    val minTemp: Double? = null,
+    val maxTemp: Double? = null,
+    val windSpeed: Double? = null,
+    val uvIndex: Double? = null,
+    val cloudCover: Int? = null,
+    val feelsLike: Double? = null,
+    val conditionSummary: String? = null,
     val weatherCode: Int? = 0,
+    val travelScore: Int? = null,
     val generatedAt: Long = System.currentTimeMillis()
 )
 

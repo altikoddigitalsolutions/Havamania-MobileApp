@@ -40,6 +40,7 @@ data class NotificationItem(
     val message: String = "",
     val category: NotificationCategory = NotificationCategory.GENERAL,
     val createdAt: Long = System.currentTimeMillis(),
+    val eventAt: Long? = null,
     val isRead: Boolean = false,
     val actionType: NotificationActionType = NotificationActionType.NONE,
     val targetId: String? = null,

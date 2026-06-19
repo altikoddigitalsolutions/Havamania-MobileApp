@@ -97,6 +97,7 @@ class TravelNotificationWorker(
                         message = message,
                         category = NotificationCategory.TRAVEL,
                         createdAt = System.currentTimeMillis(),
+                        eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
                         deepLinkTarget = "havamania://app/calendar?focusId=${plan.id}",
                         relatedTripId = plan.id,
                         actionLabel = "Detayları Gör",
@@ -219,6 +220,10 @@ class TravelNotificationWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
+        // Tarih formatını ekle
+        val eventTimeStr = NotificationDateFormatter.formatEventTime(item.eventAt ?: item.createdAt)
+        val displayMessage = if (eventTimeStr.isNotEmpty()) "$eventTimeStr • ${item.message}" else item.message
+
         // Deep link intent
         val intent = Intent(
             Intent.ACTION_VIEW,
@@ -239,8 +244,8 @@ class TravelNotificationWorker(
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher) // Use valid icon
             .setContentTitle(item.title)
-            .setContentText(item.message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
+            .setContentText(displayMessage)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(displayMessage))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

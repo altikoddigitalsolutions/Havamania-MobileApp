@@ -275,14 +275,29 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
                     if (overlapIndices.isNotEmpty()) {
                         val maxCode = overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
+                        val avgMin = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.average()
+                        val avgMax = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.average()
+                        val avgFeels = (avgMin + avgMax) / 2.0
+
+                        val score = calculateTravelScore(ForecastSnapshot(
+                            precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
+                            minTemp = avgMin,
+                            maxTemp = avgMax,
+                            windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
+                            uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull()
+                        ), plan.tripType)
+
                         snapshot = ForecastSnapshot(
                             precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
-                            minTemp = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.minOrNull(),
-                            maxTemp = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.maxOrNull(),
+                            minTemp = avgMin,
+                            maxTemp = avgMax,
                             windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
                             uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
+                            cloudCover = null,
+                            feelsLike = avgFeels,
                             conditionSummary = WeatherMapper.getWeatherCondition(maxCode),
                             weatherCode = maxCode,
+                            travelScore = score,
                             generatedAt = System.currentTimeMillis()
                         )
                     }
@@ -323,14 +338,23 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         if (snapshot == null) {
             val lastWeather = repository.currentWeatherState.value
             if (lastWeather != null && (normalizeCityName(lastWeather.cityName) == normalizeCityName(plan.city))) {
+               val score = calculateTravelScore(ForecastSnapshot(
+                   precipitationProbability = lastWeather.precipitationProbability,
+                   minTemp = lastWeather.low.filter { it.isDigit() || it == '-' }.toDoubleOrNull(),
+                   maxTemp = lastWeather.high.filter { it.isDigit() || it == '-' }.toDoubleOrNull()
+               ), plan.tripType)
+
                snapshot = ForecastSnapshot(
                    precipitationProbability = lastWeather.precipitationProbability,
                    minTemp = lastWeather.low.filter { it.isDigit() || it == '-' }.toDoubleOrNull(),
                    maxTemp = lastWeather.high.filter { it.isDigit() || it == '-' }.toDoubleOrNull(),
                    windSpeed = lastWeather.windSpeed,
                    uvIndex = lastWeather.uvIndex?.toDouble(),
+                   cloudCover = lastWeather.cloudCover,
+                   feelsLike = lastWeather.feelsLike.filter { it.isDigit() || it == '-' }.toDoubleOrNull(),
                    conditionSummary = lastWeather.condition,
                    weatherCode = lastWeather.weatherCode,
+                   travelScore = score,
                    generatedAt = System.currentTimeMillis()
                )
                analysisStatus = TravelWeatherAnalysisStatus.WEATHER_PARTIAL_READY
@@ -338,17 +362,25 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 // If even cache fails, use Current Weather API as a last online resort
                 if (lat != 0.0 && lon != 0.0) {
-                     val currentResponse = try { apiService.getFullWeather(lat = lat, lon = lon, current = "temperature_2m,weather_code,wind_speed_10m") } catch(e: Exception) { null }
+                     val currentResponse = try { apiService.getFullWeather(lat = lat, lon = lon, current = "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature") } catch(e: Exception) { null }
                      val current = currentResponse?.current
                      if (current != null) {
+                         val score = calculateTravelScore(ForecastSnapshot(
+                             minTemp = current.temperature,
+                             maxTemp = current.temperature
+                         ), plan.tripType)
+
                          snapshot = ForecastSnapshot(
                              precipitationProbability = null,
                              minTemp = current.temperature,
                              maxTemp = current.temperature,
                              windSpeed = current.windSpeed,
                              uvIndex = null,
+                             cloudCover = null,
+                             feelsLike = current.apparentTemperature,
                              conditionSummary = WeatherMapper.getWeatherCondition(current.weatherCode ?: 0),
                              weatherCode = current.weatherCode ?: 0,
+                             travelScore = score,
                              generatedAt = System.currentTimeMillis()
                          )
                          analysisStatus = TravelWeatherAnalysisStatus.WEATHER_PARTIAL_READY
@@ -361,13 +393,20 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         // FINAL STEP: Always generate an analysis if within 15 days, even if snapshot is null (Offline Fallback)
         val aiResult = TravelAiHelper.generateTravelAiSuggestion(plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot, daysUntil)
 
-        val score = if (snapshot != null) calculateTravelScore(snapshot, plan.tripType) else 75
+        val score = snapshot?.travelScore ?: 75
         val avgTemp = if (snapshot != null) (((snapshot.minTemp ?: 0.0) + (snapshot.maxTemp ?: 0.0)) / 2.0) else 0.0
 
         val estimatedRainRisk = if (snapshot?.precipitationProbability != null) {
             snapshot.precipitationProbability
         } else {
             estimateRainRisk(snapshot?.conditionSummary)
+        }
+
+        // Karşılaştırma metni oluştur (En önemli farklar)
+        val comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null) {
+            TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot)
+        } else {
+            "Bu seyahat için ilk analiz oluşturuldu."
         }
 
         val rainInfo = WeatherUtils.getPrecipitationRiskText(estimatedRainRisk, 0.0, snapshot?.weatherCode ?: 0)
@@ -402,7 +441,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             averageTemperature = avgTemp,
             summary = summaryText,
             recommendation = aiResult,
-            comparisonText = null,
+            comparisonText = comparisonText,
             previousAnalysisId = plan.analyses.lastOrNull()?.id
         )
 

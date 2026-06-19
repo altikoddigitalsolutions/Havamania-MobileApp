@@ -3,27 +3,32 @@ package com.havamania
 object DefaultNotifications {
     fun create(): List<NotificationItem> {
         val now = System.currentTimeMillis()
+        val oneHour = 1000L * 60 * 60
+        val oneDay = oneHour * 24
+
         return listOf(
             // SEYAHAT
             NotificationItem(
                 id = "def_travel_1",
                 title = "İzmir Seyahati Hazırlığı",
-                message = "Hafta sonu İzmir seyahatin için UV seviyesi yüksek görünüyor. Güneş koruyucu ve şapka almanı öneririm.",
+                message = "İzmir seyahatin için UV seviyesi yüksek görünüyor. Güneş koruyucu ve şapka almanı öneririm.",
                 category = NotificationCategory.TRAVEL,
                 isRead = false,
                 actionType = NotificationActionType.TRAVEL_CALENDAR,
                 createdAt = now - (1000 * 60 * 15),
+                eventAt = now + (oneDay * 2) + (oneHour * 3), // 2 gün sonra
                 deepLinkTarget = "havamania://app/calendar",
                 actionLabel = "Planı Gör"
             ),
             NotificationItem(
                 id = "def_travel_2",
                 title = "Rota Önerisi: Batman",
-                message = "Hasankeyf ve çevresindeki tarihi dokuyu keşfetmek için önümüzdeki 3 gün hava oldukça elverişli.",
+                message = "Hasankeyf ve çevresindeki tarihi dokuyu keşfetmek için önümüzdeki günler oldukça elverişli.",
                 category = NotificationCategory.TRAVEL,
                 isRead = true,
                 actionType = NotificationActionType.TRAVEL_CALENDAR,
-                createdAt = now - (1000 * 60 * 60 * 3),
+                createdAt = now - (oneHour * 3),
+                eventAt = now + (oneDay * 5), // 5 gün sonra
                 deepLinkTarget = "havamania://app/calendar",
                 actionLabel = "İncele"
             ),
@@ -31,22 +36,24 @@ object DefaultNotifications {
             NotificationItem(
                 id = "def_rain_1",
                 title = "Yağış Uyarısı: İstanbul",
-                message = "Son 6 saatte yağış ihtimali %20'den %65'e yükseldi. Akşam saatlerinde şemsiyeni yanına almalısın.",
+                message = "Yağış ihtimali %20'den %65'e yükseldi. Şemsiyeni yanına almalısın.",
                 category = NotificationCategory.RAIN,
                 isRead = false,
                 actionType = NotificationActionType.WEATHER_HOME,
                 createdAt = now - (1000 * 60 * 45),
+                eventAt = now + (oneHour * 4), // Bugün ilerleyen saatler
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "Tahmini Gör"
             ),
             NotificationItem(
                 id = "def_rain_2",
                 title = "Haftalık Yağış Raporu",
-                message = "Bu hafta geneli için 2 gün hafif yağış, kalan günler ise açık hava etkinliklerine uygun görünüyor.",
+                message = "Hafif yağış geçişleri ve açık hava etkinliklerine uygun günler sizi bekliyor.",
                 category = NotificationCategory.RAIN,
                 isRead = true,
                 actionType = NotificationActionType.WEATHER_HOME,
-                createdAt = now - (1000 * 60 * 60 * 8),
+                createdAt = now - (oneHour * 8),
+                eventAt = now + (oneDay * 3),
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "Detaylar"
             ),
@@ -54,22 +61,24 @@ object DefaultNotifications {
             NotificationItem(
                 id = "def_uv_1",
                 title = "Yüksek UV İndeksi",
-                message = "Bugün 12:00 - 15:00 saatleri arasında UV indeksi 8 seviyesine ulaşacak. Koruyucu kullanmayı unutma.",
+                message = "UV indeksi 8 seviyesine ulaşacak. Koruyucu kullanmayı unutma.",
                 category = NotificationCategory.UV,
                 isRead = false,
                 actionType = NotificationActionType.WEATHER_HOME,
-                createdAt = now - (1000 * 60 * 120),
+                createdAt = now - (oneHour * 2),
+                eventAt = now + (oneHour * 1), // Bugün
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "UV Detay"
             ),
             NotificationItem(
                 id = "def_uv_2",
                 title = "Güneşli Gün Önerisi",
-                message = "Cuma günü planlanan açık hava aktiviteleri için hava koşulları ve UV seviyesi oldukça uygun görünüyor.",
+                message = "Açık hava aktiviteleri için hava koşulları ve UV seviyesi oldukça uygun görünüyor.",
                 category = NotificationCategory.UV,
                 isRead = true,
                 actionType = NotificationActionType.WEATHER_HOME,
-                createdAt = now - (1000 * 60 * 60 * 12),
+                createdAt = now - (oneHour * 12),
+                eventAt = now + (oneDay * 1) + (oneHour * 2), // Yarın
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "İncele"
             ),
@@ -77,22 +86,24 @@ object DefaultNotifications {
             NotificationItem(
                 id = "def_warn_1",
                 title = "Ani Sıcaklık Düşüşü",
-                message = "İstanbul'da 18:00 sonrası sıcaklık hızlı düşecek. Dışarıdaysan hafif ceket alman konforunu artıracaktır.",
+                message = "Sıcaklık hızlı düşecek. Dışarıdaysan hafif ceket alman konforunu artıracaktır.",
                 category = NotificationCategory.WARNING,
                 isRead = false,
                 actionType = NotificationActionType.WEATHER_HOME,
                 createdAt = now - (1000 * 60 * 5),
+                eventAt = now + (oneHour * 3), // Bugün
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "Sıcaklık Grafiği"
             ),
             NotificationItem(
                 id = "def_warn_2",
                 title = "Rüzgar Hamlesi Uyarısı",
-                message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/s hıza ulaşabilir. Deniz ulaşımında gecikmeler yaşanabilir.",
+                message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/s hıza ulaşabilir. Dikkatli olunmalıdır.",
                 category = NotificationCategory.WARNING,
                 isRead = true,
                 actionType = NotificationActionType.WEATHER_HOME,
-                createdAt = now - (1000 * 60 * 60 * 2),
+                createdAt = now - (oneHour * 2),
+                eventAt = now + (oneHour * 5), // Bugün
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "Rüzgar Detay"
             ),
@@ -100,22 +111,24 @@ object DefaultNotifications {
             NotificationItem(
                 id = "def_sum_1",
                 title = "Günün Hava Özeti",
-                message = "Sabah sisli, öğleden sonra parçalı bulutlu bir gökyüzü bekleniyor. Akşam ise tamamen açık bir hava hakim olacak.",
+                message = "Sabah sisli, öğleden sonra parçalı bulutlu bir gökyüzü bekleniyor.",
                 category = NotificationCategory.SUMMARY,
                 isRead = false,
                 actionType = NotificationActionType.WEEKLY_SUMMARY,
-                createdAt = now - (1000 * 60 * 300),
+                createdAt = now - (oneHour * 5),
+                eventAt = now, // Bugün
                 deepLinkTarget = "havamania://app/ai",
                 actionLabel = "Özeti Aç"
             ),
             NotificationItem(
                 id = "def_sum_2",
                 title = "Haftalık Seyahat Analizi",
-                message = "Planladığın 3 rota için en uygun hava koşulları Çarşamba günü gerçekleşecek gibi görünüyor.",
+                message = "Planladığın rotalar için en uygun hava koşulları yaklaşıyor.",
                 category = NotificationCategory.SUMMARY,
                 isRead = true,
                 actionType = NotificationActionType.WEEKLY_SUMMARY,
-                createdAt = now - (1000 * 60 * 60 * 24),
+                createdAt = now - oneDay,
+                eventAt = now + (oneDay * 2),
                 deepLinkTarget = "havamania://app/ai",
                 actionLabel = "Analize Git"
             ),
@@ -127,7 +140,8 @@ object DefaultNotifications {
                 category = NotificationCategory.UPDATE,
                 isRead = false,
                 actionType = NotificationActionType.APP_UPDATE,
-                createdAt = now - (1000 * 60 * 60 * 1),
+                createdAt = now - oneHour,
+                eventAt = now - oneHour,
                 deepLinkTarget = "havamania://app/profile",
                 actionLabel = "Yenilikler"
             ),
@@ -138,7 +152,8 @@ object DefaultNotifications {
                 category = NotificationCategory.UPDATE,
                 isRead = true,
                 actionType = NotificationActionType.APP_UPDATE,
-                createdAt = now - (1000 * 60 * 60 * 48),
+                createdAt = now - (oneDay * 2),
+                eventAt = now - (oneDay * 2),
                 deepLinkTarget = "havamania://app/profile",
                 actionLabel = "İncele"
             ),
@@ -150,18 +165,20 @@ object DefaultNotifications {
                 category = NotificationCategory.GENERAL,
                 isRead = false,
                 actionType = NotificationActionType.WEATHER_HOME,
-                createdAt = now - (1000 * 60 * 60 * 24 * 3),
+                createdAt = now - (oneDay * 3),
+                eventAt = now - (oneDay * 3),
                 deepLinkTarget = "havamania://app/weather",
                 actionLabel = "Kullanmaya Başla"
             ),
             NotificationItem(
                 id = "def_gen_2",
                 title = "İlgi Alanlarını Güncelle",
-                message = "Sana daha iyi öneriler sunabilmemiz için profilindeki ilgi alanlarını (kamp, spor, fotoğrafçılık vb.) güncel tutabilirsin.",
+                message = "Sana daha iyi öneriler sunabilmemiz için profilindeki ilgi alanlarını güncel tutabilirsin.",
                 category = NotificationCategory.GENERAL,
                 isRead = true,
                 actionType = NotificationActionType.APP_UPDATE,
-                createdAt = now - (1000 * 60 * 60 * 24 * 7),
+                createdAt = now - (oneDay * 7),
+                eventAt = now - (oneDay * 7),
                 deepLinkTarget = "havamania://app/profile",
                 actionLabel = "Profilime Git"
             )
