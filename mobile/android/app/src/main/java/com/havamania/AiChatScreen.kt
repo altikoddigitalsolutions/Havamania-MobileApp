@@ -51,6 +51,8 @@ import kotlinx.serialization.json.Json
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.time.LocalDate
+import java.time.format.TextStyle
 import java.util.*
 
 // --- VIEWMODEL ---
@@ -249,7 +251,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     } else {
                         val dateLabel = if (detectedAction.startDate != null) {
                             val d = LocalDate.parse(detectedAction.startDate)
-                            "${d.dayOfMonth} ${d.month.getDisplayName(java.time.format.TextStyle.FULL, Locale("tr"))}"
+                            val monthName = d.month.getDisplayName(TextStyle.FULL, Locale("tr", "TR"))
+                            "${d.dayOfMonth} $monthName"
                         } else "bu tarih"
 
                         "$answer\n\nEğer $dateLabel için ${detectedAction.city}’e gitmeyi planlıyorsan istersen hızlıca bir seyahat analizi oluşturalım. Şehri ve başlangıç tarihini senin için doldurabilirim."
