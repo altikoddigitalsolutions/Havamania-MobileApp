@@ -181,7 +181,9 @@ object RecommendationEngine {
         val pressure = weatherData.pressure ?: 1013
         val cloud = weatherData.cloudCover ?: 0
 
-        // UZMAN DANIŞMAN RAPORU YAPISI
+        val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+
+        // 1. HEADER
         val header = when (tone) {
             AssistantTone.SAMIMI -> "Selam! Senin için $city havasını hemen inceledim:\n\n"
             AssistantTone.RESMI -> "$city bölgesine ait güncel meteorolojik analiz raporu aşağıda sunulmuştur:\n\n"
@@ -190,6 +192,7 @@ object RecommendationEngine {
             else -> "$city için hazırladığım atmosferik analiz raporu aşağıdadır:\n\n"
         }
 
+        // 2. DATA SECTION
         val dataSection = if (tone == AssistantTone.KISA_NET) {
             "• ${cond.replaceFirstChar { it.uppercase() }}, $temp\n" +
             "• Nem: %$humidity, Rüzgar: ${wind.toInt()} km/s\n\n"
@@ -207,6 +210,7 @@ object RecommendationEngine {
             "• Bulutluluk: %$cloud\n\n"
         }
 
+        // 3. INTERPRETATION & ADVICE (TONE BASED)
         val interpretationLabel = when (tone) {
             AssistantTone.SAMIMI -> "🧐 DURUM ŞÖYLE:\n"
             AssistantTone.RESMI -> "🔍 METEOROLOJİK DEĞERLENDİRME:\n"
@@ -216,54 +220,85 @@ object RecommendationEngine {
 
         val interpretation = interpretationLabel + when {
             prompt.contains("giys") || prompt.contains("kıyafet") || prompt.contains("ne giy") -> {
-                val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
-                val coreAdvice = when {
-                    tempVal < 10 -> "Hava oldukça soğuk, vücut ısısını korumak için kalın bir mont, bere ve atkı almanı öneririm. Katmanlı giyinmek, kapalı mekanlara girdiğinde konforunu artıracaktır."
-                    tempVal < 18 -> "Hava serin ve taze bir karaktere sahip. Orta kalınlıkta bir ceket veya hırka giymek, gün boyu vücut ısınızı dengede tutacaktır."
-                    tempVal < 25 -> "Hava ılık ve oldukça rahat; hafif bir ceket veya sweatshirt yeterli olur. Güneşin durumuna göre ceketini çıkarabileceğin bir kombin yapabilirsin."
-                    else -> "Hava sıcak; cildinin nefes alabilmesi için ince, pamuklu ve ferah kıyafetler tercih etmelisin."
+                when (tone) {
+                    AssistantTone.SAMIMI -> {
+                        val core = when {
+                            tempVal < 10 -> "Dışarısı buz gibi! Kalın montunu, bereni kap çık derim."
+                            tempVal < 18 -> "Hava biraz serince, üstüne sevdiğin bir ceket almayı unutma."
+                            tempVal < 25 -> "Mis gibi bir hava, hafif bir tişört ve hırka işini görür."
+                            else -> "Hava yanıyor! En ince kıyafetlerini seç, ferah ferah gez."
+                        }
+                        val extra = if (precip > 30) " Bu arada yağmur yağabilir, şemsiyeni de yanına al tatlım." else ""
+                        core + extra
+                    }
+                    AssistantTone.RESMI -> {
+                        val core = when {
+                            tempVal < 10 -> "Düşük sıcaklık değerleri nedeniyle kalın dış giyim ve aksesuarların tercih edilmesi önerilmektedir."
+                            tempVal < 18 -> "Serin hava koşullarına uygun orta kalınlıkta kıyafetlerin seçilmesi uygun olacaktır."
+                            tempVal < 25 -> "Ilıman hava koşulları nedeniyle hafif katmanlı giysiler tercih edilebilir."
+                            else -> "Yüksek sıcaklıklar sebebiyle ince ve hava geçiren tekstil ürünlerinin kullanılması tavsiye edilir."
+                        }
+                        val extra = if (precip > 30) " Olası yağış durumuna karşı şemsiye bulundurulması önemle rica olunur." else ""
+                        core + extra
+                    }
+                    AssistantTone.KISA_NET -> {
+                        val core = when {
+                            tempVal < 10 -> "Kalın giyin, bere tak."
+                            tempVal < 18 -> "Ceket veya hırka al."
+                            tempVal < 25 -> "Hafif giyin."
+                            else -> "İnce ve ferah giyin."
+                        }
+                        val extra = if (precip > 30) " Şemsiye al." else ""
+                        core + extra
+                    }
+                    else -> {
+                        val core = when {
+                            tempVal < 10 -> "Hava oldukça soğuk, vücut ısısını korumak için kalın bir mont, bere ve atkı almanı öneririm. Katmanlı giyinmek konforunu artıracaktır."
+                            tempVal < 18 -> "Hava serin ve taze. Orta kalınlıkta bir ceket veya hırka giymek gün boyu vücut ısınızı dengede tutacaktır."
+                            tempVal < 25 -> "Hava ılık ve rahat; hafif bir ceket veya sweatshirt yeterli olur. Güneşin durumuna göre ceketini çıkarabilirsin."
+                            else -> "Hava sıcak; cildinin nefes alabilmesi için ince, pamuklu ve ferah kıyafetler tercih etmelisin."
+                        }
+                        val extra = if (precip > 30) " Ayrıca yağış riskine karşı yanına bir şemsiye alman planlarının aksamasını önleyecektir." else ""
+                        core + extra
+                    }
                 }
-                val extra = if (precip > 30) " Ayrıca yağış riskine karşı yanına bir şemsiye alman, planlarının aksamasını önleyecektir." else ""
-                coreAdvice + extra
             }
-            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("spor") || prompt.contains("koşu") || prompt.contains("bisiklet") -> {
+            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("spor") -> {
                 val isBad = precip > 40 || wind > 35.0 || uv > 8
-                if (isBad) {
-                    "Mevcut meteorolojik koşullar (Yağış: %$precip, Rüzgar: ${wind.toInt()} km/s) dışarıda uzun süre vakit geçirmek veya efor sarf etmek için pek ideal değil. Fiziksel aktivitelerini kapalı alanlara taşıman, sağlığın ve konforun için daha doğru bir karar olabilir."
-                } else {
-                    "Gökyüzü durumu ve sıcaklık seviyesi, dışarıda aktif vakit geçirmek için oldukça davetkar. Rüzgarın ${wind.toInt()} km/s seviyesinde olması, özellikle bisiklet veya koşu gibi aktivitelerde ferahlatıcı bir etki yaratacaktır."
-                }
-            }
-            prompt.contains("fotoğraf") -> {
-                if (cloud in 30..80) {
-                    "Bulutluluk oranının %$cloud olması, ışığın homojen dağılmasını sağlayarak dış mekan çekimlerinde harika bir 'softbox' etkisi yaratacaktır. Detayları yakalamak için mükemmel bir gün."
-                } else {
-                    "Işık koşulları oldukça sert olabilir. Eğer dış çekim yapacaksan, gölge ve ışık dengesine ekstra dikkat etmeni öneririm."
-                }
-            }
-            prompt.contains("deniz") || prompt.contains("yüzme") || prompt.contains("tekne") -> {
-                if (wind > 25.0) {
-                    "Rüzgar hızı ${wind.toInt()} km/s seviyesine ulaştığı için deniz yüzeyinde çırpıntı oluşabilir. Deniz aktivitelerinde veya tekne yolculuklarında dalga boyuna karşı dikkatli olmalısın."
-                } else {
-                    "Deniz oldukça sakin görünüyor. Rüzgarın hafif esintisi, su kenarında vakit geçirmeyi oldukça keyifli kılacaktır."
+                when (tone) {
+                    AssistantTone.SAMIMI -> if (isBad) "Hava biraz huysuz, bugün dışarıda pek takılmasan daha iyi olur canım." else "Hava harika! Kendini dışarı atıp enerjini toplama zamanı."
+                    AssistantTone.RESMI -> if (isBad) "Olumsuz meteorolojik şartlar nedeniyle açık hava faaliyetleri tavsiye edilmemektedir." else "Meteorolojik koşullar açık hava faaliyetleri icra etmek için elverişli durumdadır."
+                    AssistantTone.KISA_NET -> if (isBad) "Dışarı çıkma, hava kötü." else "Dışarı çıkabilirsin, hava uygun."
+                    else -> if (isBad) "Mevcut koşullar (Yağış: %$precip, Rüzgar: ${wind.toInt()} km/s) dışarıda efor sarf etmek için pek ideal değil." else "Gökyüzü durumu ve sıcaklık, dışarıda aktif vakit geçirmek için oldukça davetkar."
                 }
             }
             else -> {
-                val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
-                "Mevcut verileri incelediğimde, $city’da dengeli bir atmosfer görüyorum. Sıcaklık $temp civarında seyrederken, nemin %$humidity olması havanın kalitesini artırıyor. Rüzgar ${WeatherUtils.getWindLevelText(wind)} şiddetinde esiyor, bu da açık hava planlarını büyük ölçüde destekliyor."
+                when (tone) {
+                    AssistantTone.SAMIMI -> "Bence bugün $city’da keyifli bir gün geçirebilirsin. Nem %$humidity, yani hava seni yormaz. Rüzgar da tatlı tatlı esiyor."
+                    AssistantTone.RESMI -> "$city bölgesinde atmosferik koşullar stabil seyretmektedir. %$humidity nem oranı ve ${wind.toInt()} km/s rüzgar hızı öngörülmektedir."
+                    AssistantTone.KISA_NET -> "Koşullar uygun. Nem %$humidity, rüzgar ${wind.toInt()} km/s."
+                    else -> "Mevcut verileri incelediğimde, $city’da dengeli bir atmosfer görüyorum. Sıcaklık $temp civarında seyrederken, nemin %$humidity olması havanın kalitesini artırıyor."
+                }
             }
         }
 
-        val suggestion = "\n\n💡 ÖNERİ VE TAVSİYE:\n" + when {
-            precip > 50 -> "Bugün planlarını kapalı alanlara göre revize etmen sürprizlerden korunmanı sağlar."
-            uv > 6 -> "Güneşin en dik geldiği 11:00 - 16:00 saatleri arasında yüksek faktörlü koruyucu kullanmayı ihmal etme."
-            wind > 30 -> "Rüzgar hamleleri anlık dengeni bozabilir, yüksek ve açık alanlarda yürürken dikkatli ol."
-            temp.contains("-") -> "Don riskine karşı su tesisatlarını kontrol etmeyi ve araç camların için önlem almayı unutma."
-            else -> "Havanın tadını çıkarabileceğin bir yürüyüş rotası planlayarak güne enerji katabilirsin."
+        // 4. FINAL ADVICE (EXPERT MODE ONLY GETS MORE)
+        val finalSuggestion = if (tone == AssistantTone.KISA_NET) "" else {
+            "\n\n💡 ÖNERİ:\n" + when {
+                precip > 50 -> "Bugün planlarını kapalı alanlara göre revize etmen sürprizlerden korunmanı sağlar."
+                uv > 6 -> "Güneşin en dik geldiği 11:00 - 16:00 saatleri arasında yüksek faktörlü koruyucu kullanmayı ihmal etme."
+                wind > 30 -> "Rüzgar hamleleri anlık dengeni bozabilir, yüksek ve açık alanlarda yürürken dikkatli ol."
+                else -> "Havanın tadını çıkarabileceğin bir yürüyüş rotası planlayarak güne enerji katabilirsin."
+            }
         }
 
-        val closing = "\n\nHavamania Asistan olarak her zaman yanındayım. Başka bir detay veya farklı bir şehir hakkında sorun olursa sormaktan çekinme!"
+        val closing = when (tone) {
+            AssistantTone.SAMIMI -> "\n\nKendine çok iyi bak, başka bir sorun olursa buradayım!"
+            AssistantTone.RESMI -> "\n\nBilgilerinize sunar, iyi günler dileriz."
+            AssistantTone.KISA_NET -> ""
+            else -> "\n\nBaşka bir detay veya farklı bir şehir hakkında sorun olursa sormaktan çekinme!"
+        }
 
-        return header + dataSection + interpretation + suggestion + closing
+        return header + dataSection + interpretation + finalSuggestion + closing
     }
 }

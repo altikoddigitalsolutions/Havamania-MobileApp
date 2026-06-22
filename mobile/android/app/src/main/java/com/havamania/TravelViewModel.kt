@@ -4,9 +4,12 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.havamania.ui.theme.ThemeManager
+import com.havamania.ui.theme.AssistantTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -197,12 +200,15 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
         val isWithinWindow = daysUntil <= 15
 
-        Log.i(TAG, "performAnalysis TripId=${plan.id} City=${plan.city} DaysUntil=$daysUntil")
+        val tone = ThemeManager.getAssistantTone(getApplication()).first()
+
+        Log.i(TAG, "performAnalysis TripId=${plan.id} City=${plan.city} DaysUntil=$daysUntil Tone=$tone")
 
         if (plan.endDate.isBefore(today)) {
              val suggestion = TravelAiHelper.generateTravelAiSuggestion(
                 city = plan.city, tripType = plan.tripType, forecastSnapshot = null,
-                previousSnapshot = null, daysUntilTrip = daysUntil, isPastTrip = true, endDate = plan.endDate
+                previousSnapshot = null, daysUntilTrip = daysUntil, isPastTrip = true,
+                endDate = plan.endDate, tone = tone
             )
             return plan.copy(
                 isAnalyzing = false,
@@ -391,7 +397,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         // FINAL STEP: Always generate an analysis if within 15 days, even if snapshot is null (Offline Fallback)
-        val aiResult = TravelAiHelper.generateTravelAiSuggestion(plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot, daysUntil)
+        val aiResult = TravelAiHelper.generateTravelAiSuggestion(plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot, daysUntil, tone = tone)
 
         val score = snapshot?.travelScore ?: 75
         val avgTemp = if (snapshot != null) (((snapshot.minTemp ?: 0.0) + (snapshot.maxTemp ?: 0.0)) / 2.0) else 0.0

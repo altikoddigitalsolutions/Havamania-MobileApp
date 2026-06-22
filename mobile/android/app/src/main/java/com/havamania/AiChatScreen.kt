@@ -160,16 +160,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
         val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
 
-        val toneInstruction = when (assistantTone) {
-            AssistantTone.SAMIMI -> "Senin karakterin: SAMİMİ. Daha sıcak, doğal ve arkadaşça bir konuşma tarzı benimse. Kullanıcıya 'sen' diye hitap et. Önerilerini bir dost tavsiyesi gibi ver."
-            AssistantTone.RESMI -> "Senin karakterin: RESMİ. Profesyonel, ciddi ve kurumsal bir hitap dili kullan. Kullanıcıya 'siz' diye hitap et. Samimi ifadelerden kaçın."
-            AssistantTone.DENGELI -> "Senin karakterin: DENGELİ. Ne çok resmi ne çok samimi ol. Bilgilendirici, güven veren ve doğal bir dil kullan."
-            AssistantTone.KISA_NET -> "Senin karakterin: KISA VE NET. Cevaplarını mümkün olduğunca kısa tut. Gereksiz açıklamalardan kaçın. Önce sonucu, sonra temel verileri ver."
-            AssistantTone.DETAYLI_UZMAN -> "Senin karakterin: DETAYLI UZMAN. Meteorolojik verileri derinlemesine analiz et. Neden-sonuç ilişkileri kur. Seyahat ve kıyafet önerilerini meteorolojik gerekçeleriyle detaylandır."
-        }
-
         return """
-            MEVCUT HAVA DURUMU (SİSTEM BİLGİSİ):
+            HAVA DURUMU VERİLERİ:
             Şehir: $city
             Sıcaklık: $temp, Hissedilen: $feelsLike
             Durum: $cond
@@ -180,21 +172,26 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
             Günlük Tahmin (Gelecek 3 gün): $dailySummary
 
-            İLETİŞİM TARZI TALİMATI:
-            $toneInstruction
-
-            GENEL TALİMATLAR:
-            1. Cevaplarını doğal Türkçe ile, kısa paragraflar halinde ver.
-            2. Markdown formatı kullanma (** işaretlerini, # başlıklarını, _ italiklerini asla kullanma).
-            3. Kıyafet önerisi istendiğinde mutlaka şu formatı kullan:
+            ÖNEMLİ TALİMATLAR:
+            1. Markdown formatı asla kullanma (**, #, _ işaretleri yasak).
+            2. Kıyafet önerisi istendiğinde şu formatı kullan:
                - Bugün [Şehir]'da [Sıcaklık]°, hissedilen [Hissedilen]°
                - Rüzgar [Düzey] (Düşük/Orta/Yüksek)
                - Yağış ihtimali %[Yüzde]
                - UV [İndeks]
                - Öneri: [Kıyafetler]
-            4. Kullanıcı sormadıkça spor, kayak, kış sporları veya termal giysi gibi kişisel varsayımlarda bulunma.
-            5. Cevabın kısa, öz ve kart yapısına uygun olsun.
+            3. Yanıtın kısa, öz ve kart yapısına uygun olsun.
         """.trimIndent()
+    }
+
+    private fun buildToneInstruction(): String {
+        return when (assistantTone) {
+            AssistantTone.SAMIMI -> "İLETİŞİM TARZI: SAMİMİ. Çok sıcak, arkadaşça ve samimi bir dil kullan. 'Sen' diye hitap et. Bir dost gibi tavsiye ver. 'Canım, dostum, selam' gibi ifadeler kullanabilirsin."
+            AssistantTone.RESMI -> "İLETİŞİM TARZI: RESMİ. Çok profesyonel, ciddi ve kurumsal bir dil kullan. 'Siz' diye hitap et. Samimiyetten kaçın. Cümlelerin kurallı ve ciddi olsun."
+            AssistantTone.DENGELI -> "İLETİŞİM TARZI: DENGELİ. Ne çok resmi ne çok samimi ol. Bilgilendirici ve doğal bir dil kullan."
+            AssistantTone.KISA_NET -> "İLETİŞİM TARZI: KISA VE NET. Sadece en gerekli bilgiyi ver. Maksimum 3-4 cümle kur. Gereksiz hiçbir kelime kullanma."
+            AssistantTone.DETAYLI_UZMAN -> "İLETİŞİM TARZI: DETAYLI UZMAN. Meteorolojik bir uzman gibi davran. Verileri derinlemesine yorumla, neden-sonuç ilişkisi kur, detaylı analiz yap ve kapsamlı öneriler sun."
+        }
     }
 
     fun sendMessage(text: String, systemContext: String? = null, isRetry: Boolean = false) {
@@ -210,8 +207,21 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         _isLoading.value = true
 
         val weatherContext = buildWeatherContext()
+        val toneInstruction = buildToneInstruction()
         val personalContext = systemContext ?: ""
-        val fullQuestion = "$weatherContext\n$personalContext\nKullanıcı: $truncatedText"
+
+        // Tone instruction is placed AT THE END of the prompt and made extremely explicit
+        val explicitTonePrompt = """
+
+            [DİKKAT: KRİTİK TALİMAT]
+            Aşağıdaki cevabını KESİNLİKLE şu iletişim tarzına göre oluştur:
+            $toneInstruction
+
+            Cevabın bu tarzın dışına çıkarsa görevin başarısız sayılacaktır.
+            Karakterine bürün ve asla bu karakterden çıkma.
+        """.trimIndent()
+
+        val fullQuestion = "$weatherContext\n$personalContext\n$explicitTonePrompt\n\nKullanıcı Sorusu: $truncatedText"
 
         viewModelScope.launch {
             logWeatherState(_weatherData.value)
