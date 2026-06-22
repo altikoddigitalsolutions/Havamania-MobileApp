@@ -75,6 +75,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
     var userAboutMe: String = ""
     var userInterests: Set<String> = emptySet()
+    var assistantTone: AssistantTone = AssistantTone.DENGELI
 
     init {
         loadConfig()
@@ -157,6 +158,14 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
         val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
 
+        val toneInstruction = when (assistantTone) {
+            AssistantTone.SAMIMI -> "Senin karakterin: SAMİMİ. Daha sıcak, doğal ve arkadaşça bir konuşma tarzı benimse. Kullanıcıya 'sen' diye hitap et. Önerilerini bir dost tavsiyesi gibi ver."
+            AssistantTone.RESMI -> "Senin karakterin: RESMİ. Profesyonel, ciddi ve kurumsal bir hitap dili kullan. Kullanıcıya 'siz' diye hitap et. Samimi ifadelerden kaçın."
+            AssistantTone.DENGELI -> "Senin karakterin: DENGELİ. Ne çok resmi ne çok samimi ol. Bilgilendirici, güven veren ve doğal bir dil kullan."
+            AssistantTone.KISA_NET -> "Senin karakterin: KISA VE NET. Cevaplarını mümkün olduğunca kısa tut. Gereksiz açıklamalardan kaçın. Önce sonucu, sonra temel verileri ver."
+            AssistantTone.DETAYLI_UZMAN -> "Senin karakterin: DETAYLI UZMAN. Meteorolojik verileri derinlemesine analiz et. Neden-sonuç ilişkileri kur. Seyahat ve kıyafet önerilerini meteorolojik gerekçeleriyle detaylandır."
+        }
+
         return """
             MEVCUT HAVA DURUMU (SİSTEM BİLGİSİ):
             Şehir: $city
@@ -169,7 +178,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
             Günlük Tahmin (Gelecek 3 gün): $dailySummary
 
-            TALİMATLAR:
+            İLETİŞİM TARZI TALİMATI:
+            $toneInstruction
+
+            GENEL TALİMATLAR:
             1. Cevaplarını doğal Türkçe ile, kısa paragraflar halinde ver.
             2. Markdown formatı kullanma (** işaretlerini, # başlıklarını, _ italiklerini asla kullanma).
             3. Kıyafet önerisi istendiğinde mutlaka şu formatı kullan:
@@ -264,7 +276,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 userPrompt = userPrompt,
                 weatherData = _weatherData.value,
                 aboutMe = userAboutMe,
-                interests = userInterests
+                interests = userInterests,
+                tone = assistantTone
             )
 
             val combinedMessage = if (fallbackText.contains("Hava durumu bilgilerini")) {
@@ -341,11 +354,13 @@ fun AiChatScreen(
     val currentWeatherData by viewModel.weatherData.collectAsStateWithLifecycle()
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
+    val assistantTone by themeViewModel.assistantTone.collectAsStateWithLifecycle()
 
     // Sync non-weather data with ViewModel
-    LaunchedEffect(aboutMe, userInterests) {
+    LaunchedEffect(aboutMe, userInterests, assistantTone) {
         viewModel.userAboutMe = aboutMe
         viewModel.userInterests = userInterests
+        viewModel.assistantTone = assistantTone
     }
 
     var showEndChatDialog by remember { mutableStateOf(false) }

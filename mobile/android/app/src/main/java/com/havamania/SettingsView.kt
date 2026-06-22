@@ -41,6 +41,7 @@ fun SettingsScreen(
     val currentTheme by themeViewModel.currentTheme.collectAsState()
     val tempUnit by themeViewModel.tempUnit.collectAsState()
     val language by themeViewModel.language.collectAsState()
+    val assistantTone by themeViewModel.assistantTone.collectAsState()
     val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
     val defaultCity by themeViewModel.defaultCity.collectAsState()
 
@@ -48,6 +49,7 @@ fun SettingsScreen(
 
     var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showToneDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showManageDataSheet by remember { mutableStateOf(false) }
@@ -87,6 +89,13 @@ fun SettingsScreen(
             SettingsGroupLabel("GÖRÜNÜM")
             HavamaniaGlassCard {
                 PremiumThemeRow(selectedTheme = currentTheme, onClick = { showThemeSheet = true })
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            SettingsGroupLabel("ASİSTAN")
+            HavamaniaGlassCard {
+                SettingsNavRow("Asistan Konuşma Dili", assistantTone.title, Icons.Rounded.AutoAwesome) { showToneDialog = true }
             }
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -166,6 +175,18 @@ fun SettingsScreen(
 
         if (showLanguageDialog) {
             SettingsOptionDialog("Dil Seçin", listOf("TR" to "Türkçe", "EN" to "English"), language, { themeViewModel.setLanguage(it); showLanguageDialog = false }) { showLanguageDialog = false }
+        }
+
+        if (showToneDialog) {
+            SettingsOptionDialog(
+                title = "Asistan Konuşma Dili",
+                options = AssistantTone.entries.map { it.name to it.title },
+                currentValue = assistantTone.name,
+                onSelect = {
+                    themeViewModel.setAssistantTone(AssistantTone.valueOf(it))
+                    showToneDialog = false
+                }
+            ) { showToneDialog = false }
         }
 
         if (showUnitDialog) {

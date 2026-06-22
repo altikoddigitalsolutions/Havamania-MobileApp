@@ -38,6 +38,14 @@ enum class TemperatureUnit(val symbol: String, val title: String) {
     CELSIUS("°C", "Celsius"), FAHRENHEIT("°F", "Fahrenheit")
 }
 
+enum class AssistantTone(val title: String, val description: String) {
+    SAMIMI("Samimi", "Daha sıcak, doğal ve arkadaşça bir konuşma tarzı."),
+    RESMI("Resmi", "Profesyonel, ciddi ve kurumsal bir hitap dili."),
+    DENGELI("Dengeli", "Ne çok resmi ne çok samimi; ideal ve bilgilendirici."),
+    KISA_NET("Kısa ve Net", "Gereksiz detaylardan arındırılmış, doğrudan sonuç odaklı."),
+    DETAYLI_UZMAN("Detaylı Uzman", "Meteorolojik verilerin derinlemesine analiz edildiği kapsamlı tarz.")
+}
+
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 /**
@@ -89,6 +97,7 @@ object ThemeManager {
     // Yeni Ayarlar
     private val TEMP_UNIT_KEY = stringPreferencesKey("temp_unit")
     private val LANGUAGE_KEY = stringPreferencesKey("language")
+    private val ASSISTANT_TONE_KEY = stringPreferencesKey("assistant_tone")
     private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
 
     // Profil Ayarları
@@ -134,6 +143,16 @@ object ThemeManager {
 
     fun getLanguage(context: Context): Flow<String> = context.dataStore.data.map {
         it[LANGUAGE_KEY] ?: "TR"
+    }
+
+    suspend fun saveAssistantTone(context: Context, tone: AssistantTone) = context.dataStore.edit { it[ASSISTANT_TONE_KEY] = tone.name }
+
+    fun getAssistantTone(context: Context): Flow<AssistantTone> = context.dataStore.data.map {
+        try {
+            AssistantTone.valueOf(it[ASSISTANT_TONE_KEY] ?: AssistantTone.DENGELI.name)
+        } catch (e: Exception) {
+            AssistantTone.DENGELI
+        }
     }
 
     suspend fun saveNotificationsEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[NOTIFICATIONS_KEY] = enabled }

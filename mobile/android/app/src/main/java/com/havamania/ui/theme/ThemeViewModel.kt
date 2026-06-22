@@ -24,6 +24,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _notificationsEnabled = MutableStateFlow(true)
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
 
+    private val _assistantTone = MutableStateFlow(AssistantTone.DENGELI)
+    val assistantTone: StateFlow<AssistantTone> = _assistantTone.asStateFlow()
+
     private val _userName = MutableStateFlow("Gezgin")
     val userName: StateFlow<String> = _userName.asStateFlow()
 
@@ -76,6 +79,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             ThemeManager.getNotificationsEnabled(getApplication()).collect { _notificationsEnabled.value = it }
+        }
+        viewModelScope.launch {
+            ThemeManager.getAssistantTone(getApplication()).collect { _assistantTone.value = it }
         }
         viewModelScope.launch {
             ThemeManager.getUserName(getApplication()).collect { _userName.value = it }
@@ -147,6 +153,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             ThemeManager.saveNotificationsEnabled(getApplication(), enabled)
             _notificationsEnabled.value = enabled
+        }
+    }
+
+    fun setAssistantTone(tone: AssistantTone) {
+        viewModelScope.launch {
+            ThemeManager.saveAssistantTone(getApplication(), tone)
+            _assistantTone.value = tone
         }
     }
 

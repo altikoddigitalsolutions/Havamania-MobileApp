@@ -152,12 +152,18 @@ object RecommendationEngine {
         userPrompt: String,
         weatherData: WeatherData?,
         aboutMe: String? = null,
-        interests: Set<String> = emptySet()
+        interests: Set<String> = emptySet(),
+        tone: AssistantTone = AssistantTone.DENGELI
     ): String {
         val prompt = userPrompt.lowercase(Locale("tr"))
 
         if (weatherData == null) {
-            return "Şu an hava durumu verilerine tam erişim sağlayamıyorum. Ancak genel tecrübelerime dayanarak, planlarını yaparken her zaman güncel tahminleri kontrol etmenin en güvenli yol olduğunu hatırlatabilirim. Birazdan tekrar denersen detaylı bir analiz sunabilirim."
+            return when (tone) {
+                AssistantTone.SAMIMI -> "Şu an hava durumuna bakamıyorum canım, birazdan tekrar sorarsan kesin çözeriz!"
+                AssistantTone.RESMI -> "Meteorolojik verilere şu an ulaşılamamaktadır. Lütfen daha sonra tekrar deneyiniz."
+                AssistantTone.KISA_NET -> "Veri hatası. Tekrar dene."
+                else -> "Şu an hava durumu verilerine tam erişim sağlayamıyorum. Birazdan tekrar denersen detaylı bir analiz sunabilirim."
+            }
         }
 
         val city = weatherData.cityName
@@ -175,21 +181,39 @@ object RecommendationEngine {
         val cloud = weatherData.cloudCover ?: 0
 
         // UZMAN DANIŞMAN RAPORU YAPISI
-        val header = "$city için hazırladığım atmosferik analiz raporu aşağıdadır:\n\n"
+        val header = when (tone) {
+            AssistantTone.SAMIMI -> "Selam! Senin için $city havasını hemen inceledim:\n\n"
+            AssistantTone.RESMI -> "$city bölgesine ait güncel meteorolojik analiz raporu aşağıda sunulmuştur:\n\n"
+            AssistantTone.KISA_NET -> "$city Güncel Tablo:\n\n"
+            AssistantTone.DETAYLI_UZMAN -> "$city için kapsamlı teknik atmosfer analizi ve uzman yorumu:\n\n"
+            else -> "$city için hazırladığım atmosferik analiz raporu aşağıdadır:\n\n"
+        }
 
-        val dataSection = "📊 GÜNCEL VERİLER:\n" +
-                "• Gökyüzü: ${cond.replaceFirstChar { it.uppercase() }}\n" +
-                "• Sıcaklık: $temp (Hissedilen: $feels)\n" +
-                "• Nem: %$humidity\n" +
-                "• Yağış İhtimali: %$precip\n" +
-                "• Rüzgar: ${WeatherUtils.formatWindWithLevel(wind)}\n" +
-                "• Hamleler: ${gust.toInt()} km/s\n" +
-                "• Yön: $windFullDir ($windDirLabel)\n" +
-                "• UV İndeksi: $uv\n" +
-                "• Basınç: $pressure hPa\n" +
-                "• Bulutluluk: %$cloud\n\n"
+        val dataSection = if (tone == AssistantTone.KISA_NET) {
+            "• ${cond.replaceFirstChar { it.uppercase() }}, $temp\n" +
+            "• Nem: %$humidity, Rüzgar: ${wind.toInt()} km/s\n\n"
+        } else {
+            "📊 GÜNCEL VERİLER:\n" +
+            "• Gökyüzü: ${cond.replaceFirstChar { it.uppercase() }}\n" +
+            "• Sıcaklık: $temp (Hissedilen: $feels)\n" +
+            "• Nem: %$humidity\n" +
+            "• Yağış İhtimali: %$precip\n" +
+            "• Rüzgar: ${WeatherUtils.formatWindWithLevel(wind)}\n" +
+            "• Hamleler: ${gust.toInt()} km/s\n" +
+            "• Yön: $windFullDir ($windDirLabel)\n" +
+            "• UV İndeksi: $uv\n" +
+            "• Basınç: $pressure hPa\n" +
+            "• Bulutluluk: %$cloud\n\n"
+        }
 
-        val interpretation = "🔍 ANALİZ VE YORUM:\n" + when {
+        val interpretationLabel = when (tone) {
+            AssistantTone.SAMIMI -> "🧐 DURUM ŞÖYLE:\n"
+            AssistantTone.RESMI -> "🔍 METEOROLOJİK DEĞERLENDİRME:\n"
+            AssistantTone.KISA_NET -> "📋 ÖZET:\n"
+            else -> "🔍 ANALİZ VE YORUM:\n"
+        }
+
+        val interpretation = interpretationLabel + when {
             prompt.contains("giys") || prompt.contains("kıyafet") || prompt.contains("ne giy") -> {
                 val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
                 val coreAdvice = when {
