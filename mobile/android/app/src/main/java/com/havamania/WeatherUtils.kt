@@ -82,4 +82,48 @@ object WeatherUtils {
             else -> "☀️"
         }
     }
+
+    /**
+     * Rüzgar hızına göre sözel seviye döner.
+     */
+    fun getWindLevelText(speed: Double): String {
+        return when {
+            speed < 5.0 -> "Sakin"
+            speed < 12.0 -> "Hafif"
+            speed < 20.0 -> "Esintili"
+            speed < 29.0 -> "Orta"
+            speed < 39.0 -> "Sert"
+            speed < 50.0 -> "Kuvvetli"
+            speed < 62.0 -> "Çok Kuvvetli"
+            speed < 75.0 -> "Fırtına"
+            else -> "Şiddetli Fırtına"
+        }
+    }
+
+    /**
+     * Rüzgar bilgisini sayısal + sözel formatta döner.
+     * Örnek: "18 km/s (Orta)"
+     */
+    fun formatWindWithLevel(speed: Double?): String {
+        if (speed == null) return "Bilinmiyor"
+        val level = getWindLevelText(speed)
+        return "${speed.toInt()} km/s ($level)"
+    }
+
+    /**
+     * Rüzgar yönü kısaltmasını uzun isme çevirir.
+     */
+    fun getFullWindDirection(label: String?): String {
+        return when (label) {
+            "K" -> "Kuzey"
+            "KD" -> "Kuzeydoğu"
+            "D" -> "Doğu"
+            "GD" -> "Güneydoğu"
+            "G" -> "Güney"
+            "GB" -> "Güneybatı"
+            "B" -> "Batı"
+            "KB" -> "Kuzeybatı"
+            else -> label ?: "Bilinmiyor"
+        }
+    }
 }

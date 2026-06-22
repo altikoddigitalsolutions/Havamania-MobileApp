@@ -136,7 +136,7 @@ class TravelNotificationWorker(
             rainProbability = snapshot?.precipitationProbability,
             minTemp = snapshot?.minTemp,
             maxTemp = snapshot?.maxTemp,
-            windRisk = if ((snapshot?.windSpeed ?: 0.0) > 30.0) "Yüksek" else "Düşük",
+            windRisk = WeatherUtils.formatWindWithLevel(snapshot?.windSpeed),
             previousAnalysisSummary = plan.lastWeatherAnalysisText,
             comparisonText = comparisonText,
             recommendedItems = recommendedItems

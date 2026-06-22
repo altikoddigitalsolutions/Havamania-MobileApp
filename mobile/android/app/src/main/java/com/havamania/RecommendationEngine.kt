@@ -1,13 +1,14 @@
 package com.havamania
 
 import java.time.LocalTime
+import java.util.Locale
 import kotlin.random.Random
 
 object RecommendationEngine {
 
     /**
-     * BUGÜN İÇİN DETAYLI, DOĞAL VE SOHBET TADINDA ÖNERİ ÜRETİR.
-     * Yaklaşık 180-320 karakter arası, 3 cümlelik yapı.
+     * BUGÜN İÇİN DETAYLI, DOĞAL VE ANALİTİK ÖNERİ ÜRETİR.
+     * Havamania Asistan'ın uzmanlık seviyesini yansıtır.
      */
     fun generateTodayRecommendation(
         weatherData: WeatherData,
@@ -17,96 +18,92 @@ object RecommendationEngine {
         val tempMin = todayDaily?.minTemp ?: 10
         val tempMax = todayDaily?.maxTemp ?: 20
 
-        // Refined condition normalization to match visual system
-        val rawCondition = weatherData.condition.lowercase()
-        val condition = when {
-            rawCondition.contains("yağmur") || rawCondition.contains("sağanak") -> "yağmurlu"
-            rawCondition.contains("bulut") && rawCondition.contains("parça") -> "parçalı bulutlu"
-            rawCondition.contains("bulut") -> "bulutlu"
-            rawCondition.contains("güneş") || rawCondition.contains("açık") -> "açık ve güneşli"
-            rawCondition.contains("sis") -> "sisli"
-            else -> rawCondition
-        }
-
+        val rawCondition = weatherData.condition.lowercase(Locale("tr"))
         val city = weatherData.cityName
-
-        val uvIndex = weatherData.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() }?.toIntOrNull() ?: 0
-        val windSpeed = weatherData.details.find { it.title.contains("Rüzgar") }?.value?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        val uvIndex = weatherData.uvIndex ?: 0
+        val windSpeed = weatherData.windSpeed ?: 0.0
         val precipProb = weatherData.precipitationProbability ?: 0
         val humidity = weatherData.humidity ?: 50
         val visibility = weatherData.visibilityKm ?: 10.0
+        val cloudCover = weatherData.cloudCover ?: 0
 
         val highlights = mutableListOf<String>()
         var primaryType = RecommendationType.GENERAL
         var priority = RecommendationPriority.LOW
 
-        // --- CÜMLE 1: GENEL ÖZET ---
-        val s1 = "Bugün $city’da hava genel olarak $condition ve sıcaklık $tempMin–$tempMax° aralığında görünüyor."
-
-        // --- CÜMLE 2: PRATİK ÖNERİ ---
-        val s2 = when {
-            condition.contains("yağmur") || condition.contains("sağanak") || precipProb > 50 -> {
+        // 1. GENEL DURUM ÖZETİ VE YORUMU
+        val intro = when {
+            rawCondition.contains("yağmur") || rawCondition.contains("sağanak") -> {
                 primaryType = RecommendationType.WARNING
                 priority = RecommendationPriority.HIGH
-                highlights.add("şemsiye")
-                listOf(
-                    "Dışarı çıkarken şemsiyeni yanına alman ve su geçirmez bir katman tercih etmen çok iyi olur.",
-                    "Yağış ihtimali yüksek olduğu için ayakkabı seçiminde su geçirmez modelleri tercih etmelisin.",
-                    "Islanmamak için hazırlıklı olmanı ve planlarını kapalı mekanlara göre revize etmeni öneririm."
-                ).random()
+                "Bugün $city’da gökyüzü oldukça hareketli. Yağış geçişleri günün temposunu belirleyecek gibi görünüyor. Sıcaklıklar $tempMin° ile $tempMax° arasında seyretse de nem oranının etkisiyle hava biraz daha ağır hissedilebilir."
             }
-            tempMax > 30 -> {
-                primaryType = RecommendationType.HEALTH
-                highlights.add("açık renk")
-                "Hava oldukça sıcak olacağı için ince, pamuklu ve açık renkli kıyafetler seçmen konforunu artıracaktır."
+            rawCondition.contains("bulut") -> {
+                "Bugün $city semalarında bulutlar hakimiyet kurmuş durumda. Güneşlenme süresi kısıtlı olsa da, sıcaklığın $tempMax° seviyelerine çıkması dışarıda vakit geçirmek için oldukça dengeli bir ortam yaratıyor."
             }
-            tempMax < 14 -> {
-                primaryType = RecommendationType.COMFORT
-                highlights.add("kalın")
-                "Hava serin seyredeceği için kalın bir mont veya katmanlı giysiler tercih ederek kendini koruyabilirsin."
+            rawCondition.contains("güneş") || rawCondition.contains("açık") -> {
+                "Pırıl pırıl bir gün $city’da seni bekliyor. Gökyüzü tamamen açık ve güneş cömertliğini sergiliyor. $tempMax°'lik maksimum sıcaklık, mevsime uygun harika bir atmosfer sunuyor."
             }
-            tempMax < 20 -> {
-                highlights.add("ince bir katman")
-                "Hava ne çok sıcak ne çok soğuk; üzerine ince bir katman veya bir ceket alarak dışarı çıkmak en mantıklısı olacaktır."
-            }
-            else -> {
-                "Hava koşulları dışarıda vakit geçirmek için oldukça ideal, rahat kıyafetlerinle günün tadını çıkarabilirsin."
-            }
+            else -> "Bugün $city’da $rawCondition bir hava hakim. Termometreler $tempMin° ile $tempMax° arasında gidip gelirken, genel atmosfer planlarını yapmak için oldukça stabil görünüyor."
         }
 
-        // --- CÜMLE 3: RİSK / EKSTRA / KİŞİSELLEŞTİRME ---
-        val extraTips = mutableListOf<String>()
+        // 2. METEOROLOJİK ANALİZ (NEDEN-SONUÇ)
+        val analysisParts = mutableListOf<String>()
 
-        // Hava riskleri
-        if (uvIndex > 6) {
-            extraTips.add("UV seviyesi yüksek olduğu için özellikle öğle saatlerinde güneş kremi ve şapka kullanmayı ihmal etme.")
-            highlights.add("UV")
+        // Yağış Analizi
+        if (precipProb > 30) {
+            analysisParts.add("Yağış ihtimali %$precipProb seviyesinde olduğu için planlarında esnek olman önemli. Nem oranının %$humidity olması, yağışın etkisini daha belirgin kılabilir.")
+            highlights.add("yağış")
         }
-        if (windSpeed > 25) {
-            extraTips.add("Rüzgar belirgin olacağı için sahil ve yüksek bölgelerde rüzgar kesici bir üst giymen iyi fikir olabilir.")
+
+        // Rüzgar Analizi
+        if (windSpeed > 20) {
+            val windLevel = WeatherUtils.getWindLevelText(windSpeed)
+            analysisParts.add("$windSpeed km/s hızındaki $windLevel rüzgar, özellikle açık alanlarda hissedilir bir serinlik yaratacaktır. Bu durum hissedilen sıcaklığın gerçek değerin biraz altında kalmasına neden olabilir.")
             highlights.add("rüzgar")
         }
-        if (visibility < 5.0) {
-            extraTips.add("Görüş mesafesi düşük olabileceği için araç kullanırken takip mesafeni artırman ve dikkatli olman önemli.")
+
+        // UV Analizi
+        if (uvIndex > 5) {
+            analysisParts.add("UV indeksi $uvIndex seviyesinde. Bu, güneşin korumasız cilt üzerinde doğrudan etkisi olabileceği anlamına geliyor. Özellikle öğle saatlerinde cildini korumaya özen göstermelisin.")
+            highlights.add("UV")
         }
 
-        // İlgi alanları (Eğer risk mesajı yoksa veya çok uzun değilse)
-        if (extraTips.size < 2) {
-            if (userInterests.contains("Spor") || userInterests.contains("Koşu")) {
-                extraTips.add(if (tempMax > 25) "Spor veya koşu planın varsa daha serin olan sabah veya akşam saatlerini seçmeni öneririm."
-                              else "Bugünkü hava tablosu açık havada spor ve antrenman yapmak için oldukça elverişli görünüyor.")
-            } else if (userInterests.contains("Fotoğrafçılık")) {
-                extraTips.add("Işık geçişleri bugün fotoğraf çekmek için güzel fırsatlar sunabilir, kameranı yanına almayı unutma.")
-            } else if (userInterests.contains("Çocuk") || userInterests.contains("Aile")) {
-                extraTips.add("Çocuklarla dışarı çıkacaksanız, ani sıcaklık değişimlerine karşı hazırlıklı olup yanınıza yedek bir hırka alabilirsiniz.")
-            } else if (userInterests.contains("Motosiklet") || userInterests.contains("Bisiklet")) {
-                if (windSpeed > 20) extraTips.add("İki teker üzerinde olacaksan rüzgar hamlelerine karşı bugün her zamankinden daha dikkatli olmalısın.")
+        // 3. AKTİVİTE VE YAŞAM ÖNERİLERİ
+        val suggestions = mutableListOf<String>()
+
+        // Kıyafet Önerisi
+        val clothingAdvice = when {
+            tempMax > 28 -> "Hava oldukça sıcak; ince, pamuklu ve açık renkli kıyafetler gün boyu konforunu korumanı sağlayacaktır."
+            tempMax < 14 -> "Havanın serinliği nedeniyle katmanlı giyinmek en mantıklısı. Kalın bir dış katman ve içine daha hafif parçalar tercih edebilirsin."
+            precipProb > 40 -> "Yanına mutlaka su geçirmeyen bir katman veya bir şemsiye almanı öneririm, sürpriz yağışlar keyfini kaçırmasın."
+            else -> "Hava ne çok sıcak ne çok soğuk. Üzerine hafif bir ceket alarak dışarı çıkmak, değişen koşullara uyum sağlamanı kolaylaştırır."
+        }
+        suggestions.add(clothingAdvice)
+
+        // İlgi Alanına Göre Özelleşmiş Öneri
+        if (userInterests.contains("Spor") || userInterests.contains("Koşu")) {
+            if (precipProb > 50 || windSpeed > 35) {
+                suggestions.add("Hava koşulları dışarıda spor yapmak için biraz zorlayıcı olabilir. Bugün antrenmanını kapalı bir spor salonunda yapmayı düşünebilirsin.")
+            } else {
+                suggestions.add("Açık havada koşu veya antrenman için ideal bir gün. Rüzgarın $windSpeed km/s olması, performansını destekleyecek taze bir hava sağlıyor.")
+            }
+        } else if (userInterests.contains("Fotoğrafçılık")) {
+            if (cloudCover in 30..70) {
+                suggestions.add("Bulutların gökyüzündeki dağılımı, fotoğrafların için harika bir yumuşak ışık sağlayacaktır. Işık geçişleri bugün fotoğraf çekmek için güzel fırsatlar sunabilir.")
+            } else if (rawCondition.contains("sis")) {
+                suggestions.add("Sisli atmosfer, dramatik ve mistik kareler yakalamak için sana eşsiz kompozisyonlar sunabilir.")
+            }
+        } else if (userInterests.contains("Kamp") || userInterests.contains("Doğa")) {
+            if (precipProb < 20 && windSpeed < 20) {
+                suggestions.add("Doğa yürüyüşü veya kamp planın varsa koşullar oldukça elverişli. Temiz havanın ve sakin atmosferin tadını çıkarabilirsin.")
+            } else if (precipProb > 50) {
+                suggestions.add("Doğa aktiviteleri için zemin ıslak ve kaygan olabilir. Eğer kamp yapacaksan su yalıtımına ekstra dikkat etmelisin.")
             }
         }
 
-        val s3 = if (extraTips.isNotEmpty()) extraTips.random() else "Bugünkü genel tabloya göre planlarını yapabilir, keyifli bir gün geçirebilirsin!"
-
-        val finalMessage = "$s1 $s2 $s3"
+        val analysisText = if (analysisParts.isNotEmpty()) analysisParts.joinToString(" ") else "Meteorolojik veriler bugün için oldukça dengeli bir tablo çiziyor, beklenmedik bir hava olayı öngörülmüyor."
+        val finalMessage = "$intro $analysisText\n\n${suggestions.joinToString(" ")}"
 
         return HavamaniaRecommendation(
             message = finalMessage,
@@ -117,21 +114,39 @@ object RecommendationEngine {
     }
 
     /**
-     * SEYAHAT PLANLARINA ÖZEL ANALİZ VE ÖNERİ ÜRETİR.
+     * SEYAHAT PLANLARINA ÖZEL ANALİTİK ANALİZ ÜRETİR.
      */
     fun generateTravelRecommendation(
         plan: TravelPlan,
         forecastSnapshot: ForecastSnapshot?
     ): String {
-        return if (forecastSnapshot != null) {
-            "${plan.city} seyahati yaklaşıyor. Seyahat gününde hava ${forecastSnapshot.conditionSummary} görünüyor. Valizine uygun kıyafetler eklemeyi unutma."
-        } else {
-            "${plan.city} seyahati için hazırlıklar başlasın! Hava durumu netleşince sana özel önerilerimi paylaşacağım."
+        if (forecastSnapshot == null) return "${plan.city} seyahati için hazırlıklar başlasın! Hava durumu netleşince meteorolojik verileri senin için anlamlandıracağım."
+
+        val cond = forecastSnapshot.conditionSummary?.lowercase(Locale("tr")) ?: "değişken"
+        val maxT = forecastSnapshot.maxTemp?.toInt() ?: 20
+        val rain = forecastSnapshot.precipitationProbability ?: 0
+        val wind = forecastSnapshot.windSpeed ?: 0.0
+
+        val base = "${plan.city} seyahatinde seni $cond bir hava bekliyor. Maksimum $maxT° sıcaklık öngörülüyor."
+
+        val analysis = when {
+            rain > 60 -> "Yağış ihtimali oldukça baskın görünüyor, bu durum şehir turu planlarını kapalı mekanlara kaydırmanı gerektirebilir."
+            maxT > 30 -> "Yüksek sıcaklıklar gün içinde çabuk yorulmana neden olabilir; su tüketimini artırmalı ve öğle saatlerinde gölgeyi tercih etmelisin."
+            wind > 30 -> "Belirgin rüzgar hızı, özellikle sahil kesimlerinde havayı olduğundan daha serin hissettirebilir."
+            else -> "Hava koşulları genel seyahat konforu açısından oldukça ideal bir seviyede seyrediyor."
         }
+
+        val advice = when {
+            rain > 40 -> "Valizine mutlaka kompakt bir şemsiye ve su geçirmeyen bir ayakkabı eklemelisin."
+            maxT < 12 -> "Hava serin olacağı için valizinde kalın bir mont ve atkı/bere ikilisine yer açman önemli."
+            else -> "Rahat bir yürüyüş ayakkabısı ve katmanlı giysiler bu seyahatin olmazsa olmazı olacaktır."
+        }
+
+        return "$base $analysis $advice"
     }
 
     /**
-     * AI BAĞLANTISI KOPARSA YEREL VERİLERLE CEVAP ÜRETİR.
+     * ASİSTAN YANITLARINI UZMAN DANIŞMAN TONUNDA ÜRETİR.
      */
     fun generateAssistantFallbackReply(
         userPrompt: String,
@@ -139,79 +154,91 @@ object RecommendationEngine {
         aboutMe: String? = null,
         interests: Set<String> = emptySet()
     ): String {
-        val prompt = userPrompt.lowercase()
+        val prompt = userPrompt.lowercase(Locale("tr"))
 
         if (weatherData == null) {
-            return "Hava durumu bilgilerini şu an tam olarak alamadım. Lütfen daha sonra tekrar dene."
+            return "Şu an hava durumu verilerine tam erişim sağlayamıyorum. Ancak genel tecrübelerime dayanarak, planlarını yaparken her zaman güncel tahminleri kontrol etmenin en güvenli yol olduğunu hatırlatabilirim. Birazdan tekrar denersen detaylı bir analiz sunabilirim."
         }
 
         val city = weatherData.cityName
         val temp = weatherData.temperature
-        val feelsLike = weatherData.feelsLike
-        val cond = weatherData.condition.lowercase()
+        val feels = weatherData.feelsLike
+        val cond = weatherData.condition.lowercase(Locale("tr"))
         val precip = weatherData.precipitationProbability ?: 0
         val wind = weatherData.windSpeed ?: 0.0
+        val windDirLabel = weatherData.windDirectionLabel ?: ""
+        val windFullDir = WeatherUtils.getFullWindDirection(windDirLabel)
+        val gust = weatherData.windGust ?: 0.0
+        val humidity = weatherData.humidity ?: 50
         val uv = weatherData.uvIndex ?: 0
+        val pressure = weatherData.pressure ?: 1013
+        val cloud = weatherData.cloudCover ?: 0
 
-        val baseHeader = "Son güncellenen hava verisine göre yardımcı olayım: "
-        val currentStatus = "$city’da şu an hava $cond, sıcaklık $temp ve hissedilen $feelsLike. "
+        // UZMAN DANIŞMAN RAPORU YAPISI
+        val header = "$city için hazırladığım atmosferik analiz raporu aşağıdadır:\n\n"
 
-        return when {
-            prompt.contains("giys") || prompt.contains("giyecek") || prompt.contains("ne giy") || prompt.contains("kıyafet") -> {
+        val dataSection = "📊 GÜNCEL VERİLER:\n" +
+                "• Gökyüzü: ${cond.replaceFirstChar { it.uppercase() }}\n" +
+                "• Sıcaklık: $temp (Hissedilen: $feels)\n" +
+                "• Nem: %$humidity\n" +
+                "• Yağış İhtimali: %$precip\n" +
+                "• Rüzgar: ${WeatherUtils.formatWindWithLevel(wind)}\n" +
+                "• Hamleler: ${gust.toInt()} km/s\n" +
+                "• Yön: $windFullDir ($windDirLabel)\n" +
+                "• UV İndeksi: $uv\n" +
+                "• Basınç: $pressure hPa\n" +
+                "• Bulutluluk: %$cloud\n\n"
+
+        val interpretation = "🔍 ANALİZ VE YORUM:\n" + when {
+            prompt.contains("giys") || prompt.contains("kıyafet") || prompt.contains("ne giy") -> {
                 val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
-                val advice = when {
-                    tempVal < 10 -> "Hava oldukça soğuk, kalın bir mont, bere ve atkı almanı öneririm."
-                    tempVal < 18 -> "Hava serin, orta kalınlıkta bir ceket veya hırka giymek iyi olacaktır."
-                    tempVal < 25 -> "Hava ılık ve rahat; hafif bir ceket veya sweatshirt yeterli olur."
-                    else -> "Hava sıcak; ince, pamuklu ve ferah kıyafetler tercih etmelisin."
+                val coreAdvice = when {
+                    tempVal < 10 -> "Hava oldukça soğuk, vücut ısısını korumak için kalın bir mont, bere ve atkı almanı öneririm. Katmanlı giyinmek, kapalı mekanlara girdiğinde konforunu artıracaktır."
+                    tempVal < 18 -> "Hava serin ve taze bir karaktere sahip. Orta kalınlıkta bir ceket veya hırka giymek, gün boyu vücut ısınızı dengede tutacaktır."
+                    tempVal < 25 -> "Hava ılık ve oldukça rahat; hafif bir ceket veya sweatshirt yeterli olur. Güneşin durumuna göre ceketini çıkarabileceğin bir kombin yapabilirsin."
+                    else -> "Hava sıcak; cildinin nefes alabilmesi için ince, pamuklu ve ferah kıyafetler tercih etmelisin."
                 }
-                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
-                val rainAdvice = if (precip > 30) " Ayrıca $formattedPrecip yağış ihtimali var, şemsiyeni sakın unutma." else ""
-                val uvAdvice = if (uv > 5) " UV indeksi $uv olduğu için güneş koruyucu kullanmanı öneririm." else ""
-                baseHeader + currentStatus + advice + rainAdvice + uvAdvice
+                val extra = if (precip > 30) " Ayrıca yağış riskine karşı yanına bir şemsiye alman, planlarının aksamasını önleyecektir." else ""
+                coreAdvice + extra
             }
-            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("çıkılır mı") || prompt.contains("spor") -> {
-                val isBadWeather = precip > 40 || wind > 35.0 || uv > 8
-                val advice = if (isBadWeather) {
-                    "Şu anki koşullar ($cond, rüzgar $wind km/s) dışarıda uzun süre vakit geçirmek için pek ideal değil. Kapalı alan aktivitelerini değerlendirebilirsin."
+            prompt.contains("aktivite") || prompt.contains("dışarı") || prompt.contains("spor") || prompt.contains("koşu") || prompt.contains("bisiklet") -> {
+                val isBad = precip > 40 || wind > 35.0 || uv > 8
+                if (isBad) {
+                    "Mevcut meteorolojik koşullar (Yağış: %$precip, Rüzgar: ${wind.toInt()} km/s) dışarıda uzun süre vakit geçirmek veya efor sarf etmek için pek ideal değil. Fiziksel aktivitelerini kapalı alanlara taşıman, sağlığın ve konforun için daha doğru bir karar olabilir."
                 } else {
-                    "Hava durumu dışarı çıkmak, yürüyüş yapmak veya hafif tempolu bir spor için oldukça elverişli görünüyor."
+                    "Gökyüzü durumu ve sıcaklık seviyesi, dışarıda aktif vakit geçirmek için oldukça davetkar. Rüzgarın ${wind.toInt()} km/s seviyesinde olması, özellikle bisiklet veya koşu gibi aktivitelerde ferahlatıcı bir etki yaratacaktır."
                 }
-                baseHeader + currentStatus + advice
             }
-            prompt.contains("yağmur") || prompt.contains("yağış") || prompt.contains("şemsiye") -> {
-                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
-                val advice = if (precip > 20) {
-                    "Bugün $city için $formattedPrecip oranında bir yağış ihtimali bulunuyor. Tedbirli olup şemsiye taşıman akıllıca olur."
+            prompt.contains("fotoğraf") -> {
+                if (cloud in 30..80) {
+                    "Bulutluluk oranının %$cloud olması, ışığın homojen dağılmasını sağlayarak dış mekan çekimlerinde harika bir 'softbox' etkisi yaratacaktır. Detayları yakalamak için mükemmel bir gün."
                 } else {
-                    "Bugün için belirgin bir yağış beklenmiyor, gökyüzü genellikle $cond."
+                    "Işık koşulları oldukça sert olabilir. Eğer dış çekim yapacaksan, gölge ve ışık dengesine ekstra dikkat etmeni öneririm."
                 }
-                baseHeader + currentStatus + advice
             }
-            prompt.contains("rüzgar") || prompt.contains("fırtına") -> {
-                val advice = if (wind > 20.0) {
-                    "Rüzgar hızı $wind km/s seviyesinde. Dışarıdayken biraz esintili hissedebilirsin, rüzgar kesici bir şeyler giymek konforunu artırır."
+            prompt.contains("deniz") || prompt.contains("yüzme") || prompt.contains("tekne") -> {
+                if (wind > 25.0) {
+                    "Rüzgar hızı ${wind.toInt()} km/s seviyesine ulaştığı için deniz yüzeyinde çırpıntı oluşabilir. Deniz aktivitelerinde veya tekne yolculuklarında dalga boyuna karşı dikkatli olmalısın."
                 } else {
-                    "Rüzgar şu an oldukça hafif ($wind km/s), hava sakin görünüyor."
+                    "Deniz oldukça sakin görünüyor. Rüzgarın hafif esintisi, su kenarında vakit geçirmeyi oldukça keyifli kılacaktır."
                 }
-                baseHeader + currentStatus + advice
-            }
-            prompt.contains("uv") || prompt.contains("güneş") || prompt.contains("krem") -> {
-                val advice = if (uv > 4) {
-                    "UV indeksi $uv seviyesinde, yani güneş etkisi belirgin. Özellikle öğle saatlerinde güneş kremi ve şapka kullanmanı öneririm."
-                } else {
-                    "Güneşin yakıcı etkisi şu an düşük (UV: $uv), ancak yine de gözlerini korumak için güneş gözlüğü takabilirsin."
-                }
-                baseHeader + currentStatus + advice
-            }
-            prompt.contains("hafta sonu") || prompt.contains("tahmin") -> {
-                baseHeader + "Hafta sonu detaylarına AI erişimim şu an kısıtlı ama genel tabloya göre planlarına kapalı alan alternatifleri eklemeni öneririm."
             }
             else -> {
-                val formattedPrecip = WeatherUtils.formatRainProbability(precip)
-                val extraInfo = "Yağış ihtimali $formattedPrecip, rüzgar $wind km/s ve UV indeksi $uv seviyesinde."
-                baseHeader + currentStatus + extraInfo + " Başka bir konuda sorunuz olursa buradayım!"
+                val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+                "Mevcut verileri incelediğimde, $city’da dengeli bir atmosfer görüyorum. Sıcaklık $temp civarında seyrederken, nemin %$humidity olması havanın kalitesini artırıyor. Rüzgar ${WeatherUtils.getWindLevelText(wind)} şiddetinde esiyor, bu da açık hava planlarını büyük ölçüde destekliyor."
             }
         }
+
+        val suggestion = "\n\n💡 ÖNERİ VE TAVSİYE:\n" + when {
+            precip > 50 -> "Bugün planlarını kapalı alanlara göre revize etmen sürprizlerden korunmanı sağlar."
+            uv > 6 -> "Güneşin en dik geldiği 11:00 - 16:00 saatleri arasında yüksek faktörlü koruyucu kullanmayı ihmal etme."
+            wind > 30 -> "Rüzgar hamleleri anlık dengeni bozabilir, yüksek ve açık alanlarda yürürken dikkatli ol."
+            temp.contains("-") -> "Don riskine karşı su tesisatlarını kontrol etmeyi ve araç camların için önlem almayı unutma."
+            else -> "Havanın tadını çıkarabileceğin bir yürüyüş rotası planlayarak güne enerji katabilirsin."
+        }
+
+        val closing = "\n\nHavamania Asistan olarak her zaman yanındayım. Başka bir detay veya farklı bir şehir hakkında sorun olursa sormaktan çekinme!"
+
+        return header + dataSection + interpretation + suggestion + closing
     }
 }

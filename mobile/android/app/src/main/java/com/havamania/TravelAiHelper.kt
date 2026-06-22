@@ -107,17 +107,20 @@ object TravelAiHelper {
         val weatherBlock = if (forecastSnapshot != null) {
             val precip = forecastSnapshot.precipitationProbability ?: 0
             val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
+            val windSpeed = forecastSnapshot.windSpeed ?: 0.0
             val code = forecastSnapshot.weatherCode ?: 0
             val cond = (forecastSnapshot.conditionSummary ?: "Açık").lowercase(Locale("tr"))
 
             val formattedPrecip = WeatherUtils.formatRainProbability(precip)
+            val windText = WeatherUtils.formatWindWithLevel(windSpeed)
 
             when {
-                code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
+                code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Rüzgar $windText hızına ulaşabilir. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
                 code >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
                 precip > 60 -> "Gideceğin tarihlerde gökyüzü biraz ağlamaklı görünüyor, $formattedPrecip yağmur ihtimali var. Hava yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
                 maxTemp > 30 -> "$maxTemp° ile güneşin cömert olduğu, pırıl pırıl bir gökyüzü seni bekliyor. Tam bir yaz havası var, yağmur riski ise yok denecek kadar az."
                 maxTemp < 10 -> "Hava biraz sert ve serin olacak, termometreler $maxTemp° civarında gezecek. Güneş yüzünü pek göstermeyebilir, kalın bir şeyler almanı öneririm."
+                windSpeed > 30 -> "Hava oldukça rüzgarlı ($windText) olacak. $maxTemp° sıcaklıkta bile esinti üşütebilir, rüzgar kesici bir şeyler almanı öneririm."
                 else -> "Tam gezmelik, harika bir hava seni bekliyor! $maxTemp° derece ve $cond gökyüzü seyahatine ayrı bir keyif katacak. Yağmur ihtimali $formattedPrecip."
             }
         } else {
