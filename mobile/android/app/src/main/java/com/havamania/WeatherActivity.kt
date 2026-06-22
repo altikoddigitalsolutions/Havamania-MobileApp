@@ -129,19 +129,26 @@ class WeatherActivity : ComponentActivity() {
                                     )
                                 }
                                 composable(
-                                    "calendar?focusId={focusId}&highlight={highlight}",
+                                    "calendar?focusId={focusId}&highlight={highlight}&city={city}&start={start}",
                                     arguments = listOf(
                                         navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null },
-                                        navArgument("highlight") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                        navArgument("highlight") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                        navArgument("city") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                        navArgument("start") { type = NavType.StringType; nullable = true; defaultValue = null }
                                     ),
-                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}&highlight={highlight}" })
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}&highlight={highlight}&city={city}&start={start}" })
                                 ) { backStackEntry ->
                                     val focusId = backStackEntry.arguments?.getString("focusId")
                                     val highlight = backStackEntry.arguments?.getString("highlight")
+                                    val city = backStackEntry.arguments?.getString("city")
+                                    val start = backStackEntry.arguments?.getString("start")
+
                                     TravelPlannerScreen(
                                         onBack = { navController.popBackStack() },
                                         focusId = focusId,
-                                        highlight = highlight
+                                        highlight = highlight,
+                                        initialCity = city,
+                                        initialStartDate = start
                                     )
                                 }
                                 composable(
@@ -153,6 +160,9 @@ class WeatherActivity : ComponentActivity() {
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
+                                        },
+                                        onNavigateToTravelCreate = { city, start ->
+                                            navController.navigate("calendar?city=$city&start=$start")
                                         }
                                     )
                                 }

@@ -209,7 +209,46 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 val answer = cleanMarkdown(response.answer)
                 if (answer.isBlank()) throw Exception("Empty response")
 
-                _messages.value = _messages.value + AltikodChatMessage(text = answer, isUser = false)
+                // Enrich with action if applicable
+                val detectedAction = if (AiIntentParser.isWeatherQuery(truncatedText)) {
+                    val city = AiIntentParser.detectCity(truncatedText)
+                    val date = AiIntentParser.detectDate(truncatedText)
+
+                    if (city != null) {
+                        val today = LocalDate.now()
+                        if (date == null || !date.isBefore(today)) {
+                             AssistantAction(
+                                type = AssistantActionType.CREATE_TRAVEL_PLAN,
+                                label = "Seyahat Analizi Oluştur",
+                                city = city,
+                                startDate = date?.toString(),
+                                tripName = "$city Seyahati"
+                            )
+                        } else null
+                    } else null
+                } else null
+
+                val finalAnswer = if (detectedAction != null) {
+                    val today = LocalDate.now()
+                    val startDate = detectedAction.startDate?.let { LocalDate.parse(it) }
+
+                    if (startDate == today) {
+                        "$answer\n\nBugün için ${detectedAction.city}’da dışarı çıkmayı planlıyorsan, senin için özel bir aktivite önerisi de hazırlayabilirim."
+                    } else {
+                        val dateLabel = if (detectedAction.startDate != null) {
+                            val d = LocalDate.parse(detectedAction.startDate)
+                            "${d.dayOfMonth} ${d.month.getDisplayName(java.time.format.TextStyle.FULL, Locale("tr"))}"
+                        } else "bu tarih"
+
+                        "$answer\n\nEğer $dateLabel için ${detectedAction.city}’e gitmeyi planlıyorsan istersen hızlıca bir seyahat analizi oluşturalım. Şehri ve başlangıç tarihini senin için doldurabilirim."
+                    }
+                } else answer
+
+                _messages.value = _messages.value + AltikodChatMessage(
+                    text = finalAnswer,
+                    isUser = false,
+                    action = detectedAction
+                )
             } catch (e: Exception) {
                 android.util.Log.e("HAVAMANIA_AI", "AI ERROR: ${e.message}")
                 addErrorMessage(truncatedText, "Asistan şu an yoğun, yerel verilere göre yanıt veriyorum.")
@@ -234,11 +273,30 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 "$prefix $fallbackText"
             }
 
+            // Enrich with action if applicable
+            val detectedAction = if (AiIntentParser.isWeatherQuery(userPrompt)) {
+                val city = AiIntentParser.detectCity(userPrompt)
+                val date = AiIntentParser.detectDate(userPrompt)
+                if (city != null) {
+                    val today = LocalDate.now()
+                    if (date == null || !date.isBefore(today)) {
+                        AssistantAction(
+                            type = AssistantActionType.CREATE_TRAVEL_PLAN,
+                            label = "Seyahat Analizi Oluştur",
+                            city = city,
+                            startDate = date?.toString(),
+                            tripName = "$city Seyahati"
+                        )
+                    } else null
+                } else null
+            } else null
+
             _messages.value = _messages.value + AltikodChatMessage(
                 text = combinedMessage,
                 isUser = false,
                 isFallback = true,
-                retryPrompt = userPrompt
+                retryPrompt = userPrompt,
+                action = detectedAction
             )
         } catch (e: Exception) {
             _messages.value = _messages.value + AltikodChatMessage(
@@ -271,6 +329,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 fun AiChatScreen(
     initialRecommendation: HavamaniaRecommendation? = null,
     onBack: () -> Unit,
+    onNavigateToTravelCreate: (String, String?) -> Unit = { _, _ -> },
     viewModel: AiChatViewModel = viewModel(),
     historyViewModel: AiHistoryViewModel = viewModel(),
     themeViewModel: ThemeViewModel = viewModel()
@@ -428,6 +487,11 @@ fun AiChatScreen(
                             themeColors = themeColors,
                             onRetry = { prompt ->
                                 viewModel.sendMessage(prompt, isRetry = true)
+                            },
+                            onActionClick = { action ->
+                                if (action.type == AssistantActionType.CREATE_TRAVEL_PLAN) {
+                                    onNavigateToTravelCreate(action.city ?: "", action.startDate)
+                                }
                             }
                         )
                     }
@@ -775,7 +839,8 @@ fun QuickSuggestions(
 fun ChatBubble(
     message: AltikodChatMessage,
     themeColors: HavamaniaColors,
-    onRetry: (String) -> Unit = {}
+    onRetry: (String) -> Unit = {},
+    onActionClick: (AssistantAction) -> Unit = {}
 ) {
     val alignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (message.isUser) themeColors.accent else themeColors.surfaceGlass
@@ -802,6 +867,22 @@ fun ChatBubble(
                     color = textColor,
                     style = MaterialTheme.typography.bodyLarge
                 )
+
+                if (message.action != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { onActionClick(message.action) },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Route, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(message.action.label, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
 
                 if (message.isFallback && message.retryPrompt != null) {
                     Spacer(Modifier.height(8.dp))

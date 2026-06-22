@@ -10,7 +10,23 @@ data class AltikodChatMessage(
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),
     val isFallback: Boolean = false,
-    val retryPrompt: String? = null
+    val retryPrompt: String? = null,
+    val action: AssistantAction? = null
+)
+
+@Serializable
+enum class AssistantActionType {
+    CREATE_TRAVEL_PLAN,
+    NONE
+}
+
+@Serializable
+data class AssistantAction(
+    val type: AssistantActionType,
+    val label: String,
+    val city: String? = null,
+    val startDate: String? = null, // YYYY-MM-DD
+    val tripName: String? = null
 )
 
 @Serializable

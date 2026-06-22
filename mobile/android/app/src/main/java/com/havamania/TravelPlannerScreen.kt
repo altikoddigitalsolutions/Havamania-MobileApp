@@ -58,6 +58,7 @@ fun TravelPlannerScreen(
     viewModel: TravelViewModel = viewModel(),
     initialCity: String? = null,
     initialTripType: String? = null,
+    initialStartDate: String? = null, // YYYY-MM-DD
     focusId: String? = null,
     highlight: String? = null,
     onBack: () -> Unit
@@ -68,6 +69,10 @@ fun TravelPlannerScreen(
     var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
     var showAddDialog by remember { mutableStateOf(false) }
     var planToEdit by remember { mutableStateOf<TravelPlan?>(null) }
+
+    // Prefill logic for NEW plan
+    var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
+
     var planForSummary by remember { mutableStateOf<TravelPlan?>(null) }
     var deleteConfirmPlan by remember { mutableStateOf<TravelPlan?>(null) }
     val listState = rememberLazyListState()
@@ -80,8 +85,24 @@ fun TravelPlannerScreen(
         }
     }
 
-    LaunchedEffect(initialCity, initialTripType) {
+    LaunchedEffect(initialCity, initialTripType, initialStartDate) {
         if (initialCity != null) {
+            val start = try {
+                if (initialStartDate != null) LocalDate.parse(initialStartDate) else LocalDate.now()
+            } catch(e: Exception) { LocalDate.now() }
+
+            val type = try {
+                if (initialTripType != null) TripType.valueOf(initialTripType) else TripType.VACATION
+            } catch(e: Exception) { TripType.VACATION }
+
+            prefillPlan = TravelPlan(
+                city = initialCity,
+                tripType = type,
+                startDate = start,
+                endDate = start.plusDays(3),
+                latitude = 0.0,
+                longitude = 0.0
+            )
             showAddDialog = true
         }
     }
@@ -213,15 +234,17 @@ fun TravelPlannerScreen(
     if (showAddDialog) {
         AddTravelPlanDialog(
             viewModel = viewModel,
-            editPlan = planToEdit,
+            editPlan = planToEdit ?: prefillPlan,
             onDismiss = {
                 showAddDialog = false
                 planToEdit = null
+                prefillPlan = null
             },
             onSave = { plan ->
                 viewModel.savePlan(plan)
                 showAddDialog = false
                 planToEdit = null
+                prefillPlan = null
             }
         )
     }
