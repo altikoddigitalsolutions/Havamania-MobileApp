@@ -193,6 +193,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             1. Markdown formatı asla kullanma (**, #, _ işaretleri yasak).
             2. Cevabını sadece düz metin olarak ver.
             3. Hava durumu cevaplarında mutlaka ZORUNLU alanları (Sıcaklık, Hissedilen, Rüzgar, Yön, Nem, Yağış, UV) göster.
+            4. Eğer kullanıcı şu an bulunduğu şehir ($city) hakkında soru soruyorsa, seyahat, gezi, rota veya valiz hazırlama ile ilgili hiçbir şey söyleme. Sadece günlük yaşam, giyim, UV korunma ve aktivite önerileri ver.
+            5. Seyahat planlama önerisini SADECE kullanıcı $city dışındaki bir yer hakkında soru soruyorsa yap.
         """.trimIndent()
     }
 
@@ -290,6 +292,11 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 val city = AiIntentParser.detectCity(truncatedText)
                 val date = AiIntentParser.detectDate(truncatedText)
 
+                // SEYAHAT ÖNERİSİ KURALI: Aktif şehir ile sorgulanan şehir aynıysa seyahat önerisi yapma
+                val currentCity = _weatherData.value?.cityName
+                val isDifferentCity = city != null && currentCity != null &&
+                        AiIntentParser.normalizeTurkish(city) != AiIntentParser.normalizeTurkish(currentCity)
+
                 // If it's a valid weather query but AI gave a generic "don't understand" answer,
                 // replace it with our local detailed weather answer.
                 var finalIsUnknown = isUnknownResponse
@@ -304,8 +311,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     finalIsUnknown = false // It's now a known response (fallback)
                 }
 
-                // Enrich with action if applicable (Only if we have a successful weather-related answer)
-                val detectedAction = if (isWeatherQuery && !finalIsUnknown) {
+                // Enrich with action if applicable (Only if we have a successful weather-related answer and it's a DIFFERENT city)
+                val detectedAction = if (isWeatherQuery && !finalIsUnknown && isDifferentCity) {
                     if (city != null) {
                         val today = LocalDate.now()
                         if (date == null || !date.isBefore(today)) {
@@ -386,7 +393,11 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             val city = AiIntentParser.detectCity(userPrompt)
             val date = AiIntentParser.detectDate(userPrompt)
 
-            val detectedAction = if (isWeatherQuery && city != null) {
+            val currentCity = _weatherData.value?.cityName
+            val isDifferentCity = city != null && currentCity != null &&
+                    AiIntentParser.normalizeTurkish(city) != AiIntentParser.normalizeTurkish(currentCity)
+
+            val detectedAction = if (isWeatherQuery && city != null && isDifferentCity) {
                 val today = LocalDate.now()
                 if (date == null || !date.isBefore(today)) {
                     AssistantAction(
