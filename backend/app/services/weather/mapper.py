@@ -1,11 +1,19 @@
 def normalize_current(raw: dict, lat: float, lon: float) -> dict:
     current = raw.get("current", {})
+    daily = raw.get("daily", {})
     return {
         "location": {"lat": lat, "lon": lon},
         "temperature": current.get("temperature_2m"),
         "humidity": current.get("relative_humidity_2m"),
         "feels_like": current.get("apparent_temperature"),
         "wind_speed": current.get("wind_speed_10m"),
+        "wind_direction": current.get("wind_direction_10m"),
+        "uv_index": current.get("uv_index"),
+        "pressure": current.get("surface_pressure"),
+        "visibility": current.get("visibility"),
+        "cloud_cover": current.get("cloud_cover"),
+        "sunrise": daily.get("sunrise", [None])[0],
+        "sunset": daily.get("sunset", [None])[0],
         "provider": "open_meteo",
     }
 

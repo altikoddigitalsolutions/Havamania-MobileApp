@@ -154,28 +154,45 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val cond = data.condition
         val city = data.cityName
         val humidity = WeatherUtils.formatRainProbability(data.humidity)
-        val wind = data.windSpeed ?: "Bilinmiyor"
+        val windSpeed = data.windSpeed ?: "Bilinmiyor"
+        val windDir = WeatherUtils.getWindDirectionFromDegrees(data.windDirectionDegrees)
         val uv = data.uvIndex ?: "Bilinmiyor"
         val precip = WeatherUtils.formatRainProbability(data.precipitationProbability)
+        val pressure = data.pressure?.let { "$it hPa" } ?: "Bilinmiyor"
+        val visibility = data.visibilityKm?.let { "$it km" } ?: "Bilinmiyor"
+        val cloudiness = data.cloudCover?.let { "%$it" } ?: "Bilinmiyor"
+        val sunrise = data.sunriseTime ?: "Bilinmiyor"
+        val sunset = data.sunsetTime ?: "Bilinmiyor"
 
         val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
         val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
 
         return """
-            HAVA DURUMU VERİLERİ:
+            HAVA DURUMU VERİLERİ (ZORUNLU):
             Şehir: $city
-            Sıcaklık: $temp, Hissedilen: $feelsLike
-            Durum: $cond
-            Nem: $humidity
-            Rüzgar: $wind km/sa
-            UV İndeksi: $uv
-            Yağış İhtimali: $precip
+            🌡️ Sıcaklık: $temp
+            🤚 Hissedilen Sıcaklık: $feelsLike
+            💨 Rüzgar Hızı: $windSpeed km/sa
+            🧭 Rüzgar Yönü: $windDir
+            💧 Nem: $humidity
+            ☔ Yağış İhtimali: $precip
+            ☀️ UV İndeksi: $uv
+
+            EK DETAYLAR (DETAYLI MOD İÇİN):
+            📈 Basınç: $pressure
+            👁️ Görüş Mesafesi: $visibility
+            ☁️ Bulutluluk: $cloudiness
+            🌅 Gün Doğumu: $sunrise
+            🌇 Gün Batımı: $sunset
+
+            ÖZETLER:
             Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
             Günlük Tahmin (Gelecek 3 gün): $dailySummary
 
             TEMEL KURALLAR:
             1. Markdown formatı asla kullanma (**, #, _ işaretleri yasak).
             2. Cevabını sadece düz metin olarak ver.
+            3. Hava durumu cevaplarında mutlaka ZORUNLU alanları (Sıcaklık, Hissedilen, Rüzgar, Yön, Nem, Yağış, UV) göster.
         """.trimIndent()
     }
 
@@ -185,50 +202,41 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 [SİSTEM ROLÜ: SAMİMİ ARKADAŞ PERSONASI]
                 - Karakter: Kullanıcının çok yakın, enerjik ve neşeli bir arkadaşısın.
                 - Hitap: Kesinlikle "sen" diye hitap et. "Selam", "canım", "dostum" gibi sıcak ifadeler kullan.
-                - Üslup: Duygularını belli et, samimi ve tavsiye veren bir tonda konuş.
+                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve doğal konuşma diliyle samimi tavsiyeler ekle.
                 - Emoji: Bol ve yerinde emoji kullan.
-                - Örnek: "Bugün Balıkesir harika görünüyor 😊 29 derece civarında sıcak bir gün seni bekliyor. Şapkanı kap ve dışarı çıkmanın tadını çıkar."
-                - Kural: Resmiyetten tamamen uzaklaş.
+                - Kural: Resmiyetten tamamen uzaklaş ama tüm zorunlu meteorolojik verileri paylaş.
             """.trimIndent()
             AssistantTone.RESMI -> """
                 [SİSTEM ROLÜ: PROFESYONEL KURUMSAL ASİSTAN PERSONASI]
                 - Karakter: Ciddi, duygusuz ve tamamen profesyonel bir kurumsal asistansın.
                 - Hitap: Kesinlikle "siz" diye hitap et.
-                - Üslup: Sadece net verileri ve resmi önerileri aktar. Cümleler kurallı ve ciddi olmalı.
+                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve profesyonel meteorolojik açıklama ekle.
                 - Emoji: KESİNLİKLE EMOJİ KULLANMA.
-                - Örnek: "Bugün Balıkesir'de hava sıcaklığı 29°C olacaktır. Yağış beklenmemektedir. UV seviyesi yüksek olduğundan güneş koruyucu kullanılması önerilir."
-                - Kural: Kişisel yorumlardan ve samimiyetten kaçın.
+                - Kural: Kişisel yorumlardan kaçın ama tüm zorunlu meteorolojik verileri teknik bir dille sun.
             """.trimIndent()
             AssistantTone.DENGELI -> """
                 [SİSTEM ROLÜ: DENGELİ REHBER PERSONASI]
                 - Karakter: Bilgilendirici, nazik ve doğal bir rehbersin.
                 - Hitap: Doğal bir dil kullan.
-                - Üslup: Samimi ve resmiyet arasında bir denge kur. Kısa açıklamalar ve pratik öneriler ver.
+                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve kısa bir meteorolojik yorum ekle.
                 - Emoji: Gerektiğinde 1-2 tane kullanabilirsin.
-                - Örnek: "Bugün Balıkesir'de güneşli bir hava bekleniyor. 29°C sıcaklık ve düşük yağış ihtimali sayesinde dış mekan aktiviteleri için uygun bir gün."
-                - Kural: Hem profesyonel kal hem de yardımcı olduğunu hissettir.
+                - Kural: Hem profesyonel kal hem de yardımcı olduğunu hissettir. Tüm zorunlu verileri paylaş.
             """.trimIndent()
             AssistantTone.KISA_NET -> """
                 [SİSTEM ROLÜ: VERİMLİLİK ODAKLI ASİSTAN PERSONASI]
                 - Karakter: Sadece sonuca odaklı, vakit kaybetmeyen bir asistansın.
                 - Hitap: Doğrudan veriye geç.
-                - Üslup: Asla uzun cümle kurma. Sadece maddeler (bullet points) kullan.
-                - Uzunluk: En fazla 4-5 satır.
-                - Örnek:
-                  • Sıcaklık: 29°C
-                  • Yağış: %0
-                  • UV: 7
-                  • Öneri: Şapka ve güneş gözlüğü kullan.
-                - Kural: Gereksiz tüm bağlaçları ve sıfatları at.
+                - Üslup: Sadece zorunlu değerleri ve tek satırlık bir özet ver.
+                - Uzunluk: En fazla 8-10 satır (Her veri bir satır).
+                - Kural: Gereksiz tüm bağlaçları ve sıfatları at. Maddeler halinde tüm zorunlu verileri ver.
             """.trimIndent()
             AssistantTone.DETAYLI_UZMAN -> """
                 [SİSTEM ROLÜ: KIDEMLİ METEOROLOJİ UZMANI PERSONASI]
                 - Karakter: Bilimsel verilere dayanan, analitik düşünen bir meteorologsun.
                 - Hitap: Profesyonel ve teknik bir dil kullan.
-                - Üslup: Hava olaylarını meteorolojik terimlerle açıkla. UV, rüzgar, nem, hissedilen sıcaklık ve basınç arasındaki sebep-sonuç ilişkilerini yorumla.
+                - Üslup: Tüm mevcut hava verilerini (Zorunlu + Ek Detaylar) ver ve derinlemesine meteorolojik analiz yap.
                 - Uzunluk: Kapsamlı ve detaylı bir analiz sun.
-                - Örnek: "UV indeksinin 7 seviyesinde olması, özellikle 11:00–16:00 saatleri arasında korunmasız ciltte hızlı güneş etkisi oluşturabilir. Nem oranının düşük olması hissedilen sıcaklığın gerçek sıcaklıktan biraz daha düşük algılanmasına neden olmaktadır..."
-                - Kural: Yüzeysel bilgiden kaçın, derinlemesine analiz yap.
+                - Kural: UV, rüzgar, nem, hissedilen sıcaklık ve basınç arasındaki sebep-sonuç ilişkilerini yorumla.
             """.trimIndent()
         }
     }

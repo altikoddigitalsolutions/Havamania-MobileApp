@@ -7,6 +7,13 @@ class WeatherCurrentResponse(BaseModel):
     humidity: float | None
     feels_like: float | None
     wind_speed: float | None
+    wind_direction: float | None
+    uv_index: float | None
+    pressure: float | None
+    visibility: float | None
+    cloud_cover: float | None
+    sunrise: str | None = None
+    sunset: str | None = None
     provider: str
 
 

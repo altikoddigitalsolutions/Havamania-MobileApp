@@ -134,82 +134,73 @@ object RecommendationEngine {
 
         val city = weatherData.cityName
         val temp = weatherData.temperature
+        val feelsLike = weatherData.feelsLike
         val cond = weatherData.condition.lowercase(Locale("tr"))
-        val precip = weatherData.precipitationProbability ?: 0
-        val wind = weatherData.windSpeed ?: 0.0
+        val precip = WeatherUtils.formatRainProbability(weatherData.precipitationProbability)
+        val windSpeed = weatherData.windSpeed ?: 0.0
+        val windDir = WeatherUtils.getWindDirectionFromDegrees(weatherData.windDirectionDegrees)
         val uv = weatherData.uvIndex ?: 0
-        val humidity = weatherData.humidity ?: 50
+        val uvLabel = when {
+            uv <= 2 -> "(Düşük)"
+            uv <= 5 -> "(Orta)"
+            uv <= 7 -> "(Yüksek)"
+            else -> "(Çok Yüksek)"
+        }
+        val humidity = WeatherUtils.formatRainProbability(weatherData.humidity)
+        val pressure = weatherData.pressure
+        val visibility = weatherData.visibilityKm
+        val cloudiness = weatherData.cloudCover
+        val sunrise = weatherData.sunriseTime
+        val sunset = weatherData.sunsetTime
+
         val tempVal = temp.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
 
         // Determination of suitability for various activities
-        val isOutdoorSuitable = precip < 30 && wind < 30 && tempVal in 15..32
-        val isRainy = precip > 40
+        val isOutdoorSuitable = (weatherData.precipitationProbability ?: 0) < 30 && windSpeed < 30 && tempVal in 15..32
+        val isRainy = (weatherData.precipitationProbability ?: 0) > 40
         val isVeryHot = tempVal > 30
-        val isVeryCold = tempVal < 10
 
-        // 1. CONCLUSION (What the user wants to know first)
-        val conclusion = when {
-            prompt.contains("uygun") || prompt.contains("yapabilirim") || prompt.contains("çıkılır") || prompt.contains("olur mu") -> {
-                if (isOutdoorSuitable) "Evet, bugün dışarı çıkmak ve aktiviteler için oldukça harika bir hava var!"
-                else if (isRainy) "Bugün dışarıdaki planların için pek uygun bir hava görünmüyor, yağış ihtimali yüksek."
-                else if (isVeryHot) "Dışarı çıkabilirsin ama hava oldukça sıcak, dikkatli olmanda fayda var."
-                else "Dışarı çıkmak için koşullar biraz zorlayıcı olabilir."
-            }
-            prompt.contains("piknik") || prompt.contains("mangal") -> {
-                if (isOutdoorSuitable && !isRainy) "Harika fikir! Piknik ve mangal için hava şu an çok müsait."
-                else "Bugün piknik veya mangal planlarını ertelemek daha güvenli olabilir."
-            }
-            prompt.contains("koşu") || prompt.contains("spor") || prompt.contains("yürüyüş") || prompt.contains("bisiklet") -> {
-                if (isOutdoorSuitable) "Spor ve yürüyüş için ideal bir hava. Performansın için harika bir gün!"
-                else if (isVeryHot) "Spor yapabilirsin ama sıvı tüketimine ve güneşin dik gelmediği saatlere dikkat etmelisin."
-                else "Hava koşulları açık havada spor yapmak için biraz sert olabilir."
-            }
-            prompt.contains("deniz") -> {
-                if (isVeryHot && !isRainy && wind < 20) "Deniz keyfi için mükemmel bir gün! Suya atlamak için sabırsızlanıyor olmalısın."
-                else "Deniz veya yüzme planı için hava biraz serin veya rüzgarlı olabilir."
-            }
-            prompt.contains("giys") || prompt.contains("kıyafet") || prompt.contains("şort") || prompt.contains("giy") -> {
-                if (isVeryHot) "Kesinlikle şort ve ince tişört zamanı! Hava oldukça sıcak."
-                else if (isVeryCold) "Sıkı giyinmelisin, dışarısı oldukça soğuk."
-                else "Hafif bir ceket veya hırka alarak dengeli bir seçim yapabilirsin."
-            }
-            else -> "Bugün $city semalarında bizi ${cond.replaceFirstChar { it.uppercase() }} bir gökyüzü bekliyor."
-        }
+        val basicData = """
+            🌡️ Sıcaklık: $temp
+            🤚 Hissedilen: $feelsLike
+            💨 Rüzgar: $windSpeed km/sa
+            🧭 Yön: $windDir
+            💧 Nem: $humidity
+            ☔ Yağış ihtimali: $precip
+            ☀️ UV: $uv $uvLabel
+        """.trimIndent()
 
-        // 2. EXPLANATION (The data behind the conclusion)
-        val explanation = when (tone) {
-            AssistantTone.SAMIMI -> "Şöyle ki; termometreler $temp dereceyi gösteriyor ve gökyüzü ${cond}. Nem oranı da %$humidity civarında, yani tam kıvamında!"
-            AssistantTone.RESMI -> "$city bölgesinde sıcaklık $temp seviyesinde olup, atmosferik durum ${cond} olarak gözlemlenmektedir. Nem oranı %$humidity seviyesindedir."
-            AssistantTone.KISA_NET -> "$temp, $cond. Nem: %$humidity."
-            AssistantTone.DETAYLI_UZMAN -> "Meteorolojik analizlere göre $city'da $temp sıcaklık ve %$humidity bağıl nem ölçülmektedir. $wind km/sa hızındaki rüzgar ve $uv seviyesindeki UV indeksi günün karakterini belirliyor."
-            else -> "Hava şu an $temp ve ${cond}. Nem oranı %$humidity, yağış ihtimali ise %$precip civarında seyrediyor."
-        }
+        val expertData = """
+            $basicData
+            📈 Basınç: $pressure hPa
+            👁️ Görüş mesafesi: $visibility km
+            ☁️ Bulutluluk: %$cloudiness
+            🌅 Gün doğumu: $sunrise
+            🌇 Gün batımı: $sunset
+        """.trimIndent()
 
-        // 3. SUGGESTIONS (Extra value)
-        val suggestion = when {
-            isRainy -> "Yanına mutlaka bir şemsiye almanı ve su geçirmeyen bir ayakkabı tercih etmeni öneririm."
-            uv > 6 -> "Güneşin etkili olduğu saatlerde güneş koruyucu ve şapka kullanmayı ihmal etme."
-            isVeryHot -> "Sıvı tüketimini artırıp mümkün olduğunca gölge alanlarda kalmaya çalışmalısın."
-            isOutdoorSuitable -> "Bu güzel havanın tadını çıkarmak için kendine güzel bir yürüyüş rotası belirleyebilirsin!"
-            else -> "Günün tadını çıkarmak için planlarını hava durumuna göre esnek tutmanda fayda var."
-        }
+        val intro = "Bugün $city'de hava ${cond}."
 
-        // 4. FORMATTING ACCORDING TO TONE
         return when (tone) {
             AssistantTone.SAMIMI -> {
-                "Selam! 😊 $conclusion\n\n$explanation $suggestion Kendine çok iyi bak!"
+                val comment = if (isOutdoorSuitable) "Harika bir gün seni bekliyor, tadını çıkar! 😊" else "Planlarını yaparken havaya dikkat et canım."
+                "Selam! 😊 $intro\n\n$basicData\n\n$comment"
             }
             AssistantTone.RESMI -> {
-                "$conclusion\n\n$explanation\n\n$suggestion Bilgilerinize sunulur."
+                val comment = "Meteorolojik veriler doğrultusunda planlamalarınızı yapmanızı öneririz."
+                "$intro\n\n$basicData\n\n$comment"
+            }
+            AssistantTone.DENGELI -> {
+                val comment = if (isRainy) "Yağış ihtimaline karşı hazırlıklı olmanızı öneririm." else "Dış mekan aktiviteleri için uygun bir atmosfer hakim."
+                "$intro\n\n$basicData\n\n$comment"
             }
             AssistantTone.KISA_NET -> {
-                "$conclusion $explanation $suggestion"
+                val summary = if (isVeryHot) "Sıcak hava dalgasına dikkat." else "Hava genel olarak stabil."
+                "$intro\n\n$basicData\n\n$summary"
             }
             AssistantTone.DETAYLI_UZMAN -> {
-                "ATMOSFERİK ANALİZ RAPORU:\n$conclusion\n\n$explanation\n\nTEKNİK ÖNERİ: $suggestion"
-            }
-            else -> {
-                "$conclusion\n\n$explanation\n\n💡 ÖNERİ: $suggestion"
+                val analysis = "Meteorolojik analiz: UV indeksi ve nem dengesi, hissedilen sıcaklık üzerinde belirleyici bir etkiye sahip. Basınç değerleri atmosferik stabiliteyi koruyor."
+                "KAPSAMLI METEOROLOJİK ANALİZ:\n$intro\n\n$expertData\n\n$analysis"
             }
         }
     }

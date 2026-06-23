@@ -78,7 +78,7 @@ object WeatherMapper {
             visibilityKm = (current?.visibility ?: 10000.0) / 1000.0,
             humidity = current?.humidity ?: 0,
             pressure = current?.pressure?.toInt() ?: 1013,
-            uvIndex = daily?.uvIndexMax?.firstOrNull()?.toInt() ?: 0,
+            uvIndex = current?.uvIndex?.toInt() ?: daily?.uvIndexMax?.firstOrNull()?.toInt() ?: 0,
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,

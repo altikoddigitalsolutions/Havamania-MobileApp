@@ -126,4 +126,14 @@ object WeatherUtils {
             else -> label ?: "Bilinmiyor"
         }
     }
+
+    /**
+     * Derece cinsinden rüzgar yönünü sözel yöne çevirir.
+     */
+    fun getWindDirectionFromDegrees(degrees: Int?): String {
+        if (degrees == null) return "Bilinmiyor"
+        val directions = listOf("Kuzey", "Kuzeydoğu", "Doğu", "Güneydoğu", "Güney", "Güneybatı", "Batı", "Kuzeybatı")
+        val index = ((degrees + 22.5) / 45).toInt() % 8
+        return directions[index]
+    }
 }
