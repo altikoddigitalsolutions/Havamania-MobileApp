@@ -56,53 +56,67 @@ class WeatherRepository(
     }
 
     /**
-     * Önce cache verisini döner, sonra API'den güncel veriyi çeker
+     * Önce cache verisini döner, sonra API'den güncel veriyi çeker.
+     * Eğer cache yeterince yeniyse (örneğin < 15 dk) network isteği atmaz.
      */
-    fun getWeatherData(lat: Double, lon: Double, cityName: String, districtName: String? = null, forceRefresh: Boolean = false): Flow<WeatherData> = flow {
+    fun getWeatherData(
+        lat: Double,
+        lon: Double,
+        cityName: String,
+        districtName: String? = null,
+        forceRefresh: Boolean = false
+    ): Flow<WeatherData> = flow {
         var hasEmitted = false
-        // unique key for cache
         val cacheKey = if (districtName != null) "$cityName-$districtName" else cityName
+        val cacheTimeoutMillis = 15 * 60 * 1000L // 15 dakika
 
-        // 1. Cache'den oku (unless forceRefresh)
-        if (!forceRefresh) {
-            val cachedEntity = weatherDao.getCachedWeather(cacheKey)
-            if (cachedEntity != null) {
-                try {
-                    val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
-                    // Eğer kritik veriler null değilse cache'i dön
-                    if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
-                        emit(cachedData)
-                        hasEmitted = true
+        // 1. Cache'den oku
+        val cachedEntity = weatherDao.getCachedWeather(cacheKey)
+        var isCacheValid = false
+
+        if (cachedEntity != null) {
+            try {
+                val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
+                val isRecent = (System.currentTimeMillis() - cachedEntity.timestamp) < cacheTimeoutMillis
+
+                // Eğer kritik veriler null değilse cache'i dön
+                if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
+                    emit(cachedData)
+                    hasEmitted = true
+                    if (isRecent && !forceRefresh) {
+                        isCacheValid = true
                     }
-                } catch (e: Exception) {
-                    // Cache bozuksa görmezden gel
                 }
+            } catch (e: Exception) {
+                // Cache bozuksa görmezden gel
             }
         }
 
-        // 2. Network'ten çek
-        try {
-            val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover"
-            val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
+        // 2. Network'ten çek (Sadece forceRefresh true ise veya cache eskiyse/yoksa)
+        if (!isCacheValid || forceRefresh) {
+            try {
+                val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover"
+                val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
 
-            val response = apiService.getFullWeather(
-                lat = lat,
-                lon = lon,
-                current = currentFields,
-                daily = dailyFields
-            )
-            val domainData = WeatherMapper.mapToDomain(response, cityName, districtName)
+                val response = apiService.getFullWeather(
+                    lat = lat,
+                    lon = lon,
+                    current = currentFields,
+                    daily = dailyFields
+                )
+                val domainData = WeatherMapper.mapToDomain(response, cityName, districtName)
 
-            // 3. Cache'i güncelle
-            val jsonString = json.encodeToString(domainData)
-            weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString))
+                // 3. Cache'i güncelle
+                val jsonString = json.encodeToString(domainData)
+                weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString))
 
-            // 4. Güncel veriyi dön
-            emit(domainData)
-            hasEmitted = true
-        } catch (e: Exception) {
-            // Eğer hiçbir veri dönemediysek hata fırlat
-            if (!hasEmitted) throw e
+                // 4. Güncel veriyi dön
+                emit(domainData)
+                hasEmitted = true
+            } catch (e: Exception) {
+                // Eğer hiçbir veri dönemediysek (ne cache ne network) hata fırlat
+                if (!hasEmitted) throw e
+            }
         }
     }.onEach { _currentWeatherState.value = it }
 }

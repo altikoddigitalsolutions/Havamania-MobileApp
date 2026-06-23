@@ -47,7 +47,7 @@ export const WeatherDetailsGrid: React.FC<WeatherDetailsGridProps> = ({ current,
     {
       icon: 'air-outline',
       label: 'RÜZGAR',
-      value: `${current.wind_speed} km/s`,
+      value: `${current.wind_speed} km/sa`,
       desc: `Yön: ${getWindDirection(current.wind_direction)}`,
       color: '#94A3B8'
     },

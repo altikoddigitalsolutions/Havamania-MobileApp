@@ -78,6 +78,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     var userAboutMe: String = ""
     var userInterests: Set<String> = emptySet()
     var assistantTone: AssistantTone = AssistantTone.DENGELI
+    var language: String = "TR"
 
     init {
         loadConfig()
@@ -166,31 +167,69 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             Sıcaklık: $temp, Hissedilen: $feelsLike
             Durum: $cond
             Nem: $humidity
-            Rüzgar: $wind km/s
+            Rüzgar: $wind km/sa
             UV İndeksi: $uv
             Yağış İhtimali: $precip
             Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
             Günlük Tahmin (Gelecek 3 gün): $dailySummary
 
-            ÖNEMLİ TALİMATLAR:
+            TEMEL KURALLAR:
             1. Markdown formatı asla kullanma (**, #, _ işaretleri yasak).
-            2. Kıyafet önerisi istendiğinde şu formatı kullan:
-               - Bugün [Şehir]'da [Sıcaklık]°, hissedilen [Hissedilen]°
-               - Rüzgar [Düzey] (Düşük/Orta/Yüksek)
-               - Yağış ihtimali %[Yüzde]
-               - UV [İndeks]
-               - Öneri: [Kıyafetler]
-            3. Yanıtın kısa, öz ve kart yapısına uygun olsun.
+            2. Cevabını sadece düz metin olarak ver.
         """.trimIndent()
     }
 
     private fun buildToneInstruction(): String {
         return when (assistantTone) {
-            AssistantTone.SAMIMI -> "İLETİŞİM TARZI: SAMİMİ. Çok sıcak, arkadaşça ve samimi bir dil kullan. 'Sen' diye hitap et. Bir dost gibi tavsiye ver. 'Canım, dostum, selam' gibi ifadeler kullanabilirsin."
-            AssistantTone.RESMI -> "İLETİŞİM TARZI: RESMİ. Çok profesyonel, ciddi ve kurumsal bir dil kullan. 'Siz' diye hitap et. Samimiyetten kaçın. Cümlelerin kurallı ve ciddi olsun."
-            AssistantTone.DENGELI -> "İLETİŞİM TARZI: DENGELİ. Ne çok resmi ne çok samimi ol. Bilgilendirici ve doğal bir dil kullan."
-            AssistantTone.KISA_NET -> "İLETİŞİM TARZI: KISA VE NET. Sadece en gerekli bilgiyi ver. Maksimum 3-4 cümle kur. Gereksiz hiçbir kelime kullanma."
-            AssistantTone.DETAYLI_UZMAN -> "İLETİŞİM TARZI: DETAYLI UZMAN. Meteorolojik bir uzman gibi davran. Verileri derinlemesine yorumla, neden-sonuç ilişkisi kur, detaylı analiz yap ve kapsamlı öneriler sun."
+            AssistantTone.SAMIMI -> """
+                [SİSTEM ROLÜ: SAMİMİ ARKADAŞ PERSONASI]
+                - Karakter: Kullanıcının çok yakın, enerjik ve neşeli bir arkadaşısın.
+                - Hitap: Kesinlikle "sen" diye hitap et. "Selam", "canım", "dostum" gibi sıcak ifadeler kullan.
+                - Üslup: Duygularını belli et, samimi ve tavsiye veren bir tonda konuş.
+                - Emoji: Bol ve yerinde emoji kullan.
+                - Örnek: "Bugün Balıkesir harika görünüyor 😊 29 derece civarında sıcak bir gün seni bekliyor. Şapkanı kap ve dışarı çıkmanın tadını çıkar."
+                - Kural: Resmiyetten tamamen uzaklaş.
+            """.trimIndent()
+            AssistantTone.RESMI -> """
+                [SİSTEM ROLÜ: PROFESYONEL KURUMSAL ASİSTAN PERSONASI]
+                - Karakter: Ciddi, duygusuz ve tamamen profesyonel bir kurumsal asistansın.
+                - Hitap: Kesinlikle "siz" diye hitap et.
+                - Üslup: Sadece net verileri ve resmi önerileri aktar. Cümleler kurallı ve ciddi olmalı.
+                - Emoji: KESİNLİKLE EMOJİ KULLANMA.
+                - Örnek: "Bugün Balıkesir'de hava sıcaklığı 29°C olacaktır. Yağış beklenmemektedir. UV seviyesi yüksek olduğundan güneş koruyucu kullanılması önerilir."
+                - Kural: Kişisel yorumlardan ve samimiyetten kaçın.
+            """.trimIndent()
+            AssistantTone.DENGELI -> """
+                [SİSTEM ROLÜ: DENGELİ REHBER PERSONASI]
+                - Karakter: Bilgilendirici, nazik ve doğal bir rehbersin.
+                - Hitap: Doğal bir dil kullan.
+                - Üslup: Samimi ve resmiyet arasında bir denge kur. Kısa açıklamalar ve pratik öneriler ver.
+                - Emoji: Gerektiğinde 1-2 tane kullanabilirsin.
+                - Örnek: "Bugün Balıkesir'de güneşli bir hava bekleniyor. 29°C sıcaklık ve düşük yağış ihtimali sayesinde dış mekan aktiviteleri için uygun bir gün."
+                - Kural: Hem profesyonel kal hem de yardımcı olduğunu hissettir.
+            """.trimIndent()
+            AssistantTone.KISA_NET -> """
+                [SİSTEM ROLÜ: VERİMLİLİK ODAKLI ASİSTAN PERSONASI]
+                - Karakter: Sadece sonuca odaklı, vakit kaybetmeyen bir asistansın.
+                - Hitap: Doğrudan veriye geç.
+                - Üslup: Asla uzun cümle kurma. Sadece maddeler (bullet points) kullan.
+                - Uzunluk: En fazla 4-5 satır.
+                - Örnek:
+                  • Sıcaklık: 29°C
+                  • Yağış: %0
+                  • UV: 7
+                  • Öneri: Şapka ve güneş gözlüğü kullan.
+                - Kural: Gereksiz tüm bağlaçları ve sıfatları at.
+            """.trimIndent()
+            AssistantTone.DETAYLI_UZMAN -> """
+                [SİSTEM ROLÜ: KIDEMLİ METEOROLOJİ UZMANI PERSONASI]
+                - Karakter: Bilimsel verilere dayanan, analitik düşünen bir meteorologsun.
+                - Hitap: Profesyonel ve teknik bir dil kullan.
+                - Üslup: Hava olaylarını meteorolojik terimlerle açıkla. UV, rüzgar, nem, hissedilen sıcaklık ve basınç arasındaki sebep-sonuç ilişkilerini yorumla.
+                - Uzunluk: Kapsamlı ve detaylı bir analiz sun.
+                - Örnek: "UV indeksinin 7 seviyesinde olması, özellikle 11:00–16:00 saatleri arasında korunmasız ciltte hızlı güneş etkisi oluşturabilir. Nem oranının düşük olması hissedilen sıcaklığın gerçek sıcaklıktan biraz daha düşük algılanmasına neden olmaktadır..."
+                - Kural: Yüzeysel bilgiden kaçın, derinlemesine analiz yap.
+            """.trimIndent()
         }
     }
 
@@ -208,16 +247,17 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
         val weatherContext = buildWeatherContext()
         val toneInstruction = buildToneInstruction()
+        val languageInstruction = if (language == "EN") "IMPORTANT: Answer ONLY in English." else "ÖNEMLİ: Sadece Türkçe cevap ver."
         val personalContext = systemContext ?: ""
 
         // Tone instruction is placed AT THE END of the prompt and made extremely explicit
         val explicitTonePrompt = """
 
-            [DİKKAT: KRİTİK TALİMAT]
-            Aşağıdaki cevabını KESİNLİKLE şu iletişim tarzına göre oluştur:
-            $toneInstruction
+            [DİKKAT: KRİTİK TALİMATLAR]
+            1. DİL: $languageInstruction
+            2. ÜSLUP: $toneInstruction
 
-            Cevabın bu tarzın dışına çıkarsa görevin başarısız sayılacaktır.
+            Cevabın yukarıdaki üslup ve dil kurallarına %100 uymalıdır.
             Karakterine bürün ve asla bu karakterden çıkma.
         """.trimIndent()
 
@@ -230,20 +270,40 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = sessionId))
                 }
 
-                val answer = cleanMarkdown(response.answer)
+                var answer = cleanMarkdown(response.answer)
                 if (answer.isBlank()) throw Exception("Empty response")
 
-                // Enrich with action if applicable
-                val detectedAction = if (AiIntentParser.isWeatherQuery(truncatedText)) {
-                    val city = AiIntentParser.detectCity(truncatedText)
-                    val date = AiIntentParser.detectDate(truncatedText)
+                // Check if AI didn't understand (Common error phrases)
+                val isUnknownResponse = answer.contains("geçerli bir soru", ignoreCase = true) ||
+                                       answer.contains("anlamadım", ignoreCase = true) ||
+                                       answer.length < 5
 
+                val isWeatherQuery = AiIntentParser.isWeatherQuery(truncatedText)
+                val city = AiIntentParser.detectCity(truncatedText)
+                val date = AiIntentParser.detectDate(truncatedText)
+
+                // If it's a valid weather query but AI gave a generic "don't understand" answer,
+                // replace it with our local detailed weather answer.
+                var finalIsUnknown = isUnknownResponse
+                if (isWeatherQuery && isUnknownResponse && _weatherData.value != null) {
+                    answer = RecommendationEngine.generateAssistantFallbackReply(
+                        userPrompt = truncatedText,
+                        weatherData = _weatherData.value,
+                        aboutMe = userAboutMe,
+                        interests = userInterests,
+                        tone = assistantTone
+                    )
+                    finalIsUnknown = false // It's now a known response (fallback)
+                }
+
+                // Enrich with action if applicable (Only if we have a successful weather-related answer)
+                val detectedAction = if (isWeatherQuery && !finalIsUnknown) {
                     if (city != null) {
                         val today = LocalDate.now()
                         if (date == null || !date.isBefore(today)) {
                              AssistantAction(
                                 type = AssistantActionType.CREATE_TRAVEL_PLAN,
-                                label = "Seyahat Analizi Oluştur",
+                                label = "✈️ Seyahat Planla",
                                 city = city,
                                 startDate = date?.toString(),
                                 tripName = "$city Seyahati"
@@ -256,17 +316,29 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     val today = LocalDate.now()
                     val startDate = detectedAction.startDate?.let { LocalDate.parse(it) }
 
-                    if (startDate == today) {
-                        "$answer\n\nBugün için ${detectedAction.city}’da dışarı çıkmayı planlıyorsan, senin için özel bir aktivite önerisi de hazırlayabilirim."
-                    } else {
-                        val dateLabel = if (detectedAction.startDate != null) {
-                            val d = LocalDate.parse(detectedAction.startDate)
-                            val monthName = d.month.getDisplayName(TextStyle.FULL, Locale("tr", "TR"))
-                            "${d.dayOfMonth} $monthName"
-                        } else "bu tarih"
+                    val invitationText = if (startDate != null) {
+                        val d = startDate
+                        val monthName = d.month.getDisplayName(TextStyle.FULL, Locale("tr", "TR"))
+                        val dateLabel = "${d.dayOfMonth} $monthName"
 
-                        "$answer\n\nEğer $dateLabel için ${detectedAction.city}’e gitmeyi planlıyorsan istersen hızlıca bir seyahat analizi oluşturalım. Şehri ve başlangıç tarihini senin için doldurabilirim."
+                        when (assistantTone) {
+                            AssistantTone.SAMIMI -> "Eğer $dateLabel tarihinde ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
+                            AssistantTone.RESMI -> "$dateLabel tarihinde ${detectedAction.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
+                            AssistantTone.KISA_NET -> "Seyahat Planla: ${detectedAction.city} ($dateLabel)"
+                            AssistantTone.DETAYLI_UZMAN -> "$dateLabel tarihinde ${detectedAction.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
+                            else -> "Eğer $dateLabel tarihinde ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
+                        }
+                    } else {
+                        when (assistantTone) {
+                            AssistantTone.SAMIMI -> "Eğer ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
+                            AssistantTone.RESMI -> "${detectedAction.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
+                            AssistantTone.KISA_NET -> "Seyahat Planla: ${detectedAction.city}"
+                            AssistantTone.DETAYLI_UZMAN -> "${detectedAction.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
+                            else -> "Eğer ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
+                        }
                     }
+
+                    "$answer\n\n$invitationText"
                 } else answer
 
                 _messages.value = _messages.value + AltikodChatMessage(
@@ -293,27 +365,29 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 tone = assistantTone
             )
 
-            val combinedMessage = if (fallbackText.contains("Hava durumu bilgilerini")) {
+            val combinedMessage = if (_weatherData.value == null) {
+                "Hava verileri şu anda alınamıyor. Lütfen daha sonra tekrar deneyin."
+            } else if (fallbackText.contains("Hava durumu bilgilerini")) {
                 fallbackText
             } else {
                 "$prefix $fallbackText"
             }
 
-            // Enrich with action if applicable
-            val detectedAction = if (AiIntentParser.isWeatherQuery(userPrompt)) {
-                val city = AiIntentParser.detectCity(userPrompt)
-                val date = AiIntentParser.detectDate(userPrompt)
-                if (city != null) {
-                    val today = LocalDate.now()
-                    if (date == null || !date.isBefore(today)) {
-                        AssistantAction(
-                            type = AssistantActionType.CREATE_TRAVEL_PLAN,
-                            label = "Seyahat Analizi Oluştur",
-                            city = city,
-                            startDate = date?.toString(),
-                            tripName = "$city Seyahati"
-                        )
-                    } else null
+            // Enrich with action if applicable (Only if city detected and it's a weather query)
+            val isWeatherQuery = AiIntentParser.isWeatherQuery(userPrompt)
+            val city = AiIntentParser.detectCity(userPrompt)
+            val date = AiIntentParser.detectDate(userPrompt)
+
+            val detectedAction = if (isWeatherQuery && city != null) {
+                val today = LocalDate.now()
+                if (date == null || !date.isBefore(today)) {
+                    AssistantAction(
+                        type = AssistantActionType.CREATE_TRAVEL_PLAN,
+                        label = "✈️ Seyahat Planla",
+                        city = city,
+                        startDate = date?.toString(),
+                        tripName = "$city Seyahati"
+                    )
                 } else null
             } else null
 
@@ -368,12 +442,14 @@ fun AiChatScreen(
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
     val assistantTone by themeViewModel.assistantTone.collectAsStateWithLifecycle()
+    val language by themeViewModel.language.collectAsStateWithLifecycle()
 
     // Sync non-weather data with ViewModel
-    LaunchedEffect(aboutMe, userInterests, assistantTone) {
+    LaunchedEffect(aboutMe, userInterests, assistantTone, language) {
         viewModel.userAboutMe = aboutMe
         viewModel.userInterests = userInterests
         viewModel.assistantTone = assistantTone
+        viewModel.language = language
     }
 
     var showEndChatDialog by remember { mutableStateOf(false) }
@@ -886,14 +962,14 @@ fun ChatBubble(
         Surface(
             color = bubbleColor,
             shape = shape,
-            tonalElevation = 2.dp,
-            shadowElevation = 1.dp
+            tonalElevation = 1.dp,
+            shadowElevation = 0.5.dp
         ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                 Text(
                     text = message.text,
                     color = textColor,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 19.sp, fontSize = 14.sp)
                 )
 
                 if (message.action != null) {

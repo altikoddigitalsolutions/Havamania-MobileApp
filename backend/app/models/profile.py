@@ -20,6 +20,10 @@ class Profile(Base):
     avatar_emoji: Mapped[str] = mapped_column(String(16), default="🧑", nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     interest: Mapped[str | None] = mapped_column(Text, nullable=True)
+    health_sensitivities: Mapped[str | None] = mapped_column(Text, nullable=True)
+    travel_preferences: Mapped[str | None] = mapped_column(Text, nullable=True)
+    activity_types: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assistant_tone: Mapped[str] = mapped_column(String(32), default="friendly", nullable=False)
 
     user = relationship("User")
     primary_location = relationship("Location", foreign_keys=[primary_location_id])

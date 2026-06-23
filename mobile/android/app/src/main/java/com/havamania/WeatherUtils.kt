@@ -102,12 +102,12 @@ object WeatherUtils {
 
     /**
      * Rüzgar bilgisini sayısal + sözel formatta döner.
-     * Örnek: "18 km/s (Orta)"
+     * Örnek: "18 km/sa (Orta)"
      */
     fun formatWindWithLevel(speed: Double?): String {
         if (speed == null) return "Bilinmiyor"
         val level = getWindLevelText(speed)
-        return "${speed.toInt()} km/s ($level)"
+        return "${speed.toInt()} km/sa ($level)"
     }
 
     /**

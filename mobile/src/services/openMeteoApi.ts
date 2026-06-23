@@ -6,6 +6,26 @@
 
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 
+// ── Cache Mekanizması ────────────────────────────────────────────────────────
+const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 dakika
+const weatherCache: Record<string, {data: any; timestamp: number}> = {};
+
+function getCacheKey(lat: number, lon: number, type: string, params: string): string {
+  return `${lat.toFixed(4)},${lon.toFixed(4)}:${type}:${params}`;
+}
+
+function getFromCache(key: string) {
+  const cached = weatherCache[key];
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setToCache(key: string, data: any) {
+  weatherCache[key] = {data, timestamp: Date.now()};
+}
+
 // ── Arayüzler ────────────────────────────────────────────────────────────────
 
 export interface CurrentWeatherData {
@@ -101,6 +121,10 @@ export async function fetchCurrentWeather(
   ].join(',');
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const cacheKey = getCacheKey(lat, lon, 'current', tUnit);
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) return cachedData;
+
   const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&current=${currentFields}&temperature_unit=${tUnit}&timezone=auto`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo current: HTTP ${res.status}`);
@@ -108,7 +132,7 @@ export async function fetchCurrentWeather(
   if (!json.current) throw new Error(`Open-Meteo current: no 'current' in response`);
   const c = json.current;
 
-  return {
+  const result: CurrentWeatherData = {
     temperature: Math.round(c.temperature_2m ?? 0),
     humidity: Math.round(c.relative_humidity_2m ?? 0),
     feels_like: Math.round(c.apparent_temperature ?? 0),
@@ -125,6 +149,9 @@ export async function fetchCurrentWeather(
     precipitation: Math.round((c.precipitation ?? 0) * 10) / 10,
     is_day: c.is_day === 1,
   };
+
+  setToCache(cacheKey, result);
+  return result;
 }
 
 // ── Saatlik Tahmin ────────────────────────────────────────────────────────────
@@ -146,6 +173,10 @@ export async function fetchHourlyWeather(
   ].join(',');
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const cacheKey = getCacheKey(lat, lon, 'hourly', `${tUnit}:${hours}`);
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) return cachedData;
+
   const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${hourlyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=3`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo hourly: HTTP ${res.status}`);
@@ -171,7 +202,9 @@ export async function fetchHourlyWeather(
       wind_gusts: Math.round(h.wind_gusts_10m[from + i] ?? 0),
     }));
 
-  return {items};
+  const result = {items};
+  setToCache(cacheKey, result);
+  return result;
 }
 
 // ── Günlük Tahmin ─────────────────────────────────────────────────────────────
@@ -196,6 +229,10 @@ export async function fetchDailyWeather(
   ].join(',');
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
+  const cacheKey = getCacheKey(lat, lon, 'daily', `${tUnit}:${days}`);
+  const cachedData = getFromCache(cacheKey);
+  if (cachedData) return cachedData;
+
   const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&daily=${dailyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=${days}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo daily: HTTP ${res.status}`);
@@ -219,7 +256,9 @@ export async function fetchDailyWeather(
     }),
   );
 
-  return {items};
+  const result = {items};
+  setToCache(cacheKey, result);
+  return result;
 }
 
 // ── Şehir Arama (Geocoding) ──────────────────────────────────────────────────
@@ -234,8 +273,8 @@ export interface GeoResult {
 export async function searchCity(query: string): Promise<GeoResult[]> {
   const params = new URLSearchParams({
     name: query,
-    count: '5',
-    language: 'en',
+    count: '50',
+    language: 'tr',
     format: 'json',
   });
 
@@ -244,13 +283,33 @@ export async function searchCity(query: string): Promise<GeoResult[]> {
   const json = await res.json();
   if (!json.results) return [];
 
-  return (json.results as any[]).map(r => ({
+  const results = (json.results as any[]).map(r => ({
     name: r.name,
     country: r.country,
     admin1: r.admin1,
     latitude: r.latitude,
     longitude: r.longitude,
+    country_code: r.country_code,
+    population: r.population || 0,
   }));
+
+  // Türkiye odaklı ve doğruluk (nüfus + eşleşme) bazlı sıralama
+  return results.sort((a, b) => {
+    const aIsTr = a.country_code === 'TR';
+    const bIsTr = b.country_code === 'TR';
+
+    if (aIsTr && !bIsTr) return -1;
+    if (!aIsTr && bIsTr) return 1;
+
+    // Her ikisi de Türkiye'deyse veya her ikisi de dışarıdaysa
+    const aExact = a.name.toLowerCase() === query.toLowerCase();
+    const bExact = b.name.toLowerCase() === query.toLowerCase();
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+
+    // Nüfusa göre (Büyük şehirler daha doğru sonuç olma eğilimindedir)
+    return (b.population || 0) - (a.population || 0);
+  });
 }
 
 // ── Ay Fazı Hesaplama ─────────────────────────────────────────────────────────

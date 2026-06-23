@@ -5,6 +5,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.premium import require_premium_user
+from app.models.profile import Profile
 from app.models.user import User
 from app.schemas.chatbot import ChatbotAskRequest, ChatbotAskResponse, ChatbotUsageResponse
 from app.services.chatbot_bridge import chatbot_bridge_client
@@ -42,7 +43,20 @@ def ask_chatbot(
             is_premium=is_premium,
         )
 
-    answer = chatbot_bridge_client.ask(question=payload.question, user_id=current_user.id)
+    # Profil verilerini çek (AI kişiselleştirme için)
+    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    context = {}
+    if profile:
+        context = {
+            "interest": profile.interest,
+            "health_sensitivities": profile.health_sensitivities,
+            "travel_preferences": profile.travel_preferences,
+            "activity_types": profile.activity_types,
+            "assistant_tone": profile.assistant_tone,
+            "language": profile.language,
+        }
+
+    answer = chatbot_bridge_client.ask(question=payload.question, user_id=current_user.id, context=context)
     usage = chatbot_usage_service.increment_message(db, usage)
 
     return ChatbotAskResponse(
@@ -77,7 +91,20 @@ def ask_chatbot_premium(
 ) -> ChatbotAskResponse:
     usage = chatbot_usage_service.get_or_create_today_usage(db, current_user.id)
     daily_limit = settings.chatbot_premium_daily_limit
-    answer = chatbot_bridge_client.ask(question=payload.question, user_id=current_user.id)
+    # Profil verilerini çek (AI kişiselleştirme için)
+    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    context = {}
+    if profile:
+        context = {
+            "interest": profile.interest,
+            "health_sensitivities": profile.health_sensitivities,
+            "travel_preferences": profile.travel_preferences,
+            "activity_types": profile.activity_types,
+            "assistant_tone": profile.assistant_tone,
+            "language": profile.language,
+        }
+
+    answer = chatbot_bridge_client.ask(question=payload.question, user_id=current_user.id, context=context)
     usage = chatbot_usage_service.increment_message(db, usage)
     return ChatbotAskResponse(
         answer=answer,

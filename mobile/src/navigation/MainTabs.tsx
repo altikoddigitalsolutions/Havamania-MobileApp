@@ -22,6 +22,7 @@ export function MainTabs(): React.JSX.Element {
 
   return (
     <Tab.Navigator
+      initialRouteName="Weather"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

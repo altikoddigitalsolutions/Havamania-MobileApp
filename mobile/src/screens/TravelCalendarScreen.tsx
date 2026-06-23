@@ -63,6 +63,17 @@ const TRAVEL_TYPES: { type: TravelType; label: string; icon: string }[] = [
   { type: 'Other', label: 'Diğer', icon: 'ellipsis-horizontal-outline' },
 ];
 
+const formatDateRange = (start: string, end: string) => {
+  if (!start || !end) return '';
+  const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+  const format = (d: string) => {
+    const parts = d.split('-');
+    if (parts.length < 3) return d;
+    return `${parseInt(parts[2])} ${MONTHS[parseInt(parts[1]) - 1]}`;
+  };
+  return `${format(start)} - ${format(end)}`;
+};
+
 /**
  * Premium Seyahat Ekranı
  */
@@ -395,62 +406,33 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
 
   const diffDays = Math.ceil(Math.abs(new Date(plan.endDate).getTime() - new Date(plan.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-  const formatDateRange = (start: string, end: string) => {
-    const MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-    const format = (d: string) => {
-      const parts = d.split('-');
-      return `${parseInt(parts[2])} ${MONTHS[parseInt(parts[1]) - 1]}`;
-    };
-    return `${format(start)} - ${format(end)}`;
-  };
-
   return (
-    <Animated.View style={[styles.card, { backgroundColor: isArchived ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', opacity: (isPastTrip && !isArchived) ? 0.8 : 1, transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View style={[styles.card, { backgroundColor: isArchived ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', opacity: (isPastTrip && !isArchived) ? 0.7 : 1, transform: [{ translateY: slideAnim }] }]}>
       <LinearGradient colors={['rgba(255,255,255,0.05)', 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={StyleSheet.absoluteFill} />
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <View style={[styles.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '20' }]}><Icon name={isArchived ? "archive" : "navigate-outline"} size={20} color={analysis?.color || C.accent} /></View>
+          <View style={[styles.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '15' }]}><Icon name={isArchived ? "archive" : typeInfo.icon} size={20} color={analysis?.color || C.accent} /></View>
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
                 {isPastTrip && !isArchived && <View style={styles.completedBadge}><Text style={styles.completedBadgeText}>TAMAMLANDI</Text></View>}
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.cardDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
-                {analysis && (
-                    <View style={[styles.statusBadge, { backgroundColor: analysis.status === 'ready' ? '#10B98120' : '#94A3B820' }]}>
-                        <Text style={[styles.statusBadgeText, { color: analysis.status === 'ready' ? '#10B981' : '#94A3B8' }]}>
-                            {analysis.status === 'far-future' ? 'Analiz zamanı bekleniyor' :
-                             analysis.status === 'ready' ? 'Gelişmiş analiz hazır' :
-                             analysis.status === 'past' ? 'Geçmiş Seyahat' : 'Analiz Hazırlanıyor'}
-                        </Text>
-                    </View>
-                )}
-            </View>
+            <Text style={[styles.cardDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
           </View>
         </View>
         {analysis?.status === 'ready' || analysis?.status === 'active' ? (
           <View style={styles.weatherSummary}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
-            </View>
+            <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
             <Text style={[styles.cardPrecip, { color: C.textSecondary }]}>Yağış: {analysis.precipitationRiskText}</Text>
           </View>
-        ) : (
-          <View style={styles.weatherSummary}>
-            <Icon name={analysis?.icon as any || 'help-circle-outline'} size={24} color={analysis?.color || C.textMuted} />
-          </View>
-        )}
+        ) : null}
       </View>
 
       {analysis && (analysis.status === 'ready' || analysis.status === 'active') && (
         <View style={styles.scoreContainer}>
           <View style={styles.scoreInfo}>
-            <Text style={[styles.scoreLabel, { color: C.textSecondary }]}>SEYAHAT SKORU</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
-              <Text style={[styles.scoreValue, { color: analysis.color }]}>{analysis.score}</Text>
-              <Text style={[styles.scoreTotal, { color: C.textMuted }]}>/100</Text>
-            </View>
+            <Text style={[styles.scoreLabel, { color: C.textSecondary }]}>KONFOR SKORU</Text>
+            <Text style={[styles.scoreValue, { color: analysis.color }]}>{analysis.score}<Text style={{fontSize: 12, color: C.textMuted}}>/100</Text></Text>
           </View>
           <View style={styles.adviceContainer}>
             <Text style={[styles.adviceText, { color: C.text }]} numberOfLines={2}>{analysis.advice}</Text>
@@ -463,19 +445,20 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
       )}
 
       <View style={styles.cardFooter}>
-        <View style={styles.footerLeft}><Icon name={typeInfo.icon} size={14} color={C.textMuted} /><Text style={[styles.footerTypeText, { color: C.textMuted }]}>{typeInfo.label}</Text></View>
         <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={onEdit}><Icon name="pencil" size={16} color={C.textSecondary} /><Text style={[styles.actionBtnText, { color: C.textSecondary }]}>Düzenle</Text></TouchableOpacity>
-          {(!isPastTrip && !isArchived) ? (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => { refetch(); onReAnalyze(); }}><Icon name="sparkles" size={16} color={C.accent} /><Text style={[styles.actionBtnText, { color: C.accent }]}>Yeniden Analiz</Text></TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.actionBtn} onPress={onShowDetail}><Icon name="stats-chart-outline" size={16} color={C.accent} /><Text style={[styles.actionBtnText, { color: C.accent }]}>Geçmiş Özeti</Text></TouchableOpacity>
-          )}
-          {isPastTrip && !isArchived && <TouchableOpacity style={[styles.actionBtn, styles.archiveActionBtn]} onPress={onArchive}><Icon name="archive-outline" size={16} color="#60A5FA" /><Text style={[styles.actionBtnText, { color: '#60A5FA' }]}>Arşivle</Text></TouchableOpacity>}
-          {isArchived && <TouchableOpacity style={styles.actionBtn} onPress={onUnarchive}><Icon name="arrow-undo-outline" size={16} color={C.textMuted} /><Text style={[styles.actionBtnText, { color: C.textMuted }]}>Geri Al</Text></TouchableOpacity>}
-          <TouchableOpacity style={styles.actionBtn} onPress={onDelete}><Icon name="trash" size={16} color="#EF444499" /><Text style={[styles.actionBtnText, { color: '#EF444499' }]}>Sil</Text></TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryAction, { backgroundColor: C.accent }]}
+            onPress={isPastTrip || isArchived ? onShowDetail : () => {}}
+          >
+            <Text style={styles.primaryActionText}>{isPastTrip || isArchived ? 'Özeti Gör' : 'Detayları Gör'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryAction} onPress={onEdit}>
+            <Icon name="ellipsis-horizontal" size={20} color={C.textSecondary} />
+          </TouchableOpacity>
         </View>
+        <TouchableOpacity onPress={onDelete} style={{padding: 4}}><Icon name="trash-outline" size={18} color="#EF444466" /></TouchableOpacity>
       </View>
+    </Animated.View>
     </Animated.View>
   );
 }
@@ -531,24 +514,30 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.detailHeader}>
-              <Text style={[styles.detailCity, { color: C.text }]}>{plan.city}</Text>
-              <Text style={[styles.detailDates, { color: C.textSecondary }]}>{plan.startDate} / {plan.endDate}</Text>
-              <View style={[styles.typeChipForm, { backgroundColor: 'rgba(255,255,255,0.05)', alignSelf: 'flex-start', marginTop: 12 }]}>
-                <Icon name={typeInfo.icon} size={16} color={C.accent} /><Text style={[styles.typeText, { color: C.textSecondary }]}>{typeInfo.label}</Text>
+              <View style={[styles.scoreCircle, { borderColor: C.accent }]}>
+                <Text style={[styles.scoreCircleValue, { color: C.text }]}>92</Text>
+                <Text style={[styles.scoreCircleLabel, { color: C.textSecondary }]}>SKOR</Text>
+              </View>
+              <View style={{flex: 1}}>
+                <Text style={[styles.detailCity, { color: C.text }]}>{plan.city}</Text>
+                <Text style={[styles.detailDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
               </View>
             </View>
 
             {historySummary ? (
                 <View style={styles.historySummaryGrid}>
                     <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                        <Icon name="thermometer-outline" size={20} color={C.accent} />
                         <Text style={styles.historyLabel}>ORTALAMA</Text>
                         <Text style={[styles.historyValue, { color: C.text }]}>{historySummary.averageTemp}°</Text>
                     </View>
                     <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                        <Icon name="sunny-outline" size={20} color="#FBBF24" />
                         <Text style={styles.historyLabel}>EN GÜNEŞLİ</Text>
                         <Text style={[styles.historyValue, { color: '#FBBF24' }]}>{historySummary.sunniestDay}</Text>
                     </View>
                     <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                        <Icon name="rainy-outline" size={20} color="#3B82F6" />
                         <Text style={styles.historyLabel}>EN YAĞIŞLI</Text>
                         <Text style={[styles.historyValue, { color: '#3B82F6' }]}>{historySummary.rainiestDay}</Text>
                     </View>
@@ -556,7 +545,7 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
             ) : <ActivityIndicator color={C.accent} />}
 
             <View style={[styles.detailSection, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-              <View style={styles.detailTitleRow}><Icon name="cloud-done-outline" size={18} color={C.accent} /><Text style={[styles.detailSectionTitle, { color: C.text }]}>AI SEYAHAT DEĞERLENDİRMESİ</Text></View>
+              <View style={styles.detailTitleRow}><Icon name="sparkles-outline" size={18} color={C.accent} /><Text style={[styles.detailSectionTitle, { color: C.text }]}>ASİSTAN DEĞERLENDİRMESİ</Text></View>
               <Text style={[styles.detailText, { color: C.textSecondary }]}>{historySummary?.evaluation || "Hava durumu kayıtları analiz ediliyor..."}</Text>
             </View>
 
@@ -677,9 +666,10 @@ const styles = StyleSheet.create({
   adviceText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
-  footerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  footerTypeText: { fontSize: 12, fontWeight: '600' },
-  cardActions: { flexDirection: 'row', gap: 8 },
+  cardActions: { flexDirection: 'row', gap: 12, flex: 1 },
+  primaryAction: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  primaryActionText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  secondaryAction: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   archiveActionBtn: { backgroundColor: 'rgba(59, 130, 246, 0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   actionBtnText: { fontSize: 11, fontWeight: '700' },
@@ -706,7 +696,10 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalTitle: { fontSize: 22, fontWeight: '800' },
   closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-  detailHeader: { marginBottom: 24 },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 24 },
+  scoreCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, justifyContent: 'center', alignItems: 'center' },
+  scoreCircleValue: { fontSize: 24, fontWeight: '900' },
+  scoreCircleLabel: { fontSize: 8, fontWeight: '800', marginTop: -2 },
   detailCity: { fontSize: 28, fontWeight: '900' },
   detailDates: { fontSize: 14, fontWeight: '600', opacity: 0.6 },
   detailSection: { padding: 20, borderRadius: 24, marginBottom: 16 },

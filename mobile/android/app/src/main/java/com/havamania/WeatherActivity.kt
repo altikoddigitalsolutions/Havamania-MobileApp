@@ -57,32 +57,34 @@ class WeatherActivity : ComponentActivity() {
                     Scaffold(
                         containerColor = themeColors.background,
                         bottomBar = {
-                            val hideBottomBarRoutes = listOf("settings", "edit_profile", "cities", "ai_history_detail", "notifications")
+                            val hideBottomBarRoutes = listOf("settings", "edit_profile", "cities", "ai_history_detail", "notifications", "ai_history")
                             val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("ai_history_detail")
 
                             if (shouldShowBottomBar) {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route ->
-                                        android.util.Log.d("Nav", "BottomBar: Tab clicked=$route, Current=$currentRoute")
-
-                                        navController.navigate(route) {
-                                            // Ensure we always pop up to start destination to avoid stack accumulation
-                                            popUpTo("weather") {
-                                                saveState = true
+                                        if (route != currentRoute) {
+                                            navController.navigate(route) {
+                                                popUpTo("weather") {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                            launchSingleTop = true
-                                            restoreState = true
                                         }
                                     }
                                 )
                             }
                         }
                     ) { innerPadding ->
+                        val hideBottomBarRoutes = listOf("settings", "edit_profile", "cities", "ai_history_detail", "notifications", "ai_history")
+                        val isBottomBarHidden = currentRoute in hideBottomBarRoutes || currentRoute.startsWith("ai_history_detail")
+
                         Box(modifier = Modifier
                             .fillMaxSize()
                             .background(backgroundGradient)
-                            .padding(bottom = if (currentRoute !in listOf("settings", "cities", "edit_profile", "notifications") && !currentRoute.startsWith("ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
+                            .padding(bottom = if (!isBottomBarHidden) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
                             NavHost(navController = navController, startDestination = "weather") {
                                 composable(

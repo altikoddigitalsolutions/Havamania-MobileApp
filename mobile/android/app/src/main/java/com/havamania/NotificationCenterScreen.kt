@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.HavamaniaTheme
 import com.havamania.ui.theme.HavamaniaTopBar
 import kotlinx.coroutines.launch
@@ -111,29 +112,17 @@ fun NotificationCenterScreen(
     }
 
     if (showDeleteAllDialog) {
-        AlertDialog(
+        HavamaniaDialog(
             onDismissRequest = { showDeleteAllDialog = false },
-            containerColor = themeColors.surface,
-            titleContentColor = themeColors.textPrimary,
-            textContentColor = themeColors.textSecondary,
-            title = { Text("Tüm bildirimleri silmek istiyor musun?") },
-            text = { Text("Bu işlem geri alınamaz.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deleteAllNotifications()
-                        showDeleteAllDialog = false
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Tüm bildirimler silindi")
-                        }
-                    }
-                ) {
-                    Text("Tümünü Sil", color = themeColors.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteAllDialog = false }) {
-                    Text("Vazgeç", color = themeColors.textPrimary)
+            title = "Tümünü Sil?",
+            text = "Tüm bildirimler kalıcı olarak silinecektir. Bu işlem geri alınamaz.",
+            confirmText = "Sil",
+            confirmColor = themeColors.error,
+            icon = Icons.Rounded.DeleteForever,
+            onConfirm = {
+                viewModel.deleteAllNotifications()
+                scope.launch {
+                    snackbarHostState.showSnackbar("Tüm bildirimler silindi")
                 }
             }
         )
@@ -200,9 +189,9 @@ fun NotificationCenterScreen(
                     state.notifications
                 }
 
-                // Filter logic
+                // Filter & Group logic
                 val filteredList = remember(notificationsToShow, state.activeFilter) {
-                    when (state.activeFilter) {
+                    val base = when (state.activeFilter) {
                         NotificationFilter.ALL -> notificationsToShow
                         NotificationFilter.UNREAD -> notificationsToShow.filter { !it.isRead }
                         NotificationFilter.TRAVEL -> notificationsToShow.filter { it.category == NotificationCategory.TRAVEL }
@@ -214,6 +203,11 @@ fun NotificationCenterScreen(
                         NotificationFilter.GENERAL -> notificationsToShow.filter { it.category == NotificationCategory.GENERAL }
                         NotificationFilter.SYSTEM -> notificationsToShow.filter { it.category == NotificationCategory.SYSTEM }
                     }
+
+                    // Tekrar edenleri grupla (Başlık ve Mesaj aynı olanları en yeniye göre teke düşür)
+                    base.groupBy { it.getSafeTitle() + it.getSafeMessage() }
+                        .map { it.value.maxByOrNull { n -> n.createdAt }!! }
+                        .sortedByDescending { it.createdAt }
                 }
 
                 if (filteredList.isEmpty()) {
@@ -440,13 +434,13 @@ fun NotificationCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
         color = cardBgColor,
         border = BorderStroke(if (isSelected) 2.dp else 1.dp, cardBorderColor),
-        shadowElevation = if (notification.isRead) 0.dp else 4.dp
+        shadowElevation = if (notification.isRead) 0.dp else 2.dp
     ) {
         Row(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
             val iconBgColor = when (notification.category) {
@@ -461,20 +455,20 @@ fun NotificationCard(
 
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(iconBgColor.copy(alpha = 0.12f)),
+                    .background(iconBgColor.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = notification.category.getIcon(),
                     contentDescription = null,
                     tint = iconBgColor,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -482,48 +476,53 @@ fun NotificationCard(
                         text = notification.getSafeTitle(),
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black,
-                            letterSpacing = 0.2.sp
+                            fontSize = 13.sp,
+                            letterSpacing = 0.1.sp
                         ),
                         color = themeColors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(text = timeStr, style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
+                    Text(text = timeStr, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = themeColors.textMuted)
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = notification.getSafeMessage(),
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                    color = if (notification.isRead) themeColors.textSecondary.copy(alpha = 0.8f) else themeColors.textSecondary,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
+                    color = if (notification.isRead) themeColors.textSecondary.copy(alpha = 0.7f) else themeColors.textSecondary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (eventTimeStr != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Etkinlik Zamanı: $eventTimeStr",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = themeColors.accent.copy(alpha = 0.7f)
-                    )
+                if (eventTimeStr != null && eventTimeStr.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Schedule, null, tint = themeColors.accent.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = eventTimeStr,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                            color = themeColors.accent.copy(alpha = 0.7f)
+                        )
+                    }
                 }
 
                 if (notification.actionLabel != null) {
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         onClick = { onNavigateToDetail("", null) },
                         shape = CircleShape,
-                        color = themeColors.accent.copy(alpha = 0.08f),
+                        color = themeColors.accent.copy(alpha = 0.1f),
                         border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
                     ) {
                         Text(
                             text = notification.actionLabel.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.8.sp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, fontSize = 10.sp),
                             color = themeColors.accent,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
                 }

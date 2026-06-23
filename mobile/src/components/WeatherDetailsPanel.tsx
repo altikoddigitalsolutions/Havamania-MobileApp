@@ -195,8 +195,8 @@ export const WeatherDetailsPanel: React.FC<WeatherDetailsPanelProps> = ({ curren
         <WeatherDetailCard
           icon="air-outline"
           label="Rüzgar"
-          value={`${current.wind_speed} km/s`}
-          description={`Hamle: ${current.wind_gusts} km/s`}
+          value={`${current.wind_speed} km/sa`}
+          description={`Hamle: ${current.wind_gusts} km/sa`}
           C={C}
           color="#94A3B8"
         />

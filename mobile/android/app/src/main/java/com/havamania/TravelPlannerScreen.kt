@@ -99,7 +99,7 @@ fun TravelPlannerScreen(
                 city = initialCity,
                 tripType = type,
                 startDate = start,
-                endDate = start.plusDays(3),
+                endDate = start,
                 latitude = 0.0,
                 longitude = 0.0
             )
@@ -257,26 +257,16 @@ fun TravelPlannerScreen(
     }
 
     if (deleteConfirmPlan != null) {
-        AlertDialog(
+        HavamaniaDialog(
             onDismissRequest = { deleteConfirmPlan = null },
-            title = { Text("Seyahati Sil") },
-            text = { Text("${deleteConfirmPlan?.city} seyahatini kalıcı olarak silmek istiyor musun?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePlan(deleteConfirmPlan!!.id)
-                    deleteConfirmPlan = null
-                }) {
-                    Text("Sil", color = themeColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteConfirmPlan = null }) {
-                    Text("İptal")
-                }
-            },
-            containerColor = themeColors.surface,
-            titleContentColor = themeColors.textPrimary,
-            textContentColor = themeColors.textSecondary
+            title = "Seyahati Sil?",
+            text = "${deleteConfirmPlan?.city} seyahati kalıcı olarak silinecektir.",
+            confirmText = "Sil",
+            confirmColor = themeColors.error,
+            icon = Icons.Rounded.DeleteForever,
+            onConfirm = {
+                viewModel.deletePlan(deleteConfirmPlan!!.id)
+            }
         )
     }
 }
@@ -515,59 +505,70 @@ fun TravelPlanCard(
 
     val formatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
     val dateRange = "${plan.startDate.format(formatter)} - ${plan.endDate.format(formatter)}"
-    val cityDesc = TravelAiHelper.getCityDescription(plan.city)
     val latestAnalysis = plan.analyses.lastOrNull()
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
     val isPressed = isPressedState.value
-    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, label = "cardScale")
+    val scale by animateFloatAsState(if (isPressed) 0.985f else 1f, label = "cardScale")
 
     Surface(
-        color = themeColors.surface.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(20.dp), // Slightly smaller radius for professional look
-        shadowElevation = 4.dp,
+        color = themeColors.surfaceGlass.copy(alpha = if (themeColors.isDark) 0.6f else 0.8f),
+        shape = RoundedCornerShape(24.dp),
+        shadowElevation = 0.dp, // Premium feel with no shadow, just glass
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .alpha(if (isPast && !isArchived) 0.85f else 1f)
-            .then(if (isFocused) Modifier.border(1.5.dp, themeColors.accent, RoundedCornerShape(20.dp)) else Modifier)
-            .clickable {
-                if (!isPast && !isArchived) isExpanded = !isExpanded
-                else onShowDetail()
-            }
+            .alpha(if (isPast && !isArchived) 0.8f else 1f)
+            .then(
+                if (isFocused) Modifier.border(1.5.dp, themeColors.accent, RoundedCornerShape(24.dp))
+                else Modifier.border(1.dp, themeColors.border.copy(alpha = 0.05f), RoundedCornerShape(24.dp))
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    if (!isPast && !isArchived) isExpanded = !isExpanded
+                    else onShowDetail()
+                }
+            )
     ) {
-        Column(modifier = Modifier.padding(14.dp).fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
             Row(verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .background(
                             Brush.linearGradient(
-                                colors = if (isArchived) listOf(themeColors.textMuted, themeColors.textMuted.copy(0.6f))
-                                else themeColors.buttonGradient ?: listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.6f))
+                                colors = if (isArchived) listOf(themeColors.textMuted.copy(0.2f), themeColors.textMuted.copy(0.1f))
+                                else themeColors.buttonGradient?.map { it.copy(alpha = 0.9f) } ?: listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.8f))
                             ),
-                            RoundedCornerShape(12.dp)
+                            RoundedCornerShape(14.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(if (isArchived) Icons.Rounded.Archive else plan.tripType.icon, null, tint = themeColors.onAccent, modifier = Modifier.size(20.dp))
+                    Icon(
+                        if (isArchived) Icons.Rounded.Archive else plan.tripType.icon,
+                        null,
+                        tint = if (isArchived) themeColors.textMuted else themeColors.onAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
 
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = plan.city,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 17.sp, letterSpacing = 0.2.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = themeColors.textPrimary
                     )
                     Text(
-                        text = dateRange,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = themeColors.textSecondary
+                        text = dateRange.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp),
+                        color = themeColors.accent.copy(alpha = 0.8f)
                     )
                 }
 
@@ -578,56 +579,51 @@ fun TravelPlanCard(
                         else -> Color(0xFFEF4444)
                     }
                     Surface(
-                        color = scoreColor.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.3f))
+                        color = scoreColor.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.2f))
                     ) {
                         Text(
                             text = "%${latestAnalysis.travelScore}",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
                             color = scoreColor
                         )
                     }
                 }
 
-                Box(modifier = Modifier.padding(start = 4.dp)) {
-                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Rounded.MoreVert, null, tint = themeColors.textMuted, modifier = Modifier.size(18.dp))
+                Box(modifier = Modifier.padding(start = 6.dp)) {
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Rounded.MoreHoriz, null, tint = themeColors.textMuted, modifier = Modifier.size(20.dp))
                     }
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
-                        containerColor = themeColors.surface
+                        containerColor = themeColors.surface,
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         if (!isPast && !isArchived) {
                             DropdownMenuItem(
-                                text = { Text("Düzenle", color = themeColors.textPrimary) },
+                                text = { Text("Düzenle", fontWeight = FontWeight.Bold) },
                                 onClick = { onEdit(); showMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Edit, null, modifier = Modifier.size(18.dp)) }
                             )
                         }
                         if (isArchived) {
                             DropdownMenuItem(
-                                text = { Text("Aktifleştir", color = themeColors.textPrimary) },
+                                text = { Text("Aktifleştir", fontWeight = FontWeight.Bold) },
                                 onClick = { onUnarchive(); showMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Unarchive, null, modifier = Modifier.size(18.dp)) }
                             )
-                        } else if (isPast) {
-                            DropdownMenuItem(
-                                text = { Text("Arşivle", color = themeColors.textPrimary) },
-                                onClick = { onArchive(); showMenu = false },
-                                leadingIcon = { Icon(Icons.Rounded.Archive, null, modifier = Modifier.size(18.dp)) }
-                            )
                         } else {
                             DropdownMenuItem(
-                                text = { Text("Arşivle", color = themeColors.textPrimary) },
+                                text = { Text("Arşivle", fontWeight = FontWeight.Bold) },
                                 onClick = { onArchive(); showMenu = false },
                                 leadingIcon = { Icon(Icons.Rounded.Archive, null, modifier = Modifier.size(18.dp)) }
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text("Sil", color = themeColors.error) },
+                            text = { Text("Sil", color = themeColors.error, fontWeight = FontWeight.Bold) },
                             onClick = { onDelete(); showMenu = false },
                             leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.error, modifier = Modifier.size(18.dp)) }
                         )
@@ -635,11 +631,11 @@ fun TravelPlanCard(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
             // Chips Row
             if (latestAnalysis != null && !isArchived) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CompactInfoChip(
                         Icons.Rounded.WaterDrop,
                         "Yağış: %${latestAnalysis.rainRiskPercent ?: 0}",
@@ -657,26 +653,26 @@ fun TravelPlanCard(
                         if (isPast) Color(0xFF10B981) else themeColors.accent
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
             }
 
             if (!isArchived) {
                 Text(
                     text = latestAnalysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                    color = themeColors.textPrimary.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontSize = 13.sp),
+                    color = themeColors.textPrimary.copy(alpha = 0.85f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
                 Text(
                     text = "Bu seyahat arşivde saklanıyor.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
                     color = themeColors.textMuted
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -687,30 +683,31 @@ fun TravelPlanCard(
                     TextButton(
                         onClick = onReanalyze,
                         enabled = !plan.isAnalyzing,
-                        contentPadding = PaddingValues(horizontal = 8.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = themeColors.accent)
                     ) {
-                        Icon(if (plan.isAnalyzing) Icons.Rounded.Sync else Icons.Rounded.Refresh, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Güncelle", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(if (plan.isAnalyzing) Icons.Rounded.Sync else Icons.Rounded.Refresh, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("GÜNCELLE", fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                     }
                     Spacer(Modifier.width(8.dp))
                 }
 
                 HavamaniaPrimaryButton(
-                    text = if (isPast || isArchived) "Raporu Gör" else "Detaylar",
+                    text = if (isPast || isArchived) "RAPORU GÖR" else "DETAYLAR",
                     onClick = { if (isPast || isArchived) onShowDetail() else isExpanded = !isExpanded },
-                    modifier = Modifier.height(34.dp).width(110.dp)
+                    modifier = Modifier.height(38.dp).width(120.dp)
                 )
             }
 
             AnimatedVisibility(visible = isExpanded) {
                 Column {
                     if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(16.dp))
                         ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
                 }
             }
@@ -1144,7 +1141,7 @@ fun TravelEmptyState(filter: TravelFilter, onAdd: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         Text(
             when(filter) {
-                TravelFilter.UPCOMING -> "🧭 İlk Seyahat Analizini Oluştur"
+                TravelFilter.UPCOMING -> "🧭 İlk Seyahat Planını Oluştur"
                 TravelFilter.PAST -> "✈ Henüz tamamlanan seyahat yok."
                 TravelFilter.ARCHIVED -> "📦 Henüz arşivlenmiş seyahat bulunmuyor."
             },

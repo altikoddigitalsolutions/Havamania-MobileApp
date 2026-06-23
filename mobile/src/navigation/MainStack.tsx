@@ -15,7 +15,7 @@ const Stack = createNativeStackNavigator<MainStackParamList>();
 
 export function MainStack(): React.JSX.Element {
   return (
-    <Stack.Navigator screenOptions={{headerShown: false}}>
+    <Stack.Navigator initialRouteName="Tabs" screenOptions={{headerShown: false}}>
       {/* Tab bar'ı içeren kapsayıcı ekran */}
       <Stack.Screen name="Tabs" component={MainTabs} />
 

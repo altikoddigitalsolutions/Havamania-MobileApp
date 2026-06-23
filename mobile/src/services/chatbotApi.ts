@@ -1,7 +1,7 @@
 import {apiClient} from './apiClient';
 
-export async function askChatbot(question: string) {
-  const response = await apiClient.post('/chatbot/ask', {question});
+export async function askChatbot(question: string, tone?: string) {
+  const response = await apiClient.post('/chatbot/ask', {question, tone});
   return response.data;
 }
 

@@ -194,7 +194,7 @@ object ThemeManager {
         val str = it[REGISTERED_CITIES_KEY] ?: ""
         if (str.isEmpty()) {
             listOf(
-                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+                GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
             )
         } else {
             try { Json.decodeFromString(str) } catch(e: Exception) { emptyList() }
@@ -207,10 +207,10 @@ object ThemeManager {
     fun getDefaultCity(context: Context): Flow<GeocodingResultDto> = context.dataStore.data.map {
         val str = it[DEFAULT_CITY_KEY] ?: ""
         if (str.isEmpty()) {
-            GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+            GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
         } else {
             try { Json.decodeFromString(str) } catch(e: Exception) {
-                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+                GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
             }
         }
     }
@@ -240,7 +240,7 @@ object ThemeManager {
     }
 
     suspend fun clearRegisteredCities(context: Context) = context.dataStore.edit {
-        val default = GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+        val default = GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
         val jsonStr = Json.encodeToString(listOf(default))
         it[REGISTERED_CITIES_KEY] = jsonStr
         it[DEFAULT_CITY_KEY] = Json.encodeToString(default)

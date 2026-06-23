@@ -46,24 +46,28 @@ fun EditProfileScreen(
         ) {
             Text(
                 "KİŞİSEL BİLGİLER",
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp, fontWeight = FontWeight.Black),
                 color = themeColors.accent.copy(alpha = 0.8f)
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            HavamaniaGlassCard {
-                Column(modifier = Modifier.padding(16.dp)) {
+            Surface(
+                color = themeColors.surfaceGlass.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(24.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Ad Soyad", color = themeColors.textSecondary) },
+                        label = { Text("Ad Soyad", color = themeColors.textMuted) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(16.dp),
                         leadingIcon = { Icon(Icons.Rounded.Person, null, tint = themeColors.accent) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
+                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.1f),
                             focusedBorderColor = themeColors.accent,
                             focusedTextColor = themeColors.textPrimary,
                             unfocusedTextColor = themeColors.textPrimary,
@@ -71,18 +75,19 @@ fun EditProfileScreen(
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     OutlinedTextField(
                         value = bio,
                         onValueChange = { bio = it },
-                        label = { Text("Bio / Açıklama", color = themeColors.textSecondary) },
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        shape = RoundedCornerShape(12.dp),
+                        label = { Text("Hava Durumu Mottosu / Bio", color = themeColors.textMuted) },
+                        modifier = Modifier.fillMaxWidth().height(140.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
+                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.1f),
                             focusedBorderColor = themeColors.accent,
                             focusedTextColor = themeColors.textPrimary,
                             unfocusedTextColor = themeColors.textPrimary,
@@ -92,15 +97,15 @@ fun EditProfileScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             HavamaniaPrimaryButton(
-                text = "Değişiklikleri Kaydet",
+                text = "PROFİLİ GÜNCELLE",
                 onClick = {
                     themeViewModel.updateProfile(name, bio)
                     onBack()
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().height(56.dp)
             )
         }
     }

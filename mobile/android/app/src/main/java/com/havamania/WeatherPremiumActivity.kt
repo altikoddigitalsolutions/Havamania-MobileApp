@@ -41,6 +41,14 @@ class WeatherPremiumActivity : ComponentActivity() {
                     Brush.verticalGradient(themeColors.gradientPrimary)
                 }
 
+                // Emniyet: Splash ekranının 5 saniyeden fazla kalmamasını garanti et
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(5000)
+                    if (appState == "splash") {
+                        appState = "main"
+                    }
+                }
+
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
                 var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
@@ -65,10 +73,14 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route ->
-                                        navController.navigate(route) {
-                                            popUpTo(Routes.WEATHER) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
+                                        try {
+                                            navController.navigate(route) {
+                                                popUpTo(Routes.WEATHER) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("Nav", "Navigation failed to $route", e)
                                         }
                                     }
                                 )
@@ -94,16 +106,22 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     })
                                 }
                                 composable(
-                                    "${Routes.CALENDAR}?focusId={focusId}",
+                                    "${Routes.CALENDAR}?focusId={focusId}&city={city}&date={date}",
                                     arguments = listOf(
-                                        navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                        navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                        navArgument("city") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                        navArgument("date") { type = NavType.StringType; nullable = true; defaultValue = null }
                                     ),
-                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}" })
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}&city={city}&date={date}" })
                                 ) { backStackEntry ->
                                     val focusId = backStackEntry.arguments?.getString("focusId")
+                                    val city = backStackEntry.arguments?.getString("city")
+                                    val date = backStackEntry.arguments?.getString("date")
                                     TravelPlannerScreen(
                                         onBack = { navController.popBackStack() },
-                                        focusId = focusId
+                                        focusId = focusId,
+                                        initialCity = city,
+                                        initialStartDate = date
                                     )
                                 }
                                 composable(Routes.AI) {
@@ -112,6 +130,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
+                                        },
+                                        onNavigateToTravelCreate = { city, date ->
+                                            navController.navigate("${Routes.CALENDAR}?focusId=NEW&city=$city&date=$date")
                                         }
                                     )
                                 }

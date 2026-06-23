@@ -11,6 +11,10 @@ class ProfileResponse(BaseModel):
     avatar_emoji: str = "🧑"
     avatar_url: str | None = None
     interest: str | None = None
+    health_sensitivities: str | None = None
+    travel_preferences: str | None = None
+    activity_types: str | None = None
+    assistant_tone: str = "friendly"
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -22,6 +26,10 @@ class ProfileUpdateRequest(BaseModel):
     avatar_emoji: str | None = Field(default=None, max_length=16)
     avatar_url: str | None = Field(default=None, max_length=255)
     interest: str | None = None
+    health_sensitivities: str | None = None
+    travel_preferences: str | None = None
+    activity_types: str | None = None
+    assistant_tone: str | None = Field(default=None, max_length=32)
 
 
 class LocationCreateRequest(BaseModel):

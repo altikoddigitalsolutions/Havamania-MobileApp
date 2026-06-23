@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,11 +103,11 @@ fun SettingsScreen(
 
             SettingsGroupLabel("BİLDİRİMLER")
             HavamaniaGlassCard {
-                SettingsToggleRow("Hava Durumu Uyarıları", "Anlık bildirimler al", Icons.Rounded.Notifications, notificationsEnabled) {
+                SettingsToggleRow("Hava Durumu Uyarıları", "Anlık meteorolojik bildirimler", Icons.Rounded.Notifications, notificationsEnabled) {
                     themeViewModel.setNotificationsEnabled(it)
                 }
                 SettingsDivider()
-                SettingsNavRow("Bildirim Tercihleri", "Detaylı özelleştirme", Icons.Rounded.SettingsSuggest) {
+                SettingsNavRow("Akıllı Uyarılar", "Kişiselleştirilmiş tercihler", Icons.Rounded.SettingsSuggest) {
                     comingSoonTitle = "Akıllı hava uyarıları yakında eklenecek."
                     showComingSoonDialog = true
                 }
@@ -114,18 +115,21 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            SettingsGroupLabel("HESAP")
+            SettingsGroupLabel("PREMIUM")
+            PremiumSettingsCard(onClick = {
+                comingSoonTitle = "Havamania Premium yakında tüm özellikleri ile açılacak."
+                showComingSoonDialog = true
+            })
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            SettingsGroupLabel("HESAP VE VERİ")
             HavamaniaGlassCard {
-                SettingsNavRow("Profil Bilgileri", "İsim, bio ve fotoğraf", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
+                SettingsNavRow("Profil Bilgileri", "İsim, bio ve kimlik", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
                 SettingsDivider()
-                SettingsNavRow("Premium Üyelik", "Tüm özellikleri aç", Icons.Rounded.WorkspacePremium) {
-                    comingSoonTitle = "Havamania yakında geliyor."
-                    showComingSoonDialog = true
-                }
+                SettingsNavRow("Verilerimi Yönet", "Güvenlik ve gizlilik", Icons.Rounded.Security) { showManageDataSheet = true }
                 SettingsDivider()
-                SettingsNavRow("Verilerimi Yönet", "Temizlik ve sıfırlama", Icons.Rounded.Storage) { showManageDataSheet = true }
-                SettingsDivider()
-                SettingsActionRow("Çıkış Yap", Icons.Rounded.Logout, themeColors.error) { showLogoutDialog = true }
+                SettingsActionRow("Oturumu Kapat", Icons.Rounded.Logout, themeColors.error) { showLogoutDialog = true }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
@@ -193,30 +197,27 @@ fun SettingsScreen(
             SettingsOptionDialog("Sıcaklık Birimi", listOf("CELSIUS" to "Celsius (°C)", "FAHRENHEIT" to "Fahrenheit (°F)"), tempUnit.name, { themeViewModel.setTempUnit(TemperatureUnit.valueOf(it)); showUnitDialog = false }) { showUnitDialog = false }
         }
 
-        if (showLogoutDialog) {
-            ConfirmDialog(
-                title = "Oturumu Kapat",
-                text = "Oturumu kapatmak istediğinize emin misiniz?",
-                confirmBtn = "KAPAT",
-                confirmColor = themeColors.error,
-                onConfirm = { showLogoutDialog = false }, // In a real app, this would perform logout
-                onDismiss = { showLogoutDialog = false }
-            )
-        }
+    if (showLogoutDialog) {
+        HavamaniaDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = "Oturumu Kapat?",
+            text = "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+            confirmText = "Çıkış Yap",
+            confirmColor = themeColors.error,
+            icon = Icons.Rounded.Logout,
+            onConfirm = { /* Logout logic */ }
+        )
+    }
 
-        if (showComingSoonDialog) {
-            AlertDialog(
-                onDismissRequest = { showComingSoonDialog = false },
-                containerColor = themeColors.surface,
-                title = { Text("YAKINDA", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
-                text = { Text(comingSoonTitle, color = themeColors.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = { showComingSoonDialog = false }) {
-                        Text("TAMAM", fontWeight = FontWeight.Black, color = themeColors.accent)
-                    }
-                }
-            )
-        }
+    if (showComingSoonDialog) {
+        HavamaniaDialog(
+            onDismissRequest = { showComingSoonDialog = false },
+            title = "YAKINDA",
+            text = comingSoonTitle,
+            confirmText = "TAMAM",
+            onConfirm = { }
+        )
+    }
     }
 }
 
@@ -231,31 +232,81 @@ fun ManageDataContent(
     val themeColors = HavamaniaTheme.colors
     var confirmAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var confirmTitle by remember { mutableStateOf("") }
+    var confirmText by remember { mutableStateOf("") }
+    var isExtraCritical by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
-        Text("Verilerimi Yönet", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 48.dp)
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "GİZLİLİK VE VERİ",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp),
+            color = themeColors.accent
+        )
+        Text(
+            "Verilerimi Yönet",
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+            color = themeColors.textPrimary
+        )
+        Text(
+            "Uygulama verilerini buradan kontrol edebilir veya sıfırlayabilirsiniz.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = themeColors.textSecondary
+        )
 
-        DataActionItem("AI Geçmişini Temizle", Icons.Rounded.AutoAwesome) {
-            confirmTitle = "AI geçmişini tamamen silmek istiyor musunuz?"; confirmAction = onClearAiHistory
+        Spacer(modifier = Modifier.height(32.dp))
+
+        DataActionItem("AI Sohbet Geçmişini Temizle", Icons.Rounded.AutoAwesome) {
+            confirmTitle = "Geçmişi Temizle"
+            confirmText = "Tüm AI sohbet kayıtlarınız kalıcı olarak silinecektir. Devam etmek istiyor musunuz?"
+            confirmAction = onClearAiHistory
+            isExtraCritical = false
         }
-        DataActionItem("Seyahatleri Temizle", Icons.Rounded.Route) {
-            confirmTitle = "Tüm seyahat planlarını silmek istiyor musunuz?"; confirmAction = onClearTravels
+        DataActionItem("Tüm Seyahatleri Sil", Icons.Rounded.Route) {
+            confirmTitle = "Seyahatleri Sil"
+            confirmText = "Oluşturduğunuz tüm seyahat planları ve analizleri silinecektir. Bu işlem geri alınamaz."
+            confirmAction = onClearTravels
+            isExtraCritical = false
         }
-        DataActionItem("Kayıtlı Şehirleri Sıfırla", Icons.Rounded.Map) {
-            confirmTitle = "Kayıtlı şehirleri sıfırlamak istiyor musunuz?"; confirmAction = onResetCities
+        DataActionItem("Lokasyon Listesini Sıfırla", Icons.Rounded.Map) {
+            confirmTitle = "Şehirleri Sıfırla"
+            confirmText = "Kayıtlı tüm şehirler silinecek ve varsayılan ayarlara dönülecektir."
+            confirmAction = onResetCities
+            isExtraCritical = false
         }
         DataActionItem("Profil Fotoğrafını Kaldır", Icons.Rounded.NoPhotography) {
-            confirmTitle = "Profil fotoğrafını kaldırmak istiyor musunuz?"; confirmAction = onRemovePhoto
+            confirmTitle = "Fotoğrafı Kaldır"
+            confirmText = "Profil fotoğrafınız kaldırılacak. Devam edilsin mi?"
+            confirmAction = onRemovePhoto
+            isExtraCritical = false
         }
-        Spacer(modifier = Modifier.height(16.dp))
+
+        Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider(color = themeColors.border.copy(alpha = 0.05f))
+        Spacer(modifier = Modifier.height(8.dp))
+
         DataActionItem("Tüm Verileri Sıfırla", Icons.Rounded.DeleteForever, themeColors.error) {
-            confirmTitle = "TÜM UYGULAMA VERİLERİNİ sıfırlamak istiyor musunuz? Bu işlem geri alınamaz."; confirmAction = onResetAll
+            confirmTitle = "KRİTİK: Tüm Verileri Sıfırla"
+            confirmText = "Bu işlem tüm profilinizi, seyahatlerinizi ve ayarlarınızı kalıcı olarak silecektir. Uygulama ilk yükleme anına dönecektir. Emin misiniz?"
+            confirmAction = onResetAll
+            isExtraCritical = true
         }
     }
 
     if (confirmAction != null) {
-        ConfirmDialog("Emin misiniz?", confirmTitle, "EVET, SİL", themeColors.error, onConfirm = { confirmAction?.invoke(); confirmAction = null }) { confirmAction = null }
+        HavamaniaDialog(
+            onDismissRequest = { confirmAction = null },
+            title = confirmTitle,
+            text = confirmText,
+            confirmText = if (isExtraCritical) "EVET, HER ŞEYİ SİL" else "SİL",
+            confirmColor = themeColors.error,
+            icon = if (isExtraCritical) Icons.Rounded.ReportProblem else Icons.Rounded.DeleteForever,
+            onConfirm = { confirmAction?.invoke() }
+        )
     }
 }
 
@@ -282,25 +333,113 @@ fun ConfirmDialog(title: String, text: String, confirmBtn: String, confirmColor:
 }
 
 @Composable
-fun SettingsOptionDialog(title: String, options: List<Pair<String, String>>, currentValue: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+fun SettingsOptionDialog(
+    title: String,
+    options: List<Pair<String, String>>,
+    currentValue: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     val themeColors = HavamaniaTheme.colors
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = themeColors.surface,
-        title = { Text(title, fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                color = themeColors.textPrimary
+            )
+        },
         text = {
-            Column {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 options.forEach { (value, label) ->
-                    Row(modifier = Modifier.fillMaxWidth().clickable { onSelect(value) }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = (value == currentValue), onClick = { onSelect(value) }, colors = RadioButtonDefaults.colors(selectedColor = themeColors.accent))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(label, color = themeColors.textPrimary)
+                    val isSelected = value == currentValue
+                    Surface(
+                        onClick = { onSelect(value) },
+                        color = if (isSelected) themeColors.accent.copy(alpha = 0.05f) else Color.Transparent,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { onSelect(value) },
+                                colors = RadioButtonDefaults.colors(selectedColor = themeColors.accent)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) themeColors.accent else themeColors.textPrimary
+                            )
+                        }
                     }
                 }
             }
         },
-        confirmButton = {}
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("KAPAT", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textMuted)
+            }
+        }
     )
+}
+
+@Composable
+fun PremiumSettingsCard(onClick: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    Surface(
+        onClick = onClick,
+        color = themeColors.accent,
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Background Pattern or Shine
+            Icon(
+                Icons.Rounded.AutoAwesome,
+                null,
+                tint = Color.White.copy(alpha = 0.1f),
+                modifier = Modifier.size(120.dp).align(Alignment.BottomEnd).offset(x = 20.dp, y = 20.dp)
+            )
+
+            Row(
+                modifier = Modifier.padding(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Havamania Premium",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                        color = Color.White
+                    )
+                    Text(
+                        "Gelişmiş seyahat analizleri ve AI kişiselleştirme.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                Surface(
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        Icons.Rounded.ArrowForward,
+                        null,
+                        tint = Color.White,
+                        modifier = Modifier.padding(8.dp).size(20.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

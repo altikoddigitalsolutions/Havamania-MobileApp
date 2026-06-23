@@ -1,9 +1,9 @@
 # Havamania PRD
 
 ## 1) Urun Ozeti
-Havamania, anlik hava durumu, konum bazli tahmin, akilli uyarilar ve hava durumu odakli chatbot deneyimini tek uygulamada birlestiren freemium bir mobil uygulamadir.  
-Frontend: React Native  
-Backend: FastAPI  
+Havamania, anlik hava durumu, konum bazli tahmin, akilli uyarilar ve hava durumu odakli chatbot deneyimini tek uygulamada birlestiren freemium bir mobil uygulamadir.
+Frontend: React Native
+Backend: FastAPI
 Veritabani: PostgreSQL
 
 ## 2) Problem ve Firsat
@@ -85,7 +85,7 @@ Not: Fiyatlar ulke bazli mobil magaza politikasina gore tanimlanacaktir.
 - FR-05: Chatbot entegrasyonu mevcut chatbot servisi uzerinden yapilmalidir.
 - FR-06: Uygulama abonelik durumuna gore ozellikleri acip kapatmalidir.
 - FR-07: Uyarilar siddet seviyesine gore gruplandirilarak gosterilmelidir.
-- FR-08: Kullanici birim tercihlerini (C/F, km/s vb.) degistirebilmelidir.
+- FR-08: Kullanici birim tercihlerini (C/F, km/sa vb.) degistirebilmelidir.
 - FR-09: Konum bazli tahmin ac/kapat ayari profil ekranindan degistirilebilmelidir.
 
 ## 10) UX Gereksinimleri

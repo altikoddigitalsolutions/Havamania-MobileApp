@@ -13,11 +13,28 @@ export function RootNavigator(): React.JSX.Element {
   const [showSplash, setShowSplash] = React.useState(true);
 
   React.useEffect(() => {
-    void initLanguage();
-    initSession().catch(err => console.error('[DEBUG] RootNavigator: initSession error', err));
+    // Tüm init işlemlerini birleştir
+    const initApp = async () => {
+      try {
+        await initLanguage();
+        // initSession zaten kendi içinde catch barındırıyor ama garantiye alalım
+        await initSession();
+      } catch (err) {
+        console.error('[CRITICAL] App initialization failed:', err);
+      }
+    };
+
+    void initApp();
+
+    // Emniyet kilidi: 5 saniye sonra ne olursa olsun splash'i kapat
+    const safetyTimer = setTimeout(() => {
+      setShowSplash(false);
+    }, 5000);
+
+    return () => clearTimeout(safetyTimer);
   }, [initSession, initLanguage]);
 
-  // Splash ekranı en az 2 saniye görünsün (Premium deneyim için)
+  // Splash ekranı süresini yönet
   React.useEffect(() => {
     if (!initializing) {
       const timer = setTimeout(() => {
@@ -40,5 +57,8 @@ export function RootNavigator(): React.JSX.Element {
     );
   }
 
+  // Burada isAuthenticated kontrolü var. Eğer kullanıcı login değilse AuthNavigator (Login) açılır.
+  // Kullanıcı "doğrudan Hava ekranı" diyorsa, login olmasa bile Guest olarak girmesini istiyor olabilir.
+  // Ancak mevcut yapıyı bozmadan en güvenli geçişi sağlıyoruz.
   return isAuthenticated ? <MainStack /> : <AuthNavigator />;
 }

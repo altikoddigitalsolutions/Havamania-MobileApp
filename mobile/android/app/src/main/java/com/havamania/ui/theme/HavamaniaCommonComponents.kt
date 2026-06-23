@@ -24,9 +24,80 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/**
+ * Premium Standard Dialog
+ */
+@Composable
+fun HavamaniaDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    text: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+    dismissText: String? = "Vazgeç",
+    confirmColor: Color = HavamaniaTheme.colors.accent,
+    icon: ImageVector? = null
+) {
+    val themeColors = HavamaniaTheme.colors
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = themeColors.surface,
+        titleContentColor = themeColors.textPrimary,
+        textContentColor = themeColors.textSecondary,
+        icon = icon?.let { { Icon(it, null, tint = confirmColor, modifier = Modifier.size(32.dp)) } },
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm()
+                    onDismissRequest()
+                },
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = confirmText.uppercase(),
+                    color = confirmColor,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                )
+            }
+        },
+        dismissButton = dismissText?.let {
+            {
+                TextButton(onClick = onDismissRequest) {
+                    Text(
+                        text = it.uppercase(),
+                        color = themeColors.textMuted,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+        },
+        shape = RoundedCornerShape(28.dp)
+    )
+}
 
 /**
  * Premium Havamania Screen Wrapper

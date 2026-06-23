@@ -112,11 +112,26 @@ fun HourlyForecastItem(
         label = "scale"
     )
 
-    val phase = remember(data.time, sunriseTime, sunsetTime) {
+    val phase = remember(data.fullTime, data.time, sunriseTime, sunsetTime) {
         val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
         val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
-        val timeObj = try { LocalTime.parse(data.time) } catch (e: Exception) { LocalTime.of(data.time.split(":")[0].toInt(), 0) }
-        val ldt = LocalDateTime.now().with(timeObj)
+
+        val ldt = try {
+            if (!data.fullTime.isNullOrEmpty()) {
+                LocalDateTime.parse(data.fullTime)
+            } else {
+                // Fallback: data.time formatı "HH:mm" veya "23 Haz" olabilir
+                val timeObj = if (data.time.contains(":")) {
+                    LocalTime.of(data.time.split(":")[0].toInt(), 0)
+                } else {
+                    LocalTime.of(0, 0) // "23 Haz" gibi durumlarda gece yarısı kabul et
+                }
+                LocalDateTime.now().with(timeObj)
+            }
+        } catch (e: Exception) {
+            LocalDateTime.now().with(LocalTime.of(12, 0))
+        }
+
         WeatherMapper.getDayPhase(ldt, sunrise, sunset)
     }
 

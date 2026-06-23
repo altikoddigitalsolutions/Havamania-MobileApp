@@ -316,6 +316,9 @@ interface AtmosphericWeatherCardProps {
   feelsLike: number;
   weatherCode: number;
   isDay: boolean;
+  humidity?: number;
+  windSpeed?: number;
+  uvIndex?: number;
   time?: string;
   lastUpdated: string;
   C: AppColors;
@@ -333,6 +336,9 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   feelsLike,
   weatherCode,
   isDay,
+  humidity,
+  windSpeed,
+  uvIndex,
   time,
 }) => {
   const { theme } = useThemeStore();
@@ -812,17 +818,17 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
           <View style={styles.glassBar}>
             <View style={styles.infoItem}>
               <Text style={[styles.infoLabel, { color: secondaryColor }]}>NEM</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>%65</Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>%{humidity ?? '--'}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoItem}>
               <Text style={[styles.infoLabel, { color: secondaryColor }]}>RÜZGAR</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>12 km/s</Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>{windSpeed ?? '--'} km/sa</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoItem}>
               <Text style={[styles.infoLabel, { color: secondaryColor }]}>UV</Text>
-              <Text style={[styles.infoValue, { color: textColor }]}>4</Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>{uvIndex ?? '--'}</Text>
             </View>
           </View>
         </View>

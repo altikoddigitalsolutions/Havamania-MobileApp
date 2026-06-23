@@ -84,12 +84,13 @@ export function ChatbotScreen(): React.JSX.Element {
 
   const askMutation = useMutation({
     mutationFn: (question: string) => {
+      const tone = profileQuery.data?.assistant_tone || 'DENGELI';
       if (isGuest) {
         return new Promise((resolve) => {
-            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data)), 1000);
+            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data, tone)), 1000);
         });
       }
-      return askChatbot(question);
+      return askChatbot(question, tone);
     },
     onMutate: () => setIsTyping(true),
     onSuccess: (data: any, question: string) => {
@@ -328,11 +329,15 @@ function WeatherCard({ data, C, city }: { data: any, C: any, city: string }) {
   );
 }
 
-function buildLocalAnswer(question: string, weather: any): {answer: string} {
+function buildLocalAnswer(question: string, weather: any, tone: string = 'DENGELI'): {answer: string} {
   if (!weather) return {answer: 'Hava durumu bilgisi yükleniyor, lütfen bekle.'};
   const q = question.toLowerCase();
   const temp = weather.temperature;
   const desc = getWeatherLabel(weather.weather_code);
+
+  if (tone === 'KISA_NET') {
+    return { answer: `Hava ${desc}, ${temp}°C. Başka bir şey?` };
+  }
 
   if (/wear|giy|kıyafet/i.test(q)) {
     if (temp > 25) return {answer: `Hava **${temp}°C** ve güneşli! İnce pamuklu kıyafetler, şapka ve güneş gözlüğü harika olur. Güneş kremi sürmeyi de unutma. 😎`};

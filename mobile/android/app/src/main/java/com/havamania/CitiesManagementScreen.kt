@@ -128,31 +128,41 @@ fun CitiesManagementScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(registeredCities, key = { it.id }) { city ->
                     val isDefault = city.id == defaultCity.id
                     CityListItem(
                         city = city,
                         isDefault = isDefault,
-                        onDelete = {
-                            if (registeredCities.size > 1) {
-                                themeViewModel.removeCity(city)
-                            }
-                        },
+                        canDelete = registeredCities.size > 1,
+                        onDelete = { themeViewModel.removeCity(city) },
                         onSetDefault = { themeViewModel.setDefaultCity(city) }
                     )
                 }
             }
 
             if (registeredCities.size <= 1) {
-                Text(
-                    "En az bir konum kayıtlı kalmalıdır.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Red.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(vertical = 12.dp).align(Alignment.CenterHorizontally)
-                )
+                Surface(
+                    color = themeColors.accent.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Info, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "Varsayılan konum silinemez. Önce başka bir şehir ekleyin.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = themeColors.textSecondary
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -164,55 +174,73 @@ fun CitiesManagementScreen(
 fun CityListItem(
     city: GeocodingResultDto,
     isDefault: Boolean,
+    canDelete: Boolean,
     onDelete: () -> Unit,
     onSetDefault: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    HavamaniaGlassCard(
-        alpha = if (isDefault) 0.6f else 0.4f,
-        cornerRadius = 20.dp
+    Surface(
+        color = themeColors.surfaceGlass.copy(alpha = if (isDefault) 0.8f else 0.4f),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isDefault) themeColors.accent.copy(alpha = 0.3f) else themeColors.border.copy(alpha = 0.1f)
+        ),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isDefault) themeColors.accent.copy(alpha = 0.1f) else themeColors.surfaceGlass),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (isDefault) Icons.Rounded.Home else Icons.Rounded.LocationOn,
+                    null,
+                    tint = if (isDefault) themeColors.accent else themeColors.textMuted,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        city.name,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                        color = themeColors.textPrimary
-                    )
-                    if (isDefault) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            color = themeColors.accent.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                "VARSAYILAN",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                color = themeColors.accent
-                            )
-                        }
+                Text(
+                    city.name,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                    color = themeColors.textPrimary
+                )
+                Text(
+                    text = if (city.admin1 != null && city.admin1 != city.name) "${city.admin1}, Türkiye" else "Türkiye",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = themeColors.textSecondary
+                )
+            }
+
+            Row {
+                if (!isDefault) {
+                    IconButton(onClick = onSetDefault) {
+                        Icon(Icons.Rounded.StarBorder, null, tint = themeColors.textMuted)
                     }
                 }
-                if (city.admin1 != null && city.admin1 != city.name) {
-                    Text(city.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
-                }
-            }
 
-            if (!isDefault) {
-                IconButton(onClick = onSetDefault) {
-                    Icon(Icons.Rounded.StarBorder, null, tint = themeColors.textMuted)
+                IconButton(
+                    onClick = onDelete,
+                    enabled = canDelete && !isDefault
+                ) {
+                    Icon(
+                        Icons.Rounded.DeleteOutline,
+                        null,
+                        tint = if (canDelete && !isDefault) themeColors.error.copy(alpha = 0.7f) else themeColors.textMuted.copy(alpha = 0.3f)
+                    )
                 }
-            }
-
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.error.copy(alpha = 0.7f))
             }
         }
     }

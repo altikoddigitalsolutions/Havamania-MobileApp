@@ -157,6 +157,30 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
           </View>
         </View>
 
+        {/* AI Asistan Ayarları */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>AI ASİSTAN</Text>
+          <View style={s.card}>
+            <SettingRow
+              icon="chatbubble-ellipses-outline"
+              label="Asistan Konuşma Dili"
+              valueText={
+                profile?.assistant_tone === 'SAMIMI' ? 'Samimi' :
+                profile?.assistant_tone === 'RESMI' ? 'Resmi' :
+                profile?.assistant_tone === 'KISA_NET' ? 'Kısa ve Net' :
+                profile?.assistant_tone === 'DETAYLI_UZMAN' ? 'Detaylı Uzman' : 'Dengeli'
+              }
+              onPress={() => {
+                const tones = ['SAMIMI', 'RESMI', 'DENGELI', 'KISA_NET', 'DETAYLI_UZMAN'];
+                const currentIdx = tones.indexOf(profile?.assistant_tone || 'DENGELI');
+                const nextTone = tones[(currentIdx + 1) % tones.length];
+                updateProfileMutation.mutate({ assistant_tone: nextTone });
+              }}
+              C={C}
+            />
+          </View>
+        </View>
+
         {/* Bildirimler */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>BİLDİRİMLER</Text>

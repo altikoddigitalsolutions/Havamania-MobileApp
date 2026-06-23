@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.*
 
 @Composable
@@ -180,16 +181,12 @@ fun ProfileScreen(
         }
 
         if (showComingSoonDialog) {
-            AlertDialog(
+            HavamaniaDialog(
                 onDismissRequest = { showComingSoonDialog = false },
-                containerColor = themeColors.surface,
-                title = { Text("YAKINDA", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
-                text = { Text(comingSoonTitle, color = themeColors.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = { showComingSoonDialog = false }) {
-                        Text("TAMAM", fontWeight = FontWeight.Black, color = themeColors.accent)
-                    }
-                }
+                title = "YAKINDA",
+                text = comingSoonTitle,
+                confirmText = "TAMAM",
+                onConfirm = { }
             )
         }
     }
@@ -212,18 +209,17 @@ fun PremiumProfileHeader(
         // Photo Section with Ambient Glow
         Box(contentAlignment = Alignment.Center) {
             val infiniteTransition = rememberInfiniteTransition(label = "profile_glow")
-            val glowScale by infiniteTransition.animateFloat(
-                initialValue = 0.8f, targetValue = 1.2f,
-                animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Reverse),
-                label = "glow_scale"
+            val glowAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.1f, targetValue = 0.3f,
+                animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Reverse),
+                label = "glow_alpha"
             )
 
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .scale(glowScale)
-                    .blur(30.dp)
-                    .background(themeColors.accent.copy(alpha = 0.15f), CircleShape)
+                    .size(140.dp)
+                    .blur(40.dp)
+                    .background(themeColors.accent.copy(alpha = glowAlpha), CircleShape)
             )
 
             Box(
@@ -231,69 +227,89 @@ fun PremiumProfileHeader(
                     .size(100.dp)
                     .clip(CircleShape)
                     .background(themeColors.surfaceGlass)
-                    .border(2.dp, Brush.linearGradient(themeColors.gradientPrimary), CircleShape)
+                    .border(1.5.dp, Brush.linearGradient(listOf(themeColors.accent, themeColors.accent.copy(0.4f))), CircleShape)
                     .clickable { onAvatarClick() },
                 contentAlignment = Alignment.Center
             ) {
-                if (imageUri != null) {
+                if (!imageUri.isNullOrBlank()) {
                     AsyncImage(
                         model = imageUri, contentDescription = null,
                         modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
                     )
                 } else {
-                    Icon(Icons.Rounded.Person, null, tint = themeColors.textPrimary, modifier = Modifier.size(50.dp))
+                    Icon(Icons.Rounded.Person, null, tint = themeColors.textPrimary.copy(0.7f), modifier = Modifier.size(50.dp))
                 }
                 Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.BottomCenter
                 ) {
-                    Icon(Icons.Rounded.PhotoCamera, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.padding(bottom = 8.dp).size(16.dp))
+                    Icon(Icons.Rounded.CameraAlt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.padding(bottom = 6.dp).size(14.dp))
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = name, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp), color = themeColors.textPrimary)
-            IconButton(onClick = onEditClick) {
-                Icon(Icons.Rounded.Verified, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
-            }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Text(
+                text = name.ifBlank { "Havamania Kullanıcısı" },
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp),
+                color = themeColors.textPrimary
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Rounded.Verified, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
         }
 
-        Text(text = bio, style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary, textAlign = TextAlign.Center)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // AI Personality Badge
-        val personality = remember(interests, aboutMe) { generateAiPersonality(interests, aboutMe) }
-        Surface(
-            color = themeColors.accent.copy(alpha = 0.1f),
-            shape = CircleShape,
-            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.2f))
-        ) {
+        if (bio.isNotBlank()) {
             Text(
-                personality.uppercase(),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
-                color = themeColors.accent
+                text = bio,
+                style = MaterialTheme.typography.bodyMedium,
+                color = themeColors.textSecondary.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // AI Personality Badge - Atmosfer Avcısı etc.
+        val personality = remember(interests, aboutMe) { generateAiPersonality(interests, aboutMe) }
+        Surface(
+            color = themeColors.accent.copy(alpha = 0.12f),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.2f))
+        ) {
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    personality.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, fontSize = 11.sp),
+                    color = themeColors.accent
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
 
         // Mini Stats Row
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            stats.forEach { (label, value) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = themeColors.textMuted)
-                }
-            }
+            ProfileStatItem(stats["İlgi"] ?: "0", "TERCİHLER")
+            ProfileStatItem(stats["Rota"] ?: "0", "ROTALAR")
+            ProfileStatItem(stats["Analiz"] ?: "0", "AI ANALİZİ")
         }
+    }
+}
+
+@Composable
+fun ProfileStatItem(value: String, label: String) {
+    val themeColors = HavamaniaTheme.colors
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp), color = themeColors.textMuted)
     }
 }
 
@@ -537,26 +553,27 @@ fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
         AboutMeSample("Outdoor", "Hafta sonları doğa yürüyüşü ve kamp yapmayı seviyorum. Rüzgar ve sıcaklık takibi benim için kritik.", Icons.Rounded.Terrain),
         AboutMeSample("Aile", "Çocuklarım için hava durumunu takip ediyorum. Park ve bahçe günlerini planlıyorum.", Icons.Rounded.ChildCare),
         AboutMeSample("Seyahat", "İş için sık seyahat ediyorum. Hafif ama şık giyinmeyi, yağmurdan kaçınmayı severim.", Icons.Rounded.Flight),
-        AboutMeSample("Macera", "Kar tutkunuyum. Kışın her fırsatta snowboard yapmaya giderim. Kar durumunu bilmek önemli.", Icons.Rounded.Snowboarding),
+        AboutMeSample("Macera", "Kar tutkunuyum. Kışın snowboard yapmayı seviyorum. Kar kalınlığı ve rüzgar durumu önemli.", Icons.Rounded.Snowboarding),
         AboutMeSample("Şehir", "Şehir hayatını seviyorum. Fotoğraf çekmek için en güzel ışığı ve bulutları arıyorum.", Icons.Rounded.CameraAlt)
     )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(24.dp)
+            .padding(horizontal = 24.dp)
             .padding(bottom = 32.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        Spacer(Modifier.height(8.dp))
         Text("HAVA KİMLİĞİ", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = themeColors.accent)
         Text("Kendinden Bahset", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-        Text("AI, bu bilgilerle sana özel seyahat ve kıyafet önerileri üretecek.", style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary)
+        Text("Hava durumuna bakış açını AI ile paylaş, sana özel analizler hazırlasın.", style = MaterialTheme.typography.bodyMedium, color = themeColors.textSecondary)
 
         Spacer(Modifier.height(32.dp))
 
         // Örnek Kartlar (Yatay Kaydırılabilir)
-        Text("ÖRNEK SENARYOLAR", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textMuted)
-        Spacer(Modifier.height(12.dp))
+        Text("ÖRNEK SENARYOLAR", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp), color = themeColors.textMuted)
+        Spacer(Modifier.height(16.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(end = 40.dp)
@@ -568,36 +585,38 @@ fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
 
         Spacer(Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth().height(160.dp),
-            placeholder = { Text("Kimsin? Hava durumu hayatını nasıl etkiliyor? Havamania sana nasıl yardımcı olabilir?", color = themeColors.textMuted.copy(alpha = 0.6f)) },
+        Surface(
+            color = themeColors.surfaceGlass.copy(alpha = 0.3f),
             shape = RoundedCornerShape(24.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = themeColors.accent,
-                unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
-                cursorColor = themeColors.accent,
-                focusedTextColor = themeColors.textPrimary,
-                unfocusedTextColor = themeColors.textPrimary
+            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+        ) {
+            TextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                placeholder = { Text("Kimsin? Hava durumu hayatını nasıl etkiliyor?", color = themeColors.textMuted.copy(alpha = 0.5f)) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = themeColors.accent,
+                    focusedTextColor = themeColors.textPrimary,
+                    unfocusedTextColor = themeColors.textPrimary
+                )
             )
-        )
+        }
 
         Spacer(Modifier.height(32.dp))
 
-        Button(
+        HavamaniaPrimaryButton(
+            text = "PROFİLİ GÜNCELLE",
             onClick = { onSave(text) },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
-            enabled = text.isNotBlank(),
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("PROFİLİ GÜNCELLE", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = Color.White)
-            }
-        }
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            enabled = text.isNotBlank()
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -632,26 +651,27 @@ fun generateAiPersonality(interests: Set<String>, aboutMe: String): String {
     val t = aboutMe.lowercase()
     return when {
         t.contains("firtina") || interests.contains("firtina_takibi") -> "Atmosfer Avcısı"
-        t.contains("kamp") || interests.contains("kamp") -> "Outdoor Gezgini"
+        t.contains("kamp") || interests.contains("kamp") || interests.contains("outdoor") -> "Doğa Gezgini"
         t.contains("cocuk") || interests.contains("cocuklar_icin") -> "Aile Meteoroloğu"
         t.contains("drone") || interests.contains("drone") -> "Gökyüzü Kaşifi"
         t.contains("motorsiklet") || interests.contains("motorsiklet") -> "Yol Savaşçısı"
         interests.contains("snowboard") || interests.contains("kayak") -> "Kış Tutkunu"
-        interests.size > 10 -> "Hava Gurusu"
-        else -> "Hava Meraklısı"
+        interests.size > 12 -> "Hava Gurusu"
+        interests.size > 5 -> "Atmosfer Kaşifi"
+        else -> "Yeni Hava Meraklısı"
     }
 }
 
 fun generateBadges(text: String): List<String> {
     val badges = mutableListOf<String>()
     val t = text.lowercase()
-    if (t.contains("kamp") || t.contains("doğa") || t.contains("yürüyüş")) badges.add("Doğa Sever")
+    if (t.contains("kamp") || t.contains("doğa") || t.contains("yürüyüş")) badges.add("Doğa Dostu")
     if (t.contains("çocuk") || t.contains("aile")) badges.add("Aile Odaklı")
-    if (t.contains("seyahat") || t.contains("rota")) badges.add("Gezgin")
-    if (t.contains("bisiklet") || t.contains("spor") || t.contains("koşu")) badges.add("Aktif Yaşam")
-    if (t.contains("yağmur") || t.contains("kar") || t.contains("kış")) badges.add("Kış Tutkunu")
+    if (t.contains("seyahat") || t.contains("rota")) badges.add("Aktif Gezgin")
+    if (t.contains("bisiklet") || t.contains("spor") || t.contains("koşu")) badges.add("Sporcu")
+    if (t.contains("yağmur") || t.contains("kar") || t.contains("kış")) badges.add("Kar Tutkunu")
     if (t.contains("drone") || t.contains("pilot")) badges.add("Hava Meraklısı")
-    if (t.contains("iş") || t.contains("seyahat")) badges.add("Şehir Kaşifi")
+    if (t.contains("şehir") || t.contains("fotoğraf")) badges.add("Şehir Kaşifi")
     if (badges.isEmpty() && text.isNotBlank()) badges.add("Hava Analisti")
     return badges.take(3)
 }
@@ -695,11 +715,31 @@ fun QuickActionsGrid(
 @Composable
 fun QuickActionItem(title: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    HavamaniaGlassCard(modifier = modifier, cornerRadius = 18.dp, alpha = 0.4f, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(4.dp)) {
-            Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+    Surface(
+        onClick = onClick,
+        color = themeColors.surfaceGlass.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f)),
+        modifier = modifier
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(themeColors.accent.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+            }
             Spacer(modifier = Modifier.width(12.dp))
-            Text(text = title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = themeColors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

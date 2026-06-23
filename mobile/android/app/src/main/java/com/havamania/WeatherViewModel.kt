@@ -68,15 +68,20 @@ class WeatherViewModel(
             initialValue = 0
         )
 
-    private var lastCity = "İstanbul"
+    private var lastCity = "Balıkesir"
     private var lastDistrict: String? = null
-    private var lastLat = 41.0082
-    private var lastLon = 28.9784
+    private var lastLat = 39.6484
+    private var lastLon = 27.8826
 
     init {
         viewModelScope.launch {
-            com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).collect { defaultCity ->
-                fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+            try {
+                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).collect { defaultCity ->
+                    fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                }
+            } catch (e: Exception) {
+                // Emniyet: Hata olsa bile varsayılan Balıkesir ile başlat
+                fetchWeather(39.6484, 27.8826, "Balıkesir")
             }
         }
     }
@@ -181,7 +186,7 @@ class WeatherViewModel(
         _selectedHourlyWeather.value = hour
     }
 
-    fun updateRecommendation(interests: Set<String>? = null) {
+    fun updateRecommendation(interests: Set<String>? = null, aboutMe: String? = null) {
         if (interests != null) {
             currentUserInterests = interests
         }
@@ -193,7 +198,8 @@ class WeatherViewModel(
             viewModelScope.launch {
                 _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
                     weatherData = weather,
-                    userInterests = currentUserInterests
+                    userInterests = currentUserInterests,
+                    aboutMe = aboutMe
                 )
             }
         }

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,23 +75,15 @@ fun AiHistoryScreen(
         }
 
         if (showDeleteConfirm) {
-            AlertDialog(
+            HavamaniaDialog(
                 onDismissRequest = { showDeleteConfirm = false },
-                containerColor = themeColors.surface,
-                title = { Text("Geçmişi Temizle", fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
-                text = { Text("Tüm AI analiz geçmişini silmek istediğinize emin misiniz?", color = themeColors.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.clearAll()
-                        showDeleteConfirm = false
-                    }) {
-                        Text("TEMİZLE", color = themeColors.error, fontWeight = FontWeight.Black)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("VAZGEÇ", color = themeColors.textPrimary, fontWeight = FontWeight.Black)
-                    }
+                title = "Geçmişi Sil?",
+                text = "Tüm AI sohbet geçmişiniz kalıcı olarak silinecektir.",
+                confirmText = "Temizle",
+                confirmColor = themeColors.error,
+                icon = Icons.Rounded.DeleteSweep,
+                onConfirm = {
+                    viewModel.clearAll()
                 }
             )
         }
@@ -104,26 +97,27 @@ fun AiHistoryCard(
     onDelete: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val dateFormat = remember { SimpleDateFormat("d MMMM, HH:mm", Locale("tr")) }
+    val dateFormat = remember { SimpleDateFormat("d MMM, HH:mm", Locale("tr")) }
     val dateStr = remember(item.timestamp) { dateFormat.format(Date(item.timestamp)) }
 
     HavamaniaGlassCard(
         onClick = onClick,
-        alpha = 0.5f,
-        cornerRadius = 24.dp
+        alpha = if (themeColors.isDark) 0.5f else 0.7f,
+        cornerRadius = 24.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(themeColors.accent.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.HistoryEdu, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -132,36 +126,45 @@ fun AiHistoryCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black, fontSize = 14.sp),
                         color = themeColors.textPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (item.cityName != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "• ${item.cityName}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = themeColors.accent
-                        )
+                        Surface(
+                            color = themeColors.accent.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(start = 6.dp)
+                        ) {
+                            Text(
+                                item.cityName,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                color = themeColors.accent
+                            )
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = item.summary,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
                     color = themeColors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = dateStr,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = themeColors.textMuted
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = themeColors.textMuted.copy(alpha = 0.6f)
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Close, null, tint = themeColors.textMuted, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
             }
         }
     }

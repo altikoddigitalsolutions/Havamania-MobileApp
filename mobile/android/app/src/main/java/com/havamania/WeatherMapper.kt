@@ -167,8 +167,22 @@ object WeatherMapper {
 
         return hourly.time.indices.map { i ->
             val fullTime = hourly.time[i]
-            var hourLabel = fullTime.split("T").last()
-            val timeObj = try { LocalTime.parse(hourLabel) } catch (e: Exception) { LocalTime.of(hourLabel.split(":").first().toInt(), 0) }
+            val hourLabelRaw = fullTime.split("T").last()
+            val hourLabel = if (hourLabelRaw == "00:00") {
+                val d = try { LocalDate.parse(fullTime.split("T").first()) } catch (e: Exception) { LocalDate.now() }
+                d.format(DateTimeFormatter.ofPattern("d MMM", Locale("tr")))
+            } else {
+                hourLabelRaw
+            }
+            val timeObj = try {
+                LocalTime.parse(hourLabelRaw)
+            } catch (e: Exception) {
+                try {
+                    LocalTime.of(hourLabelRaw.split(":").first().toInt(), 0)
+                } catch (e2: Exception) {
+                    LocalTime.of(0, 0)
+                }
+            }
 
             HourlyWeather(
                 time = hourLabel,
@@ -229,8 +243,8 @@ object WeatherMapper {
             WeatherDetailData("Rüzgar Soğutma", if (windChill != null) "${windChill.roundToInt()}°" else "Düşük", if (windChill != null) "Rüzgar etkisi dahil" else "Rüzgar etkisi düşük", "AcUnit", "#38BDF8"),
             WeatherDetailData("Yağış Olasılığı", WeatherUtils.formatRainProbability(precipProb), precipLabel, "WaterDrop", "#60A5FA"),
             WeatherDetailData("Yağış Miktarı", "${current?.precipitation ?: 0.0} mm", "Son 1 saat", "Umbrella", "#0EA5E9"),
-            WeatherDetailData("Rüzgar", "${windSpd.roundToInt()} km/s", "Anlık hız", "Air", "#34D399"),
-            WeatherDetailData("Rüzgar Hamlesi", "${windGust.roundToInt()} km/s", "Maksimum hız", "Cyclone", "#10B981"),
+            WeatherDetailData("Rüzgar", "${windSpd.roundToInt()} km/sa", "Anlık hız", "Air", "#34D399"),
+            WeatherDetailData("Rüzgar Hamlesi", "${windGust.roundToInt()} km/sa", "Maksimum hız", "Cyclone", "#10B981"),
             WeatherDetailData("UV İndeksi", "${uv.toInt()}", getUVDescription(uv), "Sun", "#FBBF24", uv.toFloat() / 12f),
             WeatherDetailData("Bulutluluk", WeatherUtils.formatRainProbability(cloudCover), "Gökyüzü kapalılığı", "Cloud", "#64748B"),
             WeatherDetailData("Görüş", "${(visibility / 1000).toInt()} km", getVisibilityDescription(visibility), "Visibility", "#10B981"),

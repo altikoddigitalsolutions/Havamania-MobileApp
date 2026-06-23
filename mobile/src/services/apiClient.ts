@@ -37,13 +37,32 @@ export function setTokenRefreshHandler(handler: () => Promise<string | null>): v
 apiClient.interceptors.response.use(
   response => response,
   async error => {
-    if (!error?.response || error.response.status !== 401 || error.config?._retry || !tokenRefreshHandler) {
-      return Promise.reject(error);
+    // Kullanıcı dostu hata mesajları ekle
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        error.friendlyMessage = 'İstek zaman aşımına uğradı. Lütfen tekrar dene.';
+      } else {
+        error.friendlyMessage = 'İnternet bağlantısı sorunu yaşıyoruz. Lütfen bağlantını kontrol et.';
+      }
+    } else {
+      const status = error.response.status;
+      if (status === 401) {
+        // Refresh token mantığı burada (zaten var)
+        if (error.config?._retry || !tokenRefreshHandler) {
+          return Promise.reject(error);
+        }
+        error.config._retry = true;
+        const newAccessToken = await tokenRefreshHandler();
+        if (!newAccessToken) return Promise.reject(error);
+        error.config.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient.request(error.config);
+      } else if (status === 404) {
+        error.friendlyMessage = 'İstediğin bilgiye şu an ulaşılamıyor.';
+      } else if (status >= 500) {
+        error.friendlyMessage = 'Sunucularımızda kısa süreli bir sorun var. Birazdan tekrar dene.';
+      }
     }
-    error.config._retry = true;
-    const newAccessToken = await tokenRefreshHandler();
-    if (!newAccessToken) return Promise.reject(error);
-    error.config.headers.Authorization = `Bearer ${newAccessToken}`;
-    return apiClient.request(error.config);
+
+    return Promise.reject(error);
   },
 );

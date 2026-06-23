@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -49,32 +50,33 @@ fun WeatherBottomBar(
     )
 
     Surface(
-        color = themeColors.surfaceGlass,
+        color = themeColors.surfaceGlass.copy(alpha = 0.94f),
         modifier = modifier.fillMaxWidth(),
-        tonalElevation = 8.dp
+        tonalElevation = 0.dp
     ) {
         Column {
+            // Premium Divider Shadow
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(1.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color.Transparent, themeColors.border.copy(alpha = 0.3f), Color.Transparent)
-                        )
-                    )
+                    .height(0.5.dp)
+                    .background(themeColors.border.copy(alpha = 0.1f))
             )
 
             NavigationBar(
-                modifier = Modifier.height(72.dp),
+                modifier = Modifier.height(80.dp),
                 containerColor = Color.Transparent,
                 tonalElevation = 0.dp,
-                windowInsets = WindowInsets(0, 0, 0, 0)
+                windowInsets = WindowInsets.navigationBars
             ) {
                 items.forEach { item ->
-                    val isSelected = currentRoute == item.route
-                    val iconSize by animateDpAsState(targetValue = if (isSelected) 26.dp else 22.dp)
-                    val labelAlpha by animateFloatAsState(targetValue = if (isSelected) 1f else 0.6f)
+                    val isSelected = when (item.route) {
+                        Routes.WEATHER -> currentRoute == Routes.WEATHER
+                        Routes.CALENDAR -> currentRoute?.startsWith(Routes.CALENDAR) == true
+                        Routes.AI -> currentRoute == Routes.AI || currentRoute?.startsWith("ai_history") == true
+                        Routes.PROFILE -> currentRoute == Routes.PROFILE
+                        else -> currentRoute == item.route
+                    }
 
                     NavigationBarItem(
                         selected = isSelected,
@@ -84,21 +86,30 @@ fun WeatherBottomBar(
                                 text = item.title,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 11.sp,
+                                    letterSpacing = 0.2.sp
                                 ),
-                                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
-                                color = if (isSelected) themeColors.accent else themeColors.textSecondary
+                                color = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.7f)
                             )
                         },
                         icon = {
-                            Box(contentAlignment = Alignment.Center) {
+                            val iconSize by animateDpAsState(targetValue = if (isSelected) 24.dp else 22.dp)
+
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .height(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isSelected) themeColors.accent else Color.Transparent)
+                            ) {
                                 if (isSelected) {
+                                    // Glow effect for extra premium feel
                                     Box(
                                         modifier = Modifier
-                                            .offset(y = (-18).dp)
-                                            .size(4.dp)
-                                            .clip(CircleShape)
-                                            .background(themeColors.accent)
+                                            .fillMaxSize()
+                                            .blur(8.dp)
+                                            .background(themeColors.accent.copy(alpha = 0.3f), CircleShape)
                                     )
                                 }
 
@@ -106,17 +117,20 @@ fun WeatherBottomBar(
                                     imageVector = item.icon,
                                     contentDescription = item.title,
                                     modifier = Modifier.size(iconSize),
-                                    tint = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.6f)
+                                    tint = if (isSelected) Color.White else themeColors.textSecondary.copy(alpha = 0.6f)
                                 )
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent
+                            indicatorColor = Color.Transparent,
+                            selectedIconColor = Color.White,
+                            unselectedIconColor = themeColors.textSecondary.copy(alpha = 0.6f),
+                            selectedTextColor = themeColors.accent,
+                            unselectedTextColor = themeColors.textSecondary.copy(alpha = 0.7f)
                         )
                     )
                 }
             }
-            Spacer(modifier = Modifier.navigationBarsPadding())
         }
     }
 }

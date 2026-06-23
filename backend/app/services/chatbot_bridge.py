@@ -11,8 +11,12 @@ class ChatbotBridgeClient:
         self.base_url = base_url or settings.chatbot_base_url
         self.timeout_seconds = timeout_seconds or settings.chatbot_timeout_seconds
 
-    def ask(self, question: str, user_id: str) -> str:
-        payload = {"question": question, "user_id": user_id}
+    def ask(self, question: str, user_id: str, context: dict | None = None) -> str:
+        payload = {
+            "question": question,
+            "user_id": user_id,
+            "context": context or {}
+        }
 
         for attempt in range(2):
             try:

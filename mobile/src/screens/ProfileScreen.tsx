@@ -129,7 +129,7 @@ export function ProfileScreen(): React.JSX.Element {
             <MenuRow
               icon="person-outline"
               label="Profil Bilgileri"
-              onPress={() => Alert.alert('Profil', 'Profil düzenleme sayfası yakında eklenecek.')}
+              onPress={() => navigation.navigate('ProfileEdit')}
               C={C}
             />
             <View style={s.divider} />

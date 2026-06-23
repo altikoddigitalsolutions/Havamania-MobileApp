@@ -37,10 +37,19 @@ object NotificationDateFormatter {
             val today = LocalDate.now()
             val tomorrow = today.plusDays(1)
 
+            val isMidnight = eventDateTime.hour == 0 && eventDateTime.minute == 0
+            val timePart = if (isMidnight) "" else " ${eventDateTime.format(timeFormatter)}"
+
             when {
-                eventDate == today -> "Bugün ${eventDateTime.format(timeFormatter)}"
-                eventDate == tomorrow -> "Yarın ${eventDateTime.format(timeFormatter)}"
-                else -> eventDateTime.format(fullDateFormatter)
+                eventDate == today -> "Bugün$timePart".trim()
+                eventDate == tomorrow -> "Yarın$timePart".trim()
+                else -> {
+                    if (isMidnight) {
+                        eventDateTime.format(DateTimeFormatter.ofPattern("d MMMM EEEE", turkishLocale))
+                    } else {
+                        eventDateTime.format(fullDateFormatter)
+                    }
+                }
             }
         } catch (e: Exception) {
             ""

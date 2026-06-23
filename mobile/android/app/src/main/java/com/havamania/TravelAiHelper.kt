@@ -245,14 +245,14 @@ object TravelAiHelper {
             }
         }
 
-        // 4. Rüzgar Karşılaştırması (Rüzgar farkı >= 8 km/s)
+        // 4. Rüzgar Karşılaştırması (Rüzgar farkı >= 8 km/sa)
         if (old.windSpeed != null && new.windSpeed != null) {
             val windDiff = new.windSpeed - old.windSpeed
             if (Math.abs(windDiff) >= 8.0) {
                 if (windDiff > 0) {
-                    changes.add("Rüzgar beklentisi ${old.windSpeed.toInt()} km/s'den ${new.windSpeed.toInt()} km/s'ye çıktı, açık hava planları için dikkatli olunmalı.")
+                    changes.add("Rüzgar beklentisi ${old.windSpeed.toInt()} km/sa'den ${new.windSpeed.toInt()} km/sa'ye çıktı, açık hava planları için dikkatli olunmalı.")
                 } else {
-                    changes.add("Rüzgar hızı azalıyor (${old.windSpeed.toInt()} → ${new.windSpeed.toInt()} km/s), daha sakin bir hava hakim olacak.")
+                    changes.add("Rüzgar hızı azalıyor (${old.windSpeed.toInt()} → ${new.windSpeed.toInt()} km/sa), daha sakin bir hava hakim olacak.")
                 }
             }
         }

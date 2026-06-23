@@ -42,62 +42,71 @@ fun WeatherEmptyState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // İkon Alanı
+        // İkon Alanı with Premium Glow
         Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(160.dp)
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(effectiveAccent.copy(alpha = 0.12f), Color.Transparent)
+                            colors = listOf(effectiveAccent.copy(alpha = 0.15f), Color.Transparent)
                         )
                     )
             )
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(72.dp),
-                tint = effectiveAccent.copy(alpha = 0.7f)
-            )
+            Surface(
+                color = effectiveAccent.copy(alpha = 0.05f),
+                shape = RoundedCornerShape(32.dp),
+                modifier = Modifier.size(96.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, effectiveAccent.copy(alpha = 0.1f))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp),
+                        tint = effectiveAccent
+                    )
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(40.dp))
 
         // Başlık
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = FontWeight.Black,
                 letterSpacing = (-0.5).sp
             ),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Açıklama
         Text(
             text = description,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                lineHeight = 22.sp
+            style = MaterialTheme.typography.bodyLarge.copy(
+                lineHeight = 26.sp
             ),
-            color = themeColors.textSecondary.copy(alpha = 0.6f),
+            color = themeColors.textSecondary.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 24.dp)
         )
 
         // Aksiyon Butonu (Opsiyonel)
         if (buttonText != null) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(56.dp))
             HavamaniaPrimaryButton(
                 text = buttonText,
                 onClick = onButtonClick,
-                modifier = Modifier.fillMaxWidth(0.8f),
+                modifier = Modifier.width(240.dp).height(56.dp),
                 icon = if (title.contains("Şehir")) Icons.Rounded.AddLocationAlt else Icons.Rounded.AutoAwesome
             )
         }

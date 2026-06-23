@@ -57,12 +57,13 @@ fun HomeScreen(
     val citySuggestions by viewModel.citySuggestions.collectAsState()
     val userInterests by themeViewModel.userInterests.collectAsState()
     val todayRecommendation by viewModel.todayRecommendation.collectAsState()
+    val userAboutMe by themeViewModel.userAboutMe.collectAsState()
 
     val notificationUiState by notificationViewModel.uiState.collectAsState()
     val unreadNotificationsCount = notificationUiState.unreadCount
 
-    LaunchedEffect(userInterests) {
-        viewModel.updateRecommendation(userInterests)
+    LaunchedEffect(userInterests, userAboutMe) {
+        viewModel.updateRecommendation(userInterests, userAboutMe)
     }
 
     val scrollState = rememberScrollState()
@@ -208,7 +209,7 @@ fun WeatherSuccessContent(
                 low = selectedDailyForecast?.minTemp?.toString()?.plus("°") ?: data.low,
                 feelsLike = selectedHourlyWeather?.temp ?: data.feelsLike,
                 humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65",
-                windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/s",
+                windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/sa",
                 uvIndex = data.details.find { it.title.contains("UV") }?.value?.filter { it.isDigit() } ?: "4",
                 unreadCount = unreadCount,
                 onCityClick = onCityClick,

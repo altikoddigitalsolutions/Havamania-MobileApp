@@ -44,11 +44,12 @@ import {useThemeStore} from '../store/themeStore';
 import {WeatherAnimBox} from '../components/WeatherAnimBox';
 import {AtmosphericWeatherCard} from '../components/AtmosphericWeatherCard';
 import {WeatherDetailsPanel} from '../components/WeatherDetailsPanel';
+import {HavamaniaRecommendationCard} from '../components/HavamaniaRecommendationCard';
 
-// ── Varsayılan konum ──────────────────────────────────────────────────────────
-const DEFAULT_LAT = 41.0082;
-const DEFAULT_LON = 28.9784;
-const DEFAULT_CITY = 'İstanbul, TR';
+// ── Varsayılan konum (Balıkesir Odaklı) ──────────────────────────────────────────
+const DEFAULT_LAT = 39.6484;
+const DEFAULT_LON = 27.8826;
+const DEFAULT_CITY = 'Balıkesir, TR';
 
 export function HomeScreen(): React.JSX.Element {
   const {t} = useTranslation();
@@ -65,20 +66,29 @@ export function HomeScreen(): React.JSX.Element {
   const [city, setCity] = useState(DEFAULT_CITY);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationSearch, setLocationSearch] = useState('');
-  const [locationResults, setLocationResults] = useState<City[]>([]);
+  const [locationResults, setLocationResults] = useState<any[]>([]);
   const [searchingLocation, setSearchingLocation] = useState(false);
 
-  // Otomatik Arama (81 İl Listesi)
+  // Otomatik Arama (API Destekli ve Türkiye Odaklı)
   useEffect(() => {
-    if (locationSearch.length >= 2) {
-      const searchNormalized = normalizeText(locationSearch);
-      const filtered = TURKEY_CITIES.filter(c =>
-        normalizeText(c.name).includes(searchNormalized)
-      );
-      setLocationResults(filtered);
-    } else {
-      setLocationResults([]);
-    }
+    const timer = setTimeout(async () => {
+      if (locationSearch.length >= 2) {
+        setSearchingLocation(true);
+        try {
+          const results = await searchCity(locationSearch);
+          // @ts-ignore
+          setLocationResults(results);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setSearchingLocation(false);
+        }
+      } else {
+        setLocationResults([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [locationSearch]);
 
   const [selectedWeather, setSelectedWeather] = useState<any>(null);
@@ -159,7 +169,23 @@ export function HomeScreen(): React.JSX.Element {
     );
   }
 
-  const current = currentQuery.data!;
+  // Hata Durumu (API Cevap Vermiyor veya Bağlantı Yok)
+  if (currentQuery.isError || !currentQuery.data) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <View style={s.center}>
+          <Text style={{fontSize: 40, marginBottom: 16}}>⚠️</Text>
+          <Text style={s.errorText}>Hava verisi şu an alınamıyor.</Text>
+          <Text style={s.loadingText}>Lütfen internet bağlantını kontrol et.</Text>
+          <TouchableOpacity style={s.retryBtn} onPress={onRefresh}>
+            <Text style={s.retryText}>Tekrar Dene</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const current = currentQuery.data;
   const hourlyItems = hourlyQuery.data?.items ?? [];
   const dailyItems = dailyQuery.data?.items ?? [];
   const todayDaily = dailyItems[0];
@@ -221,6 +247,9 @@ export function HomeScreen(): React.JSX.Element {
           feelsLike={selectedWeather?.feels_like ?? selectedWeather?.apparent_temperature ?? current.feels_like}
           weatherCode={selectedWeather?.weather_code ?? current.weather_code}
           isDay={selectedWeather?.is_day ?? current.is_day}
+          humidity={selectedWeather?.humidity ?? current.humidity}
+          windSpeed={selectedWeather?.wind_speed ?? current.wind_speed}
+          uvIndex={selectedWeather?.uv_index ?? current.uv_index}
           time={selectedWeather?.time}
           lastUpdated={new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
           C={C}
@@ -256,8 +285,9 @@ export function HomeScreen(): React.JSX.Element {
           />
         </View>
 
-        {/* ── AI Önerileri (Havamania Önerisi) ── */}
-        <AiSuggestionCard
+        {/* ── Havamania Önerisi (AI Recommendation) ── */}
+        <HavamaniaRecommendationCard
+          weather={current}
           onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
           C={C}
         />
@@ -338,19 +368,25 @@ export function HomeScreen(): React.JSX.Element {
 
             <FlatList
               data={locationResults}
-              keyExtractor={(item, i) => `${item.lat}-${item.lon}-${i}`}
+              keyExtractor={(item, i) => `${item.latitude}-${item.longitude}-${i}`}
               showsVerticalScrollIndicator={false}
               renderItem={({item}) => (
                 <TouchableOpacity
                   style={[s.locationResultItem, {borderBottomColor: C.divider}]}
                   activeOpacity={0.7}
-                  onPress={() => selectLocation(item)}>
+                  onPress={() => selectLocation({
+                    name: item.name,
+                    lat: item.latitude,
+                    lon: item.longitude
+                  } as any)}>
                   <View style={s.resultIconBox}>
                     <Icon name="location-outline" size={20} color={C.accent} />
                   </View>
                   <View style={{flex: 1}}>
                     <Text style={[s.locationResultName, {color: C.text}]}>{item.name}</Text>
-                    <Text style={[s.locationResultSub, {color: C.textSecondary}]}>Türkiye</Text>
+                    <Text style={[s.locationResultSub, {color: C.textSecondary}]}>
+                        {item.admin1 ? `${item.admin1}, ` : ''}{item.country}
+                    </Text>
                   </View>
                   <Icon name="chevron-forward" size={16} color={C.textMuted} />
                 </TouchableOpacity>
@@ -362,82 +398,6 @@ export function HomeScreen(): React.JSX.Element {
     </View>
   );
 }
-
-/**
- * AI Önerileri Kartı - Premium ve Modern
- */
-function AiSuggestionCard({onPress, C}: {onPress: (q: string) => void; C: AppColors}) {
-  const suggestions = [
-    "Bugün şemsiye gerekir mi?",
-    "Yarın nasıl giyinmeliyim?",
-    "Hafta sonu plan yapmak için hava uygun mu?",
-  ];
-
-  return (
-    <View style={aiStyles(C).container}>
-        <View style={aiStyles(C).header}>
-          <Text style={{fontSize: 14}}>✨</Text>
-          <Text style={aiStyles(C).headerText}>AI ASİSTAN ÖNERİLERİ</Text>
-        </View>
-      <View style={aiStyles(C).list}>
-        {suggestions.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={aiStyles(C).item}
-            activeOpacity={0.7}
-            onPress={() => onPress(item)}>
-            <Text style={aiStyles(C).itemText}>{item}</Text>
-            <Text style={{fontSize: 12, color: C.textMuted}}>▶</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const aiStyles = (C: AppColors) => StyleSheet.create({
-  container: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    backgroundColor: 'rgba(22, 30, 46, 0.6)',
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  headerText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: C.accent,
-    letterSpacing: 1.2,
-  },
-  list: {
-    gap: 8,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  itemText: {
-    fontSize: 14,
-    color: C.text,
-    opacity: 0.9,
-    flex: 1,
-  },
-});
 
 function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirst: boolean; isSelected: boolean; onPress: () => void; C: AppColors; t: any}) {
   const barPct = Math.min(100, Math.max(15, ((item.temp_max - item.temp_min) / 15) * 80));

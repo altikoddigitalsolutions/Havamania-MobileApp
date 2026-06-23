@@ -98,7 +98,7 @@ object DefaultNotifications {
             NotificationItem(
                 id = "def_warn_2",
                 title = "Hava Durumu Uyarısı",
-                message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/s hıza ulaşabilir. Dikkatli olunmalıdır.",
+                message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/sa hıza ulaşabilir. Dikkatli olunmalıdır.",
                 category = NotificationCategory.WARNING,
                 isRead = true,
                 actionType = NotificationActionType.WEATHER_HOME,
