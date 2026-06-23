@@ -31,6 +31,12 @@ android {
 
         buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchEnabled().toString()
         buildConfigField "boolean", "IS_HERMES_ENABLED", (project.hasProperty("hermesEnabled") ? project.property("hermesEnabled") : "true").toString()
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildFeatures {
