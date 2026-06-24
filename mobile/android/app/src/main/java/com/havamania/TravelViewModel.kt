@@ -84,7 +84,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         longitude = 41.1322,
                         tripType = TripType.EVENT,
                         startDate = LocalDate.of(currentYear, 5, 15),
-                        endDate = LocalDate.of(currentYear, 5, 16)
+                        endDate = LocalDate.of(currentYear, 5, 16),
+                        isDemo = true
                     ),
                     TravelPlan(
                         city = "Bali",
@@ -92,7 +93,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         longitude = 115.1889,
                         tripType = TripType.WEEKEND,
                         startDate = LocalDate.of(currentYear, 5, 28),
-                        endDate = LocalDate.of(currentYear, 5, 30)
+                        endDate = LocalDate.of(currentYear, 5, 30),
+                        isDemo = true
                     ),
                     TravelPlan(
                         city = "Trabzon",
@@ -100,7 +102,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         longitude = 39.7168,
                         tripType = TripType.SHOPPING,
                         startDate = LocalDate.of(currentYear, 5, 18),
-                        endDate = LocalDate.of(currentYear, 5, 21)
+                        endDate = LocalDate.of(currentYear, 5, 21),
+                        isDemo = true
                     ),
                     TravelPlan(
                         city = "Balıkesir",
@@ -108,7 +111,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         longitude = 27.8903,
                         tripType = TripType.GASTRONOMY,
                         startDate = LocalDate.of(currentYear, 6, 10),
-                        endDate = LocalDate.of(currentYear, 6, 11)
+                        endDate = LocalDate.of(currentYear, 6, 11),
+                        isDemo = true
                     ),
                     TravelPlan(
                         city = "Mardin",
@@ -116,7 +120,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         longitude = 40.7245,
                         tripType = TripType.CULTURE,
                         startDate = today.plusDays(7),
-                        endDate = today.plusDays(9)
+                        endDate = today.plusDays(9),
+                        isDemo = true
                     )
                 )
 
@@ -657,7 +662,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
         isArchived = isArchived,
         analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -681,6 +687,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         weatherAnalysisStatus = weatherAnalysisStatus.name,
         isArchived = isArchived,
         analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo
     )
 }

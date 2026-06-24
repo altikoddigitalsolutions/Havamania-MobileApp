@@ -127,5 +127,6 @@ data class TravelPlan(
     val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
     val isArchived: Boolean = false,
     val analyses: List<TravelWeatherAnalysis> = emptyList(),
-    val lastDailyNotificationDate: String? = null // YYYY-MM-DD
+    val lastDailyNotificationDate: String? = null, // YYYY-MM-DD
+    val isDemo: Boolean = false
 )

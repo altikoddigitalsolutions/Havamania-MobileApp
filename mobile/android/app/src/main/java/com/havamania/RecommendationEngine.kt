@@ -3,6 +3,7 @@ package com.havamania
 import com.havamania.ui.theme.AssistantTone
 import java.time.LocalDate
 import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 object RecommendationEngine {
@@ -123,7 +124,7 @@ object RecommendationEngine {
         return when (intent) {
             AiIntent.CLOTHING -> generateClothingReply(tempVal, feelsLikeVal, uv, precip, windSpeed, tone, interests)
             AiIntent.ACTIVITY -> generateActivityReply(city, tempVal, uv, precip, windSpeed, tone, interests)
-            AiIntent.TRAVEL -> generateTravelReply(userPrompt, weatherData, tone)
+            AiIntent.TRAVEL -> generateTravelReply(userPrompt, weatherData, travelPlans, tone)
             AiIntent.PACKING -> generatePackingReply(tempVal, precip, windSpeed, tone)
             AiIntent.CALENDAR -> generateCalendarReply(weatherData, travelPlans, tone)
             AiIntent.WEEKEND_FORECAST -> generateWeekendReply(weatherData, tone)
@@ -290,10 +291,13 @@ object RecommendationEngine {
             }
         }
 
+        val today = LocalDate.now()
         val analysisResults = travelPlans.take(3).map { plan ->
             val forecast = weatherData.dailyForecast.find { it.date == plan.startDate.toString() }
+            val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
+
             val riskScore = when {
-                forecast == null -> 0
+                forecast == null -> -1
                 forecast.weatherCode >= 95 -> 90
                 forecast.weatherCode >= 80 -> 70
                 forecast.weatherCode >= 51 -> 40
@@ -302,13 +306,16 @@ object RecommendationEngine {
             }
 
             val status = when {
-                forecast == null -> "Veri yok"
+                riskScore == -1 && daysUntil > 15 -> "Uzak Tarih (Plan Hazır)"
+                riskScore == -1 -> "Veri Bekleniyor"
                 riskScore >= 70 -> "Yüksek Risk ⚠️"
                 riskScore >= 40 -> "Orta Risk"
                 else -> "Düşük Risk ✅"
             }
 
-            val suggestion = if (riskScore >= 40) {
+            val suggestion = if (riskScore == -1 && daysUntil > 15) {
+                " (Hava durumu yaklaştığında analiz edilecektir)"
+            } else if (riskScore >= 40) {
                 val betterDay = weatherData.dailyForecast.find { it.weatherCode <= 3 && it.maxTemp in 15..28 }
                 if (betterDay != null) " (Öneri: ${betterDay.day} gününe kaydırılabilir)" else ""
             } else ""
@@ -322,6 +329,7 @@ object RecommendationEngine {
         val summary = when {
             analysisResults.any { it.contains("Yüksek Risk") } -> "Kritik: Bazı planlarınız hava koşulları nedeniyle yüksek risk taşıyor."
             analysisResults.any { it.contains("Orta Risk") } -> "Bilgi: Etkinliklerinizde yağış ihtimali nedeniyle esneklik gerekebilir."
+            analysisResults.any { it.contains("Uzak Tarih") } -> "Not: Gelecek tarihler için şimdilik sadece plan kaydınız hazırlandı."
             else -> "Sonuç: Mevcut planlarınız için hava koşulları oldukça elverişli görünüyor."
         }
 
@@ -403,12 +411,32 @@ object RecommendationEngine {
         }
     }
 
-    private fun generateTravelReply(prompt: String, weatherData: WeatherData, tone: AssistantTone): String {
-        val targetCity = AiIntentParser.detectCity(prompt) ?: "Gidilecek yer"
+    private fun generateTravelReply(prompt: String, weatherData: WeatherData, travelPlans: List<TravelPlan>, tone: AssistantTone): String {
+        val detectedCity = AiIntentParser.detectCity(prompt)
+        val firstActivePlan = travelPlans.firstOrNull { !it.isArchived }
+
+        val cityToMention = when {
+            detectedCity != null -> detectedCity
+            firstActivePlan != null -> firstActivePlan.city
+            else -> null
+        }
+
+        if (cityToMention == null) {
+            return when (tone) {
+                AssistantTone.SAMIMI -> "Tabii tatlım! Nereye gitmeyi planlıyorsun? Şehri söylersen hemen yardımcı olabilirim. 😊"
+                AssistantTone.RESMI -> "Seyahat planlamanıza yardımcı olabilirim. Lütfen varış noktanızı belirtiniz."
+                AssistantTone.KISA_NET -> "Hangi şehir için plan yapalım?"
+                else -> "Seyahat planlamanız için lütfen gitmek istediğiniz şehri belirtin."
+            }
+        }
+
         val temp = weatherData.temperature
         val cond = weatherData.condition.lowercase(Locale("tr"))
 
-        return "✈️ $targetCity seyahatiniz için $temp ve $cond bir hava öngörülüyor. Yolculuk için en konforlu saatler 08:00-11:00 arasıdır. Valizinizde mutlaka rüzgar kesici bir parçaya yer açın."
+        val base = "✈️ $cityToMention seyahatiniz için $temp ve $cond bir hava öngörülüyor."
+        val advice = " Yolculuk için en konforlu saatler 08:00-11:00 arasıdır. Valizinizde mutlaka rüzgar kesici bir parçaya yer açın."
+
+        return base + advice
     }
 
     private fun generateGeneralWeatherReply(weatherData: WeatherData, tone: AssistantTone): String {
@@ -427,7 +455,7 @@ object RecommendationEngine {
     }
 
     private fun generateTripTimingReply(weatherData: WeatherData, tone: AssistantTone): String {
-        return "🕒 Zamanlama: Yolculuk için en konforlu zaman dilimi 07:00 - 10:00 arasıdır. Bu saatlerde görüş mesafesi açık ve sıcaklık dengelidir."
+        return "🕒 Zamanlama: Yolculuk için en konforlu zaman dilimi 07:00 - 10:00 arasıdır. Bu saatlerde görüş mesafesi açık and sıcaklık dengelidir."
     }
 
     private fun generateTripRouteReply(weatherData: WeatherData, tone: AssistantTone): String {

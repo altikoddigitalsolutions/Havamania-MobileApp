@@ -103,7 +103,9 @@ data class TravelPlanEntity(
     @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean = false,
     val analyses: List<TravelWeatherAnalysis> = emptyList(),
-    val lastDailyNotificationDate: String? = null
+    val lastDailyNotificationDate: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val isDemo: Boolean = false
 )
 
 /**
@@ -137,6 +139,9 @@ interface WeatherDao {
     @Query("SELECT * FROM travel_plans ORDER BY startDate ASC")
     suspend fun getAllTravelPlans(): List<TravelPlanEntity>
 
+    @Query("SELECT * FROM travel_plans WHERE isDemo = 0 ORDER BY startDate ASC")
+    suspend fun getUserTravelPlans(): List<TravelPlanEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTravelPlan(plan: TravelPlanEntity)
 
@@ -163,7 +168,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 9, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 10, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -180,6 +185,14 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE travel_plans ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 try {
@@ -188,7 +201,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                         WeatherDatabase::class.java,
                         "weather_database"
                     )
-                    .addMigrations(MIGRATION_5_6)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_9_10)
                     .fallbackToDestructiveMigration()
                     .build()
                     INSTANCE = instance

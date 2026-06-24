@@ -13,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -77,6 +78,9 @@ fun ProfileScreen(
     var comingSoonTitle by remember { mutableStateOf("") }
     var showAboutMeSheet by remember { mutableStateOf(false) }
 
+    // Stats Detail States
+    var showStatsDetail by remember { mutableStateOf<String?>(null) }
+
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
@@ -115,7 +119,7 @@ fun ProfileScreen(
                 aboutMe = aboutMe,
                 stats = mapOf(
                     "İlgi" to userInterests.size.toString(),
-                    "Rota" to travelPlans.size.toString(),
+                    "Rota" to travelPlans.count { !it.isDemo }.toString(), // FIX: Filter demo routes
                     "Analiz" to aiHistoryItems.size.toString(),
                     "Favori" to (travelPlans.groupBy { it.tripType }.maxByOrNull { it.value.size }?.key?.label ?: "Outdoor")
                 ),
@@ -124,12 +128,13 @@ fun ProfileScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
-                onEditClick = onNavigateToEditProfile
+                onEditClick = onNavigateToEditProfile,
+                onStatClick = { showStatsDetail = it }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 2. Quick Actions - MOVED HIGHER
+            // 2. Quick Actions
             SectionHeader("HIZLI İŞLEMLER")
             QuickActionsGrid(
                 onManageCities = onNavigateToCities,
@@ -180,6 +185,21 @@ fun ProfileScreen(
             }
         }
 
+        if (showStatsDetail != null) {
+            ModalBottomSheet(
+                onDismissRequest = { showStatsDetail = null },
+                containerColor = themeColors.surface,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
+            ) {
+                StatsDetailContent(
+                    type = showStatsDetail!!,
+                    userInterests = userInterests,
+                    travelPlans = travelPlans,
+                    aiHistory = aiHistoryItems
+                )
+            }
+        }
+
         if (showComingSoonDialog) {
             HavamaniaDialog(
                 onDismissRequest = { showComingSoonDialog = false },
@@ -201,7 +221,8 @@ fun PremiumProfileHeader(
     aboutMe: String,
     stats: Map<String, String>,
     onAvatarClick: () -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    onStatClick: (String) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
 
@@ -272,7 +293,7 @@ fun PremiumProfileHeader(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // AI Personality Badge - Atmosfer Avcısı etc.
+        // AI Personality Badge
         val personality = remember(interests, aboutMe) { generateAiPersonality(interests, aboutMe) }
         Surface(
             color = themeColors.accent.copy(alpha = 0.12f),
@@ -297,19 +318,115 @@ fun PremiumProfileHeader(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            ProfileStatItem(stats["İlgi"] ?: "0", "TERCİHLER")
-            ProfileStatItem(stats["Rota"] ?: "0", "ROTALAR")
-            ProfileStatItem(stats["Analiz"] ?: "0", "AI ANALİZİ")
+            ProfileStatItem(stats["İlgi"] ?: "0", "TERCİHLER") { onStatClick("İlgi") }
+            ProfileStatItem(stats["Rota"] ?: "0", "ROTALAR") { onStatClick("Rota") }
+            ProfileStatItem(stats["Analiz"] ?: "0", "KAYDEDİLEN ANALİZ") { onStatClick("Analiz") }
         }
     }
 }
 
 @Composable
-fun ProfileStatItem(value: String, label: String) {
+fun ProfileStatItem(value: String, label: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(8.dp)
+    ) {
         Text(value, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp), color = themeColors.textMuted)
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp), color = themeColors.textMuted)
+    }
+}
+
+@Composable
+fun StatsDetailContent(
+    type: String,
+    userInterests: Set<String>,
+    travelPlans: List<TravelPlan>,
+    aiHistory: List<AiHistoryEntity>
+) {
+    val themeColors = HavamaniaTheme.colors
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .heightIn(max = 500.dp)
+    ) {
+        val title = when(type) {
+            "İlgi" -> "Seçili Hava Tercihlerin"
+            "Rota" -> "Kayıtlı Rotaların"
+            else -> "Kaydedilen Analizlerin"
+        }
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+            color = themeColors.textPrimary
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f, false)
+        ) {
+            when(type) {
+                "İlgi" -> {
+                    val selectedItems = InterestsData.categories.flatMap { cat ->
+                        cat.interests.filter { userInterests.contains(it.id) }.map { cat.title to it }
+                    }
+                    if (selectedItems.isEmpty()) {
+                        item { Text("Henüz bir tercih seçmedin.", color = themeColors.textMuted) }
+                    } else {
+                        items(selectedItems) { (category, item) ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(item.icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(item.label, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+                                    Text(category, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                "Rota" -> {
+                    val userPlans = travelPlans.filter { !it.isDemo }
+                    if (userPlans.isEmpty()) {
+                        item { Text("Henüz kendi rotanı oluşturmadın. Demo veriler istatistiğe dahil edilmez.", color = themeColors.textMuted) }
+                    } else {
+                        items(userPlans) { plan ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Route, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(plan.city, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+                                    Text("${plan.startDate} - ${plan.endDate}", style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                "Analiz" -> {
+                    if (aiHistory.isEmpty()) {
+                        item { Text("Henüz AI analizi kaydetmedin.", color = themeColors.textMuted) }
+                    } else {
+                        items(aiHistory) { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(item.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(item.summary, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
 
