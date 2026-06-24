@@ -121,6 +121,9 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Testing
+    testImplementation "junit:junit:4.13.2"
 }
 
 project.ext.vectoricons = [

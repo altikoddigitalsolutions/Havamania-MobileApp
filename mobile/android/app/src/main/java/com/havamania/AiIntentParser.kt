@@ -5,6 +5,21 @@ import java.time.Month
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+enum class AiIntent {
+    CLOTHING,
+    ACTIVITY,
+    TRAVEL,
+    PACKING,
+    CALENDAR,
+    WEEKEND_FORECAST,
+    TRIP_RISK,
+    TRIP_TIMING,
+    TRIP_ROUTE,
+    GENERAL_WEATHER,
+    OUTDOOR_EVENT,
+    CHAT
+}
+
 object AiIntentParser {
     private val turkishMonths = mapOf(
         "ocak" to Month.JANUARY, "şubat" to Month.FEBRUARY, "mart" to Month.MARCH,
@@ -40,10 +55,13 @@ object AiIntentParser {
     fun detectCity(text: String): String? {
         val normalizedInput = normalizeTurkish(text)
 
-        // Find all matching cities and pick the one that matches the longest part of the input
-        // This avoids "Aksaray" matching "Saray" etc.
         return cities
-            .filter { normalizedInput.contains(normalizeTurkish(it)) }
+            .filter { city ->
+                val normalizedCity = normalizeTurkish(city)
+                // Use word boundaries to ensure we match the whole city name
+                val regex = Regex("\\b${Regex.escape(normalizedCity)}\\b", RegexOption.IGNORE_CASE)
+                regex.containsMatchIn(normalizedInput)
+            }
             .maxByOrNull { it.length }
     }
 
@@ -86,6 +104,47 @@ object AiIntentParser {
         }
 
         return null
+    }
+
+    fun detectIntent(text: String): AiIntent {
+        val lower = normalizeTurkish(text)
+
+        return when {
+            lower.contains("selam") || lower.contains("merhaba") || lower.contains("nasilssin") ||
+                    lower.contains("kimsin") -> AiIntent.CHAT
+
+            lower.contains("takvim") || lower.contains("ajanda") || lower.contains("etkinlikler") ||
+                    lower.contains("optimize") || lower.contains("program") -> AiIntent.CALENDAR
+
+            lower.contains("dugun") || lower.contains("konser") || lower.contains("mac") ||
+                    lower.contains("organizasyon") || lower.contains("etkinlik") -> AiIntent.OUTDOOR_EVENT
+
+            lower.contains("valiz") || lower.contains("canta") || lower.contains("yanima ne") ||
+                    lower.contains("hazirla") || lower.contains("koymaliyim") -> AiIntent.PACKING
+
+            lower.contains("giysi") || lower.contains("kiyafet") || lower.contains("giy") ||
+                    lower.contains("ustume") || lower.contains("giymeliyim") || lower.contains("kombin") -> AiIntent.CLOTHING
+
+            lower.contains("disari") || lower.contains("uygun") || lower.contains("yapabilirim") ||
+                    lower.contains("piknik") || lower.contains("kosu") || lower.contains("bisiklet") ||
+                    lower.contains("kamp") || lower.contains("mangal") || lower.contains("yuruyus") ||
+                    lower.contains("spor") || lower.contains("aktivite") || lower.contains("deniz") ||
+                    lower.contains("yuzmek") -> AiIntent.ACTIVITY
+
+            lower.contains("risk") || lower.contains("tehlike") || lower.contains("sorun") ||
+                    lower.contains("uyari") || lower.contains("guvenli") -> AiIntent.TRIP_RISK
+
+            lower.contains("saat") || lower.contains("zaman") || lower.contains("ne zaman") -> AiIntent.TRIP_TIMING
+
+            lower.contains("rota") || lower.contains("yol") || lower.contains("guzergah") -> AiIntent.TRIP_ROUTE
+
+            lower.contains("seyahat") || lower.contains("gezi") || lower.contains("gitmek") ||
+                    lower.contains("gidiyorum") || lower.contains("yolculuk") || lower.contains("tatil") -> AiIntent.TRAVEL
+
+            lower.contains("hafta sonu") || lower.contains("cumartesi") || lower.contains("pazar") -> AiIntent.WEEKEND_FORECAST
+
+            else -> AiIntent.GENERAL_WEATHER
+        }
     }
 
     fun isWeatherQuery(text: String): Boolean {

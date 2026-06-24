@@ -62,6 +62,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private var sessionId = UUID.randomUUID().toString()
 
     private val repository = WeatherRepository.getInstance(application)
+    private val database = WeatherDatabase.getDatabase(application)
+    private val dao = database.weatherDao()
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
@@ -75,6 +77,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val _weatherData = MutableStateFlow<WeatherData?>(null)
     val weatherData = _weatherData.asStateFlow()
 
+    private val _activeTravels = MutableStateFlow<List<TravelPlan>>(emptyList())
+    private var contextCity: String? = null
+
     var userAboutMe: String = ""
     var userInterests: Set<String> = emptySet()
     var assistantTone: AssistantTone = AssistantTone.DENGELI
@@ -83,7 +88,47 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     init {
         loadConfig()
         observeWeatherState()
+        loadActiveTravels()
     }
+
+    private fun loadActiveTravels() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val entities = dao.getAllTravelPlans()
+                val today = LocalDate.now()
+                val active = entities.map { it.toDomain() }.filter {
+                    !it.isArchived && !it.endDate.isBefore(today)
+                }
+                _activeTravels.value = active
+            } catch (e: Exception) {
+                android.util.Log.e("HAVAMANIA_AI", "Error loading travels", e)
+            }
+        }
+    }
+
+    private fun TravelPlanEntity.toDomain() = TravelPlan(
+        id = id,
+        city = city,
+        latitude = latitude,
+        longitude = longitude,
+        tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
+        startDate = java.time.Instant.ofEpochMilli(startDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+        endDate = java.time.Instant.ofEpochMilli(endDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+        createdAt = createdAt,
+        weatherSummary = weatherSummary,
+        aiSuggestion = aiSuggestion,
+        userNote = userNote,
+        userRating = userRating,
+        lastWeatherAnalysisText = lastWeatherAnalysisText,
+        lastWeatherAnalysisDate = lastWeatherAnalysisDate,
+        lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot,
+        nextAnalysisEligibleDate = nextAnalysisEligibleDate,
+        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
+        isArchived = isArchived,
+        analyses = analyses,
+        lastDailyNotificationDate = lastDailyNotificationDate
+    )
 
     private fun observeWeatherState() {
         viewModelScope.launch {
@@ -146,8 +191,48 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             .trim()
     }
 
-    private fun buildWeatherContext(): String {
-        val data = _weatherData.value ?: return "Hava durumu verisi şu an kullanılamıyor. Lütfen ana ekrandan hava durumunun yüklendiğinden emin ol."
+    private fun buildWeatherContext(userQuestion: String): String {
+        val activeTravels = _activeTravels.value
+        val currentWeatherData = _weatherData.value
+        val questionCity = AiIntentParser.detectCity(userQuestion)
+
+        // City selection logic
+        val cityToUse = when {
+            questionCity != null -> {
+                contextCity = questionCity
+                questionCity
+            }
+            activeTravels.isNotEmpty() -> activeTravels.first().city
+            contextCity != null -> contextCity
+            currentWeatherData != null -> currentWeatherData.cityName
+            else -> null
+        }
+
+        if (cityToUse == null) return "Hava durumu verisi şu an kullanılamıyor."
+
+        // If cityToUse is different from currentWeatherData, we might not have full details,
+        // but for now let's use what we have or generic info.
+        val data = if (currentWeatherData != null && AiIntentParser.normalizeTurkish(currentWeatherData.cityName) == AiIntentParser.normalizeTurkish(cityToUse)) {
+            currentWeatherData
+        } else {
+            // If it's a travel city, look for its snapshot in activeTravels
+            val travelPlan = activeTravels.find { AiIntentParser.normalizeTurkish(it.city) == AiIntentParser.normalizeTurkish(cityToUse) }
+            val snapshot = travelPlan?.lastForecastSnapshot
+            if (snapshot != null) {
+                WeatherData(
+                    cityName = cityToUse,
+                    temperature = "${snapshot.maxTemp?.toInt() ?: 20}°",
+                    condition = snapshot.conditionSummary ?: "Açık",
+                    feelsLike = "${snapshot.feelsLike?.toInt() ?: snapshot.maxTemp?.toInt() ?: 20}°",
+                    uvIndex = snapshot.uvIndex?.toInt(),
+                    windSpeed = snapshot.windSpeed,
+                    precipitationProbability = snapshot.precipitationProbability,
+                    humidity = null
+                )
+            } else {
+                WeatherData(cityName = cityToUse)
+            }
+        }
 
         val temp = data.temperature
         val feelsLike = data.feelsLike
@@ -158,43 +243,30 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val windDir = WeatherUtils.getWindDirectionFromDegrees(data.windDirectionDegrees)
         val uv = data.uvIndex ?: "Bilinmiyor"
         val precip = WeatherUtils.formatRainProbability(data.precipitationProbability)
-        val pressure = data.pressure?.let { "$it hPa" } ?: "Bilinmiyor"
-        val visibility = data.visibilityKm?.let { "$it km" } ?: "Bilinmiyor"
-        val cloudiness = data.cloudCover?.let { "%$it" } ?: "Bilinmiyor"
-        val sunrise = data.sunriseTime ?: "Bilinmiyor"
-        val sunset = data.sunsetTime ?: "Bilinmiyor"
 
-        val hourlySummary = data.hourlyForecast.take(8).joinToString(", ") { "${it.time}: ${it.temp}" }
-        val dailySummary = data.dailyForecast.take(3).joinToString(", ") { "${it.day}: ${it.minTemp}/${it.maxTemp}°" }
+        val travelContext = if (activeTravels.isNotEmpty()) {
+            "AKTİF SEYAHATLER:\n" + activeTravels.joinToString("\n") {
+                "- ${it.city} (${it.startDate} - ${it.endDate}, Tip: ${it.tripType.label})"
+            }
+        } else ""
 
         return """
-            HAVA DURUMU VERİLERİ (ZORUNLU):
+            BAĞLAM (HAVA & SEYAHAT):
             Şehir: $city
-            🌡️ Sıcaklık: $temp
-            🤚 Hissedilen Sıcaklık: $feelsLike
-            💨 Rüzgar Hızı: $windSpeed km/sa
-            🧭 Rüzgar Yönü: $windDir
-            💧 Nem: $humidity
-            ☔ Yağış İhtimali: $precip
+            🌡️ Sıcaklık: $temp (Hissedilen: $feelsLike)
+            💨 Rüzgar: $windSpeed km/sa ($windDir)
+            ☔ Yağış İhtimali: $precip (Nem: $humidity)
             ☀️ UV İndeksi: $uv
 
-            EK DETAYLAR (DETAYLI MOD İÇİN):
-            📈 Basınç: $pressure
-            👁️ Görüş Mesafesi: $visibility
-            ☁️ Bulutluluk: $cloudiness
-            🌅 Gün Doğumu: $sunrise
-            🌇 Gün Batımı: $sunset
-
-            ÖZETLER:
-            Saatlik Tahmin (Gelecek 8 saat): $hourlySummary
-            Günlük Tahmin (Gelecek 3 gün): $dailySummary
+            $travelContext
 
             TEMEL KURALLAR:
-            1. Markdown formatı asla kullanma (**, #, _ işaretleri yasak).
-            2. Cevabını sadece düz metin olarak ver.
-            3. Hava durumu cevaplarında mutlaka ZORUNLU alanları (Sıcaklık, Hissedilen, Rüzgar, Yön, Nem, Yağış, UV) göster.
-            4. Eğer kullanıcı şu an bulunduğu şehir ($city) hakkında soru soruyorsa, seyahat, gezi, rota veya valiz hazırlama ile ilgili hiçbir şey söyleme. Sadece günlük yaşam, giyim, UV korunma ve aktivite önerileri ver.
-            5. Seyahat planlama önerisini SADECE kullanıcı $city dışındaki bir yer hakkında soru soruyorsa yap.
+            1. Markdown formatı (**, #, _) KESİNLİKLE YASAK. Sadece düz metin.
+            2. Şehir uydurma. Verilen '$city' dışındaki şehirler hakkında (kullanıcı sormadıkça) konuşma.
+            3. Kullanıcı valiz/yanına ne almalı soruyorsa (PACKING intent), sadece liste ver.
+            4. Sadece GENERAL_WEATHER intentinde 'METEOROLOJİK ANALİZ' başlığını kullan.
+            5. Soruya odaklan. Gereksiz giriş cümleleri kurma.
+            6. ASLA SÜREÇTEN BAHSETME (örn: "analiz ediliyor", "planlama yapılıyor", "hesaplanıyor"). Doğrudan SONUCU göster.
         """.trimIndent()
     }
 
@@ -204,41 +276,34 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 [SİSTEM ROLÜ: SAMİMİ ARKADAŞ PERSONASI]
                 - Karakter: Kullanıcının çok yakın, enerjik ve neşeli bir arkadaşısın.
                 - Hitap: Kesinlikle "sen" diye hitap et. "Selam", "canım", "dostum" gibi sıcak ifadeler kullan.
-                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve doğal konuşma diliyle samimi tavsiyeler ekle.
-                - Emoji: Bol ve yerinde emoji kullan.
-                - Kural: Resmiyetten tamamen uzaklaş ama tüm zorunlu meteorolojik verileri paylaş.
+                - Üslup: Tamamen günlük dil. Yapay ve kurumsal görünme. İnsan gibi konuş.
+                - Emoji: Bol ve yerinde emoji kullan. 😎 😊
             """.trimIndent()
             AssistantTone.RESMI -> """
                 [SİSTEM ROLÜ: PROFESYONEL KURUMSAL ASİSTAN PERSONASI]
-                - Karakter: Ciddi, duygusuz ve tamamen profesyonel bir kurumsal asistansın.
-                - Hitap: Kesinlikle "siz" diye hitap et.
-                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve profesyonel meteorolojik açıklama ekle.
+                - Karakter: Ciddi, kurumsal ve profesyonel bir asistansın.
+                - Hitap: Kesinlikle "siz" diye hitap et. Saygılı ve mesafeli ol.
+                - Üslup: Ciddi anlatım. Gereksiz samimiyetten kaçın.
                 - Emoji: KESİNLİKLE EMOJİ KULLANMA.
-                - Kural: Kişisel yorumlardan kaçın ama tüm zorunlu meteorolojik verileri teknik bir dille sun.
             """.trimIndent()
             AssistantTone.DENGELI -> """
                 [SİSTEM ROLÜ: DENGELİ REHBER PERSONASI]
-                - Karakter: Bilgilendirici, nazik ve doğal bir rehbersin.
+                - Karakter: Bilgilendirici, nazik ve profesyonel bir rehbersin.
                 - Hitap: Doğal bir dil kullan.
-                - Üslup: Temel değerleri (Zorunlu alanlar) ver ve kısa bir meteorolojik yorum ekle.
+                - Üslup: Profesyonel ama doğal. Orta uzunlukta, kullanıcıyı yormayan cevaplar ver.
                 - Emoji: Gerektiğinde 1-2 tane kullanabilirsin.
-                - Kural: Hem profesyonel kal hem de yardımcı olduğunu hissettir. Tüm zorunlu verileri paylaş.
             """.trimIndent()
             AssistantTone.KISA_NET -> """
                 [SİSTEM ROLÜ: VERİMLİLİK ODAKLI ASİSTAN PERSONASI]
                 - Karakter: Sadece sonuca odaklı, vakit kaybetmeyen bir asistansın.
-                - Hitap: Doğrudan veriye geç.
-                - Üslup: Sadece zorunlu değerleri ve tek satırlık bir özet ver.
-                - Uzunluk: En fazla 8-10 satır (Her veri bir satır).
-                - Kural: Gereksiz tüm bağlaçları ve sıfatları at. Maddeler halinde tüm zorunlu verileri ver.
+                - Üslup: En hızlı ve kısa cevabı ver. Maksimum 2-4 cümle.
+                - Kural: Liste yapısı (✓) tercih et. Uzun paragraf kesinlikle yasak. Teknik detay verme.
             """.trimIndent()
             AssistantTone.DETAYLI_UZMAN -> """
                 [SİSTEM ROLÜ: KIDEMLİ METEOROLOJİ UZMANI PERSONASI]
-                - Karakter: Bilimsel verilere dayanan, analitik düşünen bir meteorologsun.
-                - Hitap: Profesyonel ve teknik bir dil kullan.
-                - Üslup: Tüm mevcut hava verilerini (Zorunlu + Ek Detaylar) ver ve derinlemesine meteorolojik analiz yap.
-                - Uzunluk: Kapsamlı ve detaylı bir analiz sun.
-                - Kural: UV, rüzgar, nem, hissedilen sıcaklık ve basınç arasındaki sebep-sonuç ilişkilerini yorumla.
+                - Karakter: Teknik bilgiye sahip, analitik düşünen bir meteoroloji danışmanısın.
+                - Üslup: En detaylı mod. Neden-sonuç ilişkileri kur. Teknik açıklamalar ve meteorolojik yorumlar ekle.
+                - Kural: Uzman görüşü hissi ver.
             """.trimIndent()
         }
     }
@@ -255,10 +320,36 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
         _isLoading.value = true
 
-        val weatherContext = buildWeatherContext()
+        val weatherContext = buildWeatherContext(truncatedText)
         val toneInstruction = buildToneInstruction()
         val languageInstruction = if (language == "EN") "IMPORTANT: Answer ONLY in English." else "ÖNEMLİ: Sadece Türkçe cevap ver."
-        val personalContext = systemContext ?: ""
+        val personalContext = if (userInterests.isNotEmpty() || userAboutMe.isNotBlank()) {
+            "KULLANICI PROFİLİ:\nİlgi Alanları: ${userInterests.joinToString()}\nBilgi: $userAboutMe\n"
+        } else ""
+
+        val intent = AiIntentParser.detectIntent(truncatedText)
+        val intentInstruction = when(intent) {
+            AiIntent.CLOTHING -> "Giyim önerisine odaklan. Direkt ne giymesi gerektiğini söyle."
+            AiIntent.ACTIVITY -> "Aktivite uygunluğuna odaklan. En iyi saatleri ve rüzgar/UV etkisini belirt."
+            AiIntent.TRAVEL -> "Seyahat planlamasına odaklan. Rota ve hava riski analizi yap."
+            AiIntent.PACKING -> "Valiz listesi üret. ✓ ikonlarını kullan. Örn: ✓ Şemsiye"
+            AiIntent.CALENDAR -> """
+                TAKVİM OPTİMİZASYONU KURALLARI:
+                1. Kullanıcının 'AKTİF SEYAHATLER' listesindeki etkinlikleri tek tek listele.
+                2. Her etkinliğin tarihini ve şehrini belirt.
+                3. Hava verilerine göre her etkinlik için 'Düşük/Orta/Yüksek' risk puanı ver.
+                4. Riskliyse, hava durumunun daha iyi olduğu alternatif bir tarih öner.
+                5. 'Dikkatli olun', 'Gözden geçirin' gibi genel ifadeler yerine somut veriler (örn: %60 yağış, 35 derece sıcaklık) kullan.
+                6. Eğer takvim boşsa sadece "Takviminizde yaklaşan etkinlik bulunmuyor" de.
+            """.trimIndent()
+            AiIntent.WEEKEND_FORECAST -> "Sadece hafta sonu hava durumuna odaklan."
+            AiIntent.TRIP_RISK -> "Seyahat risklerine (fırtına, aşırı sıcak vb.) odaklan."
+            AiIntent.TRIP_TIMING -> "Yolculuk için en uygun saatleri öner."
+            AiIntent.TRIP_ROUTE -> "Yol durumu ve güzergah üzerindeki hava koşullarına odaklan."
+            AiIntent.GENERAL_WEATHER -> "Hava durumunun genel bir özetini ve meteorolojik analizini ver."
+            AiIntent.OUTDOOR_EVENT -> "Dış mekan etkinliği için hava uygunluğunu analiz et."
+            AiIntent.CHAT -> "Genel bir sohbete uygun, yardımsever ve doğal bir yanıt ver."
+        }
 
         // Tone instruction is placed AT THE END of the prompt and made extremely explicit
         val explicitTonePrompt = """
@@ -266,8 +357,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             [DİKKAT: KRİTİK TALİMATLAR]
             1. DİL: $languageInstruction
             2. ÜSLUP: $toneInstruction
+            3. ODAK (İNTENT): $intentInstruction
+            4. KİŞİSELLEŞTİRME: Kullanıcının profilini doğal bir şekilde cevaba yedir.
 
-            Cevabın yukarıdaki üslup ve dil kurallarına %100 uymalıdır.
+            Cevabın yukarıdaki üslup, dil ve odak kurallarına %100 uymalıdır.
             Karakterine bürün ve asla bu karakterden çıkma.
         """.trimIndent()
 
@@ -306,7 +399,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                         weatherData = _weatherData.value,
                         aboutMe = userAboutMe,
                         interests = userInterests,
-                        tone = assistantTone
+                        tone = assistantTone,
+                        travelPlans = _activeTravels.value
                     )
                     finalIsUnknown = false // It's now a known response (fallback)
                 }
@@ -377,7 +471,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 weatherData = _weatherData.value,
                 aboutMe = userAboutMe,
                 interests = userInterests,
-                tone = assistantTone
+                tone = assistantTone,
+                travelPlans = _activeTravels.value
             )
 
             val combinedMessage = if (_weatherData.value == null) {
@@ -569,14 +664,27 @@ fun AiChatScreen(
                         PersonalizedContextCard(aboutMe, themeColors)
                     }
 
-                    // --- BUGÜN İÇİN ÖNERİLER ---
+                    // 1. ANA HAVA DURUMU KARTI (PREMIUM)
                     if (currentWeatherData != null) {
-                        TodaySuggestionsSection(currentWeatherData!!, themeColors) { prompt ->
+                        AssistantWeatherCard(currentWeatherData!!, themeColors)
+                    }
+
+                    // 2. BUGÜN İÇİN ÖZET (AI ANALİZİ)
+                    if (currentWeatherData != null) {
+                        TodaySummarySection(currentWeatherData!!, themeColors)
+                    }
+
+                    // 3. NELER YAPABİLİRİM? (ÖZELLİKLER)
+                    AssistantSectionLabel("NELER YAPABİLİRİM?")
+                    FeatureCards(
+                        themeColors = themeColors,
+                        onCardClick = { prompt ->
                             val context = buildPersonalizedContext(aboutMe, userInterests)
                             viewModel.sendMessage(prompt, systemContext = context)
                         }
-                    }
+                    )
 
+                    // 4. HIZLI SORULAR
                     AssistantSectionLabel("HIZLI SORULAR")
                     QuickSuggestions(
                         onSuggestionClick = { prompt ->
@@ -584,15 +692,6 @@ fun AiChatScreen(
                             viewModel.sendMessage(prompt, systemContext = context)
                         },
                         themeColors = themeColors
-                    )
-
-                    AssistantSectionLabel("ÖZELLİKLER")
-                    FeatureCards(
-                        themeColors = themeColors,
-                        onCardClick = { prompt ->
-                            val context = buildPersonalizedContext(aboutMe, userInterests)
-                            viewModel.sendMessage(prompt, systemContext = context)
-                        }
                     )
 
                     Spacer(Modifier.height(32.dp))
@@ -664,8 +763,8 @@ fun AiChatScreen(
                                 cityName = null
                             )
                         }
-                        // Navigate back or reset state to ensure bottom bar remains functional
-                        onBack()
+                        // Reset chat locally and stay on this screen to show WelcomeCard
+                        viewModel.resetChat()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)
                 ) {
@@ -703,36 +802,161 @@ fun AssistantSectionLabel(text: String) {
 }
 
 @Composable
-fun TodaySuggestionsSection(weather: WeatherData, themeColors: HavamaniaColors, onSuggestionClick: (String) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-        AssistantSectionLabel("BUGÜN İÇİN ÖNERİLER")
+fun AssistantWeatherCard(weather: WeatherData, themeColors: HavamaniaColors) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 24.dp, vertical = 8.dp)
+            .fillMaxWidth(),
+        color = themeColors.surfaceGlass.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.15f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        weather.cityName.uppercase(),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        ),
+                        color = themeColors.textSecondary.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        weather.condition,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = themeColors.textPrimary
+                    )
+                }
+                Text(
+                    WeatherUtils.getWeatherEmoji(weather.weatherCode),
+                    fontSize = 40.sp
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    if (weather.temperature.contains("°")) "${weather.temperature}C" else "${weather.temperature}°C",
+                    style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = themeColors.textPrimary
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    if (weather.feelsLike.contains("°")) "Hissedilen ${weather.feelsLike}C" else "Hissedilen ${weather.feelsLike}°C",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = themeColors.textSecondary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Divider(color = themeColors.border.copy(alpha = 0.1f))
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                WeatherMetricItem(Icons.Rounded.WaterDrop, "NEM", "${weather.humidity ?: 0}%", themeColors)
+                WeatherMetricItem(Icons.Rounded.Air, "RÜZGAR", "${weather.windSpeed?.toInt() ?: 0} km/s", themeColors)
+                WeatherMetricItem(Icons.Rounded.WbSunny, "UV", "${weather.uvIndex ?: 0}", themeColors)
+                WeatherMetricItem(Icons.Rounded.Umbrella, "YAĞIŞ", "${weather.precipitationProbability ?: 0}%", themeColors)
+            }
+        }
+    }
+}
+
+@Composable
+fun WeatherMetricItem(icon: ImageVector, label: String, value: String, themeColors: HavamaniaColors) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+            color = themeColors.textSecondary.copy(alpha = 0.5f)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+            color = themeColors.textPrimary
+        )
+    }
+}
+
+@Composable
+fun TodaySummarySection(weather: WeatherData, themeColors: HavamaniaColors) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        AssistantSectionLabel("BUGÜN İÇİN ÖZET")
 
         Surface(
-            modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxWidth(),
             color = themeColors.surfaceGlass.copy(alpha = 0.3f),
             shape = RoundedCornerShape(20.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(36.dp).background(themeColors.accent.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                        Text(WeatherUtils.getWeatherEmoji(weather.weatherCode), fontSize = 18.sp)
+                // Bu öneriler normalde AI'dan gelir, ancak burada weather verilerine göre statik-dinamik eşleştiriyoruz.
+                val summaries = remember(weather) {
+                    val list = mutableListOf<Pair<ImageVector, String>>()
+
+                    val tempValue = weather.temperature.replace("°", "").replace("C", "").trim().toDoubleOrNull() ?: 20.0
+                    val uvValue = weather.uvIndex?.toDouble() ?: 0.0
+                    val precipValue = weather.precipitationProbability ?: 0
+
+                    // Giyim
+                    if (tempValue > 25) {
+                        list.add(Icons.Rounded.Checkroom to "İnce ve nefes alabilen kıyafetler tercih edebilirsin.")
+                    } else if (tempValue > 15) {
+                        list.add(Icons.Rounded.Checkroom to "Hafif bir ceket veya sweatshirt uygun olacaktır.")
+                    } else {
+                        list.add(Icons.Rounded.Checkroom to "Kalın ve koruyucu kıyafetler giymen önerilir.")
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("${weather.cityName}: ${weather.temperature}°C", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                        Text(weather.condition, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+
+                    // UV
+                    if (uvValue > 5.0) {
+                        list.add(Icons.Rounded.WbSunny to "UV seviyesi yüksek, güneş gözlüğü ve krem önerilir.")
                     }
+
+                    // Aktivite / Yağış
+                    if (precipValue > 40) {
+                        list.add(Icons.Rounded.Umbrella to "Yağış bekleniyor, yanına şemsiye almayı unutma.")
+                    } else {
+                        list.add(Icons.Rounded.DirectionsRun to "Açık hava aktiviteleri için uygun bir gün.")
+                        list.add(Icons.Rounded.CloudOff to "Bugün yağış beklenmiyor.")
+                    }
+
+                    list.take(4)
                 }
 
-                Spacer(Modifier.height(16.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SuggestionChip("Giyim Önerisi", Icons.Rounded.Checkroom, themeColors) {
-                        onSuggestionClick("Bugün ${weather.cityName}'da hava ${weather.temperature} derece ve ${weather.condition}. Ne giymeliyim?")
+                summaries.forEachIndexed { index, summary ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        Icon(
+                            summary.first,
+                            null,
+                            tint = themeColors.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            summary.second,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = themeColors.textPrimary.copy(alpha = 0.9f)
+                        )
                     }
-                    SuggestionChip("Aktivite", Icons.Rounded.Event, themeColors) {
-                        onSuggestionClick("Bugün ${weather.cityName}'da dışarı çıkmak için uygun mu? Neler yapabilirim?")
+                    if (index < summaries.size - 1) {
+                        Spacer(Modifier.height(4.dp))
                     }
                 }
             }
@@ -809,7 +1033,7 @@ fun WelcomeCard(message: String, themeColors: HavamaniaColors) {
     }
 }
 
-enum class AssistantFeatureType { CLOTHING, ACTIVITY, TRAVEL }
+enum class AssistantFeatureType { CLOTHING, ACTIVITY, TRAVEL, SUITCASE, CALENDAR, ASSISTANT }
 
 data class AssistantFeature(
     val title: String,
@@ -824,63 +1048,121 @@ fun FeatureCards(themeColors: HavamaniaColors, onCardClick: (String) -> Unit) {
     val features = remember {
         listOf(
             AssistantFeature(
-                title = "Giyim Önerisi",
+                title = "Giyim Danışmanı",
                 desc = "Hava durumuna göre stil tavsiyesi.",
                 icon = Icons.Rounded.Checkroom,
                 prompt = "Bugünkü hava durumuna göre ne giymeliyim? Sıcaklık, rüzgar, yağış ve UV durumuna göre pratik kıyafet önerisi ver.",
                 type = AssistantFeatureType.CLOTHING
             ),
             AssistantFeature(
-                title = "Aktivite",
+                title = "Aktivite Rehberi",
                 desc = "Dışarı çıkmak için en iyi zaman.",
                 icon = Icons.Rounded.DirectionsRun,
                 prompt = "Bugün dışarı çıkmak, yürüyüş yapmak, spor yapmak veya açık hava aktivitesi için uygun mu? Hava durumuna göre en uygun saatleri ve dikkat etmem gerekenleri söyle.",
                 type = AssistantFeatureType.ACTIVITY
             ),
             AssistantFeature(
-                title = "Seyahat",
+                title = "Seyahat Planlayıcı",
                 desc = "Rotalarınız için özel tavsiyeler.",
-                icon = Icons.Rounded.Route,
-                prompt = "Yaklaşan seyahatlerim ve mevcut hava durumuna göre bana seyahat planlama önerisi verir misin? Valiz, ulaşım, rota ve hava riskleri açısından tavsiye ver.",
+                icon = Icons.Rounded.FlightTakeoff,
+                prompt = "Hava durumuna göre seyahat planlamama yardımcı olur musun?",
                 type = AssistantFeatureType.TRAVEL
+            ),
+            AssistantFeature(
+                title = "Valiz Asistanı",
+                desc = "Eksiksiz bir çanta hazırlığı.",
+                icon = Icons.Rounded.WorkOutline,
+                prompt = "Hava koşullarını dikkate alarak valizime neler koymam gerektiğini söyler misin?",
+                type = AssistantFeatureType.SUITCASE
+            ),
+            AssistantFeature(
+                title = "Hava Destekli Takvim",
+                desc = "Etkinliklerinizi havaya uydurun.",
+                icon = Icons.Rounded.CalendarMonth,
+                prompt = "Önümüzdeki günlerin hava durumuna göre takvimimi nasıl optimize edebilirim?",
+                type = AssistantFeatureType.CALENDAR
+            ),
+            AssistantFeature(
+                title = "AI Asistan",
+                desc = "Hava hakkında her şeyi sorun.",
+                icon = Icons.Rounded.AutoAwesome,
+                prompt = "Hava durumu hakkında genel bir analiz ve tavsiye verir misin?",
+                type = AssistantFeatureType.ASSISTANT
             )
         )
     }
 
-    Row(
+    // Grid 2 satır x 3 sütun için Column ve Row kullanımı
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        features.forEach { feature ->
-            FeatureCard(
-                title = feature.title,
-                desc = feature.desc,
-                icon = feature.icon,
-                themeColors = themeColors,
-                onClick = { onCardClick(feature.prompt) }
-            )
+        features.chunked(3).forEach { rowFeatures ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowFeatures.forEach { feature ->
+                    FeatureCard(
+                        title = feature.title,
+                        desc = feature.desc,
+                        icon = feature.icon,
+                        themeColors = themeColors,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onCardClick(feature.prompt) }
+                    )
+                }
+                // Eğer satırda 3'ten az kart varsa boşluk bırakmak için:
+                if (rowFeatures.size < 3) {
+                    repeat(3 - rowFeatures.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun FeatureCard(title: String, desc: String, icon: ImageVector, themeColors: HavamaniaColors, onClick: () -> Unit) {
+fun FeatureCard(
+    title: String,
+    desc: String,
+    icon: ImageVector,
+    themeColors: HavamaniaColors,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         color = themeColors.surfaceGlass.copy(alpha = 0.3f),
         shape = RoundedCornerShape(20.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f)),
-        modifier = Modifier.width(160.dp)
+        modifier = modifier.height(130.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.height(12.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge, color = themeColors.textPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = themeColors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    desc,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    color = themeColors.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

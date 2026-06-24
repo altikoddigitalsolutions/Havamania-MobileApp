@@ -334,31 +334,72 @@ function buildLocalAnswer(question: string, weather: any, tone: string = 'DENGEL
   const q = question.toLowerCase();
   const temp = weather.temperature;
   const desc = getWeatherLabel(weather.weather_code);
+  const precip = weather.precipitation_probability || 0;
+  const wind = weather.wind_speed || 0;
+  const uv = weather.uv_index || 0;
 
   if (tone === 'KISA_NET') {
-    return { answer: `Hava ${desc}, ${temp}°C. Başka bir şey?` };
+    return { answer: `Hava ${desc}, ${temp}°C. Yağış ihtimali %${precip}. Rüzgar ${wind} km/s.` };
   }
 
-  if (/wear|giy|kıyafet/i.test(q)) {
-    if (temp > 25) return {answer: `Hava **${temp}°C** ve güneşli! İnce pamuklu kıyafetler, şapka ve güneş gözlüğü harika olur. Güneş kremi sürmeyi de unutma. 😎`};
-    if (temp > 15) return {answer: `Sıcaklık **${temp}°C** civarında. Şık bir sweatshirt veya ince bir ceket işini görecektir. 👕`};
-    return {answer: `Hava **${temp}°C**, biraz serin. Kalın bir ceket veya mont giymeni öneririm. 🧥`};
+  // Giyim Önerisi
+  if (/wear|giy|kıyafet|kombin/i.test(q)) {
+    let advice = "";
+    if (temp > 28) advice = "İnce pamuklu tişört ve şort harika olur. Güneş gözlüğü ve şapka eklemeyi unutma. 😎";
+    else if (temp > 18) advice = "Hafif bir sweatshirt veya ince bir ceket yeterli olacaktır. 👕";
+    else advice = "Hava serin, kalın bir mont ve atkı almanı öneririm. 🧥";
+
+    if (precip > 30) advice += "\n\n☔ Ayrıca yağış ihtimaline karşı şemsiyeni yanına almalısın.";
+
+    return { answer: `Sıcaklık **${temp}°C**. ${advice}` };
   }
-  if (/travel|seyahat/i.test(q)) {
-    return {answer: `Seyahat planlamak için harika bir zaman! Şu an ${DEFAULT_CITY} için hava seyahat dostu görünüyor. Daha detaylı bir rota için "Seyahat Takvimi" bölümünü de kullanabilirsin. ✈️`};
+
+  // Valiz Önerisi
+  if (/suitcase|valiz|çanta|hazırla/i.test(q)) {
+    const items = ["✓ Powerbank", "✓ Şarj aleti"];
+    if (temp > 25) items.push("✓ Tişörtler", "✓ Şortlar", "✓ Güneş kremi");
+    else items.push("✓ Kalın kıyafetler", "✓ Hırka");
+
+    if (precip > 30) items.push("✓ Şemsiye");
+    if (wind > 35) items.push("✓ Rüzgarlık");
+
+    return {
+      answer: `Hava durumuna göre valizine şunları koymanı öneririm:\n\n${items.join('\n')}\n\nKeyifli yolculuklar! ✈️`
+    };
   }
-  if (/picnic|piknik/i.test(q)) {
-    if (weather.weather_code < 3 && weather.wind_speed < 20) {
-      return {answer: `Bugün piknik için **mükemmel** bir gün! Hava ${desc.toLowerCase()}, rüzgar ise hafif. Sepetini hazırla! 🧺`};
+
+  // Takvim Optimizasyonu
+  if (/calendar|takvim|optimize/i.test(q)) {
+    return {
+      answer: "Takviminizde yaklaşan bir etkinlik bulunamadı. Yeni bir plan eklediğinizde hava durumuna göre en uygun günleri belirleyebilirim. 📅"
+    };
+  }
+
+  // Aktivite
+  if (/picnic|piknik|yürüyüş|koşu|spor/i.test(q)) {
+    const isGood = precip < 20 && wind < 25 && temp > 15 && temp < 30;
+    if (isGood) {
+      return { answer: `Bugün dışarıda vakit geçirmek için **mükemmel** bir gün! Hava ${desc.toLowerCase()}, sıcaklık ${temp}°C. Keyfini çıkar! 🧺` };
     }
-    return {answer: `Bugün piknik için pek uygun değil gibi. Hava ${desc.toLowerCase()} ve rüzgarlı olabilir. 💨`};
+    return { answer: `Hava koşulları (${desc.toLowerCase()}) dış mekan aktiviteleri için pek elverişli görünmüyor. 💨` };
   }
-  if (/photo|fotoğraf/i.test(q)) {
-    return {answer: `Fotoğraf çekimi için bugün **18:45 - 19:30** arası "Golden Hour" zamanı. Yumuşak ışık yakalamak için harika! 📸`};
+
+  // Hafta Sonu
+  if (/weekend|hafta sonu|cumartesi|pazar/i.test(q)) {
+    return {
+      answer: `Hafta sonu için ${temp}°C civarında ${desc.toLowerCase()} bir hava bekleniyor. Cumartesi günü açık hava etkinlikleri için daha elverişli olabilir. ☀️`
+    };
+  }
+
+  // Genel Analiz
+  if (tone === 'DETAYLI_UZMAN') {
+    return {
+      answer: `ANALİZ: ${DEFAULT_CITY} istasyonunda hava ${desc.toLowerCase()}. Termal denge: ${temp}°C. Nem: %${weather.humidity}. UV: ${uv}. Rüzgar hızı ${wind} km/s. Koşullar dış mekan aktiviteleri için ${precip < 30 ? 'stabil' : 'riskli'} seyrediyor.`
+    };
   }
 
   return {
-    answer: `Anladım. Şu an ${DEFAULT_CITY} için hava **${desc.toLowerCase()}**, sıcaklık ise **${temp}°C**. Başka bir konuda yardımcı olabilir miyim? 🌤️`,
+    answer: `Şu an ${DEFAULT_CITY} için hava **${desc.toLowerCase()}**, sıcaklık ise **${temp}°C**. Yağış ihtimali %${precip}. Başka nasıl yardımcı olabilirim? 🌤️`,
   };
 }
 
