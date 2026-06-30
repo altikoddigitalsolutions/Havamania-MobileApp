@@ -56,6 +56,7 @@ data class HeroThemeSpec(
     val cloudDensity: Int,
     val cloudColor: Color,
     val sunMoonPosition: Offset,
+    val sunMoonSize: Float, // Added for dynamic sizing
     val overlayAlpha: Float
 )
 
@@ -121,6 +122,34 @@ object WeatherHeroStyleManager {
             else -> DayPhase.NIGHT
         }
 
+        // 1.1 Calculate Dynamic Sun/Moon Position and Size
+        val isDaytime = !selectedTime.isBefore(sunrise) && selectedTime.isBefore(sunset)
+
+        val sunMoonPos = if (isDaytime) {
+            // progress = (currentTime - sunrise) / (sunset - sunrise)
+            val totalDayMinutes = java.time.Duration.between(sunrise, sunset).toMinutes().toFloat()
+            val minutesFromSunrise = java.time.Duration.between(sunrise, selectedTime).toMinutes().toFloat()
+            val t = (minutesFromSunrise / totalDayMinutes).coerceIn(0f, 1f)
+
+            val x = 0.1f + t * 0.8f
+            val y = 0.8f - (Math.sin(t * Math.PI).toFloat() * 0.65f)
+            Offset(x, y)
+        } else {
+            // Moon path (approximate or fixed)
+            Offset(0.80f, 0.25f)
+        }
+
+        val sunMoonSize = if (isDaytime) {
+            val totalDayMinutes = java.time.Duration.between(sunrise, sunset).toMinutes().toFloat()
+            val minutesFromSunrise = java.time.Duration.between(sunrise, selectedTime).toMinutes().toFloat()
+            val t = (minutesFromSunrise / totalDayMinutes).coerceIn(0f, 1f)
+
+            // Largest around solar noon (t=0.5)
+            1.0f + (Math.sin(t * Math.PI).toFloat() * 0.4f)
+        } else {
+            1.3f // Night moon slightly larger
+        }
+
         // 2. Resolve Theme Type (More granular)
         val themeType = when (weatherCode) {
             0 -> WeatherThemeType.SUNNY
@@ -137,33 +166,35 @@ object WeatherHeroStyleManager {
         // 3. Define Palettes - Premium & Atmospheric Identity
         val gradientColors = when (themeType) {
             WeatherThemeType.SUNNY -> when (dayPart) {
-                DayPhase.MORNING -> listOf(Color(0xFFBAE6FD), Color(0xFFFFD1D1), Color(0xFFFDBA74))
-                DayPhase.DAY -> listOf(Color(0xFFFBBF24), Color(0xFFF59E0B), Color(0xFF38BDF8)) // Golden Yellow + Blue Sky
-                DayPhase.EVENING -> listOf(Color(0xFFFFAD66), Color(0xFFF97316), Color(0xFF7C2D12))
+                DayPhase.MORNING -> listOf(Color(0xFFBAE6FD), Color(0xFFFFE0B2), Color(0xFFFFF9C4)) // Natural Peach/Yellow/Blue
+                DayPhase.DAY -> listOf(Color(0xFF38BDF8), Color(0xFFFBBF24), Color(0xFFF59E0B)) // Blue to Gold
+                DayPhase.EVENING -> listOf(Color(0xFFFFAD66), Color(0xFFF97316), Color(0xFFBF360C)) // Deeper Red/Orange
                 DayPhase.NIGHT -> listOf(Color(0xFF0F172A), Color(0xFF020617), Color(0xFF1E293B))
             }
             WeatherThemeType.MOSTLY_SUNNY -> when (dayPart) {
                 DayPhase.NIGHT -> listOf(Color(0xFF0F172A), Color(0xFF020617), Color(0xFF1E293B))
-                else -> listOf(Color(0xFF38BDF8), Color(0xFF7DD3FC), Color(0xFFFCD34D)) // Blue to Sun Yellow
+                DayPhase.EVENING -> listOf(Color(0xFFF97316), Color(0xFFEA580C), Color(0xFF431407))
+                else -> listOf(Color(0xFF38BDF8), Color(0xFF7DD3FC), Color(0xFFFCD34D))
             }
             WeatherThemeType.PARTLY_CLOUDY -> when (dayPart) {
-                DayPhase.NIGHT -> listOf(Color(0xFF1E293B), Color(0xFF0F172A), Color(0xFF020617))
-                else -> listOf(Color(0xFF2DD4BF), Color(0xFFBAE6FD), Color(0xFFFDE68A)) // Turquoise + Light Blue + Warm Yellow (Reduced Green)
+                DayPhase.NIGHT -> listOf(Color(0xFF0F172A), Color(0xFF020617), Color(0xFF1E1B4B))
+                DayPhase.EVENING -> listOf(Color(0xFFF97316), Color(0xFFE85D75), Color(0xFF431407))
+                else -> listOf(Color(0xFF2DD4BF), Color(0xFFBAE6FD), Color(0xFFFDE68A))
             }
             WeatherThemeType.CLOUDY -> when (dayPart) {
                 DayPhase.NIGHT -> listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF1E293B))
-                else -> listOf(Color(0xFF94A3B8), Color(0xFF64748B), Color(0xFF475569)) // Cool Gray
+                else -> listOf(Color(0xFF64748B), Color(0xFF94A3B8), Color(0xFFB4C6D1)) // Blue-Grey depth
             }
             WeatherThemeType.RAINY -> when (dayPart) {
                 DayPhase.NIGHT -> listOf(Color(0xFF020617), Color(0xFF0F172A), Color(0xFF1E3A8A))
-                else -> listOf(Color(0xFF1E3A8A), Color(0xFF1E40AF), Color(0xFF172554)) // Deep Blue
+                else -> listOf(Color(0xFF1E3A8A), Color(0xFF475569), Color(0xFF64748B)) // Moody Rainy
             }
             WeatherThemeType.SNOWY -> listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFFBAE6FD))
-            WeatherThemeType.STORMY -> listOf(Color(0xFF020617), Color(0xFF1E1B4B), Color(0xFF312E81)) // Dark Navy + Purple
+            WeatherThemeType.STORMY -> listOf(Color(0xFF020617), Color(0xFF1E1B4B), Color(0xFF312E81))
             WeatherThemeType.FOGGY -> when (dayPart) {
-                DayPhase.NIGHT -> listOf(Color(0xFF020617), Color(0xFF1E293B), Color(0xFF475569)) // Foggy Night: Darker base
-                DayPhase.MORNING -> listOf(Color(0xFFB4C6D1), Color(0xFFE9D5FF), Color(0xFFFFD1D1).copy(alpha = 0.4f)) // Foggy Morning: Lighter lavender/pink touch
-                else -> listOf(Color(0xFF94A3B8), Color(0xFFB4C6D1), Color(0xFFE9D5FF)) // Foggy Day: Blue Gray + Soft Lavender
+                DayPhase.NIGHT -> listOf(Color(0xFF020617), Color(0xFF1E293B), Color(0xFF475569))
+                DayPhase.MORNING -> listOf(Color(0xFFB4C6D1), Color(0xFFE9D5FF), Color(0xFFFFD1D1).copy(alpha = 0.4f))
+                else -> listOf(Color(0xFF94A3B8), Color(0xFFB4C6D1), Color(0xFFE9D5FF))
             }
         }
 
@@ -208,31 +239,24 @@ object WeatherHeroStyleManager {
         }
 
         val cloudDensity = when (themeType) {
-            WeatherThemeType.SUNNY -> 0
-            WeatherThemeType.MOSTLY_SUNNY -> 1
-            WeatherThemeType.PARTLY_CLOUDY -> 4
-            WeatherThemeType.CLOUDY -> 6 // Reduced count for less shadow
-            WeatherThemeType.RAINY, WeatherThemeType.STORMY -> 6
-            WeatherThemeType.FOGGY -> 2
-            WeatherThemeType.SNOWY -> 4
+            WeatherThemeType.SUNNY -> 1 // Very few
+            WeatherThemeType.MOSTLY_SUNNY -> 2 // 1-2 big
+            WeatherThemeType.PARTLY_CLOUDY -> 4 // 2-4
+            WeatherThemeType.CLOUDY -> 8 // Significant
+            WeatherThemeType.RAINY, WeatherThemeType.STORMY -> 12 // Very dense
+            WeatherThemeType.FOGGY -> 3
+            WeatherThemeType.SNOWY -> 6
         }
 
         val cloudColor = when {
-            dayPart == DayPhase.EVENING -> Color(0xFFFFD6A5).copy(alpha = 0.4f)
-            dayPart == DayPhase.NIGHT -> Color(0xFF475569).copy(alpha = 0.3f)
-            themeType == WeatherThemeType.RAINY || themeType == WeatherThemeType.STORMY -> Color(0xFF1E293B).copy(alpha = 0.4f)
-            themeType == WeatherThemeType.CLOUDY -> Color(0xFFCBD5E1).copy(alpha = 0.45f) // Reduced opacity
-            else -> Color.White.copy(alpha = 0.55f)
+            dayPart == DayPhase.EVENING -> Color(0xFFFFD6A5).copy(alpha = 0.6f)
+            dayPart == DayPhase.NIGHT -> Color(0xFF94A3B8).copy(alpha = 0.45f)
+            themeType == WeatherThemeType.RAINY || themeType == WeatherThemeType.STORMY -> Color(0xFF475569).copy(alpha = 0.7f)
+            themeType == WeatherThemeType.CLOUDY -> Color(0xFFCBD5E1).copy(alpha = 0.75f)
+            else -> Color.White.copy(alpha = 0.75f)
         }
 
-        val displayTitle = buildWeatherTitle(conditionText, dayPart)
-
-        val sunMoonPos = when (dayPart) {
-            DayPhase.MORNING -> Offset(0.20f, 0.35f)
-            DayPhase.DAY -> Offset(0.82f, 0.22f)
-            DayPhase.EVENING -> Offset(0.85f, 0.55f)
-            DayPhase.NIGHT -> Offset(0.80f, 0.25f)
-        }
+        val displayTitle = buildWeatherTitle(weatherCode, dayPart)
 
         return HeroThemeSpec(
             themeType = themeType,
@@ -246,30 +270,34 @@ object WeatherHeroStyleManager {
             cloudDensity = cloudDensity,
             cloudColor = cloudColor,
             sunMoonPosition = sunMoonPos,
-            overlayAlpha = if (isDark) 0.12f else 0.06f
+            sunMoonSize = sunMoonSize,
+            overlayAlpha = if (isDark) 0.15f else 0.08f
         )
     }
 
-    private fun buildWeatherTitle(condition: String, dayPart: DayPhase): String {
-        val cleanCondition = condition
-            .replace(" Gece", "")
-            .replace(" Sabah", "")
-            .replace(" Akşam", "")
-            .replace(" Gündüz", "")
-            .replace(" gece", "")
-            .replace(" sabah", "")
-            .replace(" akşam", "")
-            .replace(" gündüz", "")
-            .trim()
-
-        val suffix = when (dayPart) {
-            DayPhase.MORNING -> "Sabah"
-            DayPhase.DAY -> ""
-            DayPhase.EVENING -> "Akşam"
-            DayPhase.NIGHT -> "Gece"
+    private fun buildWeatherTitle(code: Int, dayPart: DayPhase): String {
+        val base = when (code) {
+            0 -> "Güneşli"
+            1 -> "Çoğunlukla Güneşli"
+            2 -> "Parçalı Bulutlu"
+            3 -> "Bulutlu"
+            45, 48 -> "Sisli"
+            51, 53, 55 -> "Hafif Yağmurlu"
+            61, 63, 65 -> "Yağmurlu"
+            80, 81, 82 -> "Sağanak Yağış"
+            71, 73, 75, 77, 85, 86 -> "Kar Yağışlı"
+            95, 96, 99 -> "Gök Gürültülü Sağanak"
+            else -> "Bulutlu"
         }
 
-        return if (suffix.isEmpty()) cleanCondition else "$cleanCondition $suffix"
+        val suffix = when (dayPart) {
+            DayPhase.MORNING -> if (code <= 1) "Açık Sabah" else "Sabah"
+            DayPhase.EVENING -> if (code <= 1) "Açık Akşam" else "Akşam"
+            DayPhase.NIGHT -> if (code <= 1) "Açık Gece" else "Gece"
+            else -> ""
+        }
+
+        return if (suffix.isEmpty() || base.contains(suffix)) base else "$base $suffix"
     }
 }
 
@@ -365,56 +393,42 @@ fun LiveBackgroundLayer(spec: HeroThemeSpec) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val sunCenter = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
 
-        val brush = if (spec.themeType == WeatherThemeType.MOSTLY_SUNNY) {
-            Brush.linearGradient(
-                0.0f to spec.gradientColors[0],
-                0.7f to spec.gradientColors[1],
-                1.0f to spec.gradientColors[2],
-                start = Offset(0f, size.height),
-                end = Offset(size.width, 0f)
-            )
-        } else {
-            Brush.linearGradient(spec.gradientColors, start = Offset(move, -move), end = Offset(size.width - move, size.height + move))
-        }
+        // Premium Background Brush with Vignette Effect
+        val brush = Brush.radialGradient(
+            0.0f to spec.gradientColors[0],
+            0.6f to spec.gradientColors[1],
+            1.0f to spec.gradientColors.last().copy(alpha = 0.9f),
+            center = sunCenter,
+            radius = size.width * 1.8f
+        )
 
         drawRect(brush = brush)
 
-        // Premium Background Shapes - Atmospheric depth
-        drawCircle(
-            color = Color.White.copy(alpha = 0.04f),
-            radius = size.width * 0.8f,
-            center = Offset(size.width * 0.1f, size.height * 0.9f)
-        )
-
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.03f),
-            radius = size.width * 0.6f,
-            center = Offset(size.width * 0.9f, size.height * 0.1f)
-        )
+        // Night Sky - Deeper Milky Way / Nebula
+        if (spec.dayPart == DayPhase.NIGHT) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF5B21B6).copy(alpha = 0.08f), Color.Transparent),
+                    center = Offset(size.width * 0.2f, size.height * 0.3f),
+                    radius = size.width * 2f
+                ),
+                center = Offset(size.width * 0.2f, size.height * 0.3f),
+                radius = size.width * 2f
+            )
+        }
 
         // Ambient glows - premium light scattering
         val scatteringColor = when (spec.dayPart) {
-            DayPhase.EVENING -> Color(0xFFFF7A3D)
+            DayPhase.EVENING -> Color(0xFFD84315) // Redder Evening
             DayPhase.NIGHT -> Color(0xFF334155)
-            DayPhase.MORNING -> Color(0xFFFFD1D1)
+            DayPhase.MORNING -> Color(0xFFFFCCBC)
             else -> Color(0xFFFFD166)
         }
 
-        // Global Radial Light
+        // Brighter Center Glow
         drawCircle(
             brush = Brush.radialGradient(
-                0.0f to scatteringColor.copy(0.12f),
-                1.0f to Color.Transparent,
-                center = center,
-                radius = size.width * 1.2f
-            ),
-            center = center,
-            radius = size.width * 1.2f
-        )
-
-        drawCircle(
-            brush = Brush.radialGradient(
-                0.0f to scatteringColor.copy(0.15f),
+                0.0f to scatteringColor.copy(0.1f),
                 1.0f to Color.Transparent,
                 center = sunCenter,
                 radius = size.width * 1.5f
@@ -423,13 +437,13 @@ fun LiveBackgroundLayer(spec: HeroThemeSpec) {
             radius = size.width * 1.5f
         )
 
-        // Subtle vignette
+        // Subtle vignette (edges darker)
         drawRect(
             brush = Brush.radialGradient(
-                0.0f to Color.Transparent,
+                0.8f to Color.Transparent,
                 1.0f to Color.Black.copy(0.12f),
                 center = center,
-                radius = size.width
+                radius = size.width * 1.2f
             )
         )
     }
@@ -455,7 +469,7 @@ fun WeatherEffectLayer(spec: HeroThemeSpec, isAnimationEnabled: Boolean) {
         }
 
         if (spec.cloudDensity > 0) {
-            HeroCloudDriftEffect(count = spec.cloudDensity, color = spec.cloudColor)
+            HeroCloudDriftEffect(count = spec.cloudDensity, color = spec.cloudColor, dayPart = spec.dayPart)
         }
     }
 }
@@ -464,30 +478,46 @@ fun WeatherEffectLayer(spec: HeroThemeSpec, isAnimationEnabled: Boolean) {
 fun PremiumSunEffect(spec: HeroThemeSpec) {
     val infiniteTransition = rememberInfiniteTransition(label = "sun_fx")
     val drift by infiniteTransition.animateFloat(0.98f, 1.02f, infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_drift")
-    val energy by infiniteTransition.animateFloat(1f, 1.05f, infiniteRepeatable(tween(15000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_energy")
+    val energy by infiniteTransition.animateFloat(1f, 1.05f, infiniteRepeatable(tween(12000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_energy")
 
     val coreColors = when (spec.dayPart) {
-        DayPhase.EVENING -> listOf(Color(0xFFFFF9C4), Color(0xFFFFB74D), Color(0xFFEA580C))
-        DayPhase.MORNING -> listOf(Color(0xFFFFFDF0), Color(0xFFFFE4E1), Color(0xFFFFB6C1))
+        DayPhase.EVENING -> listOf(Color(0xFFFFCC80), Color(0xFFFF7043), Color(0xFFD84315)) // Hotter Evening Sun
+        DayPhase.MORNING -> listOf(Color(0xFFFFFDF0), Color(0xFFFFE0B2), Color(0xFFFFAB91))
         else -> listOf(Color(0xFFFFFFFF), Color(0xFFFFF3C4), Color(0xFFFCD34D))
     }
 
     val atmosphereColor = when (spec.dayPart) {
-        DayPhase.EVENING -> Color(0xFFE85D75)
-        DayPhase.MORNING -> Color(0xFFFFB6C1)
+        DayPhase.EVENING -> Color(0xFFE64A19)
+        DayPhase.MORNING -> Color(0xFFFFAB91)
         else -> Color(0xFFFBBF24)
     }
 
-    val isEvening = spec.dayPart == DayPhase.EVENING
-    val isMorning = spec.dayPart == DayPhase.MORNING
-    val sizeMultiplier = if (isEvening) 0.82f else 1.0f // Evening sun even smaller
-    val glowMultiplier = if (isEvening) 0.65f else if (isMorning) 0.8f else 1.0f
+    val glowMultiplier = if (spec.dayPart == DayPhase.EVENING) 0.6f else 1.0f
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
-        val r = (if (spec.dayPart != DayPhase.DAY) 40.dp else 32.dp).toPx() * energy * sizeMultiplier
+        val r = 36.dp.toPx() * spec.sunMoonSize * energy
 
-        // Global Ambient Glow (for focus)
+        // 1. Lens Flare (Subtle)
+        if (spec.dayPart == DayPhase.DAY) {
+            val flareCenter = Offset(center.x - 100.dp.toPx(), center.y + 100.dp.toPx())
+            drawCircle(color = Color.White.copy(alpha = 0.02f), radius = 12.dp.toPx(), center = flareCenter)
+        }
+
+        // 2. Halo Effect (Softer, multi-layered)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to Color.White.copy(alpha = 0.04f * energy),
+                0.8f to Color.White.copy(alpha = 0.01f * energy),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = r * 6f
+            ),
+            center = center,
+            radius = r * 6f
+        )
+
+        // 3. Global Ambient Glow
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to atmosphereColor.copy(0.12f * glowMultiplier),
@@ -499,19 +529,7 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
             radius = 300.dp.toPx()
         )
 
-        // Large soft glow (Atmosphere)
-        drawCircle(
-            brush = Brush.radialGradient(
-                0.0f to atmosphereColor.copy(0.18f * drift * glowMultiplier),
-                1.0f to Color.Transparent,
-                center = center,
-                radius = 240.dp.toPx()
-            ),
-            center = center,
-            radius = 240.dp.toPx()
-        )
-
-        // Medium Glow (Bloom)
+        // 4. Bloom
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to coreColors[1].copy(0.35f * glowMultiplier),
@@ -523,11 +541,11 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
             radius = r * 3.5f
         )
 
-        // Sun Disk
+        // 5. Sun Disk
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to coreColors[0],
-                0.6f to coreColors[1],
+                0.5f to coreColors[1],
                 1.0f to coreColors[2].copy(alpha = 0.8f),
                 center = center,
                 radius = r
@@ -540,20 +558,35 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
 
 @Composable
 fun PremiumMoonEffect(spec: HeroThemeSpec) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val glow by infiniteTransition.animateFloat(0.8f, 1.1f, infiniteRepeatable(tween(6000, easing = SineEaseInOut), RepeatMode.Reverse))
+    val infiniteTransition = rememberInfiniteTransition(label = "moon")
+    val glow by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(6000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "glow"
+    )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
-        val r = 20.dp.toPx()
+        val r = 26.dp.toPx() // Larger moon
 
-        drawCircle(brush = Brush.radialGradient(0.0f to Color(0xFFFDE68A).copy(0.12f * glow), 1.0f to Color.Transparent, center = center, radius = 120.dp.toPx()), center = center, radius = 120.dp.toPx())
+        // Moon Glow (Enhanced)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to Color(0xFFFDE68A).copy(0.25f * glow),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = 160.dp.toPx()
+            ),
+            center = center,
+            radius = 160.dp.toPx()
+        )
 
         val path = Path().apply {
             addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
         }
         val clipPath = Path().apply {
-            addOval(Rect(center.x - r * 1.6f, center.y - r * 1.2f, center.x + r * 0.4f, center.y + r * 0.8f))
+            addOval(Rect(center.x - r * 1.5f, center.y - r * 1.1f, center.x + r * 0.5f, center.y + r * 0.9f))
         }
 
         drawContext.canvas.save()
@@ -563,61 +596,108 @@ fun PremiumMoonEffect(spec: HeroThemeSpec) {
     }
 }
 
-fun DrawScope.drawHeroCloud(center: Offset, scale: Float, color: Color) {
-    val w = 150.dp.toPx() * scale
-    val h = 80.dp.toPx() * scale
-    val path = Path().apply {
-        moveTo(center.x - w * 0.4f, center.y + h * 0.25f)
-        cubicTo(center.x - w * 0.65f, center.y + h * 0.1f, center.x - w * 0.6f, center.y - h * 0.35f, center.x - w * 0.25f, center.y - h * 0.25f)
-        cubicTo(center.x - w * 0.1f, center.y - h * 0.75f, center.x + w * 0.3f, center.y - h * 0.7f, center.x + w * 0.35f, center.y - h * 0.2f)
-        cubicTo(center.x + w * 0.65f, center.y - h * 0.1f, center.x + w * 0.7f, center.y + h * 0.35f, center.x + w * 0.4f, center.y + h * 0.3f)
-        close()
-    }
-    drawPath(path, color)
-}
+
 
 @Composable
-fun HeroCloudDriftEffect(count: Int, color: Color) {
+fun HeroCloudDriftEffect(count: Int, color: Color, dayPart: DayPhase = DayPhase.DAY) {
     val infiniteTransition = rememberInfiniteTransition(label = "clouds")
     val drift by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(100000, easing = LinearEasing), RepeatMode.Restart), // Even slower (100s)
+        animationSpec = infiniteRepeatable(tween(130000, easing = LinearEasing), RepeatMode.Restart),
         label = "drift"
     )
 
-    val clouds = remember(count) {
+    // Fixed composition based on DayPhase for premium consistency
+    val clouds = remember(count, dayPart) {
         List(count) { i ->
-            val isForeground = i >= count / 2
+            val layer = when {
+                i < count / 3 -> 0 // Back
+                i < count * 2 / 3 -> 1 // Mid
+                else -> 2 // Front
+            }
+
+            // Bias xRatio towards edges to keep center clear
+            val isLeft = i % 2 == 0
+            val xBase = if (isLeft) Random.nextFloat() * 0.35f else 0.65f + Random.nextFloat() * 0.35f
+
+            // Adjust xRatio for morning sun (around 0.20f, 0.35f) to cover 25-35%
+            val finalXBase = if (dayPart == DayPhase.MORNING && i == 0) 0.18f else xBase
+
             HeroCloudState(
-                xRatio = Random.nextFloat(),
-                // Adjust yRatio to keep clouds away from temperature (center)
-                yRatio = if (isForeground) Random.nextFloat() * 0.25f + 0.65f else Random.nextFloat() * 0.35f,
-                scale = if (isForeground) 1.1f + Random.nextFloat() * 0.4f else 1.8f + Random.nextFloat() * 1.0f,
-                speed = if (isForeground) 0.15f + Random.nextFloat() * 0.10f else 0.05f + Random.nextFloat() * 0.05f,
-                opacity = if (isForeground) 0.12f + Random.nextFloat() * 0.05f else 0.04f + Random.nextFloat() * 0.04f,
-                blur = if (isForeground) 0f else 8f
+                xRatio = finalXBase,
+                yRatio = when (layer) {
+                    0 -> 0.10f + (i * 0.05f)
+                    1 -> 0.40f + (i * 0.03f)
+                    else -> 0.65f - (i * 0.04f)
+                },
+                scale = when (layer) {
+                    0 -> 0.6f + (i * 0.05f)
+                    1 -> 0.9f + (i * 0.08f)
+                    else -> 1.2f + (i * 0.12f)
+                },
+                speed = when (layer) {
+                    0 -> 0.03f
+                    1 -> 0.06f
+                    else -> 0.11f
+                },
+                opacity = when (layer) {
+                    0 -> 0.12f // Arka katman %10-15
+                    1 -> 0.22f // Orta katman %20-25
+                    else -> 0.32f // Ön katman %30-35
+                },
+                blur = when (layer) {
+                    0 -> 6f
+                    1 -> 3f
+                    else -> 1f
+                }
             )
         }
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        // Draw background clouds first
-        clouds.filter { it.scale >= 1.8f }.forEach { cloud ->
-            val cw = 180.dp.toPx() * cloud.scale
+        clouds.forEach { cloud ->
+            val cw = 140.dp.toPx() * cloud.scale
             val totalSpan = size.width + cw * 2
             val x = ((cloud.xRatio + drift * cloud.speed) % 1.0f) * totalSpan - cw
-            drawHeroCloud(Offset(x, size.height * cloud.yRatio), cloud.scale, color.copy(cloud.opacity))
-        }
 
-        // Draw foreground clouds
-        clouds.filter { it.scale < 1.8f }.forEach { cloud ->
-            val cw = 180.dp.toPx() * cloud.scale
-            val totalSpan = size.width + cw * 2
-            val x = ((cloud.xRatio + drift * cloud.speed) % 1.0f) * totalSpan - cw
-            drawHeroCloud(Offset(x, size.height * cloud.yRatio), cloud.scale, color.copy(cloud.opacity))
+            drawHeroCloud(
+                Offset(x, size.height * cloud.yRatio),
+                cloud.scale,
+                color.copy(cloud.opacity)
+            )
         }
     }
+}
+
+fun DrawScope.drawHeroCloud(center: Offset, scale: Float, color: Color) {
+    val w = 120.dp.toPx() * scale
+    val h = 65.dp.toPx() * scale
+
+    // Premium Cumulus Path: Multiple small puffs for more volume and realism
+    val path = Path().apply {
+        moveTo(center.x - w * 0.4f, center.y + h * 0.2f)
+
+        // Base
+        cubicTo(
+            center.x - w * 0.5f, center.y + h * 0.25f,
+            center.x + w * 0.5f, center.y + h * 0.25f,
+            center.x + w * 0.4f, center.y + h * 0.2f
+        )
+
+        // Cluster Puffs
+        // Right side
+        cubicTo(center.x + w * 0.55f, center.y + h * 0.1f, center.x + w * 0.5f, center.y - h * 0.2f, center.x + w * 0.25f, center.y - h * 0.15f)
+        // Top right
+        cubicTo(center.x + w * 0.3f, center.y - h * 0.45f, center.x + w * 0.1f, center.y - h * 0.5f, center.x, center.y - h * 0.3f)
+        // Top left
+        cubicTo(center.x - w * 0.1f, center.y - h * 0.5f, center.x - w * 0.3f, center.y - h * 0.45f, center.x - w * 0.25f, center.y - h * 0.15f)
+        // Left side
+        cubicTo(center.x - w * 0.5f, center.y - h * 0.2f, center.x - w * 0.55f, center.y + h * 0.1f, center.x - w * 0.4f, center.y + h * 0.2f)
+
+        close()
+    }
+    drawPath(path, color)
 }
 
 private data class HeroCloudState(val xRatio: Float, val yRatio: Float, val scale: Float, val speed: Float, val opacity: Float, val blur: Float)
@@ -626,20 +706,21 @@ private data class HeroCloudState(val xRatio: Float, val yRatio: Float, val scal
 fun HeroRainEffect(isStorm: Boolean) {
     val ry by rememberInfiniteTransition(label = "rain").animateFloat(
         initialValue = 0f,
-        targetValue = 1200f,
-        animationSpec = infiniteRepeatable(tween(if (isStorm) 700 else 1200, easing = LinearEasing)),
+        targetValue = 1800f, // Faster fall
+        animationSpec = infiniteRepeatable(tween(if (isStorm) 500 else 900, easing = LinearEasing)),
         label = "rain_fall"
     )
 
     val rainDrops = remember(isStorm) {
-        List(if (isStorm) 80 else 50) {
+        List(if (isStorm) 120 else 70) {
             HeroRainDrop(
                 xRatio = Random.nextFloat(),
                 yRatio = Random.nextFloat(),
-                length = 20f + Random.nextFloat() * 25f,
-                speed = 0.6f + Random.nextFloat() * 0.8f,
-                alpha = 0.1f + Random.nextFloat() * 0.3f,
-                strokeWidth = 0.5f + Random.nextFloat() * 1f
+                length = 25f + Random.nextFloat() * 45f, // Longer drops
+                speed = 0.6f + Random.nextFloat() * 1.2f,
+                alpha = 0.08f + Random.nextFloat() * 0.3f,
+                strokeWidth = 0.4f + Random.nextFloat() * 0.8f, // Thinner drops
+                angle = -3f + Random.nextFloat() * 6f // Variable angle
             )
         }
     }
@@ -652,7 +733,7 @@ fun HeroRainEffect(isStorm: Boolean) {
             drawLine(
                 Color.White.copy(drop.alpha),
                 Offset(x, y),
-                Offset(x - 3f, y + drop.length), // Angled rain
+                Offset(x - 4f + drop.angle, y + drop.length),
                 drop.strokeWidth.dp.toPx(),
                 cap = StrokeCap.Round
             )
@@ -660,7 +741,7 @@ fun HeroRainEffect(isStorm: Boolean) {
     }
 }
 
-private data class HeroRainDrop(val xRatio: Float, val yRatio: Float, val length: Float, val speed: Float, val alpha: Float, val strokeWidth: Float)
+private data class HeroRainDrop(val xRatio: Float, val yRatio: Float, val length: Float, val speed: Float, val alpha: Float, val strokeWidth: Float, val angle: Float)
 
 @Composable
 fun LightningEffect() {
@@ -670,14 +751,28 @@ fun LightningEffect() {
 
 @Composable
 fun SnowParticleEffect() {
-    val sy by rememberInfiniteTransition().animateFloat(0f, 1000f, infiniteRepeatable(tween(5000, easing = LinearEasing)))
-    val p = remember { List(45) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+    val infiniteTransition = rememberInfiniteTransition(label = "snow")
+    val sy by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+        label = "snow_fall"
+    )
+    val particles = remember {
+        List(50) {
+            Triple(Random.nextFloat(), Random.nextFloat(), 1.5f + Random.nextFloat() * 2.5f)
+        }
+    }
     Canvas(modifier = Modifier.fillMaxSize()) {
-        p.forEach { dr ->
+        particles.forEach { p ->
+            val drift = (Math.sin(sy.toDouble() / 100 + p.first * 20) * 30).toFloat()
+            val x = (p.first * size.width + drift) % size.width
+            val y = (p.second * size.height + sy) % size.height
+
             drawCircle(
-                Color.White.copy(0.5f),
-                2.5.dp.toPx(),
-                Offset(dr.x * size.width + (Math.sin(sy.toDouble() / 80 + dr.x * 15) * 25).toFloat(), (dr.y * size.height + sy) % size.height)
+                Color.White.copy(0.6f),
+                p.third.dp.toPx(),
+                Offset(x, y)
             )
         }
     }
@@ -685,14 +780,21 @@ fun SnowParticleEffect() {
 
 @Composable
 fun StarFieldEffect() {
-    val tw by rememberInfiniteTransition().animateFloat(0.3f, 1f, infiniteRepeatable(tween(2500), RepeatMode.Reverse))
-    val stars = remember { List(60) { Offset(Random.nextFloat(), Random.nextFloat()) } }
+    val tw by rememberInfiniteTransition(label = "stars").animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "twinkle"
+    )
+    val stars = remember { List(120) { Triple(Random.nextFloat(), Random.nextFloat(), 0.4f + Random.nextFloat() * 0.8f) } }
+
     Canvas(modifier = Modifier.fillMaxSize()) {
         stars.forEachIndexed { i, s ->
+            val alpha = (0.1f + (if (i % 4 == 0) tw else if (i % 4 == 1) 0.8f - tw else 0.4f) * 0.4f).coerceIn(0f, 1f)
             drawCircle(
-                Color.White.copy(0.5f * (if (i % 2 == 0) tw else 1.3f - tw)),
-                1.2.dp.toPx(),
-                Offset(s.x * size.width, s.y * size.height)
+                Color.White.copy(alpha = alpha * 0.5f),
+                s.third.dp.toPx(),
+                Offset(s.first * size.width, s.second * size.height)
             )
         }
     }
@@ -769,12 +871,12 @@ fun PremiumWeatherContent(
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PremiumNotificationButton(unreadCount, isDark, textColor, onNotificationsClick)
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(16.dp)) // Increased spacing
                 Icon(spec.icon, null, tint = spec.accentColor, modifier = Modifier.size(34.dp))
             }
         }
 
-        Spacer(Modifier.weight(0.4f))
+        Spacer(Modifier.weight(0.3f)) // Balanced alignment
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(temperature, style = MaterialTheme.typography.displayLarge.copy(
@@ -784,21 +886,32 @@ fun PremiumWeatherContent(
                 color = textColor,
                 shadow = Shadow(color = Color.Black.copy(alpha = if(isDark) 0.2f else 0.05f), offset = Offset(0f, 4f), blurRadius = 12f)
             ))
-            Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, color = textColor, letterSpacing = 0.5.sp))
-            Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = secondaryColor))
+            Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(
+                fontWeight = FontWeight.Black,
+                color = textColor,
+                letterSpacing = 0.5.sp,
+                lineHeight = 28.sp // Reduced effective spacing
+            ))
+            Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.Bold,
+                color = secondaryColor,
+                lineHeight = 20.sp // Reduced effective spacing
+            ))
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.weight(0.8f)) // Balanced alignment
 
         // Glassmorphism Metrics Bar
         Surface(modifier = Modifier.fillMaxWidth().height(64.dp),
-            color = if (isDark) Color.White.copy(0.08f) else Color.Black.copy(0.04f),
+            color = if (isDark) Color.White.copy(0.1f) else Color.Black.copy(0.06f), // Increased contrast
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(0.8.dp, if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f))) {
+            border = BorderStroke(1.dp, if (isDark) Color.White.copy(0.15f) else Color.Black.copy(0.1f))) {
             Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to "UV $uvIndex").forEach { (icon, valStr) ->
+                val uvValue = if (spec.dayPart == DayPhase.NIGHT) "--" else "UV $uvIndex"
+
+                listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to uvValue).forEach { (icon, valStr) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, null, tint = spec.accentColor.copy(0.8f), modifier = Modifier.size(18.dp))
+                        Icon(icon, null, tint = spec.accentColor, modifier = Modifier.size(20.dp)) // Larger icon
                         Spacer(Modifier.width(8.dp))
                         Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Black), color = textColor)
                     }

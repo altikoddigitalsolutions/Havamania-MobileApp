@@ -95,7 +95,7 @@ class WeatherRepository(
         // 2. Network'ten çek (Sadece forceRefresh true ise veya cache eskiyse/yoksa)
         if (!isCacheValid || forceRefresh) {
             try {
-                val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover"
+                val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover,uv_index"
                 val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
 
                 val response = apiService.getFullWeather(

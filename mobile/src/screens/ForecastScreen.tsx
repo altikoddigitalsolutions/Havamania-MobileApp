@@ -17,7 +17,16 @@ import {useTranslation} from 'react-i18next';
 
 import {getDailyWeather} from '../services/weatherApi';
 import {searchCity, GeoResult, formatSunTime} from '../services/openMeteoApi';
-import {AppColors, FontSize, Radius, Spacing, formatDayShort, getWeatherEmoji, useColors} from '../theme';
+import {
+  AppColors,
+  FontSize,
+  Radius,
+  Spacing,
+  formatDayShort,
+  getDayName,
+  getWeatherEmoji,
+  useColors,
+} from '../theme';
 import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
@@ -193,15 +202,8 @@ function ForecastRow({
     <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={[s.row, isFirst && s.rowFirst]}>
       {/* Gün */}
       <View style={s.dayCol}>
-        <Text style={s.dayText}>{isFirst ? t('forecast.today') : formatDayShort(item.date)}</Text>
-        {isFirst && (
-          <Text style={s.dateText}>
-            {new Date(item.date + 'T12:00:00').toLocaleDateString('tr', {
-              month: 'short',
-              day: 'numeric',
-            })}
-          </Text>
-        )}
+        <Text style={s.dayText}>{isFirst ? t('forecast.today') : getDayName(item.date)}</Text>
+        <Text style={s.dateText}>{formatDayShort(item.date)}</Text>
       </View>
 
       {/* İkon */}

@@ -117,75 +117,57 @@ fun DailyForecastPanel(
                     stiffness = Spring.StiffnessLow
                 )
             )
-            .clip(RoundedCornerShape(themeStyles.cardCornerRadius))
+            .clip(RoundedCornerShape(32.dp)) // More rounded
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        themeColors.gradientPrimary[0].copy(alpha = 0.95f),
-                        themeColors.surfaceGlass.copy(alpha = 0.85f)
+                        themeColors.surface.copy(alpha = 0.9f),
+                        themeColors.surface.copy(alpha = 0.7f)
                     )
                 )
             )
             .border(
-                width = themeStyles.cardBorderWidth,
+                width = 1.dp,
                 brush = Brush.verticalGradient(
-                    listOf(themeColors.border, Color.Transparent)
+                    listOf(Color.White.copy(alpha = 0.2f), Color.Transparent)
                 ),
-                shape = RoundedCornerShape(themeStyles.cardCornerRadius)
+                shape = RoundedCornerShape(32.dp)
             )
     ) {
-        // Subtle background glow
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 60.dp, y = (-60).dp)
-                .blur(themeStyles.glassBlur * 5)
-                .background(themeColors.accent.copy(alpha = 0.05f), CircleShape)
-        )
-
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 24.dp)
+                modifier = Modifier.padding(bottom = 20.dp, start = 4.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(themeColors.accent.copy(alpha = 0.1f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.CalendarToday,
-                        contentDescription = null,
-                        tint = themeColors.accent,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
+                Icon(
+                    imageVector = Icons.Rounded.CalendarMonth,
+                    contentDescription = null,
+                    tint = themeColors.accent,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "GÜNLÜK TAHMİN",
+                    text = "10 GÜNLÜK TAHMİN",
                     style = MaterialTheme.typography.labelLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.sp
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
                     ),
-                    color = themeColors.textPrimary.copy(alpha = 0.5f)
+                    color = themeColors.textSecondary.copy(alpha = 0.8f)
                 )
             }
 
             // Forecast List
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column {
                 visibleForecast.forEachIndexed { index, forecast ->
                     key(forecast.date) {
                         val isSelected = forecast.date == selectedDate
                         DailyForecastRow(forecast, isSelected = isSelected, onClick = { onDayClick(forecast) })
                         if (index < visibleForecast.size - 1) {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(0.5.dp)
-                                    .background(themeColors.border.copy(alpha = 0.3f))
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                thickness = 0.5.dp,
+                                color = themeColors.border.copy(alpha = 0.1f)
                             )
                         }
                     }
@@ -193,7 +175,7 @@ fun DailyForecastPanel(
             }
 
             if (forecasts.size > 7) {
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -290,65 +272,73 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp) // Taller row
+            .height(72.dp) // Even taller for more air
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp)) // More rounded
             .background(
-                if (isSelected) themeColors.accent.copy(alpha = 0.15f)
+                if (isSelected) themeColors.accent.copy(alpha = 0.12f)
                 else Color.Transparent
-            )
-            .then(
-                if (isSelected) Modifier.border(1.dp, themeColors.accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                else Modifier
             )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Day Label
-        Text(
-            text = if (data.isToday) "Bugün" else data.day.split(" ").last(),
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                fontSize = 15.sp
-            ),
-            color = if (isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.8f),
-            modifier = Modifier.width(85.dp)
-        )
+        Column(modifier = Modifier.width(90.dp)) {
+            Text(
+                text = if (data.isToday) "Bugün" else data.day.split(" ").last(),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                    fontSize = 16.sp
+                ),
+                color = if (isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.9f)
+            )
+            Text(
+                text = if (data.isToday) "Şimdi" else data.date.split("-").drop(1).joinToString("/"),
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 11.sp
+                ),
+                color = themeColors.textSecondary.copy(alpha = 0.5f)
+            )
+        }
 
         // Weather Icon
         Box(
-            modifier = Modifier.width(60.dp),
+            modifier = Modifier.width(50.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = WeatherMapper.getIconFromName(data.iconName),
                 contentDescription = null,
-                tint = if (isSelected) style.accentColor else style.iconColor.copy(alpha = 0.9f),
-                modifier = Modifier.size(28.dp) // Larger icon
+                tint = if (isSelected) themeColors.accent else style.iconColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(30.dp)
             )
         }
+
+        Spacer(Modifier.width(12.dp))
 
         // Min Temp
         Text(
             text = "${data.minTemp}°",
-            style = MaterialTheme.typography.bodyLarge.copy(
+            style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 15.sp
             ),
             color = themeColors.textPrimary.copy(alpha = 0.4f),
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.width(36.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
         )
 
         // Range Bar
         TemperatureRangeBar(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = 12.dp),
             min = data.minTemp,
             max = data.maxTemp,
             style = style,
@@ -358,9 +348,9 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
         // Max Temp
         Text(
             text = "${data.maxTemp}°",
-            style = MaterialTheme.typography.bodyLarge.copy(
+            style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Black,
-                fontSize = 16.sp
+                fontSize = 17.sp
             ),
             color = themeColors.textPrimary,
             modifier = Modifier.width(40.dp),

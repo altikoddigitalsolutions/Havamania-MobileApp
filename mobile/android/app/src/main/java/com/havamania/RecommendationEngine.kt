@@ -33,27 +33,43 @@ object RecommendationEngine {
         var priority = RecommendationPriority.LOW
 
         // 1. GİRİŞ (Hava Durumu Özeti)
-        val intro = when {
-            rawCondition.contains("yağmur") || rawCondition.contains("sağanak") -> {
-                primaryType = RecommendationType.WARNING
-                priority = RecommendationPriority.HIGH
-                "Bugün $city semaları hareketli. Yağış geçişleri günün temposunu belirleyecek. $tempMin°/$tempMax° sıcaklık aralığında, nemin etkisiyle hava olduğundan ağır hissedilebilir."
-            }
-            rawCondition.contains("kar") -> {
-                primaryType = RecommendationType.WARNING
-                priority = RecommendationPriority.CRITICAL
-                "Dışarısı masalsı ama soğuk! ❄️ $city'da kar yağışı etkisini gösterecek. Sıcaklık $tempMin° civarında, buzlanmaya karşı dikkatli olmalısın."
-            }
-            rawCondition.contains("bulut") -> {
-                "Bugün $city'da bulutlar hakim. Güneş kısıtlı olsa da $tempMax° sıcaklık dışarıda vakit geçirmek için oldukça dengeli bir ortam sunuyor."
-            }
-            rawCondition.contains("güneş") || rawCondition.contains("açık") -> {
-                "Pırıl pırıl bir gün $city’da seni bekliyor. Gökyüzü tamamen açık. $tempMax°'lik maksimum sıcaklık, mevsime uygun harika bir atmosfer yaratıyor."
-            }
-            else -> "Bugün $city’da $rawCondition bir hava hakim. $tempMin° ile $tempMax° arasında seyreden termometreler, planlarını yapmak için oldukça stabil görünüyor."
+        val intros = when {
+            rawCondition.contains("yağmur") || rawCondition.contains("sağanak") -> listOf(
+                "Bugün $city semaları hareketli. Yağış geçişleri günün temposunu belirleyecek.",
+                "Yağmurlu bir güne hazır mısın? $city'da bugün şemsiyeler başrolde.",
+                "Gökyüzü bugün biraz dertli; $city'da aralıklı yağışlar bekleniyor."
+            )
+            rawCondition.contains("kar") -> listOf(
+                "Dışarısı masalsı ama soğuk! ❄️ $city'da kar yağışı etkisini gösterecek.",
+                "Beyaz örtü geliyor! $city'da bugün tam kar havası var.",
+                "Kar taneleri eşliğinde bir güne ne dersin? $city bugün oldukça soğuk."
+            )
+            rawCondition.contains("bulut") -> listOf(
+                "Bugün $city'da bulutlar hakim. Güneş kısıtlı olsa da hava oldukça dengeli.",
+                "Gri ama huzurlu bir gökyüzü $city'da seni bekliyor.",
+                "Bulutlar bugün $city semalarını parsellemiş durumda."
+            )
+            rawCondition.contains("güneş") || rawCondition.contains("açık") -> listOf(
+                "Pırıl pırıl bir gün $city’da seni bekliyor. Gökyüzü tamamen açık.",
+                "Güneş bugün $city için tüm enerjisini harcıyor!",
+                "Açık gökyüzü gün boyunca sana eşlik edecek, enerjini yüksek tut.",
+                "Bugün $city oldukça sıcak ve güneşli geçecek.",
+                "Harika bir hava! $city semaları bugün masmavi ve güneşli.",
+                "Yaz havası $city'da etkisini sürdürüyor; dışarı çıkmak için mükemmel bir zaman."
+            )
+            else -> listOf(
+                "Bugün $city’da $rawCondition bir hava hakim.",
+                "Planlarını yaparken $city'daki $rawCondition havayı göz önünde bulundurabilirsin.",
+                "Günün genelinde $city semalarında $rawCondition bir atmosfer hakim olacak."
+            )
         }
 
+        val intro = intros.random()
+        val introFull = "$intro $tempMin°/$tempMax° sıcaklık aralığında, günün tadını çıkarabilirsin."
+
         val analysisParts = mutableListOf<String>()
+
+        // ... (rest of the function remains similar but updated to use introFull)
 
         // 2. SAĞLIK VE YAŞAM ETKİSİ
         if (uvIndex >= 6 || aboutMeLower.contains("güneş") || aboutMeLower.contains("cilt") || userInterests.contains("Sağlık")) {
@@ -115,7 +131,7 @@ object RecommendationEngine {
         val analysisSection = if (analysisParts.isNotEmpty()) "\n\n⚠️ DİKKAT:\n• " + analysisParts.joinToString("\n• ") else ""
         val suggestionsSection = if (suggestions.isNotEmpty()) "\n\n💡 ÖNERİLER:\n• " + suggestions.joinToString("\n• ") else ""
 
-        val finalMessage = "$intro$analysisSection$suggestionsSection"
+        val finalMessage = "$introFull$analysisSection$suggestionsSection"
 
         return HavamaniaRecommendation(
             message = finalMessage,

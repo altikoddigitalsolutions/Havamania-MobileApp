@@ -206,8 +206,8 @@ export const WeatherDetailsPanel: React.FC<WeatherDetailsPanelProps> = ({ curren
         <WeatherDetailCard
           icon="sunny-outline"
           label="UV İndeksi"
-          value={current.uv_index}
-          description={getUVLabel(current.uv_index)}
+          value={current.is_day ? current.uv_index : '--'}
+          description={current.is_day ? getUVLabel(current.uv_index) : 'Gece vakti'}
           C={C}
           color="#FBBF24"
         />

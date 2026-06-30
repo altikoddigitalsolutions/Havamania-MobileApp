@@ -112,15 +112,15 @@ export const FontSize = { xs: 12, sm: 14, md: 16, lg: 18, xl: 20, xxl: 24, xxxl:
 
 export function getWeatherEmoji(code: number): string {
   if (code === 0) return '☀️';
-  if (code <= 2) return '🌤️';
+  if (code === 1) return '🌤';
+  if (code === 2) return '⛅';
   if (code === 3) return '☁️';
-  if (code <= 48) return '🌫️';
-  if (code <= 55) return '🌦️';
-  if (code <= 67) return '🌧️';
-  if (code <= 77) return '❄️';
-  if (code <= 82) return '🌦️';
-  if (code <= 99) return '⛈️';
-  return '🌤️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 67) return '🌧️';
+  if (code >= 71 && code <= 77) return '🌨️';
+  if (code >= 80 && code <= 82) return '🌧️';
+  if (code >= 95) return '🌩';
+  return '☀️';
 }
 
 export function getWeatherIcon(code: number): string {
@@ -137,17 +137,16 @@ export function getWeatherIcon(code: number): string {
 }
 
 export function getWeatherLabel(code: number): string {
-  if (code === 0) return 'Açık';
-  if (code === 1) return 'Çoğunlukla Açık';
+  if (code === 0) return 'Güneşli';
+  if (code === 1) return 'Çoğunlukla Güneşli';
   if (code === 2) return 'Parçalı Bulutlu';
   if (code === 3) return 'Bulutlu';
-  if (code <= 48) return 'Sisli';
-  if (code <= 55) return 'Çiseleyen';
-  if (code <= 65) return 'Yağmurlu';
-  if (code <= 75) return 'Karlı';
-  if (code <= 82) return 'Sağanak';
-  if (code <= 99) return 'Fırtınalı';
-  return 'Parçalı Bulutlu';
+  if (code === 45 || code === 48) return 'Sisli';
+  if (code >= 51 && code <= 67) return 'Sağanak Yağış';
+  if (code >= 71 && code <= 77) return 'Kar Yağışlı';
+  if (code >= 80 && code <= 82) return 'Sağanak Yağış';
+  if (code >= 95) return 'Gök Gürültülü Sağanak';
+  return 'Güneşli';
 }
 
 export function formatHour(isoTime: string): string {
@@ -158,6 +157,19 @@ export function formatHour(isoTime: string): string {
 }
 
 export function formatDayShort(isoDate: string): string {
+  const date = new Date(isoDate + 'T12:00:00');
+  const lang = i18next.language;
+  const day = date.getDate();
+  const monthNamesTr = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  if (lang === 'tr') {
+    return `${day} ${monthNamesTr[date.getMonth()]}`;
+  }
+  return `${day} ${monthNamesEn[date.getMonth()]}`;
+}
+
+export function getDayName(isoDate: string): string {
   const date = new Date(isoDate + 'T12:00:00');
   const lang = i18next.language;
   if (lang === 'tr') {

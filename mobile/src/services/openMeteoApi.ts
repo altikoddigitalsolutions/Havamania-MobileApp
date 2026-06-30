@@ -45,6 +45,7 @@ export interface CurrentWeatherData {
   dew_point: number;      // °C
   precipitation: number;  // mm (son 1 saat)
   is_day: boolean;
+  time: string;           // Yerel zaman (ISO)
 }
 
 export interface HourlyWeatherItem {
@@ -148,6 +149,7 @@ export async function fetchCurrentWeather(
     dew_point: Math.round(c.dew_point_2m ?? 0),
     precipitation: Math.round((c.precipitation ?? 0) * 10) / 10,
     is_day: c.is_day === 1,
+    time: c.time,
   };
 
   setToCache(cacheKey, result);

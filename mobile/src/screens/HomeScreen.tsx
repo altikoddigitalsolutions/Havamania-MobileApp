@@ -127,7 +127,7 @@ export function HomeScreen(): React.JSX.Element {
         temperature: currentQuery.data.temperature,
         weather_code: currentQuery.data.weather_code,
         feels_like: currentQuery.data.feels_like,
-        time: new Date().toISOString(),
+        time: currentQuery.data.time,
         description: getWeatherLabel(currentQuery.data.weather_code),
         is_day: currentQuery.data.is_day
       });
@@ -251,6 +251,8 @@ export function HomeScreen(): React.JSX.Element {
           windSpeed={selectedWeather?.wind_speed ?? current.wind_speed}
           uvIndex={selectedWeather?.uv_index ?? current.uv_index}
           time={selectedWeather?.time}
+          sunrise={todayDaily?.sunrise}
+          sunset={todayDaily?.sunset}
           lastUpdated={new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
           C={C}
         />
@@ -268,20 +270,30 @@ export function HomeScreen(): React.JSX.Element {
             data={hourlyItems.slice(0, 8)}
             keyExtractor={(item, idx) => `${item.time}-${idx}`}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{gap: Spacing.sm, paddingVertical: Spacing.xs}}
-            renderItem={({item, index}) => (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setSelectedWeather(item)}
-                style={[s.hourCard, selectedWeather?.time === item.time && s.hourCardActive]}>
-                <Text style={s.hourLabel}>{index === 0 ? t('home.today') : formatHour(item.time)}</Text>
-                <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
-                <Text style={s.hourTemp}>{item.temperature}°</Text>
-                {item.precipitation_probability > 20 && (
-                  <Text style={s.hourPrecip}>💧{formatPrecipitationProbability(item.precipitation_probability)}</Text>
-                )}
-              </TouchableOpacity>
-            )}
+            contentContainerStyle={{gap: Spacing.sm, paddingHorizontal: 2, paddingVertical: Spacing.xs}}
+            renderItem={({item, index}) => {
+              const isActive = selectedWeather?.time === item.time;
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setSelectedWeather(item)}
+                  style={[
+                    s.hourCard,
+                    isActive ? s.hourCardActive : { backgroundColor: 'rgba(255,255,255,0.03)' }
+                  ]}>
+                  <Text style={[s.hourLabel, isActive && { color: '#FFF' }]}>
+                    {index === 0 ? t('home.today') : formatHour(item.time)}
+                  </Text>
+                  <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
+                  <Text style={[s.hourTemp, isActive && { color: '#FFF' }]}>{item.temperature}°</Text>
+                  {item.precipitation_probability > 20 && (
+                    <Text style={[s.hourPrecip, isActive && { color: '#FFF' }]}>
+                      💧{formatPrecipitationProbability(item.precipitation_probability)}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
 
@@ -401,6 +413,8 @@ export function HomeScreen(): React.JSX.Element {
 
 function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirst: boolean; isSelected: boolean; onPress: () => void; C: AppColors; t: any}) {
   const barPct = Math.min(100, Math.max(15, ((item.temp_max - item.temp_min) / 15) * 80));
+  const { getDayName, formatDayShort } = require('../theme');
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -416,7 +430,10 @@ function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirs
           paddingHorizontal: 8
         }
       ]}>
-      <Text style={dailyStyles(C).day}>{isFirst ? t('home.today') : formatDayShort(item.date)}</Text>
+      <View style={{width: 52}}>
+        <Text style={dailyStyles(C).day}>{isFirst ? t('home.today') : getDayName(item.date)}</Text>
+        <Text style={dailyStyles(C).dateSub}>{formatDayShort(item.date)}</Text>
+      </View>
       <Text style={dailyStyles(C).emoji}>{getWeatherEmoji(item.weather_code)}</Text>
       <Text style={dailyStyles(C).tempMin}>{item.temp_min}°</Text>
       <View style={dailyStyles(C).barTrack}><View style={[dailyStyles(C).barFill, {width: `${barPct}%`}]} /></View>
@@ -427,12 +444,13 @@ function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirs
 
 const dailyStyles = (C: AppColors) => StyleSheet.create({
   row: {flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.sm, gap: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.divider},
-  day: {fontSize: FontSize.md, color: C.text, fontWeight: '600', width: 52},
-  emoji: {fontSize: 20, width: 28, textAlign: 'center'},
-  tempMin: {fontSize: FontSize.sm, color: C.textSecondary, width: 26, textAlign: 'right'},
-  barTrack: {flex: 1, height: 4, backgroundColor: C.bgInput, borderRadius: 2, overflow: 'hidden'},
+  day: {fontSize: FontSize.md, color: C.text, fontWeight: '700', lineHeight: 18},
+  dateSub: {fontSize: 10, color: C.textSecondary, fontWeight: '600'},
+  emoji: {fontSize: 22, width: 32, textAlign: 'center'},
+  tempMin: {fontSize: FontSize.sm, color: C.textSecondary, width: 30, textAlign: 'right'},
+  barTrack: {flex: 1, height: 4, backgroundColor: C.bgInput, borderRadius: 2, overflow: 'hidden', marginHorizontal: 8},
   barFill: {height: '100%', backgroundColor: C.accent, borderRadius: 2},
-  tempMax: {fontSize: FontSize.sm, fontWeight: '700', color: C.text, width: 26},
+  tempMax: {fontSize: FontSize.sm, fontWeight: '700', color: C.text, width: 30},
 });
 
 function UvBar({value, C}: {value: number; C: AppColors}) {
@@ -484,12 +502,29 @@ const makeStyles = (C: AppColors, insets: any) => StyleSheet.create({
   sectionHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm},
   sectionTitle: {fontSize: FontSize.xs, fontWeight: '700', color: C.textSecondary, letterSpacing: 1},
   sectionIcon: {fontSize: 13, color: C.textMuted},
-  hourCard: {alignItems: 'center', backgroundColor: C.bgSecondary, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minWidth: 72, gap: 2, borderWidth: 1, borderColor: C.border},
-  hourCardActive: {backgroundColor: C.cardHourlyActive, borderColor: C.accent},
-  hourLabel: {fontSize: FontSize.xs, color: C.textSecondary, fontWeight: '600'},
-  hourEmoji: {fontSize: 22},
-  hourTemp: {fontSize: FontSize.md, fontWeight: '700', color: C.text},
-  hourPrecip: {fontSize: 12, fontWeight: '800', color: C.accent},
+  hourCard: {
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
+    minWidth: 76,
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)'
+  },
+  hourCardActive: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  hourLabel: {fontSize: 13, color: C.textSecondary, fontWeight: '700'},
+  hourEmoji: {fontSize: 26, marginVertical: 2},
+  hourTemp: {fontSize: 17, fontWeight: '800', color: C.text},
+  hourPrecip: {fontSize: 11, fontWeight: '900', color: C.accent},
   viewMoreBtn: {alignItems: 'center', paddingTop: Spacing.md},
   viewMoreText: {fontSize: FontSize.sm, color: C.accent, fontWeight: '700'},
   metricsRow: {flexDirection: 'row', marginHorizontal: Spacing.md, marginBottom: Spacing.md, gap: Spacing.sm},
