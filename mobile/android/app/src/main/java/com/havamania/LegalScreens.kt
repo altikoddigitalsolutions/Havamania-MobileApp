@@ -13,23 +13,39 @@ import com.havamania.ui.theme.*
 
 @Composable
 fun PrivacyPolicyScreen(onBack: () -> Unit) {
-    LegalScreenTemplate(title = "Gizlilik Politikası", onBack = onBack) {
-        LegalText("Havamania, gizliliğinize önem verir. Bu politika, verilerinizin nasıl işlendiğini açıklar.")
-        LegalSection("Toplanan Veriler")
-        LegalText("Hava durumu tahmini sunmak için konum verileriniz, asistan hizmeti için ise paylaştığınız tercihler işlenmektedir.")
-        LegalSection("KVKK ve GDPR")
-        LegalText("Verileriniz yerel mevzuatlara uygun olarak saklanmakta ve üçüncü taraflarla paylaşılmamaktadır.")
+    LegalScreenTemplate(title = "GİZLİLİK POLİTİKASI", onBack = onBack) {
+        LegalText("Son Güncelleme: Ocak 2024\n\nHavamania olarak kişisel verilerinizin güvenliği önceliğimizdir. Bu metin, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve GDPR uyumluluğu kapsamında hazırlanmıştır.")
+
+        LegalSection("1. İşlenen Veriler")
+        LegalText("Hizmet sunabilmek adına şu veriler işlenmektedir:\n• Hassas Konum Verisi (Anlık hava durumu sunmak için)\n• Kullanıcı Tercihleri (İlgi alanları, profil bilgileri)\n• Cihaz Bilgileri (Performans optimizasyonu için)")
+
+        LegalSection("2. Veri İşleme Amacı")
+        LegalText("Konum verileriniz yalnızca size en yakın istasyon verisini sunmak ve seyahat rotanızdaki hava durumunu analiz etmek amacıyla kullanılır. Bu veriler kesinlikle anonimleştirilmeden üçüncü taraflara satılmaz.")
+
+        LegalSection("3. Kullanıcı Hakları")
+        LegalText("Verilerinizin silinmesini, kopyalanmasını veya düzeltilmesini her zaman Ayarlar > Verileri Sıfırla bölümünden talep edebilirsiniz.")
+
+        LegalSection("4. İletişim")
+        LegalText("Gizlilik ile ilgili sorularınız için: support@havamania.app")
     }
 }
 
 @Composable
 fun TermsOfUseScreen(onBack: () -> Unit) {
-    LegalScreenTemplate(title = "Kullanım Şartları", onBack = onBack) {
-        LegalText("Havamania uygulamasını kullanarak aşağıdaki şartları kabul etmiş sayılırsınız.")
-        LegalSection("Hizmet Kapsamı")
-        LegalText("Hava durumu verileri üçüncü taraf sağlayıcılardan alınmaktadır ve doğruluk garantisi verilmemektedir.")
-        LegalSection("Sorumluluk")
-        LegalText("Uygulama verilerine dayanarak alınan kararlardan kullanıcı sorumludur.")
+    LegalScreenTemplate(title = "KULLANIM ŞARTLARI", onBack = onBack) {
+        LegalText("Havamania uygulamasını kullanarak aşağıdaki şartları peşinen kabul etmiş sayılırsınız.")
+
+        LegalSection("1. Veri Kaynakları")
+        LegalText("Hava durumu tahminleri Open-Meteo ve diğer global veri sağlayıcılardan alınmaktadır. Verilerin %100 doğruluk payı garanti edilmez; meteorolojik koşullar anlık değişebilir.")
+
+        LegalSection("2. Kullanım Amacı")
+        LegalText("Uygulama bilgilendirme amaçlıdır. Özellikle ekstrem hava koşullarında (fırtına, sel vb.) resmi kurumların uyarıları dikkate alınmalıdır.")
+
+        LegalSection("3. Premium Abonelik")
+        LegalText("Premium özellikler yıllık veya aylık abonelik esasına dayanır. İptal işlemleri Store politikaları gereği kullanıcı tarafından yönetilir.")
+
+        LegalSection("4. Sorumluluk Reddi")
+        LegalText("Hava durumu tahminlerine dayanarak yapılan planlarda (seyahat, etkinlik vb.) oluşabilecek aksaklıklardan Havamania sorumlu tutulamaz.")
     }
 }
 
@@ -57,9 +73,9 @@ fun LegalScreenTemplate(
 fun LegalSection(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
         color = HavamaniaTheme.colors.accent,
-        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+        modifier = Modifier.padding(top = 28.dp, bottom = 12.dp)
     )
 }
 
@@ -67,8 +83,7 @@ fun LegalSection(title: String) {
 fun LegalText(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = HavamaniaTheme.colors.textPrimary.copy(alpha = 0.8f),
-        lineHeight = 22.sp
+        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
+        color = HavamaniaTheme.colors.textPrimary.copy(alpha = 0.85f)
     )
 }

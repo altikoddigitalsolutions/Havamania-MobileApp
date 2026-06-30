@@ -29,10 +29,10 @@ sealed class BottomNavItem(
     val icon: ImageVector,
     val isSpecial: Boolean = false
 ) {
-    object Weather : BottomNavItem("weather", "Hava", Icons.Rounded.Cloud)
-    object Calendar : BottomNavItem("calendar", "Takvim", Icons.Rounded.CalendarMonth)
-    object AI : BottomNavItem("ai", "Asistan", Icons.Rounded.AutoAwesome, isSpecial = true)
-    object Profile : BottomNavItem("profile", "Profil", Icons.Rounded.Person)
+    object Weather : BottomNavItem(Routes.WEATHER_ROOT, "Hava", Icons.Rounded.Cloud)
+    object Calendar : BottomNavItem(Routes.CALENDAR_ROOT, "Takvim", Icons.Rounded.CalendarMonth)
+    object AI : BottomNavItem(Routes.AI_ROOT, "Asistan", Icons.Rounded.AutoAwesome, isSpecial = true)
+    object Profile : BottomNavItem(Routes.PROFILE_ROOT, "Profil", Icons.Rounded.Person)
 }
 
 @Composable
@@ -70,17 +70,26 @@ fun WeatherBottomBar(
                 windowInsets = WindowInsets.navigationBars
             ) {
                 items.forEach { item ->
+                    // Logic: Match base route precisely to avoid cross-tab activation
                     val isSelected = when (item.route) {
-                        Routes.WEATHER -> currentRoute == Routes.WEATHER
-                        Routes.CALENDAR -> currentRoute?.startsWith(Routes.CALENDAR) == true
-                        Routes.AI -> currentRoute == Routes.AI || currentRoute?.startsWith("ai_history") == true
-                        Routes.PROFILE -> currentRoute == Routes.PROFILE
+                        Routes.WEATHER_ROOT -> currentRoute == Routes.WEATHER_ROOT
+                        Routes.CALENDAR_ROOT -> currentRoute?.startsWith(Routes.CALENDAR_ROOT) == true
+                        Routes.AI_ROOT -> currentRoute == Routes.AI_ROOT || currentRoute?.startsWith(Routes.AI_HISTORY) == true
+                        Routes.PROFILE_ROOT -> {
+                            currentRoute == Routes.PROFILE_ROOT ||
+                            currentRoute == Routes.EDIT_PROFILE ||
+                            currentRoute == Routes.CITIES ||
+                            currentRoute == Routes.SETTINGS
+                        }
                         else -> currentRoute == item.route
                     }
 
                     NavigationBarItem(
                         selected = isSelected,
-                        onClick = { onNavigate(item.route) },
+                        onClick = {
+                            android.util.Log.d("Navigation", "Tab Click: ${item.route}")
+                            onNavigate(item.route)
+                        },
                         label = {
                             Text(
                                 text = item.title,
@@ -104,7 +113,6 @@ fun WeatherBottomBar(
                                     .background(if (isSelected) themeColors.accent else Color.Transparent)
                             ) {
                                 if (isSelected) {
-                                    // Glow effect for extra premium feel
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()

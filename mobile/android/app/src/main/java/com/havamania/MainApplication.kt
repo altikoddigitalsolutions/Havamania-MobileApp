@@ -42,8 +42,8 @@ class MainApplication : Application(), ReactApplication {
 
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // Yeni mimari etkinse giriş noktasını yüklüyoruz.
-      // Hata mesajına göre Boolean bekleniyor, isNewArchEnabled gönderiyoruz.
-      load(BuildConfig.IS_NEW_ARCHITECTURE_ENABLED)
+      // Context/Application örneğini (this) geçiyoruz.
+      load()
     }
   }
 }

@@ -67,24 +67,24 @@ fun NotificationCenterScreen(
                         NotificationActionType.DAILY_FORECAST,
                         NotificationActionType.UV_DETAIL,
                         NotificationActionType.WEATHER_ALERT -> {
-                            onNavigateToDetail(Routes.WEATHER, null)
+                            onNavigateToDetail(Routes.WEATHER_ROOT, null)
                         }
                         NotificationActionType.TRAVEL_CALENDAR -> {
-                            onNavigateToDetail(Routes.CALENDAR, null)
+                            onNavigateToDetail(Routes.CALENDAR_ROOT, null)
                         }
                         NotificationActionType.TRAVEL_DETAIL -> {
                             val tripId = notification.targetId
                             if (!tripId.isNullOrBlank()) {
-                                onNavigateToDetail("${Routes.CALENDAR}?focusId=$tripId", mapOf("focusId" to tripId))
+                                onNavigateToDetail("${Routes.CALENDAR_ROOT}?focusId=$tripId", mapOf("focusId" to tripId))
                             } else {
-                                onNavigateToDetail(Routes.CALENDAR, null)
+                                onNavigateToDetail(Routes.CALENDAR_ROOT, null)
                             }
                         }
                         NotificationActionType.WEEKLY_SUMMARY -> {
-                            onNavigateToDetail(Routes.AI, null)
+                            onNavigateToDetail(Routes.AI_ROOT, null)
                         }
                         NotificationActionType.APP_UPDATE -> {
-                            onNavigateToDetail(Routes.PROFILE, null)
+                            onNavigateToDetail(Routes.PROFILE_ROOT, null)
                         }
                         NotificationActionType.NONE -> {
                             // If there's a deepLinkTarget as fallback
@@ -95,7 +95,7 @@ fun NotificationCenterScreen(
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("NotificationCenter", "Navigation failed", e)
-                    onNavigateToDetail(Routes.WEATHER, null)
+                    onNavigateToDetail(Routes.WEATHER_ROOT, null)
                 } finally {
                     // Small delay to prevent instant re-clicks
                     scope.launch {

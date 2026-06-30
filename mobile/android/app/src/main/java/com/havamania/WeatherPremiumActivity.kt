@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.havamania.ui.theme.HavamaniaTheme
 
 import androidx.navigation.NavDestination
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -33,7 +34,7 @@ class WeatherPremiumActivity : ComponentActivity() {
             HavamaniaTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER
+                val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER_ROOT
 
                 var appState by remember { mutableStateOf("splash") }
                 val themeColors = HavamaniaTheme.colors
@@ -64,20 +65,25 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 Routes.SETTINGS,
                                 Routes.EDIT_PROFILE,
                                 Routes.CITIES,
-                                "ai_history_detail",
+                                Routes.AI_HISTORY,
                                 Routes.NOTIFICATION_CENTER
                             )
-                            val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("ai_history_detail")
+                            val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
 
                             if (shouldShowBottomBar) {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
                                     onNavigate = { route ->
                                         try {
+                                            val startDestId = navController.graph.findStartDestination().id
+                                            val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT
+
                                             navController.navigate(route) {
-                                                popUpTo(Routes.WEATHER) { saveState = true }
+                                                popUpTo(startDestId) {
+                                                    saveState = true
+                                                }
                                                 launchSingleTop = true
-                                                restoreState = true
+                                                restoreState = !shouldResetState
                                             }
                                         } catch (e: Exception) {
                                             android.util.Log.e("Nav", "Navigation failed to $route", e)
@@ -90,23 +96,23 @@ class WeatherPremiumActivity : ComponentActivity() {
                         Box(modifier = Modifier
                             .fillMaxSize()
                             .background(backgroundGradient)
-                            .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
+                            .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("sub_ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
-                            NavHost(navController = navController, startDestination = Routes.WEATHER) {
+                            NavHost(navController = navController, startDestination = Routes.WEATHER_ROOT) {
                                 composable(
-                                    Routes.WEATHER,
+                                    Routes.WEATHER_ROOT,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
                                 ) {
                                     HomeScreen(onNavigateToAi = { rec, data ->
                                         pendingRecommendation = rec
                                         activeWeatherData = data
-                                        navController.navigate(Routes.AI)
+                                        navController.navigate(Routes.AI_ROOT)
                                     }, onNavigateToNotifications = {
                                         navController.navigate(Routes.NOTIFICATION_CENTER)
                                     })
                                 }
                                 composable(
-                                    "${Routes.CALENDAR}?focusId={focusId}&city={city}&date={date}",
+                                    "${Routes.CALENDAR_ROOT}?focusId={focusId}&city={city}&date={date}",
                                     arguments = listOf(
                                         navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null },
                                         navArgument("city") { type = NavType.StringType; nullable = true; defaultValue = null },
@@ -124,7 +130,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         initialStartDate = date
                                     )
                                 }
-                                composable(Routes.AI) {
+                                composable(Routes.AI_ROOT) {
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
                                         onBack = {
@@ -132,18 +138,27 @@ class WeatherPremiumActivity : ComponentActivity() {
                                             navController.popBackStack()
                                         },
                                         onNavigateToTravelCreate = { city, date ->
-                                            navController.navigate("${Routes.CALENDAR}?focusId=NEW&city=$city&date=$date")
+                                            navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")
                                         }
                                     )
                                 }
-                                composable(Routes.PROFILE) {
+                                composable(Routes.PROFILE_ROOT) {
                                     ProfileScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
                                         onNavigateToAiHistory = { navController.navigate(Routes.AI_HISTORY) },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToTravels = { navController.navigate(Routes.CALENDAR) }
+                                        onNavigateToTravels = {
+                                            val startDestId = navController.graph.findStartDestination().id
+                                            navController.navigate(Routes.CALENDAR_ROOT) {
+                                                popUpTo(startDestId) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
                                     )
                                 }
                                 composable(Routes.CITIES) {
@@ -153,7 +168,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToDetail = { id ->
-                                            navController.navigate("ai_history_detail/$id")
+                                            navController.navigate(Routes.AI_HISTORY_DETAIL.replace("{itemId}", id))
                                         }
                                     )
                                 }
@@ -184,7 +199,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 }
                                             } catch (e: Exception) {
                                                 android.util.Log.e("Nav", "Failed to navigate to $screen", e)
-                                                navController.navigate(Routes.WEATHER) {
+                                                navController.navigate(Routes.WEATHER_ROOT) {
                                                     launchSingleTop = true
                                                 }
                                             }
@@ -194,6 +209,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                             }
                         }
                     }
+
                 }
             }
         }

@@ -592,7 +592,13 @@ fun AiChatScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             HavamaniaTopBar(
                 title = config?.name ?: "HAVAMANIA ASİSTAN",
-                onBack = onBack,
+                onBack = {
+                    if (messages.isNotEmpty()) {
+                        viewModel.resetChat()
+                    } else {
+                        onBack()
+                    }
+                },
                 // ... rest of the TopBar logic ...
                 actions = {
                     if (messages.isNotEmpty()) {
