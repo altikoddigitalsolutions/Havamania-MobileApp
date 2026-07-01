@@ -277,8 +277,11 @@ fun PastTravelDetailDialog(
     viewModel: TravelViewModel = viewModel(),
     onDismiss: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tone by remember { com.havamania.ui.theme.ThemeManager.getAssistantTone(context) }.collectAsState(initial = AssistantTone.DENGELI)
+
     val themeColors = HavamaniaTheme.colors
-    val summary = remember(plan) { TravelAiHelper.generateHistorySummary(plan) }
+    val summary = remember(plan, tone) { TravelAiHelper.generateHistorySummary(plan, tone) }
 
     var userNote by remember { mutableStateOf(plan.userNote ?: "") }
     var userRating by remember { mutableIntStateOf(plan.userRating ?: 0) }

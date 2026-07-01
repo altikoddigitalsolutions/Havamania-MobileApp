@@ -137,16 +137,16 @@ export function getWeatherIcon(code: number): string {
 }
 
 export function getWeatherLabel(code: number): string {
-  if (code === 0) return 'Güneşli';
-  if (code === 1) return 'Çoğunlukla Güneşli';
-  if (code === 2) return 'Parçalı Bulutlu';
-  if (code === 3) return 'Bulutlu';
-  if (code === 45 || code === 48) return 'Sisli';
-  if (code >= 51 && code <= 67) return 'Sağanak Yağış';
-  if (code >= 71 && code <= 77) return 'Kar Yağışlı';
-  if (code >= 80 && code <= 82) return 'Sağanak Yağış';
-  if (code >= 95) return 'Gök Gürültülü Sağanak';
-  return 'Güneşli';
+  if (code === 0) return "Güneşli";
+  if (code === 1 || code === 2) return "Az Bulutlu";
+  if (code === 3) return "Parçalı Bulutlu";
+  if (code === 45 || code === 48) return "Sisli";
+  if (code >= 51 && code <= 57) return "Çiseleyen Yağmur";
+  if (code >= 61 && code <= 67) return "Yağmurlu";
+  if (code >= 80 && code <= 82) return "Sağanak Yağış";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "Karlı";
+  if (code >= 95 && code <= 99) return "Fırtınalı";
+  return "Güneşli";
 }
 
 export function formatHour(isoTime: string): string {
@@ -158,15 +158,9 @@ export function formatHour(isoTime: string): string {
 
 export function formatDayShort(isoDate: string): string {
   const date = new Date(isoDate + 'T12:00:00');
-  const lang = i18next.language;
-  const day = date.getDate();
-  const monthNamesTr = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-  const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-  if (lang === 'tr') {
-    return `${day} ${monthNamesTr[date.getMonth()]}`;
-  }
-  return `${day} ${monthNamesEn[date.getMonth()]}`;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}`;
 }
 
 export function getDayName(isoDate: string): string {

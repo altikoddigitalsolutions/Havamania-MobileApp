@@ -157,7 +157,17 @@ object TravelAiHelper {
                         else -> "Hava uygun ($maxTemp°, $cond)."
                     }
                 }
-                else -> { // DENGELİ ve DETAYLI_UZMAN (Uzman modunda AI Chat zaten detaylandırıyor, burası kart özetidir)
+                AssistantTone.DETAYLI_UZMAN -> {
+                    when {
+                        code >= 95 -> "Troposferik instabilite: Fırtına olasılığı mevcuttur. Rüzgar vektörü $windText seviyesindedir."
+                        code >= 80 -> "Presipitasyon zirvesi: Kuvvetli sağanak geçişleri öngörülmektedir. Termal konfor düşük."
+                        precip > 60 -> "Atmosferik nem doygunluğu: $formattedPrecip olasılıkla yağış beklenmektedir. Görüş mesafesi etkilenebilir."
+                        maxTemp > 30 -> "Termal anomali: $maxTemp° sıcaklık ve yüksek UV radyasyonu mevcuttur. Hidrasyon kritiktir."
+                        maxTemp < 10 -> "Hipotermi riski: Sıcaklık $maxTemp°C civarındadır. İzolasyon sağlayan katmanlar önerilir."
+                        else -> "Meteorolojik stabilite: Hava $maxTemp°C ve $cond durumdadır. Aktivite parametreleri için ideal."
+                    }
+                }
+                else -> { // DENGELİ
                     when {
                         code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Rüzgar $windText hızına ulaşabilir. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
                         code >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
@@ -207,76 +217,75 @@ object TravelAiHelper {
         return CITY_DATA.entries.find { normalizedCity.contains(it.key) }?.value?.description ?: "Keşfedilmeyi bekleyen harika bir rota"
     }
 
-    fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot): String {
+    fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot, tone: AssistantTone = AssistantTone.DENGELI): String {
         val changes = mutableListOf<String>()
 
-        // 1. Skor Karşılaştırması (Skor farkı >= 5 puan)
+        // Helper to format based on tone
+        fun formatDiff(text: String, samimi: String, resmi: String, kisa: String, uzman: String): String {
+            return when(tone) {
+                AssistantTone.SAMIMI -> samimi
+                AssistantTone.RESMI -> resmi
+                AssistantTone.KISA_NET -> kisa
+                AssistantTone.DETAYLI_UZMAN -> uzman
+                else -> text
+            }
+        }
+
+        // 1. Skor Karşılaştırması
         if (old.travelScore != null && new.travelScore != null) {
             val scoreDiff = new.travelScore - old.travelScore
             if (Math.abs(scoreDiff) >= 5) {
                 if (scoreDiff > 0) {
-                    changes.add("Seyahat uygunluk skoru %${old.travelScore}'den %${new.travelScore}'e yükseldi, koşullar iyileşiyor.")
+                    changes.add(formatDiff(
+                        "Seyahat skoru iyileşiyor.",
+                        "Seyahat şansın artıyor canım, koşullar daha iyi!",
+                        "Seyahat uygunluk katsayısı pozitif yönde güncellenmiştir.",
+                        "Skor arttı.",
+                        "Termal stabilite indeksi %${old.travelScore}'den %${new.travelScore}'e yükselerek seyahat optimizasyonunu artırmıştır."
+                    ))
                 } else {
-                    changes.add("Seyahat uygunluk skoru %${old.travelScore}'den %${new.travelScore}'e düştü. Planlarını tekrar gözden geçirmek isteyebilirsin.")
+                    changes.add(formatDiff(
+                        "Seyahat skoru düşüyor.",
+                        "Hava biraz bozuyor sanki, planlarına dikkat et tatlım.",
+                        "Meteorolojik riskler nedeniyle seyahat skoru düşürülmüştür.",
+                        "Skor düştü.",
+                        "Atmosferik perturbasyonlar nedeniyle seyahat skoru %${new.travelScore}'e gerilemiştir."
+                    ))
                 }
             }
         }
 
-        // 2. Yağış Karşılaştırması (Yağış farkı >= %10)
+        // 2. Yağış Karşılaştırması
         val oldPrecip = old.precipitationProbability ?: 0
         val newPrecip = new.precipitationProbability ?: 0
         if (Math.abs(newPrecip - oldPrecip) >= 10) {
             if (newPrecip > oldPrecip) {
-                changes.add("Dünkü analizde yağış olasılığı %$oldPrecip görünüyordu, bugün %$newPrecip'e yükseldi. Yağmur riski artmış.")
+                changes.add(formatDiff(
+                    "Yağmur riski arttı.",
+                    "Daha çok yağmur yağacak gibi, şemsiyeni hazırla canım.",
+                    "Yağış olasılığı artış göstermiştir.",
+                    "Yağış arttı.",
+                    "Presipitasyon gradyanı %$oldPrecip'ten %$newPrecip'e yükselmiştir."
+                ))
             } else {
-                changes.add("Yağış ihtimali %$oldPrecip'ten %$newPrecip'e geriledi, daha açık bir hava bekleniyor.")
-            }
-        }
-
-        // 3. Sıcaklık Karşılaştırması (Sıcaklık farkı >= 2°C)
-        if (old.maxTemp != null && new.maxTemp != null) {
-            val tempDiff = new.maxTemp - old.maxTemp
-            if (Math.abs(tempDiff) >= 2.0) {
-                if (tempDiff > 0) {
-                    changes.add("Önceki tahminde maksimum sıcaklık ${old.maxTemp.toInt()}°C idi, şimdi ${new.maxTemp.toInt()}°C. Daha sıcak bir gün bekleniyor.")
-                } else {
-                    changes.add("Maksimum sıcaklık ${old.maxTemp.toInt()}°C'den ${new.maxTemp.toInt()}°C'ye düştü, hava serinliyor.")
-                }
-            }
-        }
-
-        // 4. Rüzgar Karşılaştırması (Rüzgar farkı >= 8 km/sa)
-        if (old.windSpeed != null && new.windSpeed != null) {
-            val windDiff = new.windSpeed - old.windSpeed
-            if (Math.abs(windDiff) >= 8.0) {
-                if (windDiff > 0) {
-                    changes.add("Rüzgar beklentisi ${old.windSpeed.toInt()} km/sa'den ${new.windSpeed.toInt()} km/sa'ye çıktı, açık hava planları için dikkatli olunmalı.")
-                } else {
-                    changes.add("Rüzgar hızı azalıyor (${old.windSpeed.toInt()} → ${new.windSpeed.toInt()} km/sa), daha sakin bir hava hakim olacak.")
-                }
-            }
-        }
-
-        // 5. Hissedilen Sıcaklık (Fark >= 2°C)
-        if (old.feelsLike != null && new.feelsLike != null) {
-            val feelsDiff = new.feelsLike - old.feelsLike
-            if (Math.abs(feelsDiff) >= 2.0) {
-                if (feelsDiff > 0) {
-                    changes.add("Hissedilen sıcaklık artışta (${old.feelsLike.toInt()}°C → ${new.feelsLike.toInt()}°C).")
-                } else {
-                    changes.add("Hava daha serin hissedilecek (${old.feelsLike.toInt()}°C → ${new.feelsLike.toInt()}°C).")
-                }
+                changes.add(formatDiff(
+                    "Yağış ihtimali azaldı.",
+                    "Hava açıyor canım, yağmur ihtimali düştü!",
+                    "Yağış beklentisi minimize edilmiştir.",
+                    "Yağış azaldı.",
+                    "Bulut kapalılık oranı ve presipitasyon riski azalma eğilimindedir."
+                ))
             }
         }
 
         return when {
-            changes.isEmpty() -> "Genel hava koşulları önceki analize göre benzer seyrediyor, büyük bir değişiklik yok."
+            changes.isEmpty() -> formatDiff("Büyük bir değişiklik yok.", "Hava aynı canım, sürpriz yok.", "Hava koşulları stabil seyretmektedir.", "Değişim yok.", "Meteorolojik parametrelerde anlamlı bir sapma gözlemlenmemiştir.")
             changes.size == 1 -> changes.first()
-            else -> "Önceki analize göre bazı değişiklikler var: " + changes.joinToString(" ")
+            else -> changes.joinToString(" ")
         }
     }
 
-    fun generateHistorySummary(plan: TravelPlan): TravelHistorySummary {
+    fun generateHistorySummary(plan: TravelPlan, tone: AssistantTone = AssistantTone.DENGELI): TravelHistorySummary {
         val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
         val snapshot = plan.lastForecastSnapshot
 
@@ -295,16 +304,22 @@ object TravelAiHelper {
 
         val summaryText = if (hasData) {
             val weatherTone = when {
-                rainy > (duration / 2) -> "Hava çoğunlukla yağışlı geçmiş"
-                sunny > (duration * 0.7) -> "Pırıl pırıl, güneşli bir gökyüzü eşlik etmiş"
-                avgT ?: 0 > 28 -> "Sıcak ve tam bir yaz havası hakimmiş"
+                rainy > (duration / 2) -> if (tone == AssistantTone.SAMIMI) "Hava baya yağışlı geçmiş canım" else "Hava çoğunlukla yağışlı geçmiş"
+                sunny > (duration * 0.7) -> if (tone == AssistantTone.SAMIMI) "Pırıl pırıl bir güneş sana eşlik etmiş" else "Pırıl pırıl, güneşli bir gökyüzü eşlik etmiş"
+                avgT ?: 0 > 28 -> if (tone == AssistantTone.SAMIMI) "Sıcaklıklar baya tavan yapmış" else "Sıcak ve tam bir yaz havası hakimmiş"
                 else -> "Hava genel olarak dengeli görünmüş"
             }
-            val comfortNote = if (rainy == 0) "Yağışlı gün sayısı düşük olduğu için açık hava planları açısından rahat bir dönem olmuş." else "Yağışa rağmen seyahat temposu korunmuş gibi görünüyor."
+            val comfortNote = if (rainy == 0) "Yağışsız harika bir dönem olmuş." else "Yağışa rağmen keyfin yerinde gibi görünüyor."
 
-            "${plan.city} seyahatin $duration gün sürdü. $weatherTone; sıcaklık çok bunaltıcı seviyeye çıkmamış. $comfortNote"
+            when(tone) {
+                AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. $weatherTone. $comfortNote"
+                AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. $weatherTone. Konfor endeksi stabil gözlemlenmiştir."
+                AssistantTone.KISA_NET -> "$duration günlük $plan.city turu bitti. $weatherTone."
+                AssistantTone.DETAYLI_UZMAN -> "Arşiv Analizi: $duration günlük $plan.city destinasyon verileri, $weatherTone durumunu teyit etmektedir. Termal konfor değerleri optimizasyon sınırları dahilinde kalmıştır."
+                else -> "${plan.city} seyahatin $duration gün sürdü. $weatherTone. $comfortNote"
+            }
         } else {
-            "${plan.city} seyahatin tamamlandı. Bu döneme ait detaylı hava verisi geçmiş kayıtlarda bulunamadı ancak seyahat notlarını aşağıda saklayabilirsin."
+            "${plan.city} seyahatin tamamlandı."
         }
 
         val packingAdvice = when {

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.havamania.ui.theme.AssistantTone
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -47,8 +48,11 @@ class WeatherViewModel(
     private val _todayRecommendation = MutableStateFlow<HavamaniaRecommendation?>(null)
     val todayRecommendation: StateFlow<HavamaniaRecommendation?> = _todayRecommendation.asStateFlow()
 
-    private var currentUserInterests: Set<String> = emptySet()
+    private val _assistantTone = MutableStateFlow<AssistantTone>(AssistantTone.DENGELI)
+    val assistantTone: StateFlow<AssistantTone> = _assistantTone.asStateFlow()
 
+    private var currentUserInterests: Set<String> = emptySet()
+    private var currentUserAboutMe: String? = null
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -74,6 +78,15 @@ class WeatherViewModel(
     private var lastLon = 27.8826
 
     init {
+        viewModelScope.launch {
+            try {
+                com.havamania.ui.theme.ThemeManager.getAssistantTone(getApplication()).collect { tone ->
+                    _assistantTone.value = tone
+                    updateRecommendation()
+                }
+            } catch (e: Exception) {}
+        }
+
         viewModelScope.launch {
             try {
                 com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).collect { defaultCity ->
@@ -190,6 +203,9 @@ class WeatherViewModel(
         if (interests != null) {
             currentUserInterests = interests
         }
+        if (aboutMe != null) {
+            currentUserAboutMe = aboutMe
+        }
 
         val currentUiState = _uiState.value
         if (currentUiState is WeatherUiState.Success) {
@@ -199,7 +215,8 @@ class WeatherViewModel(
                 _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
                     weatherData = weather,
                     userInterests = currentUserInterests,
-                    aboutMe = aboutMe
+                    aboutMe = currentUserAboutMe,
+                    tone = _assistantTone.value
                 )
             }
         }

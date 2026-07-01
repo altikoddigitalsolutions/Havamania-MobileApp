@@ -177,7 +177,11 @@ fun WeatherSuccessContent(
             val sunrise = try { LocalTime.parse(data.sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
             val sunset = try { LocalTime.parse(data.sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
             val now = if (selectedHourlyWeather != null) {
-                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { java.time.LocalDateTime.now().with(displayTime) }
+                try {
+                    java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime)
+                } catch (e: Exception) {
+                    displayTime.atDate(java.time.LocalDate.now())
+                }
             } else {
                 java.time.LocalDateTime.now()
             }
@@ -185,10 +189,21 @@ fun WeatherSuccessContent(
         }
     }
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) { derivedStateOf { selectedHourlyWeather?.temp ?: selectedDailyForecast?.let { "${it.minTemp}° / ${it.maxTemp}°" } ?: data.temperature } }
-    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast, displayPhase) {
+    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf {
             val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
-            WeatherMapper.getDisplayCondition(code, displayPhase)
+            val sunrise = try { LocalTime.parse(data.sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
+            val sunset = try { LocalTime.parse(data.sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+            val now = if (selectedHourlyWeather != null) {
+                try {
+                    java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime)
+                } catch (e: Exception) {
+                    displayTime.atDate(java.time.LocalDate.now())
+                }
+            } else {
+                java.time.LocalDateTime.now()
+            }
+            WeatherUtils.getWeatherDisplayName(code, now, sunrise, sunset)
         }
     }
     val displayWeatherCode by remember(data, selectedHourlyWeather, selectedDailyForecast) { derivedStateOf { selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode } }

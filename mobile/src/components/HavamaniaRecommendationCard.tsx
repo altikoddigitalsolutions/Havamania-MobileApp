@@ -18,22 +18,28 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
     const rain = weather.precipitation_probability ?? 0;
     const wind = weather.wind_speed ?? 0;
     const uv = weather.uv_index ?? 0;
-    const hour = new Date().getHours();
+    const isDay = weather.is_day;
+    const city = "Balıkesir"; // Generic city or take from props if available
 
     let summary = "";
     const points = [];
 
-    // --- Dynamic Summaries ---
-    if (temp > 32) summary = "Bugün ekstrem sıcaklıklar bekleniyor, gölgede kalmaya çalış.";
-    else if (temp < 2) summary = "Hava buz kesiyor! Dışarı çıkarken en kalın giysilerini seç.";
-    else if (rain > 60) summary = "Kuvvetli yağış uyarısı! Bugün iç mekan aktiviteleri daha mantıklı.";
-    else if (uv > 8) summary = "Çok yüksek UV indeksi! Güneş koruyucu olmadan dışarı çıkma.";
-    else if (cond.includes("güneş")) summary = "Işıl ışıl bir gün! Enerjini güneşten alabilirsin.";
-    else if (cond.includes("bulut")) summary = "Gökyüzü biraz mahzun ama hava aktiviteler için hala uygun.";
-    else summary = `Bugün hava ${weather.description} ve ${temp}°C civarında seyrediyor.`;
+    // --- Dynamic Summaries based on Day/Night ---
+    if (isDay) {
+        if (temp > 32) summary = "Bugün ekstrem sıcaklıklar bekleniyor, gölgede kalmaya çalış.";
+        else if (temp < 2) summary = "Hava buz kesiyor! Dışarı çıkarken en kalın giysilerini seç.";
+        else if (rain > 60) summary = "Kuvvetli yağış uyarısı! Bugün iç mekan aktiviteleri daha mantıklı.";
+        else if (uv > 8) summary = "Çok yüksek UV indeksi! Güneş koruyucu olmadan dışarı çıkma.";
+        else if (cond.includes("güneş")) summary = "Işıl ışıl bir gün! Enerjini güneşten alabilirsin.";
+        else summary = `Yaz havası ${city}'de etkisini sürdürüyor; dışarı çıkmak için uygun bir zaman. ${temp}°C civarında, günün tadını çıkarabilirsin.`;
+    } else {
+        summary = `Açık ve sakin bir gece ${city}'de etkisini sürdürüyor. ${temp}°C civarında, gece serinliğini dikkate alabilirsin.`;
+        if (rain > 40) summary = "Yağmurlu bir gece bizi bekliyor, dışarı çıkarken hazırlıklı ol.";
+        if (temp < 5) summary = "Oldukça soğuk bir gece, ısınmaya özen göster.";
+    }
 
-    // --- Business Rules Context (Daily Life Focus) ---
-    if (uv > 5 && hour >= 10 && hour <= 17) {
+    // --- Point Recommendations ---
+    if (isDay && uv > 5) {
       points.push("Güneş gözlüğü ve koruyucu krem kullanımını ihmal etme.");
     }
 
@@ -47,7 +53,7 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
       points.push("Sert rüzgar var, açık alanlarda şapka ve uçuşan eşyalara dikkat.");
     }
 
-    if (temp >= 17 && temp <= 24 && rain < 15) {
+    if (isDay && temp >= 17 && temp <= 24 && rain < 15) {
       points.push("Egzersiz veya park yürüyüşü için ideal şartlar mevcut.");
     }
 
@@ -55,14 +61,15 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
       points.push("Hava biraz serin, bir hırka veya hafif ceket seni koruyacaktır.");
     }
 
-    if (cond.includes("sis")) {
-      points.push("Puslu hava görüşü kısıtlıyor, ulaşımda ekstra zaman ayır.");
-    }
-
     // Fallback logic to ensure at least 2 points
     if (points.length < 2) {
-        if (temp > 22) points.push("Sıvı tüketimini artırmayı ve hafif beslenmeyi unutma.");
-        else points.push("Günün tadını çıkarmak için hava durumuna uygun plan yap.");
+        if (isDay) {
+            if (temp > 22) points.push("Sıvı tüketimini artırmayı ve hafif beslenmeyi unutma.");
+            else points.push("Günün tadını çıkarmak için hava durumuna uygun plan yap.");
+        } else {
+            points.push("Yarınki planların için hava tahminlerini kontrol etmeyi unutma.");
+            points.push("Gece boyu dinlenmek ve yenilenmek için uygun bir atmosfer.");
+        }
     }
 
     return { summary, points: points.slice(0, 3) };

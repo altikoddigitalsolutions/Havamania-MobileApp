@@ -195,78 +195,53 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val activeTravels = _activeTravels.value
         val currentWeatherData = _weatherData.value
         val questionCity = AiIntentParser.detectCity(userQuestion)
+        val intent = AiIntentParser.detectIntent(userQuestion)
 
-        // City selection logic
-        val cityToUse = when {
-            questionCity != null -> {
-                contextCity = questionCity
-                questionCity
+        // 1. Current Location Info
+        val currentCity = currentWeatherData?.cityName ?: "Bilinmiyor"
+        val currentInfo = if (currentWeatherData != null) {
+            """
+            MEVCUT KONUM BİLGİSİ:
+            Şehir: $currentCity
+            Hava Durumu: ${currentWeatherData.condition}
+            Sıcaklık: ${currentWeatherData.temperature} (Hissedilen: ${currentWeatherData.feelsLike})
+            Yağış İhtimali: ${WeatherUtils.formatRainProbability(currentWeatherData.precipitationProbability)}
+            Rüzgar: ${currentWeatherData.windSpeed ?: "Bilinmiyor"} km/sa
+            """.trimIndent()
+        } else "MEVCUT KONUM BİLGİSİ: Şu an ulaşılamıyor."
+
+        // 2. Travel Context Info (Calendar)
+        val travelInfo = if (activeTravels.isNotEmpty()) {
+            "TAKVİMDEKİ PLANLANMIŞ SEYAHATLER:\n" + activeTravels.joinToString("\n") {
+                "- ${it.city} (Tarih: ${it.startDate} ile ${it.endDate} arası, Tip: ${it.tripType.label}, Hava: ${it.lastForecastSnapshot?.conditionSummary ?: "Henüz analiz edilmedi"})"
             }
-            activeTravels.isNotEmpty() -> activeTravels.first().city
-            contextCity != null -> contextCity
-            currentWeatherData != null -> currentWeatherData.cityName
-            else -> null
-        }
+        } else "TAKVİMDEKİ PLANLANMIŞ SEYAHATLER: Kayıtlı aktif bir seyahat planı bulunmuyor."
 
-        if (cityToUse == null) return "Hava durumu verisi şu an kullanılamıyor."
+        // 3. Selection of specific city data if needed
+        val targetCity = questionCity ?: if (intent == AiIntent.TRAVEL && activeTravels.isNotEmpty()) activeTravels.first().city else null
 
-        // If cityToUse is different from currentWeatherData, we might not have full details,
-        // but for now let's use what we have or generic info.
-        val data = if (currentWeatherData != null && AiIntentParser.normalizeTurkish(currentWeatherData.cityName) == AiIntentParser.normalizeTurkish(cityToUse)) {
-            currentWeatherData
-        } else {
-            // If it's a travel city, look for its snapshot in activeTravels
-            val travelPlan = activeTravels.find { AiIntentParser.normalizeTurkish(it.city) == AiIntentParser.normalizeTurkish(cityToUse) }
-            val snapshot = travelPlan?.lastForecastSnapshot
-            if (snapshot != null) {
-                WeatherData(
-                    cityName = cityToUse,
-                    temperature = "${snapshot.maxTemp?.toInt() ?: 20}°",
-                    condition = snapshot.conditionSummary ?: "Açık",
-                    feelsLike = "${snapshot.feelsLike?.toInt() ?: snapshot.maxTemp?.toInt() ?: 20}°",
-                    uvIndex = snapshot.uvIndex?.toInt(),
-                    windSpeed = snapshot.windSpeed,
-                    precipitationProbability = snapshot.precipitationProbability,
-                    humidity = null
-                )
-            } else {
-                WeatherData(cityName = cityToUse)
-            }
-        }
-
-        val temp = data.temperature
-        val feelsLike = data.feelsLike
-        val cond = data.condition
-        val city = data.cityName
-        val humidity = WeatherUtils.formatRainProbability(data.humidity)
-        val windSpeed = data.windSpeed ?: "Bilinmiyor"
-        val windDir = WeatherUtils.getWindDirectionFromDegrees(data.windDirectionDegrees)
-        val uv = data.uvIndex ?: "Bilinmiyor"
-        val precip = WeatherUtils.formatRainProbability(data.precipitationProbability)
-
-        val travelContext = if (activeTravels.isNotEmpty()) {
-            "AKTİF SEYAHATLER:\n" + activeTravels.joinToString("\n") {
-                "- ${it.city} (${it.startDate} - ${it.endDate}, Tip: ${it.tripType.label})"
-            }
+        val detailedCityData = if (targetCity != null) {
+             val travelPlan = activeTravels.find { AiIntentParser.normalizeTurkish(it.city) == AiIntentParser.normalizeTurkish(targetCity) }
+             val snapshot = travelPlan?.lastForecastSnapshot
+             if (snapshot != null) {
+                 "\nSORULAN ŞEHİR ANALİZİ ($targetCity):\n" +
+                 "Beklenen Hava: ${snapshot.conditionSummary}, Sıcaklık: ${snapshot.maxTemp?.toInt()}°C, Yağış Riski: %${snapshot.precipitationProbability ?: 0}"
+             } else ""
         } else ""
 
         return """
-            BAĞLAM (HAVA & SEYAHAT):
-            Şehir: $city
-            🌡️ Sıcaklık: $temp (Hissedilen: $feelsLike)
-            💨 Rüzgar: $windSpeed km/sa ($windDir)
-            ☔ Yağış İhtimali: $precip (Nem: $humidity)
-            ☀️ UV İndeksi: $uv
+            $currentInfo
 
-            $travelContext
+            $travelInfo
+            $detailedCityData
 
-            TEMEL KURALLAR:
-            1. Markdown formatı (**, #, _) KESİNLİKLE YASAK. Sadece düz metin.
-            2. Şehir uydurma. Verilen '$city' dışındaki şehirler hakkında (kullanıcı sormadıkça) konuşma.
-            3. Kullanıcı valiz/yanına ne almalı soruyorsa (PACKING intent), sadece liste ver.
-            4. Sadece GENERAL_WEATHER intentinde 'METEOROLOJİK ANALİZ' başlığını kullan.
-            5. Soruya odaklan. Gereksiz giriş cümleleri kurma.
-            6. ASLA SÜREÇTEN BAHSETME (örn: "analiz ediliyor", "planlama yapılıyor", "hesaplanıyor"). Doğrudan SONUCU göster.
+            KRİTİK KURALLAR:
+            1. 'MEVCUT KONUM' ve 'SEYAHAT DESTİNASYONU' ayrımını kesin yap.
+            2. Eğer kullanıcı 'seyahatim', 'gideceğim yer', 'tatilim' gibi ifadeler kullanıyorsa SADECE 'TAKVİMDEKİ PLANLANMIŞ SEYAHATLER' bilgisini kullan.
+            3. Eğer Takvim boşsa ve kullanıcı seyahati hakkında soru soruyorsa: "Henüz planlanmış bir seyahatin bulunmuyor. İstersen yeni bir seyahat planlayabiliriz." cevabını ver.
+            4. Mevcut konumu (örn: $currentCity) asla bir seyahat destinasyonuymuş gibi ('$currentCity seyahatiniz' şeklinde) sunma.
+            5. Kullanıcı spesifik bir şehri sormadıkça ve takvimde o şehre seyahat yoksa, mevcut konum hakkında seyahat diliyle konuşma.
+            6. Markdown yasak.
         """.trimIndent()
     }
 

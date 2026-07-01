@@ -332,41 +332,26 @@ object WeatherMapper {
         else -> Icons.Rounded.Cloud
     }
 
-    fun getWeatherCondition(code: Int): String = when (code) {
-        0 -> "Güneşli"; 1 -> "Çoğunlukla Güneşli"; 2 -> "Parçalı Bulutlu"
-        3 -> "Bulutlu"; 45, 48 -> "Sisli"; 51, 53, 55 -> "Hafif Yağmurlu"
-        61, 63, 65 -> "Yağmurlu"; 71, 73, 75 -> "Karlı"
-        80, 81, 82 -> "Sağanak Yağış"; 95, 96, 99 -> "Fırtınalı"; else -> "Bulutlu"
+    fun getWeatherCondition(code: Int): String {
+        return WeatherUtils.getWeatherDisplayName(
+            weatherCode = code,
+            currentTime = LocalDateTime.now(),
+            sunrise = null, // Default behavior
+            sunset = null
+        )
     }
 
     /**
      * UI ekranında görünecek condition metnini günün saatine göre normalize eder.
      * Gece 22:00'da "Güneşli" yerine "Açık Gece" yazmasını sağlar.
      */
-    fun getDisplayCondition(code: Int, phase: DayPhase): String {
-        val base = getWeatherCondition(code)
-
-        return when (phase) {
-            DayPhase.NIGHT -> {
-                when (code) {
-                    0, 1 -> "Açık Gece"
-                    2 -> "Parçalı Bulutlu Gece"
-                    3 -> "Bulutlu Gece"
-                    45, 48 -> "Sisli Gece"
-                    51, 53, 55, 61, 63, 65, 80, 81, 82 -> "Yağmurlu Gece"
-                    71, 73, 75, 77, 85, 86 -> "Karlı Gece"
-                    95, 96, 99 -> "Fırtınalı Gece"
-                    else -> "$base Gece"
-                }
-            }
-            DayPhase.EVENING -> {
-                if (code == 0 || code == 1) "Açık Akşam" else "$base Akşam"
-            }
-            DayPhase.MORNING -> {
-                if (code == 0 || code == 1) "Açık Sabah" else "$base Sabah"
-            }
-            DayPhase.DAY -> base
-        }
+    fun getDisplayCondition(code: Int, phase: DayPhase, sunrise: LocalTime? = null, sunset: LocalTime? = null, time: LocalDateTime? = null): String {
+        return WeatherUtils.getWeatherDisplayName(
+            weatherCode = code,
+            currentTime = time ?: LocalDateTime.now(),
+            sunrise = sunrise,
+            sunset = sunset
+        )
     }
 
     fun getDayPhase(now: LocalDateTime, sunrise: LocalTime, sunset: LocalTime): DayPhase {

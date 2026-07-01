@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
 import kotlinx.coroutines.delay
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
 data class DailyForecastStyle(
     val accentColor: Color,
     val barGradient: List<Color>,
@@ -298,7 +302,14 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
                 color = if (isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.9f)
             )
             Text(
-                text = if (data.isToday) "Şimdi" else data.date.split("-").drop(1).joinToString("/"),
+                text = if (data.isToday) "Şimdi" else {
+                    try {
+                        val dateObj = LocalDate.parse(data.date)
+                        dateObj.format(DateTimeFormatter.ofPattern("dd/MM", Locale("tr", "TR")))
+                    } catch (e: Exception) {
+                        data.date.split("-").let { if (it.size >= 3) "${it[2]}/${it[1]}" else data.date }
+                    }
+                },
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Medium,
                     fontSize = 11.sp

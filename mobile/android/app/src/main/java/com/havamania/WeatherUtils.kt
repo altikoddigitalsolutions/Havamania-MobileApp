@@ -1,8 +1,60 @@
 package com.havamania
 
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.util.Locale
 
 object WeatherUtils {
+
+    /**
+     * Hava durumuna göre sözel açıklama döner.
+     * Gece/Gündüz ayrımını yapar ve yasaklı ifadeleri (Güneşli Açık Gece vb.) engeller.
+     */
+    fun getWeatherDisplayName(
+        weatherCode: Int,
+        currentTime: LocalDateTime,
+        sunrise: LocalTime?,
+        sunset: LocalTime?
+    ): String {
+        val time = currentTime.toLocalTime()
+
+        val isNight = if (sunrise != null && sunset != null) {
+            time.isBefore(sunrise) || time.isAfter(sunset)
+        } else {
+            time.hour < 6 || time.hour >= 20
+        }
+
+        return when {
+            weatherCode == 0 && isNight -> "Açık Gece"
+            weatherCode == 0 -> "Güneşli"
+
+            weatherCode in 1..2 && isNight -> "Az Bulutlu Gece"
+            weatherCode in 1..2 -> "Az Bulutlu"
+
+            weatherCode == 3 && isNight -> "Bulutlu Gece"
+            weatherCode == 3 -> "Bulutlu"
+
+            weatherCode in listOf(45, 48) -> "Sisli"
+
+            weatherCode in listOf(51, 53, 55, 56, 57) && isNight -> "Çiseleyen Yağmur"
+            weatherCode in listOf(51, 53, 55, 56, 57) -> "Çiseleyen Yağmur"
+
+            weatherCode in listOf(61, 63, 65, 66, 67) && isNight -> "Yağmurlu Gece"
+            weatherCode in listOf(61, 63, 65, 66, 67) -> "Yağmurlu"
+
+            weatherCode in listOf(80, 81, 82) && isNight -> "Sağanak Yağışlı Gece"
+            weatherCode in listOf(80, 81, 82) -> "Sağanak Yağış"
+
+            weatherCode in listOf(95, 96, 99) && isNight -> "Fırtınalı Gece"
+            weatherCode in listOf(95, 96, 99) -> "Fırtınalı"
+
+            weatherCode in listOf(71, 73, 75, 77, 85, 86) && isNight -> "Karlı Gece"
+            weatherCode in listOf(71, 73, 75, 77, 85, 86) -> "Karlı"
+
+            isNight -> "Gece"
+            else -> "Güneşli"
+        }
+    }
 
     /**
      * Yağış ihtimali formatlamak için merkezi fonksiyon.

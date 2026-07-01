@@ -415,33 +415,18 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
         // Karşılaştırma metni oluştur (En önemli farklar)
         val comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null) {
-            TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot)
+            TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot, tone)
         } else {
-            "Bu seyahat için ilk analiz oluşturuldu."
+            when(tone) {
+                AssistantTone.SAMIMI -> "Bu seyahat için ilk analizini hazırladım canım! ✨"
+                AssistantTone.RESMI -> "İlgili seyahat planı için ilk meteorolojik analiz oluşturulmuştur."
+                AssistantTone.KISA_NET -> "İlk analiz hazır."
+                AssistantTone.DETAYLI_UZMAN -> "Seyahat periyodu için başlangıç fazı atmosferik simülasyonu tamamlanmıştır."
+                else -> "Bu seyahat için ilk analiz oluşturuldu."
+            }
         }
 
-        val rainInfo = WeatherUtils.getPrecipitationRiskText(estimatedRainRisk, 0.0, snapshot?.weatherCode ?: 0)
-        val summaryText = if (snapshot != null) {
-             val cityNormalized = plan.city.trim()
-             val cond = snapshot.conditionSummary?.lowercase() ?: "açık"
-             val assistantTone = when {
-                 (snapshot.weatherCode ?: 0) >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek."
-                 (snapshot.weatherCode ?: 0) >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek."
-                 (estimatedRainRisk ?: 0) > 60 -> {
-                    val formatted = WeatherUtils.formatRainProbability(estimatedRainRisk)
-                    "$cityNormalized seyahatinde yanına mutlaka bir şemsiye almalısın, yağmur ihtimali $formatted."
-                 }
-                 (snapshot.maxTemp ?: 20.0) > 30 -> "$cityNormalized seni güneşli ve pırıl pırıl bir havayla karşılayacak, tam gezmelik!"
-                 (snapshot.maxTemp ?: 20.0) < 12 -> "$cityNormalized serin bir havayla seni bekliyor, valizine kalın bir şeyler eklemeyi unutma."
-                 else -> {
-                    val formatted = WeatherUtils.formatRainProbability(estimatedRainRisk)
-                    "$cityNormalized seyahatin için hava oldukça ideal ve $cond görünüyor, yağmur ihtimali $formatted."
-                 }
-             }
-             assistantTone
-        } else {
-            "Hava verisi sınırlı olsa da seyahatiniz için temel öneriler hazırlandı."
-        }
+        val summaryText = RecommendationEngine.generateTravelRecommendation(plan, snapshot, plan.lastForecastSnapshot, tone)
 
         val newAnalysis = TravelWeatherAnalysis(
             tripId = plan.id,

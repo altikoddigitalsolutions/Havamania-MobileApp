@@ -220,9 +220,10 @@ object WeatherHeroStyleManager {
         }
 
         val icon = when (themeType) {
-            WeatherThemeType.SUNNY, WeatherThemeType.MOSTLY_SUNNY -> if (dayPart == DayPhase.NIGHT) Icons.Rounded.NightsStay else Icons.Rounded.WbSunny
+            WeatherThemeType.SUNNY, WeatherThemeType.MOSTLY_SUNNY -> if (!isDaytime) Icons.Rounded.NightsStay else Icons.Rounded.WbSunny
             WeatherThemeType.RAINY -> Icons.Rounded.WaterDrop
-            WeatherThemeType.CLOUDY, WeatherThemeType.PARTLY_CLOUDY -> Icons.Rounded.Cloud
+            WeatherThemeType.CLOUDY -> Icons.Rounded.Cloud
+            WeatherThemeType.PARTLY_CLOUDY -> if (!isDaytime) Icons.Rounded.Cloud else Icons.Rounded.WbCloudy
             WeatherThemeType.SNOWY -> Icons.Rounded.AcUnit
             WeatherThemeType.STORMY -> Icons.Rounded.Thunderstorm
             WeatherThemeType.FOGGY -> Icons.Rounded.FilterDrama
@@ -256,7 +257,12 @@ object WeatherHeroStyleManager {
             else -> Color.White.copy(alpha = 0.75f)
         }
 
-        val displayTitle = buildWeatherTitle(weatherCode, dayPart)
+        val displayTitle = WeatherUtils.getWeatherDisplayName(
+            weatherCode = weatherCode,
+            currentTime = selectedTime.atDate(LocalDate.now()),
+            sunrise = sunrise,
+            sunset = sunset
+        )
 
         return HeroThemeSpec(
             themeType = themeType,
@@ -273,31 +279,6 @@ object WeatherHeroStyleManager {
             sunMoonSize = sunMoonSize,
             overlayAlpha = if (isDark) 0.15f else 0.08f
         )
-    }
-
-    private fun buildWeatherTitle(code: Int, dayPart: DayPhase): String {
-        val base = when (code) {
-            0 -> "Güneşli"
-            1 -> "Çoğunlukla Güneşli"
-            2 -> "Parçalı Bulutlu"
-            3 -> "Bulutlu"
-            45, 48 -> "Sisli"
-            51, 53, 55 -> "Hafif Yağmurlu"
-            61, 63, 65 -> "Yağmurlu"
-            80, 81, 82 -> "Sağanak Yağış"
-            71, 73, 75, 77, 85, 86 -> "Kar Yağışlı"
-            95, 96, 99 -> "Gök Gürültülü Sağanak"
-            else -> "Bulutlu"
-        }
-
-        val suffix = when (dayPart) {
-            DayPhase.MORNING -> if (code <= 1) "Açık Sabah" else "Sabah"
-            DayPhase.EVENING -> if (code <= 1) "Açık Akşam" else "Akşam"
-            DayPhase.NIGHT -> if (code <= 1) "Açık Gece" else "Gece"
-            else -> ""
-        }
-
-        return if (suffix.isEmpty() || base.contains(suffix)) base else "$base $suffix"
     }
 }
 
@@ -383,26 +364,21 @@ fun WeatherHeroCard(
 @Composable
 fun LiveBackgroundLayer(spec: HeroThemeSpec) {
     val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val move by infiniteTransition.animateFloat(
+    val bgShift by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 60f,
-        animationSpec = infiniteRepeatable(tween(40000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "bg_move"
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "bgShift"
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val sunCenter = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
 
-        // Premium Background Brush with Vignette Effect
-        val brush = Brush.radialGradient(
-            0.0f to spec.gradientColors[0],
-            0.6f to spec.gradientColors[1],
-            1.0f to spec.gradientColors.last().copy(alpha = 0.9f),
-            center = sunCenter,
-            radius = size.width * 1.8f
-        )
+        // Dynamic background shift
+        val shiftColor = Color.White.copy(alpha = 0.03f * bgShift)
 
-        drawRect(brush = brush)
+        drawRect(brush = Brush.verticalGradient(spec.gradientColors))
+        drawRect(color = shiftColor)
 
         // Night Sky - Deeper Milky Way / Nebula
         if (spec.dayPart == DayPhase.NIGHT) {
@@ -477,11 +453,15 @@ fun WeatherEffectLayer(spec: HeroThemeSpec, isAnimationEnabled: Boolean) {
 @Composable
 fun PremiumSunEffect(spec: HeroThemeSpec) {
     val infiniteTransition = rememberInfiniteTransition(label = "sun_fx")
-    val drift by infiniteTransition.animateFloat(0.98f, 1.02f, infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_drift")
-    val energy by infiniteTransition.animateFloat(1f, 1.05f, infiniteRepeatable(tween(12000, easing = SineEaseInOut), RepeatMode.Reverse), label = "sun_energy")
+    val energy by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.03f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "sun_energy"
+    )
 
     val coreColors = when (spec.dayPart) {
-        DayPhase.EVENING -> listOf(Color(0xFFFFCC80), Color(0xFFFF7043), Color(0xFFD84315)) // Hotter Evening Sun
+        DayPhase.EVENING -> listOf(Color(0xFFFFCC80), Color(0xFFFF7043), Color(0xFFD84315))
         DayPhase.MORNING -> listOf(Color(0xFFFFFDF0), Color(0xFFFFE0B2), Color(0xFFFFAB91))
         else -> listOf(Color(0xFFFFFFFF), Color(0xFFFFF3C4), Color(0xFFFCD34D))
     }
@@ -498,13 +478,7 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
         val r = 36.dp.toPx() * spec.sunMoonSize * energy
 
-        // 1. Lens Flare (Subtle)
-        if (spec.dayPart == DayPhase.DAY) {
-            val flareCenter = Offset(center.x - 100.dp.toPx(), center.y + 100.dp.toPx())
-            drawCircle(color = Color.White.copy(alpha = 0.02f), radius = 12.dp.toPx(), center = flareCenter)
-        }
-
-        // 2. Halo Effect (Softer, multi-layered)
+        //  Halo with energy pulse
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to Color.White.copy(alpha = 0.04f * energy),
@@ -517,10 +491,10 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
             radius = r * 6f
         )
 
-        // 3. Global Ambient Glow
+        // Global Ambient Glow
         drawCircle(
             brush = Brush.radialGradient(
-                0.0f to atmosphereColor.copy(0.12f * glowMultiplier),
+                0.0f to atmosphereColor.copy(0.12f * glowMultiplier * energy),
                 1.0f to Color.Transparent,
                 center = center,
                 radius = 300.dp.toPx()
@@ -529,19 +503,7 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
             radius = 300.dp.toPx()
         )
 
-        // 4. Bloom
-        drawCircle(
-            brush = Brush.radialGradient(
-                0.0f to coreColors[1].copy(0.35f * glowMultiplier),
-                1.0f to Color.Transparent,
-                center = center,
-                radius = r * 3.5f
-            ),
-            center = center,
-            radius = r * 3.5f
-        )
-
-        // 5. Sun Disk
+        // Sun Disk
         drawCircle(
             brush = Brush.radialGradient(
                 0.0f to coreColors[0],
@@ -559,21 +521,27 @@ fun PremiumSunEffect(spec: HeroThemeSpec) {
 @Composable
 fun PremiumMoonEffect(spec: HeroThemeSpec) {
     val infiniteTransition = rememberInfiniteTransition(label = "moon")
-    val glow by infiniteTransition.animateFloat(
+    val breath by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.02f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "breath"
+    )
+    val glowOpacity by infiniteTransition.animateFloat(
         initialValue = 0.85f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(tween(6000, easing = SineEaseInOut), RepeatMode.Reverse),
-        label = "glow"
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(4000, easing = SineEaseInOut), RepeatMode.Reverse),
+        label = "glowOpacity"
     )
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val center = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
-        val r = 26.dp.toPx() // Larger moon
+        val r = 26.dp.toPx() * breath
 
-        // Moon Glow (Enhanced)
+        // Moon Glow
         drawCircle(
             brush = Brush.radialGradient(
-                0.0f to Color(0xFFFDE68A).copy(0.25f * glow),
+                0.0f to Color(0xFFFDE68A).copy(0.20f * glowOpacity),
                 1.0f to Color.Transparent,
                 center = center,
                 radius = 160.dp.toPx()
@@ -582,16 +550,12 @@ fun PremiumMoonEffect(spec: HeroThemeSpec) {
             radius = 160.dp.toPx()
         )
 
-        val path = Path().apply {
-            addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
-        }
-        val clipPath = Path().apply {
-            addOval(Rect(center.x - r * 1.5f, center.y - r * 1.1f, center.x + r * 0.5f, center.y + r * 0.9f))
-        }
+        val path = Path().apply { addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r)) }
+        val clipPath = Path().apply { addOval(Rect(center.x - r * 1.5f, center.y - r * 1.1f, center.x + r * 0.5f, center.y + r * 0.9f)) }
 
         drawContext.canvas.save()
         drawContext.canvas.clipPath(clipPath, ClipOp.Difference)
-        drawPath(path, Color(0xFFFDE68A))
+        drawPath(path, Color(0xFFFDE68A).copy(alpha = glowOpacity))
         drawContext.canvas.restore()
     }
 }
@@ -600,73 +564,53 @@ fun PremiumMoonEffect(spec: HeroThemeSpec) {
 
 @Composable
 fun HeroCloudDriftEffect(count: Int, color: Color, dayPart: DayPhase = DayPhase.DAY) {
-    val infiniteTransition = rememberInfiniteTransition(label = "clouds")
-    val drift by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(130000, easing = LinearEasing), RepeatMode.Restart),
-        label = "drift"
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 1. Foreground Layer (Large clouds, ~22s for natural movement)
+        AnimatedCloudLayer(durationMillis = 22000, startOffset = 420f, endOffset = -180f, y = 60.dp, alpha = 0.35f, scale = 1.1f, color = color)
+
+        // 2. Middle Layer (Medium clouds, ~33s)
+        AnimatedCloudLayer(durationMillis = 33000, startOffset = -120f, endOffset = 430f, y = 120.dp, alpha = 0.25f, scale = 0.8f, color = color)
+
+        // 3. Background Layer (Small/distant clouds, ~46s)
+        AnimatedCloudLayer(durationMillis = 46000, startOffset = 360f, endOffset = -200f, y = 180.dp, alpha = 0.20f, scale = 1.4f, color = color)
+    }
+}
+
+@Composable
+fun AnimatedCloudLayer(
+    durationMillis: Int,
+    startOffset: Float,
+    endOffset: Float,
+    y: androidx.compose.ui.unit.Dp,
+    alpha: Float,
+    scale: Float,
+    color: Color
+) {
+    val transition = rememberInfiniteTransition(label = "cloudTransition")
+    val offsetX by transition.animateFloat(
+        initialValue = startOffset,
+        targetValue = endOffset,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMillis, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "cloudOffset"
     )
 
-    // Fixed composition based on DayPhase for premium consistency
-    val clouds = remember(count, dayPart) {
-        List(count) { i ->
-            val layer = when {
-                i < count / 3 -> 0 // Back
-                i < count * 2 / 3 -> 1 // Mid
-                else -> 2 // Front
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                this.alpha = alpha
+                scaleX = scale
+                scaleY = scale
             }
-
-            // Bias xRatio towards edges to keep center clear
-            val isLeft = i % 2 == 0
-            val xBase = if (isLeft) Random.nextFloat() * 0.35f else 0.65f + Random.nextFloat() * 0.35f
-
-            // Adjust xRatio for morning sun (around 0.20f, 0.35f) to cover 25-35%
-            val finalXBase = if (dayPart == DayPhase.MORNING && i == 0) 0.18f else xBase
-
-            HeroCloudState(
-                xRatio = finalXBase,
-                yRatio = when (layer) {
-                    0 -> 0.10f + (i * 0.05f)
-                    1 -> 0.40f + (i * 0.03f)
-                    else -> 0.65f - (i * 0.04f)
-                },
-                scale = when (layer) {
-                    0 -> 0.6f + (i * 0.05f)
-                    1 -> 0.9f + (i * 0.08f)
-                    else -> 1.2f + (i * 0.12f)
-                },
-                speed = when (layer) {
-                    0 -> 0.03f
-                    1 -> 0.06f
-                    else -> 0.11f
-                },
-                opacity = when (layer) {
-                    0 -> 0.12f // Arka katman %10-15
-                    1 -> 0.22f // Orta katman %20-25
-                    else -> 0.32f // Ön katman %30-35
-                },
-                blur = when (layer) {
-                    0 -> 6f
-                    1 -> 3f
-                    else -> 1f
-                }
-            )
-        }
-    }
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        clouds.forEach { cloud ->
-            val cw = 140.dp.toPx() * cloud.scale
-            val totalSpan = size.width + cw * 2
-            val x = ((cloud.xRatio + drift * cloud.speed) % 1.0f) * totalSpan - cw
-
-            drawHeroCloud(
-                Offset(x, size.height * cloud.yRatio),
-                cloud.scale,
-                color.copy(cloud.opacity)
-            )
-        }
+    ) {
+        drawHeroCloud(
+            center = Offset(offsetX.dp.toPx(), y.toPx()),
+            scale = 1.0f,
+            color = color
+        )
     }
 }
 
