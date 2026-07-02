@@ -94,12 +94,12 @@ object TravelAiHelper {
             }
         }
 
-        if (daysUntilTrip > 15) {
+        if (daysUntilTrip > 10) {
             return when (tone) {
-                AssistantTone.SAMIMI -> "HAVA ÖZETİ|Daha vakit var! 15 gün kala tüm detayları önüne sereceğim. [SEP] VALİZ TAVSİYESİ|Henüz erken, valizi sonraya sakla. [SEP] MUTLAKA GÖR|O tarihlerde en popüler yerleri fısıldayacağım. [SEP] DENEMEDEN DÖNME|En taze lezzetleri o zaman seçeriz. [SEP] YEREL TAVSİYE|Şimdilik sadece heyecanını yaşa!"
-                AssistantTone.RESMI -> "HAVA ÖZETİ|Hava durumu analizi seyahate 15 gün kala sisteme yansıtılacaktır. [SEP] VALİZ TAVSİYESİ|Tahminlerin kesinleşmesi beklenmektedir. [SEP] MUTLAKA GÖR|Popüler mekan listesi ilgili tarihlerde sunulacaktır. [SEP] DENEMEDEN DÖNME|Mevsimlik öneriler paylaşılacaktır. [SEP] YEREL TAVSİYE|Hazırlık sürecini takip ediniz."
-                AssistantTone.KISA_NET -> "HAVA ÖZETİ|15 gün kala aktifleşecek. [SEP] VALİZ TAVSİYESİ|Bekleyiniz. [SEP] MUTLAKA GÖR|Yakında. [SEP] DENEMEDEN DÖNME|Yakında. [SEP] YEREL TAVSİYE|Takipte kal."
-                else -> "HAVA ÖZETİ|Hava durumu verileri seyahatinize 15 gün kala analiz edilecektir. [SEP] VALİZ TAVSİYESİ|Tahminler netleştiğinde en uygun kıyafet önerilerini burada bulacaksın. [SEP] MUTLAKA GÖR|Gideceğin şehir için en popüler mekanları o tarihlerde senin için listeleyeceğiz. [SEP] DENEMEDEN DÖNME|Yöresel lezzetlerin en tazelerini mevsime göre önereceğiz. [SEP] YEREL TAVSİYE|Şu an için sadece rotanın heyecanını yaşa, detayları bize bırak."
+                AssistantTone.SAMIMI -> "HAVA ÖZETİ|Daha vakit var! 10 gün kala tüm detayları önüne sereceğim. [SEP] VALİZ TAVSİYESİ|Henüz erken, valizi sonraya sakla. [SEP] MUTLAKA GÖR|O tarihlerde en popüler yerleri fısıldayacağım. [SEP] DENEMEDEN DÖNME|En taze lezzetleri o zaman seçeriz. [SEP] YEREL TAVSİYE|Şimdilik sadece heyecanını yaşa!"
+                AssistantTone.RESMI -> "HAVA ÖZETİ|Hava durumu analizi seyahate 10 gün kala sisteme yansıtılacaktır. [SEP] VALİZ TAVSİYESİ|Tahminlerin kesinleşmesi beklenmektedir. [SEP] MUTLAKA GÖR|Popüler mekan listesi ilgili tarihlerde sunulacaktır. [SEP] DENEMEDEN DÖNME|Mevsimlik öneriler paylaşılacaktır. [SEP] YEREL TAVSİYE|Hazırlık sürecini takip ediniz."
+                AssistantTone.KISA_NET -> "HAVA ÖZETİ|10 gün kala aktifleşecek. [SEP] VALİZ TAVSİYESİ|Bekleyiniz. [SEP] MUTLAKA GÖR|Yakında. [SEP] DENEMEDEN DÖNME|Yakında. [SEP] YEREL TAVSİYE|Takipte kal."
+                else -> "HAVA ÖZETİ|Hava durumu verileri seyahatinize 10 gün kala analiz edilecektir. [SEP] VALİZ TAVSİYESİ|Tahminler netleştiğinde en uygun kıyafet önerilerini burada bulacaksın. [SEP] MUTLAKA GÖR|Gideceğin şehir için en popüler mekanları o tarihlerde senin için listeleyeceğiz. [SEP] DENEMEDEN DÖNME|Yöresel lezzetlerin en tazelerini mevsime göre önereceğiz. [SEP] YEREL TAVSİYE|Şu an için sadece rotanın heyecanını yaşa, detayları bize bırak."
             }
         }
 

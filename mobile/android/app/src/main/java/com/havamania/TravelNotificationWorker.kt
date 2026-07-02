@@ -56,8 +56,8 @@ class TravelNotificationWorker(
             // Geçmiş seyahatleri atla
             if (isOver) continue
 
-            // KURAL: Seyahate 15 gün veya daha az kaldıysa (seyahat günü dahil)
-            if (daysUntil in 0..15) {
+            // KURAL: Seyahate 10 gün veya daha az kaldıysa (seyahat günü dahil)
+            if (daysUntil in 0..10) {
                 // KURAL: Günde maksimum 1 bildirim gönder
                 if (plan.lastDailyNotificationDate == dateStr) continue
 
@@ -168,7 +168,7 @@ class TravelNotificationWorker(
                 val base = if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
                     "Hava tahminlerinde bazı değişiklikler var. Güncel analizi inceleyebilirsin."
                 } else {
-                    "Seyahatine $daysLeft gün kaldı. Hava durumuna göre hazırlıklarını gözden geçir."
+                    "Seyahatin yaklaşıyor ($daysLeft gün kaldı), hava analizin hazır. Hazırlıklarını gözden geçir."
                 }
                 "$cityLabel: $base 🎒"
             }

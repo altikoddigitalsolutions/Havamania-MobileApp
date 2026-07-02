@@ -153,7 +153,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             if (plan.isArchived) return@forEach
 
             val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
-            val isWithinWindow = daysUntil <= 15
+            val isWithinWindow = daysUntil <= 10
             val isOver = today.isAfter(plan.endDate)
 
             if (isOver) return@forEach
@@ -203,7 +203,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     suspend fun performAnalysis(plan: TravelPlan): TravelPlan {
         val today = LocalDate.now()
         val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
-        val isWithinWindow = daysUntil <= 15
+        val isWithinWindow = daysUntil <= 10
 
         val tone = ThemeManager.getAssistantTone(getApplication()).first()
 
@@ -228,7 +228,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return plan.copy(
                 isAnalyzing = false,
                 weatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
-                lastWeatherAnalysisText = "Seyahatiniz 15 günden daha uzak. Hava tahminleri yaklaştığında analiz edilecektir.",
+                lastWeatherAnalysisText = "Seyahatiniz 10 günden daha uzak. Hava tahminleri yaklaştığında analiz edilecektir.",
                 aiSuggestion = null,
                 lastWeatherAnalysisDate = System.currentTimeMillis()
             )
@@ -401,7 +401,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
-        // FINAL STEP: Always generate an analysis if within 15 days, even if snapshot is null (Offline Fallback)
+        // FINAL STEP: Always generate an analysis if within 10 days, even if snapshot is null (Offline Fallback)
         val aiResult = TravelAiHelper.generateTravelAiSuggestion(plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot, daysUntil, tone = tone)
 
         val score = snapshot?.travelScore ?: 75
@@ -567,7 +567,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 _plans.value = domainPlans
                 Log.i(FLOW_TAG, "RefreshTripsCalled=true TripsCount=${domainPlans.size}")
 
-                if (isUpcoming && daysUntil <= 15) {
+                if (isUpcoming && daysUntil <= 10) {
                     Log.i(FLOW_TAG, "AutoAnalysisStarted=true")
                     analyzeTravelWeather(plan)
                 }

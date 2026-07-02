@@ -359,7 +359,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
     queryKey: ['weather', plan.lat, plan.lon, plan.startDate],
     queryFn: () => getDailyWeather(plan.lat, plan.lon, 14),
     staleTime: 15 * 60 * 1000,
-    enabled: !isPastTrip && daysUntilStart <= 15 && !isArchived,
+    enabled: !isPastTrip && daysUntilStart <= 10 && !isArchived,
   });
 
   const analysis = useMemo((): TravelAnalysisResult | null => {
@@ -380,14 +380,14 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         };
     }
 
-    if (daysUntilStart > 15) {
+    if (daysUntilStart > 10) {
         return {
           status: 'far-future',
           score: 0,
           averageTemp: 0,
           maxPrecipProbability: 0,
           summary: '',
-          advice: "Bu seyahat için detaylı hava analizi henüz oluşturulamaz. 15 günden daha uzun vadeli hava tahminleri güvenilir olmadığı için analiz, seyahate 15 günden az kaldığında otomatik hazırlanacaktır.",
+          advice: "Bu seyahat için detaylı hava analizi henüz oluşturulamaz. 10 günden daha uzun vadeli hava tahminleri güvenilir olmadığı için analiz, seyahate 10 günden az kaldığında otomatik hazırlanacaktır.",
           icon: 'time-outline',
           emoji: '⏳',
           color: C.textMuted,

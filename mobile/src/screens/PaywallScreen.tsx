@@ -17,7 +17,7 @@ import {validateReceipt} from '../services/subscriptionApi';
 import {useColors, AppColors, Spacing} from '../theme';
 
 const PREMIUM_FEATURES = [
-  {icon: 'airplane', title: 'Gelişmiş Seyahat Analizi', desc: '15 günlük detaylı hava ve aktivite raporu.'},
+  {icon: 'airplane', title: 'Gelişmiş Seyahat Analizi', desc: '10 günlük detaylı hava ve aktivite raporu.'},
   {icon: 'briefcase', title: 'AI Valiz Önerisi', desc: 'Hava durumuna göre otomatik hazırlanan ihtiyaç listesi.'},
   {icon: 'notifications', title: 'Akıllı Bildirimler', desc: 'Anlık yağış ve UV değişim uyarıları.'},
   {icon: 'images', title: 'Atmosferik Görseller', desc: 'Hava durumuna göre değişen dinamik tema.'},
