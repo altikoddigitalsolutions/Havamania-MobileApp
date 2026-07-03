@@ -9,121 +9,7 @@ import java.util.Locale
 object RecommendationEngine {
 
     /**
-     * Günlük hava durumu önerisi oluşturur - Kişiselleştirme ve Sağlık Hassasiyeti eklendi.
-     */
-    fun generateTodayRecommendation(
-        weatherData: WeatherData,
-        userInterests: Set<String> = emptySet(),
-        aboutMe: String? = null,
-        tone: AssistantTone = AssistantTone.DENGELI
-    ): HavamaniaRecommendation {
-        val todayDaily = weatherData.dailyForecast.firstOrNull { it.isToday } ?: weatherData.dailyForecast.firstOrNull()
-        val tempMin = todayDaily?.minTemp ?: 10
-        val tempMax = todayDaily?.maxTemp ?: 20
-
-        val rawCondition = weatherData.condition.lowercase(Locale("tr"))
-        val city = weatherData.cityName
-        val uvIndex = weatherData.uvIndex ?: 0
-        val windSpeed = weatherData.windSpeed ?: 0.0
-        val precipProb = weatherData.precipitationProbability ?: 0
-        val humidity = weatherData.humidity ?: 50
-        val aboutMeLower = aboutMe?.lowercase(Locale("tr")) ?: ""
-
-        val highlights = mutableListOf<String>()
-        var primaryType = RecommendationType.GENERAL
-        var priority = RecommendationPriority.LOW
-
-        val isNight = !weatherData.isDay
-
-        // 1. TONA GÖRE GİRİŞ VE ANA MESAJ OLUŞTURMA
-        val finalMessage = when (tone) {
-            AssistantTone.SAMIMI -> buildSamimiRecommendation(city, rawCondition, isNight, tempMin, tempMax, uvIndex, humidity, precipProb, windSpeed, userInterests, aboutMeLower)
-            AssistantTone.RESMI -> buildResmiRecommendation(city, rawCondition, isNight, tempMin, tempMax, uvIndex, humidity, precipProb, windSpeed, userInterests, aboutMeLower)
-            AssistantTone.KISA_NET -> buildKisaNetRecommendation(city, rawCondition, isNight, tempMin, tempMax, uvIndex, humidity, precipProb, windSpeed, userInterests, aboutMeLower)
-            AssistantTone.DETAYLI_UZMAN -> buildUzmanRecommendation(city, rawCondition, isNight, tempMin, tempMax, uvIndex, humidity, precipProb, windSpeed, userInterests, aboutMeLower)
-            else -> buildDengeliRecommendation(city, rawCondition, isNight, tempMin, tempMax, uvIndex, humidity, precipProb, windSpeed, userInterests, aboutMeLower)
-        }
-
-        // Highlightları ve önceliği belirle (Teknik metinlerden bağımsız genel mantık)
-        if (uvIndex >= 6) { highlights.add("UV"); if (uvIndex >= 8) priority = RecommendationPriority.HIGH }
-        if (humidity > 75) highlights.add("nem")
-        if (precipProb > 40) highlights.add("yağış")
-        if (windSpeed > 30) highlights.add("rüzgar")
-
-        return HavamaniaRecommendation(
-            message = finalMessage,
-            type = primaryType,
-            highlightedWords = highlights.distinct(),
-            priority = priority
-        )
-    }
-
-    private fun buildSamimiRecommendation(city: String, cond: String, isNight: Boolean, min: Int, max: Int, uv: Int, hum: Int, precip: Int, wind: Double, interests: Set<String>, bio: String): String {
-        val intro = when {
-            cond.contains("yağmur") || cond.contains("sağanak") -> if (isNight) "Gece yağmuru $city semalarını serinletiyor canım. 🌧️" else "Bugün $city'da şemsiyeler başrolde, yağmura hazır mısın? ☂️"
-            cond.contains("kar") -> if (isNight) "Bembeyaz bir gece seni bekliyor canım, karın tadını çıkar! ❄️" else "Dışarısı tam bir masal diyarı gibi, karın tadını çıkar canım! ☃️"
-            cond.contains("bulut") -> if (isNight) "$city'da bulutlu bir gece, yıldızları görmek zor olabilir tatlım." else "Gökyüzü biraz dertli bugün, bulutlar $city'da hakimiyeti kurmuş."
-            cond.contains("güneş") || cond.contains("açık") -> if (isNight) "Yıldızlar bu gece $city üzerinde pırıl pırıl parlıyor canım. ✨" else "Güneş bugün tüm enerjisini harcıyor, harika bir gün seni bekliyor! ☀️"
-            else -> if (isNight) "$city'da sakin bir gece hakim canım." else "Bugün $city semalarında $cond bir hava var."
-        }
-        val tempStr = "Hava $min°/$max° arası, bence tam gezmelik!"
-        val advice = mutableListOf<String>()
-        if (uv > 6 && !isNight) advice.add("güneş kremini sakın unutma")
-        if (precip > 30) advice.add("yanına bir şemsiye alırsan iyi olur")
-        if (max > 28) advice.add("ince pamuklu bir şeyler giymeni öneririm")
-
-        val bioAdvice = if (bio.contains("çocuk") || bio.contains("aile")) " Sevdiklerinle vakit geçirmek için de bence harika bir zaman!" else ""
-        val prefix = if (advice.isNotEmpty()) " Bence " else ""
-
-        return "$intro $tempStr$prefix${advice.joinToString(", ", postfix = ".")}$bioAdvice"
-    }
-
-    private fun buildResmiRecommendation(city: String, cond: String, isNight: Boolean, min: Int, max: Int, uv: Int, hum: Int, precip: Int, wind: Double, interests: Set<String>, bio: String): String {
-        val status = if (isNight) "gece saatlerinde" else "gün içerisinde"
-        val intro = "$city bölgesinde $status $cond hava koşullarının hakim olması öngörülmektedir."
-        val temp = "Sıcaklık değerleri minimum $min°C, maksimum $max°C olarak ölçülmüştür."
-        val measures = mutableListOf<String>()
-        if (uv > 6 && !isNight) measures.add("yüksek UV radyasyonuna karşı koruyucu ekipman kullanımı önerilir")
-        if (precip > 30) measures.add("olası presipitasyona karşı tedbir alınması uygun olacaktır")
-        if (max > 28) measures.add("hafif ve açık renkli tekstil ürünlerinin tercihi konforunuzu artıracaktır")
-
-        return "$intro $temp ${measures.joinToString(". ", postfix = ".", transform = { it.replaceFirstChar { c -> c.uppercase() } })}"
-    }
-
-    private fun buildDengeliRecommendation(city: String, cond: String, isNight: Boolean, min: Int, max: Int, uv: Int, hum: Int, precip: Int, wind: Double, interests: Set<String>, bio: String): String {
-        val intro = if (isNight) "$city'de $cond ve sakin bir gece etkisini sürdürüyor." else "$city'de bugün $cond bir hava bekleniyor."
-        val temp = "$min°/$max° sıcaklık aralığında, günün tadını çıkarabilirsin."
-        val tips = mutableListOf<String>()
-        if (uv > 6 && !isNight) tips.add("Güneş kremini ihmal etme")
-        if (precip > 30) tips.add("Yanına şemsiye alabilirsin")
-        if (max > 28) tips.add("İnce ve pamuklu kıyafetler giyebilirsin")
-
-        return "$intro $temp ${tips.joinToString(". ")}"
-    }
-
-    private fun buildKisaNetRecommendation(city: String, cond: String, isNight: Boolean, min: Int, max: Int, uv: Int, hum: Int, precip: Int, wind: Double, interests: Set<String>, bio: String): String {
-        val parts = mutableListOf<String>()
-        parts.add("$city: $cond ($min°/$max°)")
-        if (uv > 6 && !isNight) parts.add("UV Yüksek")
-        if (precip > 30) parts.add("Yağış riski")
-        if (max > 28) parts.add("İnce giyin, bol su iç")
-        return parts.joinToString(". ")
-    }
-
-    private fun buildUzmanRecommendation(city: String, cond: String, isNight: Boolean, min: Int, max: Int, uv: Int, hum: Int, precip: Int, wind: Double, interests: Set<String>, bio: String): String {
-        val timeSpan = if (isNight) "Gece periyodunda" else "Gündüz periyodunda"
-        val intro = "Meteorolojik Analiz Raporu ($city): $timeSpan $cond atmosferik olaylar ve troposferik hareketlilik gözlemlenmektedir."
-        val detail = "Sıcaklık spektrumu $min°C ile $max°C aralığındadır. %$hum bağıl nem oranı, evaporatif soğumayı kısıtlayarak termal algıyı (hissedilen sıcaklık) yukarı yönlü manipüle edebilir."
-        val windInfo = if (wind > 5) " Rüzgar vektörü anlık $wind km/sa hıza ulaşarak sirkülasyon sağlamaktadır." else " Atmosferik stabilite nedeniyle rüzgar hızı nominal değerlerin altındadır ($wind km/sa); serinletici etkisi kısıtlıdır."
-        val analysis = mutableListOf<String>()
-        if (uv > 6 && !isNight) analysis.add("UV indeksi $uv (Yüksek) seviyesine ulaşacağından, fotodermatolojik koruma protokolleri (güneş koruyucu, şapka) önceliklendirilmelidir")
-        if (precip > 40) analysis.add("Hidro-meteorolojik veriler %$precip presipitasyon olasılığı verdiğinden, dış mekan operasyonlarında mobilite kısıtlamaları öngörülmelidir")
-
-        return "$intro $detail$windInfo ${analysis.joinToString(". ", postfix = ". ")}"
-    }
-
-    /**
-     * AI Asistan Yanıtları - Kişiselleştirme ve Tonlama
+     * AI Asistan Yanıtları - Yeni Kurallara Göre Optimize Edildi
      */
     fun generateAssistantFallbackReply(
         userPrompt: String,
@@ -138,164 +24,167 @@ object RecommendationEngine {
         val intent = AiIntentParser.detectIntent(userPrompt)
         val today = LocalDate.now()
         val nextPlan = travelPlans
-            .filter { !it.isArchived && !it.endDate.isBefore(today) }
+            .filter { !it.isArchived && !it.endDate.isAfter(today.plusDays(30)) && !it.endDate.isBefore(today) }
             .minByOrNull { it.startDate }
 
-        // Şehir tespiti
         val promptCity = AiIntentParser.detectCity(userPrompt)
 
-        // Mantıksal ayrım: Seyahatle ilgili bir niyet varsa ve seyahat planı varsa onu kullan
-        // Ama kullanıcı spesifik bir şehir sormuşsa (örn: "İstanbul hava nasıl") onu önceliklendir.
-        val isTravelIntent = intent == AiIntent.TRAVEL || intent == AiIntent.PACKING || intent == AiIntent.TRIP_RISK
-
-        if (isTravelIntent && promptCity == null && nextPlan == null) {
-            return when (tone) {
-                AssistantTone.SAMIMI -> "Henüz planlanmış bir seyahatin bulunmuyor canım. İstersen hemen yeni bir seyahat planlayabiliriz! 😊"
-                AssistantTone.RESMI -> "Kayıtlı aktif bir seyahat planınız bulunmamaktadır. Yeni bir seyahat planı oluşturulması önerilir."
-                AssistantTone.KISA_NET -> "Planlı seyahat yok. Yeni plan oluşturabiliriz."
-                else -> "Henüz planlanmış bir seyahatin bulunmuyor. İstersen yeni bir seyahat planlayabiliriz."
-            }
-        }
-
-        val targetCity: String
-        val targetTemp: Int
-        val targetFeels: Int
-        val targetUv: Int
-        val targetPrecip: Int
-        val targetWind: Double
-
-        if (isTravelIntent && promptCity == null && nextPlan != null) {
-            // Seyahat planı bağlamını kullan
-            val snapshot = nextPlan.lastForecastSnapshot
-            targetCity = nextPlan.city
-            targetTemp = snapshot?.maxTemp?.toInt() ?: 20
-            targetFeels = snapshot?.feelsLike?.toInt() ?: targetTemp
-            targetUv = snapshot?.uvIndex?.toInt() ?: 0
-            targetPrecip = snapshot?.precipitationProbability ?: 0
-            targetWind = snapshot?.windSpeed ?: 0.0
-        } else if (promptCity != null && AiIntentParser.normalizeTurkish(promptCity) != AiIntentParser.normalizeTurkish(weatherData.cityName)) {
-            // Başka bir şehir sorulmuş (Seyahat planı olsun olmasın)
-            targetCity = promptCity
-            // Detaylı veri yoksa varsayılan veya weatherData'dan benzer veri (basitleştirme için)
-            targetTemp = 20; targetFeels = 20; targetUv = 4; targetPrecip = 0; targetWind = 10.0
-        } else {
-            // Mevcut konum bağlamını kullan
-            targetCity = weatherData.cityName
-            targetTemp = weatherData.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
-            targetFeels = weatherData.feelsLike.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: targetTemp
-            targetUv = weatherData.uvIndex ?: 0
-            targetPrecip = weatherData.precipitationProbability ?: 0
-            targetWind = weatherData.windSpeed ?: 0.0
-        }
+        // Context Selection
+        val targetCity: String = promptCity ?: weatherData.cityName
+        val currentTemp = weatherData.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+        val feelsLike = weatherData.feelsLike.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: currentTemp
+        val uv = weatherData.uvIndex ?: 0
+        val humidity = weatherData.humidity ?: 50
+        val wind = weatherData.windSpeed ?: 10.0
+        val precip = weatherData.precipitationProbability ?: 0
 
         return when (intent) {
-            AiIntent.CLOTHING -> generateClothingReply(targetTemp, targetFeels, targetUv, targetPrecip, targetWind, tone, interests)
-            AiIntent.ACTIVITY -> generateActivityReply(targetCity, targetTemp, targetUv, targetPrecip, targetWind, tone, interests)
-            AiIntent.TRAVEL -> generateTravelReply(userPrompt, weatherData, travelPlans, tone)
-            AiIntent.PACKING -> generatePackingReply(targetTemp, targetPrecip, targetWind, tone)
-            AiIntent.CALENDAR -> generateCalendarReply(weatherData, travelPlans, tone)
+            AiIntent.CLOTHING -> generateClothingReply(targetCity, currentTemp, feelsLike, uv, wind, humidity, tone)
+            AiIntent.ACTIVITY -> generateActivityReply(targetCity, currentTemp, uv, precip, wind, humidity, tone)
             AiIntent.WEEKEND_FORECAST -> generateWeekendReply(weatherData, tone)
-            AiIntent.TRIP_RISK -> generateTripRiskReply(weatherData, tone) // Bu fonksiyona da context eklenmeli
-            AiIntent.GENERAL_WEATHER -> generateGeneralWeatherReply(weatherData, tone)
+            AiIntent.PACKING -> generatePackingReply(nextPlan, tone)
+            AiIntent.GENERAL_WEATHER -> {
+                if (userPrompt.contains("yağmur", ignoreCase = true) || userPrompt.contains("yağış", ignoreCase = true)) {
+                    generateRainReply(targetCity, precip, weatherData, tone)
+                } else {
+                    generateGeneralWeatherReply(weatherData, tone)
+                }
+            }
+            AiIntent.TRAVEL -> generateTravelReply(userPrompt, weatherData, travelPlans, tone)
             else -> generateGeneralWeatherReply(weatherData, tone)
         }
     }
 
-    private fun generateClothingReply(temp: Int, feels: Int, uv: Int, precip: Int, wind: Double, tone: AssistantTone, interests: Set<String>): String {
-        val upperItems = mutableListOf<String>()
-        val lowerItems = mutableListOf<String>()
-        val accessoryItems = mutableListOf<String>()
-
-        when {
-            temp > 28 -> {
-                upperItems.add("ince pamuklu tişört")
-                lowerItems.add("şort veya keten pantolon")
-                accessoryItems.add("güneş gözlüğü")
-                if (uv > 5) accessoryItems.add("şapka")
-            }
-            temp > 20 -> {
-                upperItems.add("polo yaka tişört")
-                lowerItems.add("hafif kot veya chino pantolon")
-                if (wind > 20) accessoryItems.add("ince hırka")
-            }
-            temp > 12 -> {
-                upperItems.add("sweatshirt veya uzun kollu gömlek")
-                upperItems.add("hafif ceket")
-                lowerItems.add("kot pantolon")
-            }
-            else -> {
-                upperItems.add("termal içlik")
-                upperItems.add("kalın kazak")
-                upperItems.add("kışlık mont")
-                lowerItems.add("kalın pantolon")
-                accessoryItems.add("atkı ve bere")
-            }
+    // 1) BUGÜN NE GİYMELİYİM?
+    private fun generateClothingReply(city: String, temp: Int, feels: Int, uv: Int, wind: Double, hum: Int, tone: AssistantTone): String {
+        val baseAdvice = when {
+            temp > 28 || feels > 30 -> "Hava oldukça sıcak olduğu için terletmeyen, %100 pamuklu veya keten kumaşlar günü kurtaracaktır."
+            temp > 20 -> "Hafif bir tişört ve altına ince bir pantolon ideal görünüyor; ne çok sıcak ne çok soğuk, tam kararında bir hava."
+            temp > 12 -> "Sweatshirt veya uzun kollu ince gömleklerin üzerine hafif bir ceket alarak katmanlı bir kombin yapmanı öneririm."
+            else -> "Hava oldukça sert; yünlü kazaklar, kalın pantolonlar ve mutlaka koruyucu bir mont giyerek vücut ısını korumalısın."
         }
 
-        if (precip > 30) accessoryItems.add("şemsiye")
+        val uvAdvice = if (uv > 5) " UV seviyesi yüksek olduğu için dışarıda güneş gözlüğü ve şapka kullanmayı, açıkta kalan bölgelere güneş kremi sürmeyi ihmal etme." else ""
+        val windAdvice = if (wind > 25) " Rüzgar hızı yüksek olduğu için hissettiğin soğukluk artabilir, rüzgar kesici bir üst tercih etmen konforunu artıracaktır." else ""
+        val eveningAdvice = if (temp > 15) " Akşam saatlerinde hava biraz serinleyebilir, yanına ince bir hırka alman iyi olur." else " Gece sıcaklıklar iyice düşeceği için dışarıda kalacaksan hazırlıklı olmalısın."
 
         return when (tone) {
-            AssistantTone.SAMIMI -> "Sıcaklık $temp derece canım, hissedilen ise $feels. 😊 Bence şöyle rahat bir şeyler seçebilirsin: Üstte ${upperItems.joinToString(", ")}, altta ${lowerItems.joinToString(", ")}. ${if(accessoryItems.isNotEmpty()) "Aksesuar olarak da ${accessoryItems.joinToString(", ")} harika olur!" else ""}"
-            AssistantTone.RESMI -> "Güncel sıcaklık $temp°C (hissedilen $feels°C) olarak bildirilmiştir. Konforunuz açısından şu giyim kombinasyonu önerilir: Üst bölümde ${upperItems.joinToString(", ")}, alt bölümde ${lowerItems.joinToString(", ")}. ${if(accessoryItems.isNotEmpty()) "Ek olarak ${accessoryItems.joinToString(", ")} kullanımı uygun olacaktır." else ""}"
-            AssistantTone.KISA_NET -> "$temp° (His: $feels°). Öneri: ${upperItems.firstOrNull() ?: ""}, ${lowerItems.firstOrNull() ?: ""}${if(accessoryItems.isNotEmpty()) ", " + accessoryItems.firstOrNull() else ""}."
-            AssistantTone.DETAYLI_UZMAN -> "Meteorolojik verilere göre ortam sıcaklığı $temp°C, termal algı ise $feels°C düzeyindedir. Vücut ısısı regülasyonu için ${upperItems.joinToString(", ")} ve ${lowerItems.joinToString(", ")} entegrasyonu tavsiye edilir. $precip% presipitasyon riski nedeniyle ${accessoryItems.joinToString(", ")} fonksiyonel bir tercih olacaktır."
-            else -> "Hava $temp° (hissedilen $feels°). Şunları giyebilirsin: ${upperItems.joinToString(", ")}, ${lowerItems.joinToString(", ")} ve ${accessoryItems.joinToString(", ")}."
+            AssistantTone.SAMIMI -> "$city'de bugün hava tam bir muamma canım! 😊 $baseAdvice$uvAdvice$windAdvice$eveningAdvice Güzel görünmeyi unutma!"
+            AssistantTone.RESMI -> "$city lokasyonu için meteorolojik veriler ışığında şu giyim önerileri sunulmaktadır: $baseAdvice$uvAdvice$windAdvice$eveningAdvice Bilgilerinize sunulur."
+            AssistantTone.DETAYLI_UZMAN -> "Meteorolojik Analiz ($city): Termal algı $feels°C ve bağıl nem %$hum seviyelerindedir. Bu parametreler altında $baseAdvice$uvAdvice$windAdvice$eveningAdvice Termal regülasyonunuzu bu doğrultuda optimize ediniz."
+            AssistantTone.KISA_NET -> "$city: $temp° ($baseAdvice). UV: $uv. $uvAdvice"
+            else -> "Bugün $city'de $baseAdvice$uvAdvice$windAdvice$eveningAdvice"
         }
     }
 
-    private fun generateActivityReply(city: String, temp: Int, uv: Int, precip: Int, wind: Double, tone: AssistantTone, interests: Set<String>): String {
-        val activities = mutableListOf<String>()
+    // 2) HAFTA SONU HAVA NASIL?
+    private fun generateWeekendReply(weather: WeatherData, tone: AssistantTone): String {
+        val sat = weather.dailyForecast.find { it.day.contains("Cumartesi", true) }
+        val sun = weather.dailyForecast.find { it.day.contains("Pazar", true) }
 
-        if (precip < 20 && temp in 18..28) activities.add("piknik")
-        if (wind < 25 && precip < 10) activities.add("bisiklet sürüşü")
-        if (temp in 15..25 && wind < 30) activities.add("açık hava koşusu")
-        if (temp > 25 && uv < 8) activities.add("yüzme / plaj")
-        if (activities.isEmpty()) activities.add("kapalı alan aktiviteleri")
+        if (sat == null || sun == null) return "Hafta sonu verileri henüz netleşmedi, ancak yakında burada olacak."
+
+        val verdict = if (sat.maxTemp >= sun.maxTemp && sat.precipitationProbability < 20) "Cumartesi" else "Pazar"
+        val advice = if (sat.precipitationProbability > 40 || sun.precipitationProbability > 40) "Kapalı alan etkinliklerine yönelmek daha güvenli olabilir." else "Piknik, sahil yürüyüşü veya açık hava kahvaltısı için harika bir fırsat."
 
         return when (tone) {
-            AssistantTone.SAMIMI -> "Bugün $city harika canım! 😊 Şöyle bir plan yapmaya ne dersin: ${activities.joinToString(", ")}. Bence çok keyifli olur!"
-            AssistantTone.RESMI -> "$city bölgesi için meteorolojik koşullar dahilinde şu faaliyetler icra edilebilir: ${activities.joinToString(", ")}. Bilgilerinize sunulur."
-            AssistantTone.KISA_NET -> "$city Aktiviteler: ${activities.joinToString(", ")}."
-            AssistantTone.DETAYLI_UZMAN -> "Atmosferik stabilite ve termal konfor indeksine göre $city lokasyonunda ${activities.joinToString(", ")} faaliyetleri için optimal koşullar oluşmuştur. Rüzgarın $wind km/sa olması ${activities.firstOrNull() ?: ""} için avantajlıdır."
-            else -> "Bugün $city'de şunları yapabilirsin: ${activities.joinToString(", ")}."
+            AssistantTone.SAMIMI -> "Hafta sonu planların için harika haberlerim var canım! 😊 Cumartesi ${sat.maxTemp}°, Pazar ise ${sun.maxTemp}° görünüyor. Karşılaştırdığımda $verdict günü hava çok daha davetkar. Bence $advice"
+            AssistantTone.RESMI -> "Hafta sonu projeksiyonu: Cumartesi günü maksimum ${sat.maxTemp}°C, Pazar günü ise ${sun.maxTemp}°C sıcaklık öngörülmektedir. Atmosferik koşullar değerlendirildiğinde $verdict gününün outdoor faaliyetler için daha elverişli olduğu saptanmıştır."
+            AssistantTone.DETAYLI_UZMAN -> "48 Saatlik Hafta Sonu Analizi: Cumartesi günü troposferik stabilite hakimken (${sat.maxTemp}°C), Pazar günü sıcaklık ve rüzgar vektörlerinde değişim bekleniyor (${sun.maxTemp}°C). $verdict günü $advice Karşılaştırmalı analizimiz dış mekan planları için Cumartesi gününü işaret etmektedir."
+            AssistantTone.KISA_NET -> "Cmt: ${sat.maxTemp}°, Paz: ${sun.maxTemp}°. $verdict günü daha uygun. $advice"
+            else -> "Hafta sonu Cumartesi ${sat.maxTemp}°, Pazar ${sun.maxTemp}° civarında olacak. Genel değerlendirmeme göre $verdict günü dışarı çıkmak için çok daha uygun. $advice"
         }
     }
 
-    private fun generatePackingReply(temp: Int, precip: Int, wind: Double, tone: AssistantTone): String {
+    // 3) DIŞARI ÇIKMAK İÇİN UYGUN MU?
+    private fun generateActivityReply(city: String, temp: Int, uv: Int, precip: Int, wind: Double, hum: Int, tone: AssistantTone): String {
+        val isGood = precip < 20 && wind < 30 && temp in 15..28
+        val status = if (isGood) "oldukça uygun" else "biraz riskli"
+
+        val details = mutableListOf<String>()
+        if (precip > 30) details.add("yağış ihtimali (%$precip)")
+        if (wind > 25) details.add("sert rüzgar ($wind km/sa)")
+        if (uv > 6) details.add("yüksek UV radyasyonu")
+        if (hum > 75) details.add("yüksek nem oranı")
+
+        val reason = if (details.isNotEmpty()) "Ancak ${details.joinToString(", ")} nedeniyle dikkatli olmalısın." else "Şu an hiçbir engel görünmüyor."
+        val timeHint = if (uv > 6) " Özellikle 11:00 ile 16:00 saatleri arasını kapalı alanlarda geçirmeni öneririm." else ""
+
+        return when (tone) {
+            AssistantTone.SAMIMI -> "Bugün $city'de dışarı çıkmak için hava $status canım! 😊 $reason$timeHint Şöyle güzel bir yürüyüş ruhuna iyi gelirdi."
+            AssistantTone.RESMI -> "$city bölgesi için yapılan analizlerde dış mekan faaliyetlerinin icrası $status olarak değerlendirilmiştir. $reason$timeHint Tedbirli olmanız önerilir."
+            AssistantTone.DETAYLI_UZMAN -> "Aktivite Uygunluk İndeksi ($city): Mevcut atmosferik parametreler (Yağış: %$precip, Rüzgar: $wind km/sa, UV: $uv) incelendiğinde durumun $status olduğu görülmektedir. $reason$timeHint Fizyolojik konfor açısından öğleden sonra saatleri risk içermektedir."
+            AssistantTone.KISA_NET -> "Hava $status. $reason $timeHint"
+            else -> "Bugün $city'de dışarı çıkmak $status. $reason$timeHint Planlarını bu verilere göre yapabilirsin."
+        }
+    }
+
+    // 4) BUGÜN YAĞMUR YAĞACAK MI?
+    private fun generateRainReply(city: String, precip: Int, weather: WeatherData, tone: AssistantTone): String {
+        val hourlyPrecip = weather.hourlyForecast.take(12).filter { it.precipitationProbability > 30 }
+        val hours = hourlyPrecip.joinToString(", ") { it.time.split("T").last().take(5) }
+
+        val rainText = when {
+            precip > 70 -> "Bugün yağmur kaçınılmaz görünüyor, hazırlıklı olmalısın."
+            precip > 30 -> "Günün belli bölümlerinde yağış geçişleri olabilir, gökyüzü her an sürpriz yapabilir."
+            else -> "Bugün yağmur beklemiyoruz, gökyüzü oldukça dost canlısı görünüyor."
+        }
+
+        val umbrellaAdvice = if (precip > 30) " Yanına mutlaka sağlam bir şemsiye ve su geçirmeyen bir ayakkabı almalısın." else " Şemsiye taşımana gerek yok, açık hava planlarını gönül rahatlığıyla yapabilirsin."
+        val timeDetail = if (hourlyPrecip.isNotEmpty()) " Özellikle şu saatlere dikkat: $hours." else ""
+
+        return when (tone) {
+            AssistantTone.SAMIMI -> "Bugün $city'de yağmur ihtimali %$precip canım. $rainText$timeDetail$umbrellaAdvice Islanmanı hiç istemem! ☔"
+            AssistantTone.RESMI -> "Günlük yağış projeksiyonu: %$precip presipitasyon olasılığı saptanmıştır. $rainText$timeDetail$umbrellaAdvice Bilgilerinize sunulur."
+            AssistantTone.DETAYLI_UZMAN -> "Hidro-Meteorolojik Analiz: Bağıl nem ve bulut kapalılık oranı %$precip olasılıkla yağış formasyonuna işaret etmektedir. $rainText$timeDetail$umbrellaAdvice Veriler gün boyu stabil bir seyir izlemektedir."
+            AssistantTone.KISA_NET -> "Yağış ihtimali: %$precip. $rainText $timeDetail"
+            else -> "Bugün $city'de yağmur ihtimali %$precip seviyesinde. $rainText$timeDetail$umbrellaAdvice"
+        }
+    }
+
+    // 5) VALİZİME NE ALMALIYIM?
+    private fun generatePackingReply(plan: TravelPlan?, tone: AssistantTone): String {
+        if (plan == null) {
+            return when (tone) {
+                AssistantTone.SAMIMI -> "Valizine bakmak isterdim ama henüz kayıtlı bir seyahatin yok canım! 😊 Takvim bölümünden hemen bir rota oluştur, en iyi listeyi hazırlayalım."
+                AssistantTone.RESMI -> "Sistemde kayıtlı yaklaşan bir seyahat planı bulunamamıştır. Valiz önerisi oluşturulabilmesi için lütfen Takvim üzerinden seyahat detayı giriniz."
+                AssistantTone.DETAYLI_UZMAN -> "Envanter Analizi Hatası: Projeksiyon yapılacak aktif bir seyahat rotası mevcut değildir. Analiz için destinasyon verisi gerekmektedir."
+                AssistantTone.KISA_NET -> "Kayıtlı seyahat yok. Önce takvime plan ekle."
+                else -> "Asistan şu an yaklaşan bir seyahat planı bulamadı. Valiz önerisi verebilmem için önce Takvim'den bir seyahat oluşturmalısın."
+            }
+        }
+
+        val city = plan.city
+        val snapshot = plan.lastForecastSnapshot
+        val temp = snapshot?.maxTemp?.toInt() ?: 20
+        val precip = snapshot?.precipitationProbability ?: 0
+        val minTemp = snapshot?.minTemp?.toInt() ?: 15
+
         val items = mutableListOf<String>()
-        if (temp > 25) items.add("güneş kremi, şort, tişört")
-        else if (temp > 15) items.add("ceket, kot pantolon, spor ayakkabı")
-        else items.add("mont, kazak, kalın çorap")
+        if (temp > 25) items.addAll(listOf("şort", "ince tişört", "güneş kremi", "şapka"))
+        else if (temp > 15) items.addAll(listOf("kot pantolon", "hafif ceket", "spor ayakkabı"))
+        else items.addAll(listOf("kalın mont", "yünlü kazak", "atkı", "termal çorap"))
 
-        if (precip > 20) items.add("şemsiye veya yağmurluk")
-        items.add("powerbank, kişisel bakım ürünleri")
+        if (precip > 30) items.add("şemsiye veya yağmurluk")
+        if (temp - minTemp > 10) items.add("gece serinliği için hırka")
+        items.add("powerbank")
+
+        val listStr = items.joinToString(", ")
 
         return when (tone) {
-            AssistantTone.SAMIMI -> "Valizini hazırlarken bence şunları unutma canım: ${items.joinToString(", ")}. Şimdiden iyi yolculuklar! ✈️"
-            AssistantTone.RESMI -> "Seyahat planlamanız doğrultusunda şu ekipmanların valizinizde bulunması tavsiye edilir: ${items.joinToString(", ")}."
-            AssistantTone.KISA_NET -> "Valiz listesi: ${items.joinToString(", ")}."
-            AssistantTone.DETAYLI_UZMAN -> "Destinasyon verileri ışığında valiz optimizasyonu için; ${items.joinToString(", ")} materyallerinin envanterde bulundurulması elzemdir."
-            else -> "Valizine şunları eklemeni öneririm: ${items.joinToString(", ")}."
+            AssistantTone.SAMIMI -> "$city seyahatin için valizini ben hazırladım bile canım! ✨ Hava gündüz $temp°, gece ise $minTemp° civarında olacak. Şu listeyi unutma: $listStr. Şimdiden iyi yolculuklar! ✈️"
+            AssistantTone.RESMI -> "$city seyahatiniz için hazırlanan ekipman listesi: Gündüz sıcaklığı $temp°C, gece $minTemp°C olarak öngörüldüğünden valizinizde $listStr bulunması tavsiye edilir."
+            AssistantTone.DETAYLI_UZMAN -> "Destinasyon Lojistik Analizi ($city): Termal spektrum $minTemp°C ile $temp°C arasındadır. Presipitasyon riski %$precip seviyesindedir. Optimizasyon için önerilen materyaller: $listStr. Hazırlıklarınızı bu verilere göre tamamlayınız."
+            AssistantTone.KISA_NET -> "$city Valizi ($temp°/$minTemp°): $listStr."
+            else -> "$city seyahatin için valizine şunları almanı öneririm: $listStr. Gündüz hava $temp° iken akşam $minTemp° dereceye kadar düşebilir, hazırlıklı olmalısın."
         }
     }
 
-    private fun generateCalendarReply(weatherData: WeatherData, travelPlans: List<TravelPlan>, tone: AssistantTone): String {
-        if (travelPlans.isEmpty()) return "Takviminizde henüz planlı bir etkinlik bulunmuyor."
-        val result = travelPlans.take(3).joinToString(", ") { "${it.startDate}: ${it.city}" }
-        return when (tone) {
-            AssistantTone.SAMIMI -> "Takvimine baktım canım, yakında şunlar var: $result. Heyecanlı mısın? 😊"
-            AssistantTone.RESMI -> "Kayıtlı seyahat planlarınız şu şekildedir: $result. Bilgilerinize sunulur."
-            AssistantTone.KISA_NET -> "Planlar: $result."
-            AssistantTone.DETAYLI_UZMAN -> "Mevcut seyahat projeksiyonu şu takvimsel verileri içermektedir: $result. Lojistik hazırlıkların bu tarihlere göre revize edilmesi önerilir."
-            else -> "Yaklaşan seyahat planlarınız:\n$result"
-        }
-    }
-
-    private fun generateGeneralWeatherReply(weatherData: WeatherData, tone: AssistantTone): String {
-        val city = weatherData.cityName
-        val temp = weatherData.temperature
-        val cond = weatherData.condition.lowercase(Locale("tr"))
-        val feels = weatherData.feelsLike
+    private fun generateGeneralWeatherReply(weather: WeatherData, tone: AssistantTone): String {
+        val city = weather.cityName
+        val temp = weather.temperature
+        val cond = weather.condition.lowercase(Locale("tr"))
+        val feels = weather.feelsLike
 
         return when (tone) {
             AssistantTone.SAMIMI -> "Selam canım! 😊 $city'de hava şu an $temp, ama nemden dolayı $feels gibi hissediliyor. Gökyüzü de $cond, tam gezmelik!"
@@ -309,11 +198,7 @@ object RecommendationEngine {
     private fun generateTravelReply(prompt: String, weatherData: WeatherData, travelPlans: List<TravelPlan>, tone: AssistantTone): String {
         val detectedCity = AiIntentParser.detectCity(prompt)
         val today = LocalDate.now()
-
-        // Takvimdeki en yakın ve aktif seyahati bul
-        val nextPlan = travelPlans
-            .filter { !it.isArchived && !it.endDate.isBefore(today) }
-            .minByOrNull { it.startDate }
+        val nextPlan = travelPlans.filter { !it.isArchived && !it.endDate.isBefore(today) }.minByOrNull { it.startDate }
 
         val city = detectedCity ?: nextPlan?.city
 
@@ -326,13 +211,6 @@ object RecommendationEngine {
             }
         }
 
-        // Eğer kullanıcı mevcut konumunu sormuşsa ama takvimde oraya bir seyahat YOKSA
-        // ve bu bir TRAVEL intent ise (promptta seyahat kelimesi geçiyor vs)
-        // Mevcut konumu "seyahat" olarak değerlendirmemek için kontrol:
-        if (detectedCity == null && nextPlan == null) {
-             // Bu durumda yukarıdaki city == null zaten yakalar.
-        }
-
         return when (tone) {
             AssistantTone.SAMIMI -> "$city seyahatin için hava süper görünüyor canım! 😊 Valiz hazırlığı için bana her zaman sorabilirsin."
             AssistantTone.RESMI -> "$city istikametine yapılacak seyahatler için atmosferik koşullar elverişlidir. Seyahat öncesi valiz hazırlığı hususunda tarafımızdan teknik destek alabilirsiniz."
@@ -342,33 +220,8 @@ object RecommendationEngine {
         }
     }
 
-    private fun generateTripRiskReply(weatherData: WeatherData, tone: AssistantTone): String {
-        val precip = weatherData.precipitationProbability ?: 0
-        return when (tone) {
-            AssistantTone.SAMIMI -> if (precip > 50) "⚠️ Dikkat canım, yolda biraz yağmur olabilir, yavaş git emi?" else "✅ Yol tertemiz, gönül rahatlığıyla çıkabilirsin!"
-            AssistantTone.RESMI -> if (precip > 50) "⚠️ Dikkat: Güzergah üzerinde yağış riski bulunmaktadır. Güvenli sürüş kurallarına riayet ediniz." else "✅ Seyahat güzergahı üzerinde herhangi bir risk tespit edilmemiştir."
-            AssistantTone.KISA_NET -> if (precip > 50) "Yağış riski var. Dikkatli sür." else "Yol açık. Risk yok."
-            AssistantTone.DETAYLI_UZMAN -> if (precip > 50) "Analiz raporu: Rota üzerinde %$precip olasılıkla presipitasyon öngörülmektedir. Fren mesafesi ve görüş mesafesi parametrelerini optimize ediniz." else "Sismik ve atmosferik veriler yol güvenliği için ideal seviyededir. Operasyonel bir engel bulunmamaktadır."
-            else -> if (precip > 50) "⚠️ Dikkat: Yağış riski var. Sürüş güvenliğine dikkat edin." else "✅ Seyahat rotası üzerinde şu an için bir risk görünmüyor."
-        }
-    }
-
-    private fun generateWeekendReply(weatherData: WeatherData, tone: AssistantTone): String {
-        val sat = weatherData.dailyForecast.find { it.day.contains("Cumartesi", true) }
-        val sun = weatherData.dailyForecast.find { it.day.contains("Pazar", true) }
-        if (sat == null || sun == null) return "Hafta sonu verileri henüz netleşmedi."
-
-        return when (tone) {
-            AssistantTone.SAMIMI -> "Hafta sonu planın varsa süper! 😊 Cmt ${sat.maxTemp}°, Pazar ${sun.maxTemp}° olacak. Bence şimdiden planını yap!"
-            AssistantTone.RESMI -> "Hafta sonu meteorolojik projeksiyonu: Cumartesi günü en yüksek sıcaklık ${sat.maxTemp}°C, Pazar günü ise ${sun.maxTemp}°C olarak öngörülmektedir."
-            AssistantTone.KISA_NET -> "Hafta sonu: Cmt ${sat.maxTemp}°, Paz ${sun.maxTemp}°."
-            AssistantTone.DETAYLI_UZMAN -> "Hafta sonu periyodu için 48 saatlik tahmin simülasyonu: Cumartesi günü termal zirve ${sat.maxTemp}°C, Pazar günü ise ${sun.maxTemp}°C düzeyindedir. Aktivite planlaması bu dalgalanmaya göre stabilize edilmelidir."
-            else -> "Hafta sonu tahmini:\nCumartesi: ${sat.maxTemp}°\nPazar: ${sun.maxTemp}°"
-        }
-    }
-
     /**
-     * Gelişmiş Seyahat Önerisi - Karşılaştırma ve Detaylı Analiz
+     * Gelişmiş Seyahat Önerisi - Kart Görünümü İçin
      */
     fun generateTravelRecommendation(
         plan: TravelPlan,
@@ -376,47 +229,16 @@ object RecommendationEngine {
         previousSnapshot: ForecastSnapshot? = null,
         tone: AssistantTone = AssistantTone.DENGELI
     ): String {
-        if (currentSnapshot == null) {
-            return when (tone) {
-                AssistantTone.SAMIMI -> "${plan.city} seyahatin için heyecan dorukta! ✈️ Hazırlıklara şimdiden başla canım."
-                AssistantTone.RESMI -> "${plan.city} seyahati planlamanız onaylanmıştır. Hazırlık sürecine başlanması önerilir."
-                AssistantTone.KISA_NET -> "${plan.city} hazırlıkları başlasın."
-                AssistantTone.DETAYLI_UZMAN -> "${plan.city} destinasyonu için lojistik planlama evresine geçilmesi meteorolojik açıdan tavsiye edilir."
-                else -> "${plan.city} seyahati için hazırlıklar başlasın! ✈️"
-            }
-        }
+        if (currentSnapshot == null) return "${plan.city} seyahati için hazırlıklar başlasın! ✈️"
 
         val cond = currentSnapshot.conditionSummary?.lowercase(Locale("tr")) ?: "değişken"
         val maxT = currentSnapshot.maxTemp?.toInt() ?: 20
         val rain = currentSnapshot.precipitationProbability ?: 0
 
         return when (tone) {
-            AssistantTone.SAMIMI -> {
-                var msg = "${plan.city} seyahatin yaklaşıyor canım! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. 😊"
-                if (rain > 50) msg += "\n☔ Bence yanına bir şemsiye almalısın, ıslanmanı istemem!"
-                else if (maxT > 30) msg += "\n☀️ Güneş kremini sakın unutma, hava baya sıcak olacak."
-                msg + "\n🎒 Valizine powerbank eklemeyi de unutma sakın!"
-            }
-            AssistantTone.RESMI -> {
-                var msg = "${plan.city} seyahatiniz yaklaşmaktadır. Tahmin edilen hava durumu $maxT°C ve $cond olarak bildirilmiştir."
-                if (rain > 50) msg += "\n☔ Yağış ihtimaline karşı teknik önlem (şemsiye/yağmurluk) alınması önerilir."
-                msg + "\n🎒 Gerekli ekipmanların (şarj cihazı/powerbank) valizinizde bulunması önem arz etmektedir."
-            }
-            AssistantTone.KISA_NET -> {
-                var msg = "${plan.city}: $maxT°, $cond."
-                if (rain > 50) msg += " Yağış riski: Şemsiye al."
-                msg + " Valiz: Powerbank ekle."
-            }
-            AssistantTone.DETAYLI_UZMAN -> {
-                var msg = "Analiz Raporu: ${plan.city} destinasyonunda troposferik veriler $maxT°C ve $cond koşulları öngörmektedir."
-                if (rain > 50) msg += "\n☔ Presipitasyon olasılığı %$rain düzeyinde olduğundan, dış mekan mobilite planlarının revize edilmesi önerilir."
-                msg + "\n🎒 Enerji yönetimi için powerbank gibi yardımcı donanımların envantere eklenmesi teknik tavsiyemizdir."
-            }
-            else -> {
-                var msg = "${plan.city} seyahatin yaklaşıyor! Seni $maxT° sıcaklıkta $cond bir hava bekliyor."
-                if (rain > 50) msg += "\n☔ Yağış ihtimali yüksek. Yanına şemsiye almanı öneririz."
-                msg + "\n🎒 Valizine powerbank eklemeyi unutma."
-            }
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin yaklaşıyor canım! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. 😊"
+            AssistantTone.RESMI -> "${plan.city} seyahatiniz yaklaşmaktadır. Tahmin edilen hava durumu $maxT°C ve $cond olarak bildirilmiştir."
+            else -> "${plan.city} seyahatin yaklaşıyor! Seni $maxT° sıcaklıkta $cond bir hava bekliyor."
         }
     }
 }
