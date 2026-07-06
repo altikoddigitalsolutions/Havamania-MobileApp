@@ -53,6 +53,7 @@ data class HourlyWeather(
     val weatherCode: Int = 0,
     val isDay: Boolean = true,
     val precipProb: String? = null,
+    val precipitationProbability: Int? = null,
     val iconName: String = "Cloud",
     val isSelected: Boolean = false
 )
@@ -63,6 +64,7 @@ data class DailyForecast(
     val date: String = "", // ISO date (YYYY-MM-DD)
     val minTemp: Int,
     val maxTemp: Int,
+    val precipitationProbability: Int? = null,
     val iconName: String = "WbSunny",
     val weatherCode: Int = 0,
     val isToday: Boolean = false

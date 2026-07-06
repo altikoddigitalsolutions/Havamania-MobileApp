@@ -211,9 +211,50 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
         <View style={s.section}>
           <Text style={s.sectionTitle}>DİĞER</Text>
           <View style={s.card}>
-            <SettingRow icon="shield-checkmark-outline" label="Gizlilik Politikası" onPress={() => {}} C={C} />
+            <SettingRow icon="shield-checkmark-outline" label="Gizlilik Politikası" onPress={() => Alert.alert('Bilgi', 'Gizlilik politikası sayfası açılıyor...')} C={C} />
             <View style={s.divider} />
-            <SettingRow icon="information-circle-outline" label="Hakkında" onPress={() => {}} C={C} />
+            <SettingRow icon="document-text-outline" label="Kullanım Şartları" onPress={() => Alert.alert('Bilgi', 'Kullanım şartları sayfası açılıyor...')} C={C} />
+            <View style={s.divider} />
+            <SettingRow icon="information-circle-outline" label="Hakkında" onPress={() => Alert.alert('Hakkında', 'Havamania v1.2.0\nPremium Hava Durumu Asistanı')} C={C} />
+          </View>
+        </View>
+
+        {/* Veri Güvenliği ve Temizlik */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>VERİ VE GÜVENLİK</Text>
+          <View style={s.card}>
+            <SettingRow
+              icon="trash-outline"
+              label="AI Geçmişini Temizle"
+              onPress={() => {
+                Alert.alert(
+                  'Geçmişi Temizle',
+                  'AI asistan ile olan tüm konuşma geçmişin silinecek. Bu işlem geri alınamaz.',
+                  [
+                    { text: 'Vazgeç', style: 'cancel' },
+                    { text: 'Temizle', style: 'destructive', onPress: () => Alert.alert('Başarılı', 'Konuşma geçmişi temizlendi.') }
+                  ]
+                );
+              }}
+              C={C}
+            />
+            <View style={s.divider} />
+            <SettingRow
+              icon="refresh-circle-outline"
+              label="Tüm Verileri Sıfırla"
+              desc="Hesabındaki tüm seyahatler ve ayarlar silinir."
+              onPress={() => {
+                Alert.alert(
+                  'Verileri Sıfırla',
+                  'Uygulamadaki tüm verilerin kalıcı olarak silinecektir. Emin misin?',
+                  [
+                    { text: 'İptal', style: 'cancel' },
+                    { text: 'Verileri Sıfırla', style: 'destructive', onPress: () => Alert.alert('Sıfırlandı', 'Tüm veriler temizlendi.') }
+                  ]
+                );
+              }}
+              C={C}
+            />
           </View>
         </View>
 

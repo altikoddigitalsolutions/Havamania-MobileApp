@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueries, useQuery} from '@tanstack/react-query';
+import { requestLocationPermission, showPermissionSettingsAlert } from '../utils/permissionUtils';
 import Geolocation from 'react-native-geolocation-service';
 
 import {getCurrentWeather, getDailyWeather, getHourlyWeather} from '../services/weatherApi';
@@ -68,17 +69,9 @@ export function MapScreen(): React.JSX.Element {
 
   const requestLocation = async () => {
     setLocating(true);
-    try {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('İzin Gerekli', 'Konumunuzu görmek için konum iznine ihtiyaç var.');
-          setLocating(false);
-          return;
-        }
-      }
+    const result = await requestLocationPermission();
+
+    if (result.granted) {
       Geolocation.getCurrentPosition(
         pos => {
           setUserLat(pos.coords.latitude);
@@ -86,13 +79,16 @@ export function MapScreen(): React.JSX.Element {
           setLocating(false);
         },
         () => {
-          Alert.alert('Hata', 'Konum alınamadı.');
+          Alert.alert('Hata', 'Konum verisi alınamadı.');
           setLocating(false);
         },
         {enableHighAccuracy: true, timeout: 10000, maximumAge: 5000},
       );
-    } catch {
+    } else {
       setLocating(false);
+      if (!result.canRetry) {
+        showPermissionSettingsAlert('location');
+      }
     }
   };
 

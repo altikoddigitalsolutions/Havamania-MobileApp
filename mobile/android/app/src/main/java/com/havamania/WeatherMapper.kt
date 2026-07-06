@@ -193,6 +193,7 @@ object WeatherMapper {
                 isDay = !timeObj.isBefore(sunrise) && timeObj.isBefore(sunset),
                 temp = "${hourly.temperature[i].toInt()}°",
                 precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
+                precipitationProbability = hourly.precipitationProbability?.get(i),
                 isSelected = fullTime == currentHourStr
             )
         }
@@ -208,6 +209,7 @@ object WeatherMapper {
                 weatherCode = daily.weatherCode[index],
                 minTemp = daily.tempMin[index].toInt(),
                 maxTemp = daily.tempMax[index].toInt(),
+                precipitationProbability = daily.precipProbMax?.getOrNull(index),
                 isToday = index == 0
             )
         }

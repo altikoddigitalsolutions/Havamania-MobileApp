@@ -58,7 +58,7 @@ import java.util.*
 // --- VIEWMODEL ---
 class AiChatViewModel(application: Application) : AndroidViewModel(application) {
     private val api = AltikodChatFactory.create()
-    private val botId = "1"
+    private val botId = "6"
     private var sessionId = UUID.randomUUID().toString()
 
     private val repository = WeatherRepository.getInstance(application)

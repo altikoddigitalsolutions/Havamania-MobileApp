@@ -30,7 +30,7 @@ fun PremiumScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PREMIUM",
+                title = "HAVAMANIA PREMIUM",
                 onBack = onBack
             )
         }
@@ -52,7 +52,7 @@ fun PremiumScreen(
                         .size(200.dp)
                         .background(
                             Brush.radialGradient(
-                                colors = listOf(themeColors.accent.copy(alpha = 0.2f), Color.Transparent)
+                                colors = listOf(themeColors.accent.copy(alpha = 0.25f), Color.Transparent)
                             )
                         )
                 )
@@ -60,7 +60,7 @@ fun PremiumScreen(
                     color = themeColors.accent.copy(alpha = 0.1f),
                     shape = CircleShape,
                     modifier = Modifier.size(100.dp),
-                    border = BorderStroke(2.dp, themeColors.accent.copy(alpha = 0.3f))
+                    border = BorderStroke(2.dp, themeColors.accent.copy(alpha = 0.4f))
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -76,7 +76,7 @@ fun PremiumScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                "Hava Durumunda Sınırları Kaldır",
+                "Atmosferik Gücü Serbest Bırak",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Black,
                     letterSpacing = (-0.5).sp
@@ -86,7 +86,7 @@ fun PremiumScreen(
             )
 
             Text(
-                "AI destekli seyahat analizleri, kişiselleştirilmiş uyarılar ve reklamsız bir atmosfer.",
+                "Gelişmiş AI analizleri ve kişiselleştirilmiş meteorolojik rehberlik ile standartların ötesine geçin.",
                 style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
                 color = themeColors.textSecondary.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
@@ -95,35 +95,42 @@ fun PremiumScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Features Grid
-            PremiumFeatureItem(
-                icon = Icons.Rounded.Route,
-                title = "Akıllı Seyahat Analizi",
-                desc = "10 günlük seyahat periyodunda valiz önerisinden rota güvenliğine her şey."
-            )
-            PremiumFeatureItem(
-                icon = Icons.Rounded.AutoAwesome,
-                title = "Hiper-Kişiselleştirme",
-                desc = "Sağlık hassasiyetlerine ve ilgi alanlarına göre özelleşmiş AI asistanı."
-            )
-            PremiumFeatureItem(
-                icon = Icons.Rounded.Compare,
-                title = "Trend Karşılaştırması",
-                desc = "Önceki tahminlerle güncel veriler arasındaki değişimleri anlık görün."
-            )
-            PremiumFeatureItem(
-                icon = Icons.Rounded.NotificationsActive,
-                title = "Kritik Hava Uyarıları",
-                desc = "UV, fırtına ve ani yağışlarda telefonunuza özel, anlaşılır bildirimler."
-            )
+            // Features List
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.Route,
+                    title = "Gelişmiş Seyahat Analizi",
+                    desc = "15 günlük seyahat periyodunda valiz önerisinden rota güvenliğine her şey."
+                )
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.Compare,
+                    title = "Tahmin Değişim Karşılaştırması",
+                    desc = "Önceki tahminlerle güncel veriler arasındaki farkları ve seyahat skorundaki değişimleri anlık takip edin."
+                )
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.NotificationsActive,
+                    title = "Akıllı Bildirimler",
+                    desc = "Anlık yağış, yüksek UV ve seyahat planınızdaki kritik hava değişiklikleri için kişisel uyarılar."
+                )
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = "Sınırsız AI Asistan",
+                    desc = "Sağlık hassasiyetlerinize ve ilgi alanlarınıza göre özelleşen hiper-kişiselleştirilmiş cevaplar."
+                )
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.History,
+                    title = "AI Sohbet Geçmişi",
+                    desc = "Asistanınızla yaptığınız tüm seyahat planlarını ve hava durumu analizlerini arşivleyin."
+                )
+            }
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Price Card (Prominent & Modern)
+            // Price Card
             Surface(
-                color = themeColors.accent.copy(alpha = 0.05f),
+                color = themeColors.accent.copy(alpha = 0.08f),
                 shape = RoundedCornerShape(32.dp),
-                border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.2f)),
+                border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -137,12 +144,12 @@ fun PremiumScreen(
                     ) {
                         Column {
                             Text(
-                                "Yıllık Abonelik",
+                                "Yıllık Premium",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                                 color = themeColors.textPrimary
                             )
                             Text(
-                                "Tüm özellikler açık",
+                                "Tüm özellikler sınırsız",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = themeColors.textSecondary
                             )
@@ -150,7 +157,7 @@ fun PremiumScreen(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                "₺199,99",
+                                "₺299,99",
                                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
                                 color = themeColors.textPrimary
                             )
@@ -165,19 +172,21 @@ fun PremiumScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     HavamaniaPrimaryButton(
-                        text = "PREMIUM'A GEÇ",
+                        text = "PREMIUM'U AKTİF ET",
                         onClick = onPurchaseSuccess,
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                        modifier = Modifier.fillMaxWidth().height(60.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
-                "Aboneliğinizi istediğiniz zaman Store üzerinden iptal edebilirsiniz.",
+                "Abonelik ödemeleri Store hesabınızdan tahsil edilir ve dilediğiniz zaman iptal edilebilir.",
                 style = MaterialTheme.typography.labelSmall,
                 color = themeColors.textMuted,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
             )
 
             Spacer(modifier = Modifier.height(100.dp))
@@ -192,33 +201,37 @@ fun PremiumFeatureItem(
     desc: String
 ) {
     val themeColors = HavamaniaTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Surface(
-            color = themeColors.accent.copy(alpha = 0.1f),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.size(44.dp)
+        Row(
+            modifier = Modifier.padding(vertical = 12.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
+            Surface(
+                color = themeColors.accent.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(46.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
+                }
             }
-        }
-        Spacer(modifier = Modifier.width(20.dp))
-        Column {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                color = themeColors.textPrimary
-            )
-            Text(
-                desc,
-                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
-                color = themeColors.textSecondary.copy(alpha = 0.7f)
-            )
+            Spacer(modifier = Modifier.width(20.dp))
+            Column {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
+                    color = themeColors.textPrimary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    desc,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = themeColors.textSecondary.copy(alpha = 0.75f)
+                )
+            }
         }
     }
 }

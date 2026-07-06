@@ -41,7 +41,7 @@ import {
 } from '../theme';
 import { formatPrecipitationProbability } from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
-import {WeatherAnimBox} from '../components/WeatherAnimBox';
+import { ErrorView, HomeSkeleton } from '../components/StateViews';
 import {AtmosphericWeatherCard} from '../components/AtmosphericWeatherCard';
 import {WeatherDetailsPanel} from '../components/WeatherDetailsPanel';
 import {HavamaniaRecommendationCard} from '../components/HavamaniaRecommendationCard';
@@ -159,29 +159,16 @@ export function HomeScreen(): React.JSX.Element {
   const s = makeStyles(C, insets);
 
   if (isLoading) {
-    return (
-      <SafeAreaView style={s.safe}>
-        <View style={s.center}>
-          <ActivityIndicator size="large" color={C.accent} />
-          <Text style={s.loadingText}>{t('home.loading')}</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <HomeSkeleton />;
   }
 
   // Hata Durumu (API Cevap Vermiyor veya Bağlantı Yok)
   if (currentQuery.isError || !currentQuery.data) {
     return (
-      <SafeAreaView style={s.safe}>
-        <View style={s.center}>
-          <Text style={{fontSize: 40, marginBottom: 16}}>⚠️</Text>
-          <Text style={s.errorText}>Hava verisi şu an alınamıyor.</Text>
-          <Text style={s.loadingText}>Lütfen internet bağlantını kontrol et.</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={onRefresh}>
-            <Text style={s.retryText}>Tekrar Dene</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <ErrorView
+        type={currentQuery.error ? 'api-fail' : 'no-internet'}
+        onRetry={onRefresh}
+      />
     );
   }
 
@@ -300,6 +287,7 @@ export function HomeScreen(): React.JSX.Element {
         {/* ── Havamania Önerisi (AI Recommendation) ── */}
         <HavamaniaRecommendationCard
           weather={current}
+          profile={profileQuery.data}
           onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
           C={C}
         />

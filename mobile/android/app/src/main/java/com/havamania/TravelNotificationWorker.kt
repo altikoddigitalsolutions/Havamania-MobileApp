@@ -56,8 +56,8 @@ class TravelNotificationWorker(
             // Geçmiş seyahatleri atla
             if (isOver) continue
 
-            // KURAL: Seyahate 10 gün veya daha az kaldıysa (seyahat günü dahil)
-            if (daysUntil in 0..10) {
+            // KURAL: Seyahate 15 gün veya daha az kaldıysa (seyahat günü dahil)
+            if (daysUntil in 0..15) {
                 // KURAL: Günde maksimum 1 bildirim gönder
                 if (plan.lastDailyNotificationDate == dateStr) continue
 

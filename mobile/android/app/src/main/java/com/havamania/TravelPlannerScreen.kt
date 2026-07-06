@@ -661,7 +661,7 @@ fun TravelPlanCard(
 
             if (!isArchived) {
                 Text(
-                    text = latestAnalysis?.summary ?: "Detaylı şehir analizi seyahate 10 gün kala otomatik olarak burada belirecek.",
+                    text = latestAnalysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
                     style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontSize = 13.sp),
                     color = themeColors.textPrimary.copy(alpha = 0.85f),
                     maxLines = 2,
@@ -682,7 +682,7 @@ fun TravelPlanCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!isArchived && !isPast && ChronoUnit.DAYS.between(today, plan.startDate) <= 10) {
+                if (!isArchived && !isPast && ChronoUnit.DAYS.between(today, plan.startDate) <= 15) {
                     TextButton(
                         onClick = onReanalyze,
                         enabled = !plan.isAnalyzing,
@@ -799,7 +799,7 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
             plan.isAnalyzing -> "Analiz hazırlanıyor..."
             hasAnalysisData && isWeatherReal -> "✅ Seyahat Önerilerin Hazır"
             hasAnalysisData -> "✅ Temel Öneriler Hazır"
-            daysUntilTrip > 10 -> "📅 10 gün kala hazırlanacak"
+            daysUntilTrip > 15 -> "📅 15 gün kala hazırlanacak"
             else -> "❌ Veri Alınamadı"
         }
 
@@ -812,7 +812,7 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
         Spacer(Modifier.height(4.dp))
 
         Text(
-            text = analysis?.summary ?: "Detaylı şehir analizi seyahate 10 gün kala otomatik olarak burada belirecek.",
+            text = analysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
             color = themeColors.textPrimary.copy(alpha = 0.9f),
             maxLines = if (isExpanded) Int.MAX_VALUE else 2,
@@ -894,7 +894,7 @@ fun ActionRow(
                     icon = Icons.Rounded.Analytics
                 )
             } else {
-                if (daysUntilTrip <= 10) {
+                if (daysUntilTrip <= 15) {
                     OutlinedButton(
                         onClick = onReanalyze,
                         modifier = Modifier.height(36.dp),
