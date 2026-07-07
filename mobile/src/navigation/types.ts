@@ -31,5 +31,6 @@ export type MainStackParamList = {
   Alerts: undefined;
   Map: undefined;
   TravelCalendar: undefined;
-  Settings: undefined;    // Yeni Ayarlar ekranı
+  Settings: undefined;
+  Premium: undefined;
 };

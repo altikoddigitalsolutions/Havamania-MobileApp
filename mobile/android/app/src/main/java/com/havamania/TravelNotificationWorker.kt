@@ -52,20 +52,21 @@ class TravelNotificationWorker(
             val plan = entity.toDomain()
             val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
             val isOver = today.isAfter(plan.endDate)
+            val isOngoing = !today.isBefore(plan.startDate) && !today.isAfter(plan.endDate)
 
             // Geçmiş seyahatleri atla
             if (isOver) continue
 
-            // KURAL: Seyahate 15 gün veya daha az kaldıysa (seyahat günü dahil)
-            if (daysUntil in 0..15) {
+            // KURAL: Seyahate TRIP_ANALYSIS_WINDOW_DAYS gün veya daha az kaldıysa VEYA seyahat devam ediyorsa
+            if (daysUntil in 0..TRIP_ANALYSIS_WINDOW_DAYS || isOngoing) {
                 // KURAL: Günde maksimum 1 bildirim gönder
                 if (plan.lastDailyNotificationDate == dateStr) continue
 
-                // Önce analizi güncelle (İnternet bağımlılığı TravelViewModel tarafından yönetilir)
+                // Önce analizi güncelle
                 val updatedPlan = try {
                     travelViewModel.performAnalysis(plan)
                 } catch (e: Exception) {
-                    plan // Analiz başarısızsa eski veriyi kullan
+                    plan
                 }
 
                 // Analiz güncellendiyse kaydet
@@ -74,7 +75,7 @@ class TravelNotificationWorker(
                 }
 
                 val travelData = buildNotificationData(updatedPlan, daysUntil)
-                val (title, message) = generateNotificationText(updatedPlan, daysUntil, travelData)
+                val (title, message) = generateNotificationText(updatedPlan, daysUntil, isOngoing, travelData)
 
                 val notificationId = "travel_${plan.id}_$dateStr"
 
@@ -91,10 +92,7 @@ class TravelNotificationWorker(
                     travelData = travelData
                 )
 
-                // Yerel bildirim listesine ekle
                 notificationDao.insert(notificationItem)
-
-                // Sistem bildirimini göster
                 showSystemNotification(notificationItem)
 
                 // KURAL: Bugün bildirim gönderildi olarak işaretle
@@ -146,17 +144,25 @@ class TravelNotificationWorker(
     private fun generateNotificationText(
         plan: TravelPlan,
         daysLeft: Int,
+        isOngoing: Boolean,
         data: TravelNotificationData
     ): Pair<String, String> {
         val latestAnalysis = plan.analyses.lastOrNull()
         val dateFormatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
         val dateRange = "${plan.startDate.format(dateFormatter)} - ${plan.endDate.format(dateFormatter)}"
 
-        // KURAL 13: Başlık formatı kategori bazlı standartlaştırıldı
         val title = "Seyahat Güncellemesi"
         val cityLabel = "${plan.city} • $dateRange"
 
         val message = when {
+            isOngoing -> {
+                val today = LocalDate.now()
+                val dayCount = ChronoUnit.DAYS.between(plan.startDate, today).toInt() + 1
+                val weather = if (data.weatherSummary != null)
+                    "Bugün hava ${data.weatherSummary.lowercase()}, ${data.maxTemp?.toInt()}°."
+                    else "Hava tahminlerini kontrol etmeyi unutma."
+                "$cityLabel: Seyahatin devam ediyor (Gün: $dayCount). $weather"
+            }
             daysLeft == 0 -> {
                 val weather = if (data.weatherSummary != null)
                     "Hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
@@ -208,7 +214,7 @@ class TravelNotificationWorker(
         )
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher) // Use valid icon
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(item.title)
             .setContentText(item.message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
@@ -270,7 +276,6 @@ class TravelNotificationWorker(
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            // Saat 09:00 için gecikmeyi hesapla
             val currentDate = LocalDateTime.now()
             var dueDate = LocalDateTime.now()
                 .withHour(9)

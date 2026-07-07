@@ -97,23 +97,30 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
 
   const isActuallyDay = currentHour >= sunriseHour && currentHour < sunsetHour;
 
-  // 2. Yörünge Hesaplama (Celestial Orbit)
-  const celestialProgress = useMemo(() => {
-    if (isActuallyDay) {
-      // Gündüz: Sol (Doğu) -> Sağ (Batı)
-      return (currentHour - sunriseHour) / (sunsetHour - sunriseHour);
-    } else {
-      // Gece: Sağ (Batı) -> Sol (Doğu)
-      let elapsed;
-      const totalNight = (24 - sunsetHour) + sunriseHour;
-      if (currentHour >= sunsetHour) elapsed = currentHour - sunsetHour;
-      else elapsed = (24 - sunsetHour) + currentHour;
-      return elapsed / totalNight;
-    }
-  }, [currentHour, sunriseHour, sunsetHour, isActuallyDay]);
+  // 2. Bağımsız Yörünge Hesaplamaları
+  const sunProgress = useMemo(() => {
+    const p = (currentHour - sunriseHour) / (sunsetHour - sunriseHour);
+    return Math.max(0, Math.min(1, p));
+  }, [currentHour, sunriseHour, sunsetHour]);
 
-  // 3. Arka Plan Dönemi Hesaplama
-  const getPeriod = (h: number): TimePeriod => {
+  const moonProgress = useMemo(() => {
+    let elapsed;
+    const totalNight = (24 - sunsetHour) + sunriseHour;
+    if (currentHour >= sunsetHour) elapsed = currentHour - sunsetHour;
+    else elapsed = (24 - sunsetHour) + currentHour;
+    const p = elapsed / totalNight;
+    return Math.max(0, Math.min(1, p));
+  }, [currentHour, sunriseHour, sunsetHour]);
+
+  // 3. Animasyon Değerleri
+  const sunPosAnim = useRef(new Animated.Value(sunProgress)).current;
+  const moonPosAnim = useRef(new Animated.Value(moonProgress)).current;
+  const bgFadeAnim = useRef(new Animated.Value(0)).current;
+  const entryAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  const currentPeriod = useMemo(() => {
+    const h = currentHour;
     if (h < 5) return TimePeriod.DEEP_NIGHT;
     if (h < 7) return TimePeriod.SUNRISE;
     if (h < 10) return TimePeriod.MORNING;
@@ -122,25 +129,16 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
     if (h < 21) return TimePeriod.SUNSET;
     if (h < 23) return TimePeriod.DUSK;
     return TimePeriod.NIGHT;
-  };
-
-  const currentPeriod = getPeriod(currentHour);
-
-  // 4. Animasyon Değerleri
-  const celestialAnim = useRef(new Animated.Value(celestialProgress)).current;
-  const bgFadeAnim = useRef(new Animated.Value(0)).current;
-  const entryAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current;
-  const masterAnim = useRef(new Animated.Value(0)).current;
+  }, [currentHour]);
 
   const [bgLayerFrom, setBgLayerFrom] = useState(currentPeriod);
   const [bgLayerTo, setBgLayerTo] = useState(currentPeriod);
 
-  // 5. Efektler
+  // 4. Efekt Başlatıcılar
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
     Animated.timing(entryAnim, { toValue: 1, duration: 800, easing: Easing.out(Easing.back(1)), useNativeDriver: true }).start();
-    Animated.loop(Animated.timing(masterAnim, { toValue: 1, duration: 25000, easing: Easing.linear, useNativeDriver: true })).start();
+
     Animated.loop(Animated.sequence([
       Animated.timing(pulseAnim, { toValue: 1, duration: 3000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
       Animated.timing(pulseAnim, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
@@ -148,54 +146,54 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
   }, []);
 
   useEffect(() => {
-    // Konum Güncelleme (Yumuşak Geçiş)
-    Animated.timing(celestialAnim, {
-      toValue: celestialProgress,
-      duration: 1500,
-      easing: Easing.inOut(Easing.sine),
-      useNativeDriver: false,
-    }).start();
+    // Konum Güncellemeleri
+    Animated.parallel([
+      Animated.timing(sunPosAnim, { toValue: sunProgress, duration: 1500, easing: Easing.inOut(Easing.sine), useNativeDriver: false }),
+      Animated.timing(moonPosAnim, { toValue: moonProgress, duration: 1500, easing: Easing.inOut(Easing.sine), useNativeDriver: false }),
+    ]).start();
 
     // Arka Plan Geçişi
     if (currentPeriod !== bgLayerTo) {
       setBgLayerFrom(bgLayerTo);
       setBgLayerTo(currentPeriod);
       bgFadeAnim.setValue(0);
-      Animated.timing(bgFadeAnim, {
-        toValue: 1,
-        duration: 2500,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(bgFadeAnim, { toValue: 1, duration: 2500, useNativeDriver: true }).start();
     }
-  }, [celestialProgress, currentPeriod]);
+  }, [sunProgress, moonProgress, currentPeriod]);
 
-  // 6. Geometri ve Interpolation
+  // 5. Geometri
   const hPadding = 50;
-  const startX = isActuallyDay ? hPadding : SCREEN_WIDTH - hPadding - 60;
-  const endX = isActuallyDay ? SCREEN_WIDTH - hPadding - 60 : hPadding;
+  const arcHeight = 140;
 
-  const cX = celestialAnim.interpolate({
+  // GÜNEŞ YÖRÜNGESİ (Sol -> Sağ)
+  const sunX = sunPosAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [startX, endX]
+    outputRange: [hPadding, SCREEN_WIDTH - hPadding - 60]
   });
-
-  const cY = celestialAnim.interpolate({
+  const sunY = sunPosAnim.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: [200, 70, 200]
+    outputRange: [220, 70, 220]
   });
-
-  const cScale = celestialAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.8, 1.1, 0.8]
-  });
-
-  const cOpacity = celestialAnim.interpolate({
-    inputRange: [0, 0.1, 0.9, 1],
+  const sunOpacity = sunPosAnim.interpolate({
+    inputRange: [0, 0.05, 0.95, 1],
     outputRange: [0, 1, 1, 0]
   });
 
-  // 7. Render Yardımcıları
+  // AY YÖRÜNGESİ (Sağ -> Sol)
+  const moonX = moonPosAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SCREEN_WIDTH - hPadding - 60, hPadding]
+  });
+  const moonY = moonPosAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [220, 70, 220]
+  });
+  const moonOpacity = moonPosAnim.interpolate({
+    inputRange: [0, 0.05, 0.95, 1],
+    outputRange: [0, 1, 1, 0]
+  });
+
+  // 6. Render Yardımcıları
   const stars = useMemo(() => [...Array(40)].map((_, i) => ({
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 60}%`,
@@ -216,30 +214,51 @@ export const AtmosphericWeatherCard: React.FC<AtmosphericWeatherCardProps> = ({
           <LinearGradient colors={GRADIENT_CONFIG[bgLayerTo]} style={StyleSheet.absoluteFill} start={{x:0, y:0}} end={{x:1, y:1}} />
         </Animated.View>
 
-        {/* Gökyüzü ve Celestial Body */}
+        {/* Gökyüzü Elemanları */}
         <View style={StyleSheet.absoluteFill}>
           {!isActuallyDay && stars.map((p, i) => <Star key={i} p={p} />)}
 
-          <Animated.View style={[
-            styles.celestialBody,
-            {
-              transform: [
-                { translateX: cX },
-                { translateY: cY },
-                { scale: cScale }
-              ],
-              opacity: cOpacity
-            }
-          ]}>
+          {/* BAĞIMSIZ GÜNEŞ OBJESİ */}
+          {isActuallyDay && (
             <Animated.View style={[
-                styles.celestialGlow,
+                styles.celestialBody,
                 {
-                    backgroundColor: isActuallyDay ? '#FCD34D' : '#F8FAFC',
-                    opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.35] })
+                  transform: [
+                    { translateX: sunX },
+                    { translateY: sunY },
+                    { scale: sunPosAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.8, 1.1, 0.8] }) }
+                  ],
+                  opacity: sunOpacity
                 }
-            ]} />
-            <Text style={styles.celestialEmoji}>{isActuallyDay ? '☀️' : '🌙'}</Text>
-          </Animated.View>
+            ]}>
+                <Animated.View style={[
+                    styles.celestialGlow,
+                    { backgroundColor: '#FCD34D', opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.4] }) }
+                ]} />
+                <Text style={styles.celestialEmoji}>☀️</Text>
+            </Animated.View>
+          )}
+
+          {/* BAĞIMSIZ AY OBJESİ */}
+          {!isActuallyDay && (
+            <Animated.View style={[
+                styles.celestialBody,
+                {
+                  transform: [
+                    { translateX: moonX },
+                    { translateY: moonY },
+                    { scale: moonPosAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 1.0, 0.7] }) }
+                  ],
+                  opacity: moonOpacity
+                }
+            ]}>
+                <Animated.View style={[
+                    styles.celestialGlow,
+                    { backgroundColor: '#F8FAFC', opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.25] }) }
+                ]} />
+                <Text style={styles.celestialEmoji}>🌙</Text>
+            </Animated.View>
+          )}
         </View>
 
         <View style={styles.glassOverlay} />
@@ -302,14 +321,14 @@ const Star = ({ p }: any) => {
 };
 
 const getDisplayTitle = (code: number, isDay: boolean) => {
-    if (code === 0) return isDay ? "Güneşli" : "Açık";
+    if (code === 0) return isDay ? "Güneşli" : "Açık Gece";
     if (code <= 2) return "Az Bulutlu";
     if (code === 3) return "Parçalı Bulutlu";
     if (code <= 48) return "Sisli";
     if (code <= 67) return "Yağmurlu";
     if (code <= 82) return "Sağanak Yağış";
     if (code <= 99) return "Fırtınalı";
-    return isDay ? "Güneşli" : "Açık";
+    return isDay ? "Güneşli" : "Açık Gece";
 };
 
 const getDisplayEmoji = (code: number, isDay: boolean) => {

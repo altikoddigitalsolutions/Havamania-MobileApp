@@ -10,6 +10,8 @@ import java.util.*
 /**
  * Modern Travel Planner Models
  */
+const val TRIP_ANALYSIS_WINDOW_DAYS = 10
+
 enum class TripType(val label: String, val icon: ImageVector) {
     BUSINESS("💼 İş", Icons.Rounded.BusinessCenter),
     VACATION("🏖 Tatil", Icons.Rounded.BeachAccess),

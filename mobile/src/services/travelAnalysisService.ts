@@ -16,6 +16,8 @@ export interface TravelAnalysisResult {
   status: 'past' | 'active' | 'ready' | 'pending' | 'far-future';
   packing: string[];
   activities: string[];
+  localTips: string[];
+  comparison?: string;
   metrics?: {
     rain_sum: number;
     wind_max: number;
@@ -48,9 +50,11 @@ export function analyzeTravelPlan(
   items: DailyWeatherItem[],
   startDate: string,
   endDate: string,
-  type: TravelType
+  type: TravelType,
+  city: string
 ): TravelAnalysisResult {
   const periodItems = items.filter(i => i.date >= startDate && i.date <= endDate);
+  const daysUntilStart = Math.ceil((new Date(startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 
   if (periodItems.length === 0) {
     return {
@@ -59,13 +63,14 @@ export function analyzeTravelPlan(
       maxPrecipProbability: UNKNOWN,
       precipitationRiskText: UNKNOWN,
       summary: 'Veri yok',
-      advice: 'Hava durumu verisi henüz mevcut değil.',
+      advice: daysUntilStart > 15 ? 'Seyahatine 15 günden fazla var. Tahminler yaklaştıkça burası güncellenecek.' : 'Hava durumu verisi henüz mevcut değil.',
       icon: 'help-circle-outline',
       emoji: '❓',
       color: '#94A3B8',
-      status: 'pending',
+      status: daysUntilStart > 15 ? 'far-future' : 'pending',
       packing: ['Standart'],
-      activities: []
+      activities: [],
+      localTips: []
     };
   }
 
@@ -83,8 +88,9 @@ export function analyzeTravelPlan(
   const precipitationRiskText = getPrecipitationRiskText(rawMaxProb, maxPrecipSum, mainWeatherCode);
 
   let score = 100;
-  let packing = ["Rahat ayakkabı", "Powerbank"];
-  let activities = ["Şehir turu"];
+  let packing = ["Rahat ayakkabı", "Powerbank", "Kişisel bakım kiti"];
+  let activities = ["Şehir turu", "Yerel lezzet tadımı"];
+  let localTips = [`${city} seyahatinde güncel hava durumuna göre planlarını esnek tutman faydalı olabilir.`];
 
   // Scoring logic
   let probForScore = typeof rawMaxProb === 'number' ? rawMaxProb : 0;
@@ -94,56 +100,71 @@ export function analyzeTravelPlan(
 
   if (probForScore > 60) {
     score -= 40;
-    packing.push("Şemsiye", "Su geçirmeyen bot", "Yağmurluk");
-    activities.push("Müze ziyareti", "Kapalı alan aktiviteleri");
+    packing.push("Şemsiye", "Su geçirmeyen ayakkabı", "Yağmurluk");
+    activities.push("Müze ziyareti", "Kapalı çarşı gezisi");
+    localTips.push("Yağışlı havalarda kapalı mekanları tercih etmen konforunu artıracaktır.");
   } else if (probForScore > 30) {
     score -= 20;
-    packing.push("Şemsiye");
-    activities.push("Kısa yürüyüşler");
+    packing.push("Kompakt şemsiye");
+    activities.push("Kısa sahil yürüyüşleri");
   }
 
   if (windMax > 40) {
       score -= 15;
-      packing.push("Rüzgarlık");
+      packing.push("Rüzgar kesici ceket");
   }
 
   if (uvMax > 7) {
-      packing.push("Güneş kremi (50+ SPF)", "Geniş kenarlı şapka");
+      packing.push("Güneş kremi (50+ SPF)", "Geniş kenarlı şapka", "Güneş gözlüğü");
   }
 
   switch (type) {
     case 'Beach':
       if (avgMax < 24) score -= 30;
-      packing.push("Mayo", "Plaj havlusu", "Güneş gözlüğü");
-      activities.push("Yüzme", "Güneşlenme");
+      packing.push("Mayo", "Plaj havlusu", "Terlik");
+      activities.push("Yüzme", "Güneşlenme", "Tekne turu");
+      localTips.push("Akşamları deniz meltemi serinletebilir, yanına ince bir hırka almalısın.");
       break;
     case 'Winter':
       if (avgMax > 8) score -= 30;
-      packing.push("Kalın mont", "Termal içlik", "Bere & Eldiven");
-      activities.push("Kayak / Snowboard", "Sıcak içecek keyfi");
+      packing.push("Kalın mont", "Termal içlik", "Bere & Eldiven", "Kalın çorap");
+      activities.push("Kayak / Snowboard", "Sıcak çikolata keyfi");
+      localTips.push("Kar yağışı durumunda ulaşım süreleri uzayabilir, planlarını erken yap.");
       break;
     case 'Camping':
       if (avgMin < 6) score -= 25;
       if (probForScore > 30) score -= 30;
-      packing.push("Uyku tulumu", "Kafa lambası", "İlkyardım kiti");
-      activities.push("Kamp ateşi", "Yıldız gözlemi");
+      packing.push("4 mevsim uyku tulumu", "Kafa lambası", "Yedek pil", "Su arıtma tableti");
+      activities.push("Kamp ateşi", "Gece yıldız gözlemi", "Hafif hiking");
+      localTips.push("Zemin nemli olabilir, çadır altlığı kullanmayı unutma.");
       break;
     case 'Culture':
-      activities.push("Tarihi yerler", "Yerel lezzet tadımı");
+      activities.push("Tarihi saray ziyareti", "Sanat galerileri");
+      packing.push("Yürüyüş ayakkabısı");
+      localTips.push("Popüler yerler için biletlerini önceden online alarak vakit kazanabilirsin.");
       break;
   }
 
   score = Math.max(0, Math.min(100, score));
   const weatherLabel = getWeatherLabel(mainWeatherCode).toLowerCase();
 
-  let advice = `Hava genellikle ${weatherLabel}.`;
-  if (probForScore > 70) advice += " Yağış riski çok yüksek, planlarını buna göre yap.";
-  else if (avgMax > 30) advice += " Oldukça sıcak bir hava bekleniyor, sıvı tüketimine dikkat.";
-  else if (avgMin < 5) advice += " Geceler oldukça serin geçecek, tedbirli olmalısın.";
+  let advice = `Seyahat boyunca hava genellikle ${weatherLabel}.`;
+  if (probForScore > 70) advice += " Yağış riski çok yüksek, iç mekan planlarını önceliklendir.";
+  else if (avgMax > 30) advice += " Oldukça sıcak bir hava bekleniyor, güneşin dik geldiği saatlere dikkat.";
+  else if (avgMin < 5) advice += " Geceler dondurucu olabilir, konaklama yerinde ısıtma olduğundan emin ol.";
+
+  if (daysUntilStart <= 3) {
+      advice = "⚠️ Seyahatine çok az kaldı! " + advice + " Tahminler şu an oldukça net.";
+  }
 
   let color = "#10B981";
   if (score < 50) color = "#EF4444";
   else if (score < 80) color = "#F59E0B";
+
+  // Mock comparison for demonstration
+  const comparison = daysUntilStart < 7
+    ? "Önceki analize göre sıcaklıklar 2 derece düştü, yağış riski ise aynı kalıyor."
+    : "Tahminler henüz başlangıç aşamasında, stabil görünüyor.";
 
   return {
     score,
@@ -156,8 +177,10 @@ export function analyzeTravelPlan(
     emoji: getWeatherEmoji(mainWeatherCode),
     color,
     status: 'ready',
-    packing,
-    activities,
+    packing: [...new Set(packing)], // Unique items
+    activities: [...new Set(activities)],
+    localTips: [...new Set(localTips)],
+    comparison,
     metrics: {
         rain_sum: maxPrecipSum,
         wind_max: windMax,

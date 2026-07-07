@@ -100,7 +100,7 @@ fun PremiumScreen(
                 PremiumFeatureItem(
                     icon = Icons.Rounded.Route,
                     title = "Gelişmiş Seyahat Analizi",
-                    desc = "15 günlük seyahat periyodunda valiz önerisinden rota güvenliğine her şey."
+                    desc = "10 günlük seyahat periyodunda valiz önerisinden rota güvenliğine her şey."
                 )
                 PremiumFeatureItem(
                     icon = Icons.Rounded.Compare,

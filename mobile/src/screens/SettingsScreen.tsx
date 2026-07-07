@@ -13,6 +13,16 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import Icon from 'react-native-vector-icons/Ionicons';
 
+// Safe import for LinearGradient
+let LinearGradient: any;
+try {
+  LinearGradient = require('react-native-linear-gradient').default;
+} catch (e) {
+  LinearGradient = ({ children, colors, style }: any) => (
+    <View style={[style, { backgroundColor: colors[0] }]}>{children}</View>
+  );
+}
+
 import {SettingsStackParamList} from '../navigation/SettingsStack';
 import {
   getNotificationPreferences,
@@ -22,6 +32,7 @@ import {
 } from '../services/profileApi';
 import {useAuthStore} from '../store/authStore';
 import {useThemeStore} from '../store/themeStore';
+import {useTravelStore} from '../store/travelStore';
 import {useColors, Spacing, Radius, FontSize, AppColors} from '../theme';
 
 type Props = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
@@ -95,6 +106,24 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+
+        {/* Premium Promosyon */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={s.premiumCard}
+          onPress={() => (navigation as any).navigate('Premium')}>
+          <LinearGradient colors={[C.accent, C.accentDark]} style={s.premiumGradient} start={{x:0, y:0}} end={{x:1, y:1}}>
+            <View style={s.premiumContent}>
+              <View>
+                <Text style={s.premiumTitle}>Premium'a Geç</Text>
+                <Text style={s.premiumSubtitle}>Tüm özellikleri sınırsız kullanın</Text>
+              </View>
+              <View style={s.premiumBadge}>
+                <Icon name="ribbon" size={20} color={C.accent} />
+              </View>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
         {/* Görünüm Bölümü */}
         <View style={s.section}>
@@ -246,10 +275,20 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
               onPress={() => {
                 Alert.alert(
                   'Verileri Sıfırla',
-                  'Uygulamadaki tüm verilerin kalıcı olarak silinecektir. Emin misin?',
+                  'Uygulamadaki tüm verilerin (seyahatler, geçmiş, ayarlar) kalıcı olarak silinecektir. Bu işlem geri alınamaz. Emin misin?',
                   [
                     { text: 'İptal', style: 'cancel' },
-                    { text: 'Verileri Sıfırla', style: 'destructive', onPress: () => Alert.alert('Sıfırlandı', 'Tüm veriler temizlendi.') }
+                    {
+                      text: 'Tümünü Sıfırla',
+                      style: 'destructive',
+                      onPress: async () => {
+                         // Gerçek sıfırlama mantığı
+                         useTravelStore.getState().plans.forEach(p => useTravelStore.getState().removePlan(p.id));
+                         setTheme('light');
+                         setAnimationsEnabled(true);
+                         Alert.alert('Başarılı', 'Tüm veriler temizlendi.');
+                      }
+                    }
                   ]
                 );
               }}
@@ -313,6 +352,12 @@ const rowStyles = StyleSheet.create({
 const makeStyles = (C: AppColors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   content: { padding: Spacing.lg },
+  premiumCard: { marginBottom: 24, borderRadius: 20, overflow: 'hidden', elevation: 8, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
+  premiumGradient: { padding: 20 },
+  premiumContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  premiumTitle: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  premiumSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 2 },
+  premiumBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
   section: { marginBottom: 28 },
   sectionTitle: { fontSize: 12, fontWeight: '800', color: C.textMuted, letterSpacing: 1.5, marginBottom: 12, marginLeft: 4 },
   card: { backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border },

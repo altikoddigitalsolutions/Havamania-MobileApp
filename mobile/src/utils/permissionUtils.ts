@@ -22,11 +22,11 @@ export const requestLocationPermission = async (): Promise<PermissionResult> => 
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
-          title: 'Konum İzni Gerekli',
+          title: '📍 Konum İzni',
           message: 'Havamania, bulunduğun şehre göre anlık hava analizi ve kişisel öneriler sunmak için konumunu kullanır.',
-          buttonNeutral: 'Sonra Sor',
+          buttonNeutral: 'Daha Sonra',
           buttonNegative: 'İptal',
-          buttonPositive: 'Tamam',
+          buttonPositive: 'İzin Ver',
         }
       );
 
@@ -43,11 +43,35 @@ export const requestLocationPermission = async (): Promise<PermissionResult> => 
   return { granted: false, canRetry: true };
 };
 
+export const requestNotificationPermission = async (): Promise<PermissionResult> => {
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      try {
+        const granted = await PermissionsAndroid.request(
+          'android.permission.POST_NOTIFICATIONS' as any,
+          {
+            title: '🔔 Bildirim İzni',
+            message: 'Yağış, UV ve seyahat analizlerindeki önemli değişiklikleri zamanında bildirebilmemiz için bildirim iznine ihtiyacımız var.',
+            buttonNeutral: 'Daha Sonra',
+            buttonNegative: 'İptal',
+            buttonPositive: 'İzin Ver',
+          }
+        );
+        return {
+          granted: granted === PermissionsAndroid.RESULTS.GRANTED,
+          canRetry: granted !== PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN,
+        };
+      } catch (err) {
+        return { granted: false, canRetry: true };
+      }
+    }
+    return { granted: true, canRetry: true }; // iOS or older Android handles it differently or has it enabled
+};
+
 export const showPermissionSettingsAlert = (type: PermissionType) => {
-  const title = type === 'location' ? 'Konum İzni Reddedildi' : 'Bildirim İzni Gerekli';
+  const title = type === 'location' ? 'Konum İzni Gerekli' : 'Bildirim İzni Gerekli';
   const message = type === 'location'
     ? 'Hava durumunu bulunduğunuz konuma göre otomatik göstermek için ayarlardan konum iznini açmanız gerekiyor.'
-    : 'Önemli hava değişimlerinden anında haberdar olmak için bildirim iznini açmanızı öneririz.';
+    : 'Önemli hava değişimlerinden ve seyahat analizlerinden haberdar olmak için bildirim iznini açmanızı öneririz.';
 
   Alert.alert(
     title,

@@ -21,6 +21,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 
 import {askChatbot} from '../services/chatbotApi';
 import {getCurrentWeather} from '../services/weatherApi';
+import {getProfile} from '../services/profileApi';
 import {Spacing, Radius, FontSize, useColors, getWeatherEmoji, getWeatherLabel} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
@@ -76,6 +77,12 @@ export function ChatbotScreen(): React.JSX.Element {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
+  const profileQuery = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: !isGuest,
+  });
+
   const weatherQuery = useQuery({
     queryKey: ['weather', 'current', DEFAULT_LAT, DEFAULT_LON],
     queryFn: () => getCurrentWeather(DEFAULT_LAT, DEFAULT_LON),
@@ -87,7 +94,7 @@ export function ChatbotScreen(): React.JSX.Element {
       const tone = profileQuery.data?.assistant_tone || 'DENGELI';
       if (isGuest) {
         return new Promise((resolve) => {
-            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data, tone)), 1000);
+            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data, profileQuery.data, tone)), 1000);
         });
       }
       return askChatbot(question, tone);
@@ -329,7 +336,7 @@ function WeatherCard({ data, C, city }: { data: any, C: any, city: string }) {
   );
 }
 
-function buildLocalAnswer(question: string, weather: any, tone: string = 'DENGELI'): {answer: string} {
+function buildLocalAnswer(question: string, weather: any, profile: any, tone: string = 'DENGELI'): {answer: string} {
   if (!weather) return {answer: 'Hava durumu bilgisi yükleniyor, lütfen bekle.'};
   const q = question.toLowerCase();
   const temp = weather.temperature;
@@ -337,6 +344,9 @@ function buildLocalAnswer(question: string, weather: any, tone: string = 'DENGEL
   const precip = weather.precipitation_probability || 0;
   const wind = weather.wind_speed || 0;
   const uv = weather.uv_index || 0;
+
+  const interests = profile?.interest?.toLowerCase() || "";
+  const health = profile?.health_sensitivities?.toLowerCase() || "";
 
   if (tone === 'KISA_NET') {
     return { answer: `Hava ${desc}, ${temp}°C. Yağış ihtimali %${precip}. Rüzgar ${wind} km/s.` };
@@ -378,10 +388,20 @@ function buildLocalAnswer(question: string, weather: any, tone: string = 'DENGEL
   // Aktivite
   if (/picnic|piknik|yürüyüş|koşu|spor/i.test(q)) {
     const isGood = precip < 20 && wind < 25 && temp > 15 && temp < 30;
+
+    if (interests.includes("koşu") && temp < 25 && precip < 10) {
+        return { answer: "Koşu tutkun için harika bir hava! Sıcaklık ideal, nem düşük. Koşu ayakkabılarını hazırla! 🏃‍♂️" };
+    }
+
     if (isGood) {
       return { answer: `Bugün dışarıda vakit geçirmek için **mükemmel** bir gün! Hava ${desc.toLowerCase()}, sıcaklık ${temp}°C. Keyfini çıkar! 🧺` };
     }
     return { answer: `Hava koşulları (${desc.toLowerCase()}) dış mekan aktiviteleri için pek elverişli görünmüyor. 💨` };
+  }
+
+  // Sağlık
+  if (health.includes("uv") && uv > 5) {
+      return { answer: `Hassasiyetini dikkate aldığımızda, bugünkü ${uv} seviyesindeki UV indeksi senin için riskli olabilir. Lütfen yüksek korumalı güneş kremi kullan. 🧴` };
   }
 
   // Hafta Sonu

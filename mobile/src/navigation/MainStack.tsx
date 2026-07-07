@@ -10,6 +10,7 @@ import {AlertsScreen} from '../screens/AlertsScreen';
 import {MapScreen} from '../screens/MapScreen';
 import {TravelCalendarScreen} from '../screens/TravelCalendarScreen';
 import {SettingsScreen} from '../screens/SettingsScreen';
+import {PremiumScreen} from '../screens/PremiumScreen';
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -54,6 +55,11 @@ export function MainStack(): React.JSX.Element {
         name="Settings"
         component={SettingsScreen}
         options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="Premium"
+        component={PremiumScreen}
+        options={{animation: 'slide_from_bottom'}}
       />
     </Stack.Navigator>
   );

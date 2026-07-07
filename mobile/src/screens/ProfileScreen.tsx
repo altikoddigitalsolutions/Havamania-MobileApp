@@ -143,7 +143,7 @@ export function ProfileScreen(): React.JSX.Element {
             <MenuRow
               icon="star-outline"
               label="Premium'a Geç"
-              onPress={() => navigation.navigate('Paywall')}
+              onPress={() => navigation.navigate('Premium')}
               C={C}
               rightElement={<View style={s.proBadge}><Text style={s.proText}>PRO</Text></View>}
             />

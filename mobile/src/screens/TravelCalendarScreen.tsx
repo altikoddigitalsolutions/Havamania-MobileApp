@@ -16,6 +16,7 @@ import {
   Platform,
   Animated,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useColors, Spacing, Radius, FontSize } from '../theme';
@@ -36,8 +37,8 @@ import { TURKEY_CITIES, City } from '../data/cities';
 import { normalizeText } from '../utils/textUtils';
 import { useQuery } from '@tanstack/react-query';
 import { getDailyWeather } from '../services/weatherApi';
-import { analyzeTravelPlan, TravelAnalysisResult } from '../services/travelAnalysisService';
-import { formatDayShort } from '../theme';
+import { analyzeTravelPlan, TravelAnalysisResult, generateTravelHistorySummary } from '../services/travelAnalysisService';
+import { getTripStatus, TripStatus, getTripDayCount } from '../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -74,9 +75,6 @@ const formatDateRange = (start: string, end: string) => {
   return `${format(start)} - ${format(end)}`;
 };
 
-/**
- * Premium Seyahat Ekranı
- */
 export function TravelCalendarScreen() {
   return <TravelScreen />;
 }
@@ -111,9 +109,15 @@ function TravelScreen() {
     const today = new Date().toISOString().split('T')[0];
     let result = [...plans];
     if (filter === 'Upcoming') {
-      result = plans.filter(p => p.endDate >= today && !p.isArchived);
+      result = plans.filter(p => {
+        const status = getTripStatus(today, p.startDate, p.endDate);
+        return status !== TripStatus.PAST && !p.isArchived;
+      });
     } else if (filter === 'Past') {
-      result = plans.filter(p => p.endDate < today && !p.isArchived);
+      result = plans.filter(p => {
+        const status = getTripStatus(today, p.startDate, p.endDate);
+        return status === TripStatus.PAST && !p.isArchived;
+      });
     } else if (filter === 'Archived') {
       result = plans.filter(p => p.isArchived);
     }
@@ -318,9 +322,6 @@ function TravelScreen() {
   );
 }
 
-/**
- * Premium Seyahat Kartı
- */
 function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onShowDetail, onReAnalyze }: {
   plan: TravelPlan;
   index: number;
@@ -344,22 +345,16 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
 
   const typeInfo = TRAVEL_TYPES.find(t => t.type === plan.type) || TRAVEL_TYPES[5];
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const isPastTrip = plan.endDate < today;
-  const isActiveTrip = plan.startDate <= today && plan.endDate >= today;
-  const isArchived = plan.isArchived;
 
-  const daysUntilStart = useMemo(() => {
-    const todayDate = new Date(today);
-    const start = new Date(plan.startDate);
-    const diffTime = start.getTime() - todayDate.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }, [plan.startDate, today]);
+  const tripStatus = useMemo(() => getTripStatus(today, plan.startDate, plan.endDate), [today, plan.startDate, plan.endDate]);
+  const isPastTrip = tripStatus === TripStatus.PAST;
+  const isArchived = plan.isArchived;
 
   const { data: weatherData, refetch, isFetching } = useQuery({
     queryKey: ['weather', plan.lat, plan.lon, plan.startDate],
     queryFn: () => getDailyWeather(plan.lat, plan.lon, 14),
     staleTime: 15 * 60 * 1000,
-    enabled: !isPastTrip && daysUntilStart <= 15 && !isArchived,
+    enabled: !isPastTrip && tripStatus !== TripStatus.UPCOMING_LOCKED && !isArchived,
   });
 
   const analysis = useMemo((): TravelAnalysisResult | null => {
@@ -369,6 +364,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
           score: 100,
           averageTemp: 0,
           maxPrecipProbability: 0,
+          precipitationRiskText: 'Yok',
           summary: '',
           advice: isArchived
               ? `${plan.city} seyahatin arşivlendi.`
@@ -376,35 +372,46 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
           icon: isArchived ? 'archive' : 'checkmark-circle',
           emoji: '✅',
           color: C.textMuted,
-          packing: []
+          packing: [],
+          activities: [],
+          localTips: []
         };
     }
 
-    if (daysUntilStart > 15) {
+    if (tripStatus === TripStatus.UPCOMING_LOCKED) {
         return {
           status: 'far-future',
           score: 0,
           averageTemp: 0,
           maxPrecipProbability: 0,
+          precipitationRiskText: 'Bilinmiyor',
           summary: '',
-          advice: "Bu seyahat için detaylı hava analizi henüz oluşturulamaz. 15 günden daha uzun vadeli hava tahminleri güvenilir olmadığı için analiz, seyahate 15 günden az kaldığında otomatik hazırlanacaktır.",
+          advice: `${plan.city} seyahatin kayıt altında. Detaylı hava analizi seyahate 15 gün kala burada belirecek.`,
           icon: 'time-outline',
           emoji: '⏳',
           color: C.textMuted,
-          packing: []
+          packing: [],
+          activities: [],
+          localTips: []
         };
     }
 
     if (!weatherData) return null;
 
-    const result = analyzeTravelPlan(weatherData.items, plan.startDate, plan.endDate, plan.type);
+    const result = analyzeTravelPlan(weatherData.items, plan.startDate, plan.endDate, plan.type, plan.city);
 
-    if (isActiveTrip) result.status = 'active';
+    if (tripStatus === TripStatus.UPCOMING_ACTIVE) {
+        result.advice = `${plan.city} seyahatin yaklaşıyor! ${result.advice}`;
+    }
+
+    if (tripStatus === TripStatus.ONGOING) {
+        result.status = 'active';
+        const dayCount = getTripDayCount(today, plan.startDate);
+        result.advice = `${plan.city} seyahatin şu anda devam ediyor. Bugün seyahatinin ${dayCount}. günü. ${result.advice}`;
+    }
 
     return result;
-  }, [weatherData, plan.startDate, plan.endDate, plan.type, C, isPastTrip, isActiveTrip, isArchived, daysUntilStart, plan.city]);
-
-  const diffDays = Math.ceil(Math.abs(new Date(plan.endDate).getTime() - new Date(plan.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  }, [weatherData, plan.startDate, plan.endDate, plan.type, C, isPastTrip, isArchived, tripStatus, plan.city, today]);
 
   return (
     <Animated.View style={[styles.card, { backgroundColor: isArchived ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', opacity: (isPastTrip && !isArchived) ? 0.7 : 1, transform: [{ translateY: slideAnim }] }]}>
@@ -415,12 +422,13 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
+                {tripStatus === TripStatus.ONGOING && !isArchived && <View style={[styles.completedBadge, { backgroundColor: '#10B98120', borderColor: '#10B98140' }]}><Text style={[styles.completedBadgeText, { color: '#10B981' }]}>DEVAM EDİYOR</Text></View>}
                 {isPastTrip && !isArchived && <View style={styles.completedBadge}><Text style={styles.completedBadgeText}>TAMAMLANDI</Text></View>}
             </View>
             <Text style={[styles.cardDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
           </View>
         </View>
-        {analysis?.status === 'ready' || analysis?.status === 'active' ? (
+        {(analysis?.status === 'ready' || analysis?.status === 'active') && tripStatus !== TripStatus.UPCOMING_LOCKED ? (
           <View style={styles.weatherSummary}>
             <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
             <Text style={[styles.cardPrecip, { color: C.textSecondary }]}>Yağış: {analysis.precipitationRiskText}</Text>
@@ -428,7 +436,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         ) : null}
       </View>
 
-      {analysis && (analysis.status === 'ready' || analysis.status === 'active') && (
+      {analysis && (analysis.status === 'ready' || analysis.status === 'active') && tripStatus !== TripStatus.UPCOMING_LOCKED && (
         <View style={styles.scoreContainer}>
           <View style={styles.scoreInfo}>
             <Text style={[styles.scoreLabel, { color: C.textSecondary }]}>KONFOR SKORU</Text>
@@ -440,15 +448,15 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         </View>
       )}
 
-      {(!analysis || analysis.status === 'pending' || analysis.status === 'far-future' || analysis.status === 'past') && (
-        <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} isPast={isPastTrip || isArchived} />
+      {(!analysis || analysis.status === 'pending' || analysis.status === 'far-future' || analysis.status === 'past' || tripStatus === TripStatus.UPCOMING_LOCKED) && (
+        <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} isPast={isPastTrip || isArchived} tripStatus={tripStatus} />
       )}
 
       <View style={styles.cardFooter}>
         <View style={styles.cardActions}>
           <TouchableOpacity
             style={[styles.primaryAction, { backgroundColor: C.accent }]}
-            onPress={isPastTrip || isArchived ? onShowDetail : () => {}}
+            onPress={onShowDetail}
           >
             <Text style={styles.primaryActionText}>{isPastTrip || isArchived ? 'Özeti Gör' : 'Detayları Gör'}</Text>
           </TouchableOpacity>
@@ -459,44 +467,38 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         <TouchableOpacity onPress={onDelete} style={{padding: 4}}><Icon name="trash-outline" size={18} color="#EF444466" /></TouchableOpacity>
       </View>
     </Animated.View>
-    </Animated.View>
   );
 }
 
-/**
- * AI Önerileri Bölümü
- */
-function TravelAiRecommendationSection({ analysis, isFetching, isPast }: { analysis: any; isFetching: boolean, isPast: boolean }) {
+function TravelAiRecommendationSection({ analysis, isFetching, isPast, tripStatus }: { analysis: any; isFetching: boolean, isPast: boolean, tripStatus: TripStatus }) {
   const C = useColors();
-  if (isFetching) return <View style={styles.aiSectionLoading}><Text style={{ color: C.textMuted, fontSize: 12 }}>Yapay zeka rotayı analiz ediyor...</Text></View>;
+  if (isFetching) return <View style={styles.aiSectionLoading}><ActivityIndicator size="small" color={C.accent} /><Text style={{ color: C.textMuted, fontSize: 12, marginTop: 8 }}>Rotalar analiz ediliyor...</Text></View>;
   if (!analysis) return null;
+
+  const isLocked = tripStatus === TripStatus.UPCOMING_LOCKED;
 
   return (
     <View style={styles.aiSection}>
-      <View style={styles.aiTitleRow}><Icon name={isPast ? "information-circle-outline" : "sparkles-outline"} size={14} color={isPast ? C.textMuted : C.accent} /><Text style={[styles.aiTitle, { color: isPast ? C.textMuted : C.accent }]}>{isPast ? "BİLGİLENDİRME" : "HAVAMANIA AI ÖNERİLERİ"}</Text></View>
+      <View style={styles.aiTitleRow}><Icon name={isPast ? "information-circle-outline" : "sparkles-outline"} size={14} color={isPast ? C.textMuted : C.accent} /><Text style={[styles.aiTitle, { color: isPast ? C.textMuted : C.accent }]}>{isPast ? "BİLGİLENDİRME" : isLocked ? "SEYAHAT KAYDI" : "HAVAMANIA AI ÖNERİLERİ"}</Text></View>
       <View style={styles.aiGrid}>
-        {!isPast && (
-          <><View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}><View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}><Icon name="airplane-outline" size={12} color="#3B82F6" /></View><Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>{analysis.status === 'ready' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}</Text></View>
-          <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}><View style={[styles.aiMiniIcon, { backgroundColor: '#10B98120' }]}><Icon name="briefcase-outline" size={12} color="#10B981" /></View><Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>Valiz: {analysis.packing ? (Array.isArray(analysis.packing) ? analysis.packing.slice(0, 2).join(', ') : analysis.packing) : 'Standart'}</Text></View></>
+        {!isPast && !isLocked && (
+          <><View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}><View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}><Icon name="airplane-outline" size={12} color="#3B82F6" /></View><Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>{analysis.status === 'ready' || analysis.status === 'active' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}</Text></View>
+          <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}><View style={[styles.aiMiniIcon, { backgroundColor: '#10B98120' }]}><Icon name="briefcase-outline" size={12} color="#10B981" /></View><Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>Valiz: {analysis.packing?.slice(0, 2).join(', ') || 'Standart'}</Text></View></>
         )}
-        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)', flexBasis: '100%' }]}><View style={[styles.aiMiniIcon, { backgroundColor: (isPast ? C.textMuted : analysis.color) + '20' }]}><Icon name={isPast ? "document-text-outline" : "bulb-outline"} size={12} color={isPast ? C.textMuted : analysis.color} /></View><Text style={[styles.aiMiniText, { color: C.text }]}>{analysis.advice}</Text></View>
+        <View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)', flexBasis: '100%' }]}><View style={[styles.aiMiniIcon, { backgroundColor: (isPast || isLocked ? C.textMuted : analysis.color) + '20' }]}><Icon name={isPast ? "document-text-outline" : isLocked ? "calendar-outline" : "bulb-outline"} size={12} color={isPast || isLocked ? C.textMuted : analysis.color} /></View><Text style={[styles.aiMiniText, { color: C.text }]}>{analysis.advice}</Text></View>
       </View>
     </View>
   );
 }
 
-/**
- * Geçmiş Seyahat Detay Modalı
- */
 function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; plan: TravelPlan | null; onClose: () => void }) {
   const C = useColors();
   if (!plan) return null;
-  const typeInfo = TRAVEL_TYPES.find(t => t.type === plan.type) || TRAVEL_TYPES[5];
 
   const { data: historyWeather } = useQuery({
-    queryKey: ['history-weather', plan.lat, plan.lon, plan.startDate],
-    queryFn: () => getDailyWeather(plan.lat, plan.lon, 14), // Using daily as proxy for history
-    enabled: visible,
+    queryKey: ['weather', 'history', plan.lat, plan.lon, plan.startDate],
+    queryFn: () => getDailyWeather(plan.lat, plan.lon, 14),
+    enabled: !!plan,
   });
 
   const historySummary = useMemo(() => {
@@ -509,7 +511,7 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
       <View style={styles.modalOverlay}>
         <View style={[styles.detailContent, { backgroundColor: C.bgSecondary, borderColor: C.border, borderWidth: 1 }]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: C.text }]}>Geçmiş Seyahat Özeti</Text>
+            <Text style={[styles.modalTitle, { color: C.text }]}>Seyahat Özeti</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}><Icon name="close" size={24} color={C.textSecondary} /></TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -558,7 +560,7 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
 
             <TouchableOpacity style={[styles.saveButton, { backgroundColor: C.accent, marginTop: 40 }]} onPress={onClose}>
                 <LinearGradient colors={[C.accent, C.accentDark]} style={StyleSheet.absoluteFill} start={{x: 0, y: 0}} end={{x: 1, y: 0}} />
-                <Text style={styles.saveButtonText}>Bu Rotayı Tekrar Planla</Text>
+                <Text style={styles.saveButtonText}>Geri Dön</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -567,9 +569,6 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
   );
 }
 
-/**
- * Boş Durum Bileşeni
- */
 function TravelEmptyState({ onAdd }: { onAdd: () => void }) {
   const C = useColors();
   return (
@@ -582,9 +581,6 @@ function TravelEmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-/**
- * Premium Floating Action Button
- */
 function PremiumRouteButton({ onPress }: { onPress: () => void }) {
   const C = useColors();
   const scale = useRef(new Animated.Value(1)).current;
@@ -610,8 +606,6 @@ const styles = StyleSheet.create({
   activeFilterChip: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   filterText: { fontSize: 13, fontWeight: '700' },
   listContent: { padding: Spacing.xl, paddingBottom: 120 },
-
-  // Card Styles
   card: { borderRadius: 24, borderWidth: 1, marginBottom: 20, overflow: 'hidden', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 4 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -622,16 +616,10 @@ const styles = StyleSheet.create({
   completedBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: '#60A5FA' },
   weatherSummary: { alignItems: 'flex-end', gap: 4 },
   cardTemp: { fontSize: 18, fontWeight: '800' },
-
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  statusBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-
   historySummaryGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   historyItem: { flex: 1, padding: 12, borderRadius: 16, alignItems: 'center' },
   historyLabel: { fontSize: 8, fontWeight: '900', color: 'rgba(255,255,255,0.4)', marginBottom: 4 },
   historyValue: { fontSize: 14, fontWeight: '800' },
-
-  // AI Section
   aiSection: { marginTop: 4, marginBottom: 20 },
   aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   aiTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
@@ -640,41 +628,18 @@ const styles = StyleSheet.create({
   aiMiniIcon: { width: 24, height: 24, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   aiMiniText: { fontSize: 11, fontWeight: '600', flex: 1, lineHeight: 15 },
   aiSectionLoading: { paddingVertical: 20, alignItems: 'center' },
-
   cardPrecip: { fontSize: 11, fontWeight: '600' },
-  scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)'
-  },
-  scoreInfo: {
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.05)',
-    paddingRight: 12,
-    marginRight: 12,
-    alignItems: 'center'
-  },
+  scoreContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 16, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  scoreInfo: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)', paddingRight: 12, marginRight: 12, alignItems: 'center' },
   scoreLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 },
   scoreValue: { fontSize: 20, fontWeight: '900' },
-  scoreTotal: { fontSize: 10, fontWeight: '700' },
   adviceContainer: { flex: 1 },
   adviceText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
-
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   cardActions: { flexDirection: 'row', gap: 12, flex: 1 },
   primaryAction: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   primaryActionText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   secondaryAction: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  archiveActionBtn: { backgroundColor: 'rgba(59, 130, 246, 0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  actionBtnText: { fontSize: 11, fontWeight: '700' },
-
-  // Empty State
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 40 },
   emptyIllustration: { width: 160, height: 160, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
   glowCircle: { position: 'absolute', width: 100, height: 100, borderRadius: 50, opacity: 0.1, transform: [{ scale: 1.5 }] },
@@ -682,14 +647,10 @@ const styles = StyleSheet.create({
   emptySubText: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   emptyBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16, elevation: 4 },
   emptyBtnText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
-
-  // FAB
   fabWrapper: { position: 'absolute', bottom: 30, left: 20, right: 20, alignItems: 'center' },
   fab: { height: 56, borderRadius: 28, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8, overflow: 'hidden' },
   fabContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fabText: { color: '#FFF', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-
-  // Modal & Detail
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '92%' },
   detailContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '85%' },

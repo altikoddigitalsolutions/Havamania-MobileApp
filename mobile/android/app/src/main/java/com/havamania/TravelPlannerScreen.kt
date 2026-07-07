@@ -501,7 +501,10 @@ fun TravelPlanCard(
 ) {
     val themeColors = HavamaniaTheme.colors
     val today = LocalDate.now()
-    val isPast = plan.endDate.isBefore(today)
+    val tripStatus = RecommendationEngine.getTripStatus(today, plan.startDate, plan.endDate)
+    val isPast = tripStatus == TripStatus.PAST
+    val isOngoing = tripStatus == TripStatus.ONGOING
+    val isLocked = tripStatus == TripStatus.UPCOMING_LOCKED
     val isArchived = plan.isArchived
     var isExpanded by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -575,7 +578,23 @@ fun TravelPlanCard(
                     )
                 }
 
-                if (latestAnalysis != null && !isArchived) {
+                if (isOngoing && !isArchived) {
+                    Surface(
+                        color = Color(0xFF10B981).copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.2f))
+                    ) {
+                        Text(
+                            text = "DEVAM EDİYOR",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 9.sp),
+                            color = Color(0xFF10B981)
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+
+                if (latestAnalysis != null && !isArchived && !isLocked) {
                     val scoreColor = when {
                         latestAnalysis.travelScore >= 80 -> Color(0xFF10B981)
                         latestAnalysis.travelScore >= 60 -> Color(0xFFFBBF24)
@@ -637,7 +656,7 @@ fun TravelPlanCard(
             Spacer(Modifier.height(12.dp))
 
             // Chips Row
-            if (latestAnalysis != null && !isArchived) {
+            if (latestAnalysis != null && !isArchived && !isLocked) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CompactInfoChip(
                         Icons.Rounded.WaterDrop,
@@ -649,19 +668,20 @@ fun TravelPlanCard(
                         "${latestAnalysis.averageTemperature?.toInt() ?: "--"}°C",
                         themeColors.textSecondary
                     )
-                    val statusLabel = if (isPast) "Tamamlandı" else if (plan.isAnalyzing) "Analiz ediliyor" else "Planlandı"
+                    val statusLabel = if (isOngoing) "Seyahattesin" else if (isPast) "Tamamlandı" else if (plan.isAnalyzing) "Analiz ediliyor" else "Planlandı"
                     CompactInfoChip(
-                        if (isPast) Icons.Rounded.CheckCircle else Icons.Rounded.Event,
+                        if (isPast) Icons.Rounded.CheckCircle else if (isOngoing) Icons.Rounded.AirplaneTicket else Icons.Rounded.Event,
                         statusLabel,
-                        if (isPast) Color(0xFF10B981) else themeColors.accent
+                        if (isPast || isOngoing) Color(0xFF10B981) else themeColors.accent
                     )
                 }
                 Spacer(Modifier.height(12.dp))
             }
 
             if (!isArchived) {
+                val detailText = latestAnalysis?.summary ?: "${plan.city} seyahatin kayıt altında. Detaylı hava analizi seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala burada belirecek."
                 Text(
-                    text = latestAnalysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
+                    text = detailText,
                     style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontSize = 13.sp),
                     color = themeColors.textPrimary.copy(alpha = 0.85f),
                     maxLines = 2,
@@ -682,7 +702,7 @@ fun TravelPlanCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!isArchived && !isPast && ChronoUnit.DAYS.between(today, plan.startDate) <= 15) {
+                if (!isArchived && !isPast && !isLocked) {
                     TextButton(
                         onClick = onReanalyze,
                         enabled = !plan.isAnalyzing,
@@ -799,7 +819,7 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
             plan.isAnalyzing -> "Analiz hazırlanıyor..."
             hasAnalysisData && isWeatherReal -> "✅ Seyahat Önerilerin Hazır"
             hasAnalysisData -> "✅ Temel Öneriler Hazır"
-            daysUntilTrip > 15 -> "📅 15 gün kala hazırlanacak"
+            daysUntilTrip > TRIP_ANALYSIS_WINDOW_DAYS -> "📅 $TRIP_ANALYSIS_WINDOW_DAYS gün kala hazırlanacak"
             else -> "❌ Veri Alınamadı"
         }
 
@@ -812,7 +832,7 @@ fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isEx
         Spacer(Modifier.height(4.dp))
 
         Text(
-            text = analysis?.summary ?: "Detaylı şehir analizi seyahate 15 gün kala otomatik olarak burada belirecek.",
+            text = analysis?.summary ?: "Detaylı şehir analizi seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala otomatik olarak burada belirecek.",
             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
             color = themeColors.textPrimary.copy(alpha = 0.9f),
             maxLines = if (isExpanded) Int.MAX_VALUE else 2,
@@ -894,7 +914,7 @@ fun ActionRow(
                     icon = Icons.Rounded.Analytics
                 )
             } else {
-                if (daysUntilTrip <= 15) {
+                if (daysUntilTrip <= TRIP_ANALYSIS_WINDOW_DAYS) {
                     OutlinedButton(
                         onClick = onReanalyze,
                         modifier = Modifier.height(36.dp),

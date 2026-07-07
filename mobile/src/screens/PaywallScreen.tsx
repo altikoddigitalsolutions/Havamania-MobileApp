@@ -22,7 +22,7 @@ import {useColors, AppColors, Spacing, Radius} from '../theme';
 const {width, height} = Dimensions.get('window');
 
 const PREMIUM_FEATURES = [
-  {icon: 'airplane-outline', title: 'Gelişmiş Seyahat Analizi', desc: '15 günlük detaylı hava, aktivite ve risk raporu.'},
+  {icon: 'airplane-outline', title: 'Gelişmiş Seyahat Analizi', desc: '10 günlük detaylı hava, aktivite ve risk raporu.'},
   {icon: 'analytics-outline', title: 'Tahmin Karşılaştırması', desc: 'Hava durumundaki en ufak değişimleri anında takip edin.'},
   {icon: 'notifications-outline', title: 'Akıllı Bildirimler', desc: 'Kritik hava olayları için size özel kişiselleştirilmiş uyarılar.'},
   {icon: 'briefcase-outline', title: 'AI Valiz & Giyim Önerisi', desc: 'Gideceğiniz yere göre otomatik hazırlanan ihtiyaç listesi.'},

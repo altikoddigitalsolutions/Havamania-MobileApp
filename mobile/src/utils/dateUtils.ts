@@ -1,5 +1,46 @@
 import i18next from 'i18next';
 
+export const TRIP_ANALYSIS_WINDOW_DAYS = 10;
+
+export enum TripStatus {
+  UPCOMING_LOCKED = 'UPCOMING_LOCKED',
+  UPCOMING_ACTIVE = 'UPCOMING_ACTIVE',
+  ONGOING = 'ONGOING',
+  PAST = 'PAST'
+}
+
+/**
+ * Seyahat durumunu hesaplar.
+ */
+export function getTripStatus(todayStr: string, startStr: string, endStr: string): TripStatus {
+  const today = new Date(todayStr);
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(startStr);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endStr);
+  end.setHours(0, 0, 0, 0);
+
+  if (today > end) return TripStatus.PAST;
+  if (today >= start && today <= end) return TripStatus.ONGOING;
+
+  const diffTime = start.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays > TRIP_ANALYSIS_WINDOW_DAYS ? TripStatus.UPCOMING_LOCKED : TripStatus.UPCOMING_ACTIVE;
+}
+
+/**
+ * Seyahatin kaçıncı gününde olunduğunu döndürür (1-tabanlı)
+ */
+export function getTripDayCount(todayStr: string, startStr: string): number {
+    const today = new Date(todayStr);
+    today.setHours(0,0,0,0);
+    const start = new Date(startStr);
+    start.setHours(0,0,0,0);
+    const diffTime = today.getTime() - start.getTime();
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+}
+
 /**
  * Tarihleri doğal dile çevirir (Örn: "Bugün 14:00", "Dün 09:41", "5 saat önce")
  */

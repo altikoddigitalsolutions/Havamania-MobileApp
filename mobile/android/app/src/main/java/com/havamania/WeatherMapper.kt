@@ -123,7 +123,7 @@ object WeatherMapper {
             score -= 20
             warnings.add("güçlü rüzgar")
         }
-        val uv = daily?.uvIndexMax?.firstOrNull() ?: 0.0
+        val uv = daily?.uvIndexMax?.firstOrNull() ?: current?.uvIndex ?: 0.0
         if (uv > 7.0) {
             score -= 15
             warnings.add("yüksek UV")

@@ -32,10 +32,11 @@ export const ErrorView: React.FC<ErrorViewProps> = ({
     'generic': { icon: 'alert-circle-outline', title: 'Bir Sorun Oluştu', message: 'Şu an işleminizi gerçekleştiremiyoruz.' },
     'no-internet': { icon: 'wifi-outline', title: 'İnternet Bağlantısı Yok', message: 'Kısa süreli bağlantı sorunu yaşıyoruz. Tekrar deneyebilirsin.' },
     'api-fail': { icon: 'cloud-offline-outline', title: 'Servis Bağlantısı', message: 'Hava durumu sunucularımıza ulaşamıyoruz. Lütfen birazdan tekrar dene.' },
-    'location-denied': { icon: 'location-outline', title: 'Konum İzni Gerekli', message: 'Size özel hava analizi sunabilmemiz için konum iznine ihtiyacımız var.' },
+    'location-denied': { icon: 'location-outline', title: 'Konum İzni Gerekli', message: 'Havamania, bulunduğun şehre göre anlık hava analizi ve kişisel öneriler sunmak için konumunu kullanır.' },
     'not-found': { icon: 'search-outline', title: 'Şehir Bulunamadı', message: 'Aradığın şehri bulamadık. Farklı bir isimle aramayı deneyebilirsin.' },
     'ai-fail': { icon: 'sparkles-outline', title: 'Asistan Cevap Veremiyor', message: 'AI asistanımız şu an dinleniyor. Lütfen sorunu tekrar sormayı dene.' },
-    'permission': { icon: 'notifications-outline', title: 'İzin Gerekli', message: 'Bu özelliği kullanabilmek için ayarlardan gerekli izinleri vermeniz gerekiyor.' },
+    'permission': { icon: 'notifications-outline', title: 'Bildirim İzni Gerekli', message: 'Yağış, UV ve seyahat analizlerindeki önemli değişiklikleri bildirebilmemiz için izne ihtiyacımız var.' },
+    'data-fail': { icon: 'save-outline', title: 'Veri Kaydedilemedi', message: 'İşlemi şu an gerçekleştiremedik. Lütfen tekrar dene.' },
   };
 
   const current = config[type] || config.generic;

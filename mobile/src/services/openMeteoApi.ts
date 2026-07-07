@@ -9,6 +9,7 @@ const BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 // ── Cache Mekanizması ────────────────────────────────────────────────────────
 const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 dakika
 const weatherCache: Record<string, {data: any; timestamp: number}> = {};
+const pendingRequests: Record<string, Promise<any>> = {};
 
 function getCacheKey(lat: number, lon: number, type: string, params: string): string {
   return `${lat.toFixed(4)},${lon.toFixed(4)}:${type}:${params}`;
@@ -24,6 +25,21 @@ function getFromCache(key: string) {
 
 function setToCache(key: string, data: any) {
   weatherCache[key] = {data, timestamp: Date.now()};
+}
+
+async function fetchWithCache(key: string, fetchFn: () => Promise<any>) {
+  const cached = getFromCache(key);
+  if (cached) return cached;
+
+  if (pendingRequests[key]) return pendingRequests[key];
+
+  pendingRequests[key] = fetchFn().finally(() => {
+    delete pendingRequests[key];
+  });
+
+  const result = await pendingRequests[key];
+  setToCache(key, result);
+  return result;
 }
 
 // ── Arayüzler ────────────────────────────────────────────────────────────────
@@ -123,37 +139,35 @@ export async function fetchCurrentWeather(
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
   const cacheKey = getCacheKey(lat, lon, 'current', tUnit);
-  const cachedData = getFromCache(cacheKey);
-  if (cachedData) return cachedData;
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&current=${currentFields}&temperature_unit=${tUnit}&timezone=auto`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Open-Meteo current: HTTP ${res.status}`);
-  const json = await res.json();
-  if (!json.current) throw new Error(`Open-Meteo current: no 'current' in response`);
-  const c = json.current;
+  return fetchWithCache(cacheKey, async () => {
+    const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&current=${currentFields}&temperature_unit=${tUnit}&timezone=auto`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo current: HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json.current) throw new Error(`Open-Meteo current: no 'current' in response`);
+    const c = json.current;
 
-  const result: CurrentWeatherData = {
-    temperature: Math.round(c.temperature_2m ?? 0),
-    humidity: Math.round(c.relative_humidity_2m ?? 0),
-    feels_like: Math.round(c.apparent_temperature ?? 0),
-    wind_speed: Math.round(c.wind_speed_10m ?? 0),
-    wind_direction: Math.round(c.wind_direction_10m ?? 0),
-    wind_gusts: Math.round(c.wind_gusts_10m ?? 0),
-    weather_code: c.weather_code ?? 0,
-    uv_index: Math.round((c.uv_index ?? 0) * 10) / 10,
-    description: describeWeather(c.weather_code ?? 0),
-    pressure: Math.round(c.surface_pressure ?? 1013),
-    visibility: Math.round((c.visibility ?? 10000) / 1000 * 10) / 10, // m → km
-    cloud_cover: Math.round(c.cloud_cover ?? 0),
-    dew_point: Math.round(c.dew_point_2m ?? 0),
-    precipitation: Math.round((c.precipitation ?? 0) * 10) / 10,
-    is_day: c.is_day === 1,
-    time: c.time,
-  };
-
-  setToCache(cacheKey, result);
-  return result;
+    const result: CurrentWeatherData = {
+      temperature: Math.round(c.temperature_2m ?? 0),
+      humidity: Math.round(c.relative_humidity_2m ?? 0),
+      feels_like: Math.round(c.apparent_temperature ?? 0),
+      wind_speed: Math.round(c.wind_speed_10m ?? 0),
+      wind_direction: Math.round(c.wind_direction_10m ?? 0),
+      wind_gusts: Math.round(c.wind_gusts_10m ?? 0),
+      weather_code: c.weather_code ?? 0,
+      uv_index: Math.round((c.uv_index ?? 0) * 10) / 10,
+      description: describeWeather(c.weather_code ?? 0),
+      pressure: Math.round(c.surface_pressure ?? 1013),
+      visibility: Math.round((c.visibility ?? 10000) / 1000 * 10) / 10, // m → km
+      cloud_cover: Math.round(c.cloud_cover ?? 0),
+      dew_point: Math.round(c.dew_point_2m ?? 0),
+      precipitation: Math.round((c.precipitation ?? 0) * 10) / 10,
+      is_day: c.is_day === 1,
+      time: c.time,
+    };
+    return result;
+  });
 }
 
 // ── Saatlik Tahmin ────────────────────────────────────────────────────────────
@@ -176,37 +190,35 @@ export async function fetchHourlyWeather(
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
   const cacheKey = getCacheKey(lat, lon, 'hourly', `${tUnit}:${hours}`);
-  const cachedData = getFromCache(cacheKey);
-  if (cachedData) return cachedData;
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${hourlyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=3`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Open-Meteo hourly: HTTP ${res.status}`);
-  const json = await res.json();
-  const h = json.hourly;
+  return fetchWithCache(cacheKey, async () => {
+    const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&hourly=${hourlyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=3`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo hourly: HTTP ${res.status}`);
+    const json = await res.json();
+    const h = json.hourly;
 
-  const now = new Date();
-  const nowHour = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
-  const startIdx = (h.time as string[]).findIndex(t => t >= nowHour);
-  const from = startIdx >= 0 ? startIdx : 0;
+    const now = new Date();
+    const nowHour = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+    const startIdx = (h.time as string[]).findIndex(t => t >= nowHour);
+    const from = startIdx >= 0 ? startIdx : 0;
 
-  const items: HourlyWeatherItem[] = (h.time as string[])
-    .slice(from, from + hours)
-    .map((time: string, i: number) => ({
-      time,
-      temperature: Math.round(h.temperature_2m[from + i] ?? 0),
-      apparent_temperature: Math.round(h.apparent_temperature[from + i] ?? 0),
-      weather_code: h.weather_code[from + i] ?? 0,
-      precipitation_probability: h.precipitation_probability[from + i] ?? 0,
-      precipitation: Math.round((h.precipitation[from + i] ?? 0) * 10) / 10,
-      cloud_cover: h.cloud_cover[from + i] ?? 0,
-      wind_speed: Math.round(h.wind_speed_10m[from + i] ?? 0),
-      wind_gusts: Math.round(h.wind_gusts_10m[from + i] ?? 0),
-    }));
+    const items: HourlyWeatherItem[] = (h.time as string[])
+      .slice(from, from + hours)
+      .map((time: string, i: number) => ({
+        time,
+        temperature: Math.round(h.temperature_2m[from + i] ?? 0),
+        apparent_temperature: Math.round(h.apparent_temperature[from + i] ?? 0),
+        weather_code: h.weather_code[from + i] ?? 0,
+        precipitation_probability: h.precipitation_probability[from + i] ?? 0,
+        precipitation: Math.round((h.precipitation[from + i] ?? 0) * 10) / 10,
+        cloud_cover: h.cloud_cover[from + i] ?? 0,
+        wind_speed: Math.round(h.wind_speed_10m[from + i] ?? 0),
+        wind_gusts: Math.round(h.wind_gusts_10m[from + i] ?? 0),
+      }));
 
-  const result = {items};
-  setToCache(cacheKey, result);
-  return result;
+    return {items};
+  });
 }
 
 // ── Günlük Tahmin ─────────────────────────────────────────────────────────────
@@ -232,35 +244,32 @@ export async function fetchDailyWeather(
 
   const tUnit = tempUnit === 'F' ? 'fahrenheit' : 'celsius';
   const cacheKey = getCacheKey(lat, lon, 'daily', `${tUnit}:${days}`);
-  const cachedData = getFromCache(cacheKey);
-  if (cachedData) return cachedData;
 
-  const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&daily=${dailyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=${days}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Open-Meteo daily: HTTP ${res.status}`);
-  const json = await res.json();
-  const d = json.daily;
+  return fetchWithCache(cacheKey, async () => {
+    const url = `${BASE_URL}?latitude=${lat}&longitude=${lon}&daily=${dailyFields}&temperature_unit=${tUnit}&timezone=auto&forecast_days=${days}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo daily: HTTP ${res.status}`);
+    const json = await res.json();
+    const d = json.daily;
 
-  const items: DailyWeatherItem[] = (d.time as string[]).map(
-    (date: string, i: number) => ({
-      date,
-      temp_max: Math.round(d.temperature_2m_max[i] ?? 0),
-      temp_min: Math.round(d.temperature_2m_min[i] ?? 0),
-      weather_code: d.weather_code[i] ?? 0,
-      precipitation_probability: d.precipitation_probability_max[i] ?? 0,
-      precipitation_sum: Math.round((d.precipitation_sum[i] ?? 0) * 10) / 10,
-      wind_speed_max: Math.round(d.wind_speed_10m_max[i] ?? 0),
-      wind_gusts_max: Math.round(d.wind_gusts_10m_max[i] ?? 0),
-      sunrise: d.sunrise[i] ?? '',
-      sunset: d.sunset[i] ?? '',
-      solar_noon: d.solar_noon[i] ?? '',
-      uv_index_max: Math.round((d.uv_index_max[i] ?? 0) * 10) / 10,
-    }),
-  );
-
-  const result = {items};
-  setToCache(cacheKey, result);
-  return result;
+    const items: DailyWeatherItem[] = (d.time as string[]).map(
+      (date: string, i: number) => ({
+        date,
+        temp_max: Math.round(d.temperature_2m_max[i] ?? 0),
+        temp_min: Math.round(d.temperature_2m_min[i] ?? 0),
+        weather_code: d.weather_code[i] ?? 0,
+        precipitation_probability: d.precipitation_probability_max[i] ?? 0,
+        precipitation_sum: Math.round((d.precipitation_sum[i] ?? 0) * 10) / 10,
+        wind_speed_max: Math.round(d.wind_speed_10m_max[i] ?? 0),
+        wind_gusts_max: Math.round(d.wind_gusts_10m_max[i] ?? 0),
+        sunrise: d.sunrise[i] ?? '',
+        sunset: d.sunset[i] ?? '',
+        solar_noon: d.solar_noon[i] ?? '',
+        uv_index_max: Math.round((d.uv_index_max[i] ?? 0) * 10) / 10,
+      }),
+    );
+    return {items};
+  });
 }
 
 // ── Şehir Arama (Geocoding) ──────────────────────────────────────────────────

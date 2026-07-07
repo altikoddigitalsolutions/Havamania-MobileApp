@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Spacing, Radius, AppColors } from '../theme';
+import { Spacing, Radius, AppColors, FontSize } from '../theme';
 
 interface HavamaniaRecommendationCardProps {
   weather: any;
@@ -26,7 +26,7 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
     const health = profile?.health_sensitivities?.toLowerCase() || "";
 
     let summary = "";
-    const points: { icon: string, text: string, type: string }[] = [];
+    const sections: { icon: string, text: string, title: string, color: string }[] = [];
 
     // 1. Özet & Yaşam Etkisi
     if (isDay) {
@@ -39,48 +39,57 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
     }
 
     // 2. Kıyafet Önerisi
-    if (temp > 25) {
-        points.push({ icon: 'shirt-outline', text: "İnce, pamuklu ve açık renkli kıyafetler seçmelisin.", type: 'clothing' });
-    } else if (temp > 15) {
-        points.push({ icon: 'shirt-outline', text: "Hafif bir sweatshirt veya ceket seni rahat ettirecektir.", type: 'clothing' });
-    } else {
-        points.push({ icon: 'shirt-outline', text: "Kalın bir mont, gerekirse atkı ve bere almayı unutma.", type: 'clothing' });
-    }
+    let clothingText = "";
+    if (temp > 25) clothingText = "İnce, pamuklu ve açık renkli kıyafetler seçmelisin.";
+    else if (temp > 15) clothingText = "Hafif bir sweatshirt veya ceket seni rahat ettirecektir.";
+    else clothingText = "Kalın bir mont, gerekirse atkı ve bere almayı unutma.";
+
+    if (rain > 30) clothingText += " Yanına şemsiye almayı unutma.";
+
+    sections.push({ icon: 'shirt-outline', title: 'KIYAFET', text: clothingText, color: '#60A5FA' });
 
     // 3. Sağlık & Risk (Kişiselleştirilmiş)
-    if (uv > 6 || health.includes("uv")) {
-        points.push({ icon: 'sunny-outline', text: `UV seviyesi ${uv}. Güneş kremi ve gözlük kullanımı senin için çok önemli.`, type: 'risk' });
-    }
-    if (health.includes("polen") && (cond.includes("güneş") || cond.includes("açık"))) {
-        points.push({ icon: 'medical-outline', text: "Hava açık, polen seviyesi hassasiyetini tetikleyebilir. Dikkatli ol.", type: 'risk' });
-    }
-    if (rain > 40) {
-        points.push({ icon: 'umbrella-outline', text: "Yağış ihtimaline karşı şemsiyeni veya yağmurluğunu hazırda tut.", type: 'risk' });
+    if (uv > 6 || health.includes("uv") || health.includes("cilt")) {
+        sections.push({
+          icon: 'sunny-outline',
+          title: 'RİSK UYARISI',
+          text: `UV seviyesi ${uv}. Güneş kremi ve gözlük kullanımı senin için çok önemli.`,
+          color: '#F59E0B'
+        });
+    } else if (health.includes("polen") && (cond.includes("güneş") || cond.includes("açık"))) {
+        sections.push({
+          icon: 'medical-outline',
+          title: 'RİSK UYARISI',
+          text: "Hava açık, polen seviyesi hassasiyetini tetikleyebilir. Dikkatli ol.",
+          color: '#F59E0B'
+        });
     }
 
     // 4. Aktivite Önerisi (Kişiselleştirilmiş)
+    let activityText = "";
     if (interests.includes("spor") || interests.includes("koşu")) {
-        if (temp > 10 && temp < 25 && rain < 20) {
-            points.push({ icon: 'fitness-outline', text: "Koşu veya açık hava antrenmanı için harika bir hava!", type: 'activity' });
-        }
-    }
-    if (interests.includes("fotoğraf")) {
-        if (cond.includes("bulutlu") || cond.includes("parçalı")) {
-            points.push({ icon: 'camera-outline', text: "Yumuşak ışık çekimler için ideal, kameranı alıp dışarı çıkabilirsin.", type: 'activity' });
-        }
-    }
-    if (interests.includes("doğa") || interests.includes("yürüyüş")) {
-        if (temp > 15 && rain < 10) {
-            points.push({ icon: 'leaf-outline', text: "Doğa yürüyüşü için parkurlar seni bekliyor.", type: 'activity' });
-        }
+        if (temp > 10 && temp < 25 && rain < 20) activityText = "Koşu veya açık hava antrenmanı için harika bir hava!";
+    } else if (interests.includes("fotoğraf")) {
+        if (cond.includes("bulutlu") || cond.includes("parçalı")) activityText = "Yumuşak ışık çekimler için ideal, kameranı alıp çıkabilirsin.";
+    } else if (interests.includes("doğa") || interests.includes("yürüyüş")) {
+        if (temp > 15 && rain < 10) activityText = "Doğa yürüyüşü için parkurlar seni bekliyor.";
     }
 
-    // Fallback point if too few
-    if (points.length < 2) {
-        points.push({ icon: 'bulb-outline', text: "Günün tadını çıkarmak için planlarını hava durumuna göre güncelle.", type: 'general' });
+    if (activityText) {
+      sections.push({ icon: 'fitness-outline', title: 'AKTİVİTE', text: activityText, color: '#10B981' });
     }
 
-    return { summary, points: points.slice(0, 4) };
+    // 5. Seyahat Önerisi (Fallback if sections are few)
+    if (sections.length < 3) {
+      sections.push({
+        icon: 'map-outline',
+        title: 'SEYAHAT',
+        text: "Hafta sonu yakın yerlere küçük bir kaçamak yapmak için hava oldukça uygun görünüyor.",
+        color: '#8B5CF6'
+      });
+    }
+
+    return { summary, sections: sections.slice(0, 3) };
   };
 
   const rec = generateRecommendation();
@@ -96,13 +105,16 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
 
       <Text style={[styles.summary, { color: C.text }]}>{rec.summary}</Text>
 
-      <View style={styles.points}>
-        {rec.points.map((p, i) => (
-          <View key={i} style={styles.pointRow}>
-            <View style={[styles.pointIconBox, { backgroundColor: C.divider }]}>
-                <Icon name={p.icon} size={14} color={C.textSecondary} />
+      <View style={styles.sections}>
+        {rec.sections.map((s, i) => (
+          <View key={i} style={styles.sectionRow}>
+            <View style={[styles.sectionIconBox, { backgroundColor: s.color + '15' }]}>
+                <Icon name={s.icon} size={16} color={s.color} />
             </View>
-            <Text style={[styles.pointText, { color: C.textSecondary }]}>{p.text}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: s.color }]}>{s.title}</Text>
+              <Text style={[styles.sectionText, { color: C.textSecondary }]}>{s.text}</Text>
+            </View>
           </View>
         ))}
       </View>
@@ -151,32 +163,39 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   summary: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    lineHeight: 22,
+    lineHeight: 24,
     marginTop: 2,
   },
-  points: {
-    gap: 10,
-    marginTop: 4,
+  sections: {
+    gap: 16,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  pointRow: {
+  sectionRow: {
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
+    gap: 14,
+    alignItems: 'flex-start',
   },
-  pointIconBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
+  sectionIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 2,
   },
-  pointText: {
-    fontSize: 13,
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  sectionText: {
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 18,
-    flex: 1,
+    lineHeight: 20,
   },
   btn: {
     flexDirection: 'row',
@@ -185,7 +204,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: Radius.lg,
-    marginTop: 10,
+    marginTop: 4,
   },
   btnText: {
     color: '#FFF',
