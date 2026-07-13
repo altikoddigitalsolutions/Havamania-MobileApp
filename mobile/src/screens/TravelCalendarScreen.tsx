@@ -10,7 +10,6 @@ import {
   SafeAreaView,
   Alert,
   ScrollView,
-  Dimensions,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +18,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useColors, Spacing, Radius, FontSize } from '../theme';
+import { useTheme } from '../theme';
 import { SeasonalBackground } from '../components/SeasonalBackground';
 
 // Safe import for LinearGradient
@@ -39,8 +38,6 @@ import { useQuery } from '@tanstack/react-query';
 import { getDailyWeather } from '../services/weatherApi';
 import { analyzeTravelPlan, TravelAnalysisResult, generateTravelHistorySummary } from '../services/travelAnalysisService';
 import { getTripStatus, TripStatus, getTripDayCount } from '../utils/dateUtils';
-
-const { width } = Dimensions.get('window');
 
 const TRAVEL_TYPES: { type: TravelType; label: string; icon: string }[] = [
   { type: 'Vacation', label: 'Tatil', icon: 'beach-outline' },
@@ -76,11 +73,7 @@ const formatDateRange = (start: string, end: string) => {
 };
 
 export function TravelCalendarScreen() {
-  return <TravelScreen />;
-}
-
-function TravelScreen() {
-  const C = useColors();
+  const { colors: C, spacing, fontSize, responsive, layout, radius } = useTheme();
   const { plans, addPlan, removePlan, updatePlan, archivePlan, unarchivePlan } = useTravelStore();
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -202,114 +195,118 @@ function TravelScreen() {
     setDetailVisible(true);
   };
 
+  const s = makeStyles(C, spacing, fontSize, responsive, layout, radius);
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]}>
+    <SafeAreaView style={s.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={[C.bg, C.bgSecondary]} style={StyleSheet.absoluteFill} />
       <SeasonalBackground />
 
-      <View style={styles.header}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            <Text style={[styles.title, { color: C.text }]}>Seyahat Takvimi</Text>
-            <Text style={[styles.subtitle, { color: C.textSecondary }]}>Hava durumuna göre akıllı seyahat planlayıcı</Text>
+      <View style={s.centeredContainer}>
+        <View style={s.header}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.title}>Seyahat Takvimi</Text>
+              <Text style={s.subtitle}>Hava durumuna göre akıllı seyahat planlayıcı</Text>
+            </View>
+            <TouchableOpacity onPress={() => setFilter('Archived')} style={s.archiveBtn}>
+              <Icon name="archive-outline" size={24} color={filter === 'Archived' ? C.accent : C.textSecondary} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => setFilter('Archived')}>
-            <Icon name="archive-outline" size={24} color={filter === 'Archived' ? C.accent : C.textSecondary} />
-          </TouchableOpacity>
         </View>
-      </View>
 
-      <View style={styles.filterContainer}>
-        {(['Upcoming', 'Past', 'Archived'] as const).map((f) => (
-          <TouchableOpacity
-            key={f}
-            onPress={() => setFilter(f)}
-            style={[
-              styles.filterChip,
-              { backgroundColor: filter === f ? C.accent : 'rgba(255,255,255,0.05)' },
-              filter === f && styles.activeFilterChip
-            ]}
-          >
-            <Text style={[styles.filterText, { color: filter === f ? '#FFF' : C.textSecondary }]}>
-              {f === 'Upcoming' ? 'Yaklaşanlar' : f === 'Past' ? 'Geçmiş' : 'Arşiv'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <View style={s.filterContainer}>
+          {(['Upcoming', 'Past', 'Archived'] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setFilter(f)}
+              style={[
+                s.filterChip,
+                { backgroundColor: filter === f ? C.accent : 'rgba(255,255,255,0.05)' },
+                filter === f && s.activeFilterChip
+              ]}
+            >
+              <Text style={[s.filterText, { color: filter === f ? '#FFF' : C.textSecondary }]}>
+                {f === 'Upcoming' ? 'Yaklaşanlar' : f === 'Past' ? 'Geçmiş' : 'Arşiv'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <FlatList
-        data={displayPlans}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <TravelCard
-            plan={item}
-            index={index}
-            onEdit={() => handleEdit(item)}
-            onDelete={() => handleDelete(item.id)}
-            onArchive={() => archivePlan(item.id)}
-            onUnarchive={() => unarchivePlan(item.id)}
-            onShowDetail={() => openDetail(item)}
-            onReAnalyze={() => {}}
-          />
-        )}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<TravelEmptyState onAdd={() => setModalVisible(true)} />}
-      />
+        <FlatList
+          data={displayPlans}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => (
+            <TravelCard
+              plan={item}
+              index={index}
+              onEdit={() => handleEdit(item)}
+              onDelete={() => handleDelete(item.id)}
+              onArchive={() => archivePlan(item.id)}
+              onUnarchive={() => unarchivePlan(item.id)}
+              onShowDetail={() => openDetail(item)}
+              onReAnalyze={() => {}}
+            />
+          )}
+          contentContainerStyle={s.listContent}
+          ListEmptyComponent={<TravelEmptyState onAdd={() => setModalVisible(true)} />}
+        />
+      </View>
 
       <PremiumRouteButton onPress={() => setModalVisible(true)} />
 
       {/* Rota Oluşturma Modalı */}
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={resetForm}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: C.bgSecondary, borderColor: C.border, borderWidth: 1 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: C.text }]}>{editingId ? 'Seyahati Düzenle' : 'Yeni Seyahat Planla'}</Text>
-              <TouchableOpacity onPress={resetForm} style={styles.closeBtn}><Icon name="close" size={24} color={C.textSecondary} /></TouchableOpacity>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{editingId ? 'Seyahati Düzenle' : 'Yeni Seyahat Planla'}</Text>
+              <TouchableOpacity onPress={resetForm} style={s.closeBtn}><Icon name="close" size={24} color={C.textSecondary} /></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>NEREYE GİDİYORSUN?</Text>
+              <View style={s.inputGroup}>
+                <Text style={s.inputLabel}>NEREYE GİDİYORSUN?</Text>
                 {selectedCity ? (
-                  <TouchableOpacity style={[styles.selectedCityBox, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: C.accent }]} onPress={() => setSelectedCity(null)}>
+                  <TouchableOpacity style={[s.selectedCityBox, { borderColor: C.accent }]} onPress={() => setSelectedCity(null)}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name="location" size={18} color={C.accent} /><Text style={{ color: C.text, fontWeight: '600' }}>{selectedCity.name}</Text></View>
                     <Icon name="close-circle" size={18} color={C.textMuted} />
                   </TouchableOpacity>
                 ) : (
                   <View>
-                    <TextInput style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]} placeholder="Şehir ara (örn: Antalya)" placeholderTextColor={C.textMuted} value={citySearch} onChangeText={setCitySearch} />
+                    <TextInput style={s.input} placeholder="Şehir ara (örn: Antalya)" placeholderTextColor={C.textMuted} value={citySearch} onChangeText={setCitySearch} />
                     {citySearch.length > 0 && (
-                      <View style={[styles.searchDropdown, { backgroundColor: C.bgSecondary, borderColor: C.border }]}>
+                      <View style={s.searchDropdown}>
                         {filteredCities.map((item) => (
-                          <TouchableOpacity key={item.name} style={styles.searchItem} onPress={() => { setSelectedCity(item); setCitySearch(''); }}><Text style={{ color: C.text }}>{item.name}</Text></TouchableOpacity>
+                          <TouchableOpacity key={item.name} style={s.searchItem} onPress={() => { setSelectedCity(item); setCitySearch(''); }}><Text style={{ color: C.text }}>{item.name}</Text></TouchableOpacity>
                         ))}
                       </View>
                     )}
                   </View>
                 )}
               </View>
-              <View style={styles.dateRow}>
-                <View style={{ flex: 1 }}><Text style={[styles.inputLabel, { color: C.textSecondary }]}>BAŞLANGIÇ</Text><TextInput style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={C.textMuted} value={startDate} onChangeText={setStartDate} /></View>
-                <View style={{ flex: 1 }}><Text style={[styles.inputLabel, { color: C.textSecondary }]}>BİTİŞ</Text><TextInput style={[styles.input, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]} placeholder="YYYY-MM-DD" placeholderTextColor={C.textMuted} value={endDate} onChangeText={setEndDate} /></View>
+              <View style={s.dateRow}>
+                <View style={{ flex: 1 }}><Text style={s.inputLabel}>BAŞLANGIÇ</Text><TextInput style={s.input} placeholder="YYYY-MM-DD" placeholderTextColor={C.textMuted} value={startDate} onChangeText={setStartDate} /></View>
+                <View style={{ flex: 1 }}><Text style={s.inputLabel}>BİTİŞ</Text><TextInput style={s.input} placeholder="YYYY-MM-DD" placeholderTextColor={C.textMuted} value={endDate} onChangeText={setEndDate} /></View>
               </View>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>SEYAHAT KONSEPTİ</Text>
+              <View style={s.inputGroup}>
+                <Text style={s.inputLabel}>SEYAHAT KONSEPTİ</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                   {TRAVEL_TYPES.map((t) => (
-                    <TouchableOpacity key={t.type} onPress={() => setTravelType(t.type)} style={[styles.typeChipForm, { backgroundColor: travelType === t.type ? C.accent : 'rgba(255,255,255,0.05)' }]}>
+                    <TouchableOpacity key={t.type} onPress={() => setTravelType(t.type)} style={[s.typeChipForm, { backgroundColor: travelType === t.type ? C.accent : 'rgba(255,255,255,0.05)' }]}>
                       <Icon name={t.icon} size={16} color={travelType === t.type ? '#FFF' : C.textSecondary} />
-                      <Text style={[styles.typeText, { color: travelType === t.type ? '#FFF' : C.textSecondary }]}>{t.label}</Text>
+                      <Text style={[s.typeText, { color: travelType === t.type ? '#FFF' : C.textSecondary }]}>{t.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
               </View>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: C.textSecondary }]}>ÖZEL NOTLAR</Text>
-                <TextInput style={[styles.input, styles.textArea, { backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border }]} placeholder="Havalimanı transferi, otel adı vb..." placeholderTextColor={C.textMuted} multiline numberOfLines={3} value={note} onChangeText={setNote} />
+              <View style={s.inputGroup}>
+                <Text style={s.inputLabel}>ÖZEL NOTLAR</Text>
+                <TextInput style={[s.input, s.textArea]} placeholder="Havalimanı transferi, otel adı vb..." placeholderTextColor={C.textMuted} multiline numberOfLines={3} value={note} onChangeText={setNote} />
               </View>
-              <TouchableOpacity style={[styles.saveButton, { backgroundColor: C.accent }]} onPress={handleSavePlan}>
+              <TouchableOpacity style={s.saveButton} onPress={handleSavePlan}>
                 <LinearGradient colors={[C.accent, C.accentDark]} style={StyleSheet.absoluteFill} start={{x: 0, y: 0}} end={{x: 1, y: 0}} />
-                <Text style={styles.saveButtonText}>{editingId ? 'Güncelle' : 'Planı Oluştur'}</Text>
+                <Text style={s.saveButtonText}>{editingId ? 'Güncelle' : 'Planı Oluştur'}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -332,7 +329,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
   onShowDetail: () => void;
   onReAnalyze: () => void;
 }) {
-  const C = useColors();
+  const { colors: C, fontSize, spacing, radius } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -350,7 +347,7 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
   const isPastTrip = tripStatus === TripStatus.PAST;
   const isArchived = plan.isArchived;
 
-  const { data: weatherData, refetch, isFetching } = useQuery({
+  const { data: weatherData, isFetching } = useQuery({
     queryKey: ['weather', plan.lat, plan.lon, plan.startDate],
     queryFn: () => getDailyWeather(plan.lat, plan.lon, 14),
     staleTime: 15 * 60 * 1000,
@@ -413,37 +410,38 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
     return result;
   }, [weatherData, plan.startDate, plan.endDate, plan.type, C, isPastTrip, isArchived, tripStatus, plan.city, today]);
 
+  const s = cardStyles(C, spacing, fontSize, radius);
+
   return (
-    <Animated.View style={[styles.card, { backgroundColor: isArchived ? 'rgba(255,255,255,0.01)' : 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', opacity: (isPastTrip && !isArchived) ? 0.7 : 1, transform: [{ translateY: slideAnim }] }]}>
+    <Animated.View style={[s.card, { opacity: (isPastTrip && !isArchived) ? 0.7 : 1, transform: [{ translateY: slideAnim }] }]}>
       <LinearGradient colors={['rgba(255,255,255,0.05)', 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={StyleSheet.absoluteFill} />
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <View style={[styles.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '15' }]}><Icon name={isArchived ? "archive" : typeInfo.icon} size={20} color={analysis?.color || C.accent} /></View>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={[styles.cardCity, { color: C.text }]}>{plan.city}</Text>
-                {tripStatus === TripStatus.ONGOING && !isArchived && <View style={[styles.completedBadge, { backgroundColor: '#10B98120', borderColor: '#10B98140' }]}><Text style={[styles.completedBadgeText, { color: '#10B981' }]}>DEVAM EDİYOR</Text></View>}
-                {isPastTrip && !isArchived && <View style={styles.completedBadge}><Text style={styles.completedBadgeText}>TAMAMLANDI</Text></View>}
+      <View style={s.cardHeader}>
+        <View style={s.cardHeaderLeft}>
+          <View style={[s.routeIconBox, { backgroundColor: (analysis?.color || C.accent) + '15' }]}><Icon name={isArchived ? "archive" : typeInfo.icon} size={20} color={analysis?.color || C.accent} /></View>
+          <View style={{flex: 1}}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                <Text style={[s.cardCity, { color: C.text }]} numberOfLines={1} ellipsizeMode="tail">{plan.city}</Text>
+                {tripStatus === TripStatus.ONGOING && !isArchived && <View style={[s.completedBadge, { backgroundColor: '#10B98120', borderColor: '#10B98140' }]}><Text style={[s.completedBadgeText, { color: '#10B981' }]}>DEVAM</Text></View>}
+                {isPastTrip && !isArchived && <View style={s.completedBadge}><Text style={s.completedBadgeText}>BİTTİ</Text></View>}
             </View>
-            <Text style={[styles.cardDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
+            <Text style={[s.cardDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
           </View>
         </View>
         {(analysis?.status === 'ready' || analysis?.status === 'active') && tripStatus !== TripStatus.UPCOMING_LOCKED ? (
-          <View style={styles.weatherSummary}>
-            <Text style={[styles.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
-            <Text style={[styles.cardPrecip, { color: C.textSecondary }]}>Yağış: {analysis.precipitationRiskText}</Text>
+          <View style={s.weatherSummary}>
+            <Text style={[s.cardTemp, { color: C.text }]}>{analysis.emoji} {analysis.averageTemp}°</Text>
           </View>
         ) : null}
       </View>
 
       {analysis && (analysis.status === 'ready' || analysis.status === 'active') && tripStatus !== TripStatus.UPCOMING_LOCKED && (
-        <View style={styles.scoreContainer}>
-          <View style={styles.scoreInfo}>
-            <Text style={[styles.scoreLabel, { color: C.textSecondary }]}>KONFOR SKORU</Text>
-            <Text style={[styles.scoreValue, { color: analysis.color }]}>{analysis.score}<Text style={{fontSize: 12, color: C.textMuted}}>/100</Text></Text>
+        <View style={s.scoreContainer}>
+          <View style={s.scoreInfo}>
+            <Text style={[s.scoreLabel, { color: C.textSecondary }]}>SKOR</Text>
+            <Text style={[s.scoreValue, { color: analysis.color }]}>{analysis.score}</Text>
           </View>
-          <View style={styles.adviceContainer}>
-            <Text style={[styles.adviceText, { color: C.text }]} numberOfLines={2}>{analysis.advice}</Text>
+          <View style={s.adviceContainer}>
+            <Text style={[s.adviceText, { color: C.text }]} numberOfLines={2}>{analysis.advice}</Text>
           </View>
         </View>
       )}
@@ -452,26 +450,26 @@ function TravelCard({ plan, index, onEdit, onDelete, onArchive, onUnarchive, onS
         <TravelAiRecommendationSection analysis={analysis} isFetching={isFetching} isPast={isPastTrip || isArchived} tripStatus={tripStatus} />
       )}
 
-      <View style={styles.cardFooter}>
-        <View style={styles.cardActions}>
+      <View style={s.cardFooter}>
+        <View style={s.cardActions}>
           <TouchableOpacity
-            style={[styles.primaryAction, { backgroundColor: C.accent }]}
+            style={[s.primaryAction, { backgroundColor: C.accent }]}
             onPress={onShowDetail}
           >
-            <Text style={styles.primaryActionText}>{isPastTrip || isArchived ? 'Özeti Gör' : 'Detayları Gör'}</Text>
+            <Text style={s.primaryActionText}>{isPastTrip || isArchived ? 'Özeti Gör' : 'Detayları Gör'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={onEdit}>
+          <TouchableOpacity style={s.secondaryAction} onPress={onEdit}>
             <Icon name="ellipsis-horizontal" size={20} color={C.textSecondary} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={onDelete} style={{padding: 4}}><Icon name="trash-outline" size={18} color="#EF444466" /></TouchableOpacity>
+        <TouchableOpacity onPress={() => onDelete()} style={{padding: 8}}><Icon name="trash-outline" size={18} color="#EF444466" /></TouchableOpacity>
       </View>
     </Animated.View>
   );
 }
 
 function TravelAiRecommendationSection({ analysis, isFetching, isPast, tripStatus }: { analysis: any; isFetching: boolean, isPast: boolean, tripStatus: TripStatus }) {
-  const C = useColors();
+  const { colors: C, fontSize, spacing } = useTheme();
   if (isFetching) return <View style={styles.aiSectionLoading}><ActivityIndicator size="small" color={C.accent} /><Text style={{ color: C.textMuted, fontSize: 12, marginTop: 8 }}>Rotalar analiz ediliyor...</Text></View>;
   if (!analysis) return null;
 
@@ -479,7 +477,7 @@ function TravelAiRecommendationSection({ analysis, isFetching, isPast, tripStatu
 
   return (
     <View style={styles.aiSection}>
-      <View style={styles.aiTitleRow}><Icon name={isPast ? "information-circle-outline" : "sparkles-outline"} size={14} color={isPast ? C.textMuted : C.accent} /><Text style={[styles.aiTitle, { color: isPast ? C.textMuted : C.accent }]}>{isPast ? "BİLGİLENDİRME" : isLocked ? "SEYAHAT KAYDI" : "HAVAMANIA AI ÖNERİLERİ"}</Text></View>
+      <View style={styles.aiTitleRow}><Icon name={isPast ? "information-circle-outline" : "sparkles-outline"} size={14} color={isPast ? C.textMuted : C.accent} /><Text style={[styles.aiTitle, { color: isPast ? C.textMuted : C.accent }]}>{isPast ? "BİLGİLENDİRME" : isLocked ? "SEYAHAT KAYDI" : "AI ÖNERİLERİ"}</Text></View>
       <View style={styles.aiGrid}>
         {!isPast && !isLocked && (
           <><View style={[styles.aiMiniCard, { backgroundColor: 'rgba(255,255,255,0.02)' }]}><View style={[styles.aiMiniIcon, { backgroundColor: '#3B82F620' }]}><Icon name="airplane-outline" size={12} color="#3B82F6" /></View><Text style={[styles.aiMiniText, { color: C.text }]} numberOfLines={2}>{analysis.status === 'ready' || analysis.status === 'active' ? 'Gidiş planı için hava müsait.' : 'Plan bekleniyor.'}</Text></View>
@@ -492,7 +490,7 @@ function TravelAiRecommendationSection({ analysis, isFetching, isPast, tripStatu
 }
 
 function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; plan: TravelPlan | null; onClose: () => void }) {
-  const C = useColors();
+  const { colors: C, spacing, fontSize, radius, layout, responsive } = useTheme();
   if (!plan) return null;
 
   const { data: historyWeather } = useQuery({
@@ -506,61 +504,63 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
     return generateTravelHistorySummary(historyWeather.items.filter(i => i.date >= plan.startDate && i.date <= plan.endDate), plan.city);
   }, [historyWeather, plan.startDate, plan.endDate, plan.city]);
 
+  const s = makeStyles(C, spacing, fontSize, responsive, layout, radius);
+
   return (
     <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.detailContent, { backgroundColor: C.bgSecondary, borderColor: C.border, borderWidth: 1 }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: C.text }]}>Seyahat Özeti</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}><Icon name="close" size={24} color={C.textSecondary} /></TouchableOpacity>
+      <View style={s.modalOverlay}>
+        <View style={s.detailContent}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Seyahat Özeti</Text>
+            <TouchableOpacity onPress={onClose} style={s.closeBtn}><Icon name="close" size={24} color={C.textSecondary} /></TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.detailHeader}>
-              <View style={[styles.scoreCircle, { borderColor: C.accent }]}>
-                <Text style={[styles.scoreCircleValue, { color: C.text }]}>92</Text>
-                <Text style={[styles.scoreCircleLabel, { color: C.textSecondary }]}>SKOR</Text>
+            <View style={s.detailHeader}>
+              <View style={[s.scoreCircle, { borderColor: C.accent }]}>
+                <Text style={s.scoreCircleValue}>92</Text>
+                <Text style={s.scoreCircleLabel}>SKOR</Text>
               </View>
               <View style={{flex: 1}}>
-                <Text style={[styles.detailCity, { color: C.text }]}>{plan.city}</Text>
-                <Text style={[styles.detailDates, { color: C.textSecondary }]}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
+                <Text style={s.detailCity} numberOfLines={1}>{plan.city}</Text>
+                <Text style={s.detailDates}>{formatDateRange(plan.startDate, plan.endDate)}</Text>
               </View>
             </View>
 
             {historySummary ? (
-                <View style={styles.historySummaryGrid}>
-                    <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                <View style={s.historySummaryGrid}>
+                    <View style={s.historyItem}>
                         <Icon name="thermometer-outline" size={20} color={C.accent} />
-                        <Text style={styles.historyLabel}>ORTALAMA</Text>
-                        <Text style={[styles.historyValue, { color: C.text }]}>{historySummary.averageTemp}°</Text>
+                        <Text style={s.historyLabel}>ORTALAMA</Text>
+                        <Text style={[s.historyValue, { color: C.text }]}>{historySummary.averageTemp}°</Text>
                     </View>
-                    <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                    <View style={s.historyItem}>
                         <Icon name="sunny-outline" size={20} color="#FBBF24" />
-                        <Text style={styles.historyLabel}>EN GÜNEŞLİ</Text>
-                        <Text style={[styles.historyValue, { color: '#FBBF24' }]}>{historySummary.sunniestDay}</Text>
+                        <Text style={s.historyLabel}>EN GÜNEŞLİ</Text>
+                        <Text style={[s.historyValue, { color: '#FBBF24' }]}>{historySummary.sunniestDay}</Text>
                     </View>
-                    <View style={[styles.historyItem, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+                    <View style={s.historyItem}>
                         <Icon name="rainy-outline" size={20} color="#3B82F6" />
-                        <Text style={styles.historyLabel}>EN YAĞIŞLI</Text>
-                        <Text style={[styles.historyValue, { color: '#3B82F6' }]}>{historySummary.rainiestDay}</Text>
+                        <Text style={s.historyLabel}>EN YAĞIŞLI</Text>
+                        <Text style={[s.historyValue, { color: '#3B82F6' }]}>{historySummary.rainiestDay}</Text>
                     </View>
                 </View>
             ) : <ActivityIndicator color={C.accent} />}
 
-            <View style={[styles.detailSection, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-              <View style={styles.detailTitleRow}><Icon name="sparkles-outline" size={18} color={C.accent} /><Text style={[styles.detailSectionTitle, { color: C.text }]}>ASİSTAN DEĞERLENDİRMESİ</Text></View>
-              <Text style={[styles.detailText, { color: C.textSecondary }]}>{historySummary?.evaluation || "Hava durumu kayıtları analiz ediliyor..."}</Text>
+            <View style={s.detailSection}>
+              <View style={s.detailTitleRow}><Icon name="sparkles-outline" size={18} color={C.accent} /><Text style={s.detailSectionTitle}>ASİSTAN DEĞERLENDİRMESİ</Text></View>
+              <Text style={s.detailText}>{historySummary?.evaluation || "Hava durumu kayıtları analiz ediliyor..."}</Text>
             </View>
 
             {plan.note && (
-              <View style={[styles.detailSection, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-                <View style={styles.detailTitleRow}><Icon name="bookmark-outline" size={18} color={C.accent} /><Text style={[styles.detailSectionTitle, { color: C.text }]}>NOTLARINIZ</Text></View>
-                <Text style={[styles.detailText, { color: C.textSecondary }]}>{plan.note}</Text>
+              <View style={s.detailSection}>
+                <View style={s.detailTitleRow}><Icon name="bookmark-outline" size={18} color={C.accent} /><Text style={s.detailSectionTitle}>NOTLARINIZ</Text></View>
+                <Text style={s.detailText}>{plan.note}</Text>
               </View>
             )}
 
-            <TouchableOpacity style={[styles.saveButton, { backgroundColor: C.accent, marginTop: 40 }]} onPress={onClose}>
+            <TouchableOpacity style={[s.saveButton, { marginTop: 40 }]} onPress={onClose}>
                 <LinearGradient colors={[C.accent, C.accentDark]} style={StyleSheet.absoluteFill} start={{x: 0, y: 0}} end={{x: 1, y: 0}} />
-                <Text style={styles.saveButtonText}>Geri Dön</Text>
+                <Text style={s.saveButtonText}>Geri Dön</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -570,7 +570,7 @@ function PastTripDetailModal({ visible, plan, onClose }: { visible: boolean; pla
 }
 
 function TravelEmptyState({ onAdd }: { onAdd: () => void }) {
-  const C = useColors();
+  const { colors: C, spacing, fontSize } = useTheme();
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}><View style={[styles.glowCircle, { backgroundColor: C.accent }]} /><Icon name="map-outline" size={80} color={C.textSecondary} style={{ opacity: 0.5 }} /></View>
@@ -582,7 +582,7 @@ function TravelEmptyState({ onAdd }: { onAdd: () => void }) {
 }
 
 function PremiumRouteButton({ onPress }: { onPress: () => void }) {
-  const C = useColors();
+  const { colors: C } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
   const handlePressIn = () => Animated.spring(scale, { toValue: 0.9, useNativeDriver: true }).start();
   const handlePressOut = () => Animated.spring(scale, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
@@ -596,39 +596,17 @@ function PremiumRouteButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { padding: Spacing.xl, paddingTop: 20 },
-  title: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
-  subtitle: { fontSize: 14, marginTop: 4, opacity: 0.7 },
-  filterContainer: { flexDirection: 'row', paddingHorizontal: Spacing.xl, gap: 10, marginBottom: Spacing.lg },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full },
-  activeFilterChip: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  filterText: { fontSize: 13, fontWeight: '700' },
-  listContent: { padding: Spacing.xl, paddingBottom: 120 },
-  card: { borderRadius: 24, borderWidth: 1, marginBottom: 20, overflow: 'hidden', padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 4 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+const cardStyles = (C: any, spacing: any, fontSize: any, radius: any) => StyleSheet.create({
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginBottom: 20, overflow: 'hidden', padding: 20, backgroundColor: 'rgba(255,255,255,0.03)' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   routeIconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  cardCity: { fontSize: 22, fontWeight: '800' },
-  cardDates: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  completedBadge: { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 4 },
-  completedBadgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, color: '#60A5FA' },
-  weatherSummary: { alignItems: 'flex-end', gap: 4 },
-  cardTemp: { fontSize: 18, fontWeight: '800' },
-  historySummaryGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  historyItem: { flex: 1, padding: 12, borderRadius: 16, alignItems: 'center' },
-  historyLabel: { fontSize: 8, fontWeight: '900', color: 'rgba(255,255,255,0.4)', marginBottom: 4 },
-  historyValue: { fontSize: 14, fontWeight: '800' },
-  aiSection: { marginTop: 4, marginBottom: 20 },
-  aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  aiTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
-  aiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  aiMiniCard: { flex: 1, minWidth: '45%', padding: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  aiMiniIcon: { width: 24, height: 24, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  aiMiniText: { fontSize: 11, fontWeight: '600', flex: 1, lineHeight: 15 },
-  aiSectionLoading: { paddingVertical: 20, alignItems: 'center' },
-  cardPrecip: { fontSize: 11, fontWeight: '600' },
+  cardCity: { fontSize: fontSize.lg, fontWeight: '800', flexShrink: 1 },
+  cardDates: { fontSize: fontSize.xs, fontWeight: '600', marginTop: 2 },
+  completedBadge: { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)', borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  completedBadgeText: { fontSize: 8, fontWeight: '900', color: '#60A5FA' },
+  weatherSummary: { alignItems: 'flex-end' },
+  cardTemp: { fontSize: fontSize.md, fontWeight: '800' },
   scoreContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 16, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   scoreInfo: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.05)', paddingRight: 12, marginRight: 12, alignItems: 'center' },
   scoreLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginBottom: 2 },
@@ -640,6 +618,59 @@ const styles = StyleSheet.create({
   primaryAction: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   primaryActionText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   secondaryAction: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
+});
+
+const makeStyles = (C: any, spacing: any, fontSize: any, responsive: any, layout: any, radius: any) => StyleSheet.create({
+  container: { flex: 1 },
+  centeredContainer: { flex: 1, alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
+  header: { padding: spacing.pagePadding, paddingTop: 20 },
+  title: { fontSize: fontSize.xxxl, fontWeight: '800', letterSpacing: -1, color: C.text },
+  subtitle: { fontSize: fontSize.sm, marginTop: 4, opacity: 0.7, color: C.textSecondary },
+  filterContainer: { flexDirection: 'row', paddingHorizontal: spacing.pagePadding, gap: 10, marginBottom: spacing.md },
+  filterChip: { flex: 1, paddingVertical: 8, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  activeFilterChip: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  filterText: { fontSize: fontSize.xs, fontWeight: '700' },
+  listContent: { padding: spacing.pagePadding, paddingBottom: 120 },
+  archiveBtn: { padding: 8 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: spacing.lg, maxHeight: '92%', alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
+  detailContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: spacing.lg, maxHeight: '85%', alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth, backgroundColor: C.bgSecondary, borderColor: C.border, borderWidth: 1 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { fontSize: fontSize.xxl, fontWeight: '800', color: C.text },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 24 },
+  scoreCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, justifyContent: 'center', alignItems: 'center' },
+  scoreCircleValue: { fontSize: 24, fontWeight: '900', color: C.text },
+  scoreCircleLabel: { fontSize: 8, fontWeight: '800', marginTop: -2, color: C.textSecondary },
+  detailCity: { fontSize: fontSize.xxl, fontWeight: '900', color: C.text },
+  detailDates: { fontSize: fontSize.sm, fontWeight: '600', opacity: 0.6, color: C.textSecondary },
+  detailSection: { padding: 20, borderRadius: 24, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.03)' },
+  detailTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  detailSectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1, color: C.text },
+  detailText: { fontSize: 14, lineHeight: 22, fontWeight: '500', color: C.textSecondary },
+  inputGroup: { marginBottom: 20 },
+  inputLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 10, marginLeft: 4, color: C.textSecondary },
+  input: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, fontSize: 16, fontWeight: '600', backgroundColor: 'rgba(255,255,255,0.05)', color: C.text, borderColor: C.border },
+  textArea: { height: 100, paddingTop: 16, textAlignVertical: 'top' },
+  dateRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  selectedCityBox: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.05)' },
+  searchDropdown: { position: 'absolute', top: 90, left: 0, right: 0, borderRadius: 16, borderWidth: 1, zIndex: 1000, elevation: 10, padding: 8, backgroundColor: C.bgSecondary, borderColor: C.border },
+  searchItem: { padding: 14, borderRadius: 10 },
+  typeChipForm: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14 },
+  typeText: { fontSize: 14, fontWeight: '700' },
+  saveButton: { height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginTop: 20, overflow: 'hidden', backgroundColor: C.accent },
+  saveButtonText: { color: '#FFF', fontSize: 18, fontWeight: '800', zIndex: 1 },
+});
+
+const styles = StyleSheet.create({
+  aiSection: { marginTop: 4, marginBottom: 20 },
+  aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  aiTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  aiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  aiMiniCard: { flex: 1, minWidth: '45%', padding: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aiMiniIcon: { width: 24, height: 24, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  aiMiniText: { fontSize: 11, fontWeight: '600', flex: 1, lineHeight: 15 },
+  aiSectionLoading: { paddingVertical: 20, alignItems: 'center' },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 40 },
   emptyIllustration: { width: 160, height: 160, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
   glowCircle: { position: 'absolute', width: 100, height: 100, borderRadius: 50, opacity: 0.1, transform: [{ scale: 1.5 }] },
@@ -651,32 +682,4 @@ const styles = StyleSheet.create({
   fab: { height: 56, borderRadius: 28, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8, overflow: 'hidden' },
   fabContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fabText: { color: '#FFF', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '92%' },
-  detailContent: { borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: Spacing.xl, maxHeight: '85%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  modalTitle: { fontSize: 22, fontWeight: '800' },
-  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 24 },
-  scoreCircle: { width: 80, height: 80, borderRadius: 40, borderWidth: 4, justifyContent: 'center', alignItems: 'center' },
-  scoreCircleValue: { fontSize: 24, fontWeight: '900' },
-  scoreCircleLabel: { fontSize: 8, fontWeight: '800', marginTop: -2 },
-  detailCity: { fontSize: 28, fontWeight: '900' },
-  detailDates: { fontSize: 14, fontWeight: '600', opacity: 0.6 },
-  detailSection: { padding: 20, borderRadius: 24, marginBottom: 16 },
-  detailTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  detailSectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  detailText: { fontSize: 14, lineHeight: 22, fontWeight: '500' },
-  inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 10, marginLeft: 4 },
-  input: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, fontSize: 16, fontWeight: '600' },
-  textArea: { height: 100, paddingTop: 16, textAlignVertical: 'top' },
-  dateRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  selectedCityBox: { height: 56, borderRadius: 16, paddingHorizontal: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  searchDropdown: { position: 'absolute', top: 90, left: 0, right: 0, borderRadius: 16, borderWidth: 1, zIndex: 1000, elevation: 10, padding: 8 },
-  searchItem: { padding: 14, borderRadius: 10 },
-  typeChipForm: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14 },
-  typeText: { fontSize: 14, fontWeight: '700' },
-  saveButton: { height: 60, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginTop: 20, overflow: 'hidden' },
-  saveButtonText: { color: '#FFF', fontSize: 18, fontWeight: '800', zIndex: 1 },
 });

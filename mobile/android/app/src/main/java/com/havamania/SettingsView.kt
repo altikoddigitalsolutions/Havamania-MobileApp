@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,6 @@ fun SettingsScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showToneDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
     var showManageDataSheet by remember { mutableStateOf(false) }
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
@@ -128,8 +128,6 @@ fun SettingsScreen(
                 SettingsNavRow("Profil Bilgileri", "İsim, bio ve kimlik", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
                 SettingsDivider()
                 SettingsNavRow("Verilerimi Yönet", "Güvenlik ve gizlilik", Icons.Rounded.Security) { showManageDataSheet = true }
-                SettingsDivider()
-                SettingsActionRow("Oturumu Kapat", Icons.Rounded.Logout, themeColors.error) { showLogoutDialog = true }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
@@ -196,18 +194,6 @@ fun SettingsScreen(
         if (showUnitDialog) {
             SettingsOptionDialog("Sıcaklık Birimi", listOf("CELSIUS" to "Celsius (°C)", "FAHRENHEIT" to "Fahrenheit (°F)"), tempUnit.name, { themeViewModel.setTempUnit(TemperatureUnit.valueOf(it)); showUnitDialog = false }) { showUnitDialog = false }
         }
-
-    if (showLogoutDialog) {
-        HavamaniaDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = "Oturumu Kapat?",
-            text = "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
-            confirmText = "Çıkış Yap",
-            confirmColor = themeColors.error,
-            icon = Icons.Rounded.Logout,
-            onConfirm = { /* Logout logic */ }
-        )
-    }
 
     if (showComingSoonDialog) {
         HavamaniaDialog(
@@ -445,16 +431,49 @@ fun PremiumSettingsCard(onClick: () -> Unit) {
 @Composable
 fun PremiumThemeRow(selectedTheme: AppTheme, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
+    val configuration = LocalConfiguration.current
+    val isSmallScreen = configuration.screenWidthDp < 380 // Telefon genişliği eşiği
+
     Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp, horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 18.dp, horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconBoxContainer(Icons.Rounded.Palette, themeColors.accent)
             Spacer(modifier = Modifier.width(16.dp))
-            Text("Uygulama Teması", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary, modifier = Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(selectedTheme.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = themeColors.accent)
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textSecondary.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Uygulama Teması",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = if (isSmallScreen) 15.sp else 16.sp
+                    ),
+                    color = themeColors.textPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = selectedTheme.title,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = if (isSmallScreen) 11.sp else 12.sp
+                    ),
+                    color = themeColors.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
+
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Rounded.ChevronRight,
+                null,
+                tint = themeColors.textSecondary.copy(alpha = 0.3f),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -666,17 +685,6 @@ fun SettingsToggleRow(title: String, subtitle: String, icon: ImageVector, checke
             Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
         }
         HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-fun SettingsActionRow(title: String, icon: ImageVector, contentColor: Color, onClick: () -> Unit = {}) {
-    Surface(onClick = onClick, color = Color.Transparent) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconBoxContainer(icon, contentColor)
-            Spacer(modifier = Modifier.width(16.dp))
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = contentColor.copy(alpha = 0.9f))
-        }
     }
 }
 

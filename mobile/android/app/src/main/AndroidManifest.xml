@@ -29,7 +29,7 @@
       <activity
         android:name=".WeatherPremiumActivity"
         android:label="@string/app_name"
-        android:theme="@style/Theme.AppCompat.NoActionBar"
+        android:theme="@style/Theme.App.Starting"
         android:launchMode="singleTask"
         android:exported="true">
         <intent-filter>

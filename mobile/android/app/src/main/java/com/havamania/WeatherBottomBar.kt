@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.*
 
 sealed class BottomNavItem(
     val route: String,
@@ -42,6 +42,9 @@ fun WeatherBottomBar(
     modifier: Modifier = Modifier
 ) {
     val themeColors = HavamaniaTheme.colors
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
+
     val items = listOf(
         BottomNavItem.Weather,
         BottomNavItem.Calendar,
@@ -54,8 +57,16 @@ fun WeatherBottomBar(
         modifier = modifier.fillMaxWidth(),
         tonalElevation = 0.dp
     ) {
-        Column {
-            // Premium Divider Shadow
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier
+                    .then(
+                        if (windowSize.isTablet || windowSize.isLargeTablet)
+                            Modifier.widthIn(max = responsive.maxContentWidth)
+                        else Modifier.fillMaxWidth()
+                    )
+            ) {
+                // Premium Divider Shadow
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -64,10 +75,9 @@ fun WeatherBottomBar(
             )
 
             NavigationBar(
-                modifier = Modifier.height(80.dp),
                 containerColor = Color.Transparent,
                 tonalElevation = 0.dp,
-                windowInsets = WindowInsets.navigationBars
+                windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 items.forEach { item ->
                     // Logic: Match base route precisely to avoid cross-tab activation
@@ -96,9 +106,12 @@ fun WeatherBottomBar(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                                     fontSize = 11.sp,
-                                    letterSpacing = 0.2.sp
+                                    letterSpacing = 0.2.sp,
+                                    lineHeight = 16.sp
                                 ),
-                                color = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.7f)
+                                color = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                modifier = Modifier.padding(top = 2.dp)
                             )
                         },
                         icon = {
@@ -107,8 +120,8 @@ fun WeatherBottomBar(
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
-                                    .width(64.dp)
-                                    .height(32.dp)
+                                    .width(60.dp)
+                                    .height(30.dp)
                                     .clip(CircleShape)
                                     .background(if (isSelected) themeColors.accent else Color.Transparent)
                             ) {
@@ -116,7 +129,7 @@ fun WeatherBottomBar(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .blur(8.dp)
+                                            .blur(6.dp)
                                             .background(themeColors.accent.copy(alpha = 0.3f), CircleShape)
                                     )
                                 }
@@ -141,4 +154,5 @@ fun WeatherBottomBar(
             }
         }
     }
+}
 }

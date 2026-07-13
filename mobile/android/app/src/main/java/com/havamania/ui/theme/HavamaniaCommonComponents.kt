@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -143,7 +144,7 @@ fun HavamaniaScreen(
 @Composable
 fun HavamaniaGlassCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = HavamaniaTheme.styles.cardCornerRadius,
+    cornerRadius: Dp = LocalResponsiveValues.current.cardRadius,
     alpha: Float = 0.7f,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
@@ -152,6 +153,9 @@ fun HavamaniaGlassCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
     val isPressed = isPressedState.value
+
+    val windowSize = LocalWindowSize.current
+    val responsive = LocalResponsiveValues.current
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed && onClick != null) 0.97f else 1f,
@@ -182,7 +186,7 @@ fun HavamaniaGlassCard(
             )
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(if (windowSize.isCompact) 14.dp else 20.dp),
             content = content
         )
     }
@@ -451,43 +455,53 @@ fun HavamaniaTopBar(
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     val colors = HavamaniaTheme.colors
+    val responsive = LocalResponsiveValues.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = responsive.pagePadding, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        if (onBack != null) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surfaceGlass.copy(alpha = 0.5f))
-                    .border(1.dp, colors.border.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
-                    contentDescription = "Geri",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
+        // Left side: Back Button or Spacer
+        Box(modifier = Modifier.widthIn(min = 48.dp)) {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceGlass.copy(alpha = 0.5f))
+                        .border(1.dp, colors.border.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ArrowBack,
+                        contentDescription = "Geri",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
-        } else {
-            Spacer(Modifier.size(48.dp))
         }
 
+        // Center side: Title with Weight
         Text(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelLarge.copy(
-                letterSpacing = 2.sp,
-                fontWeight = FontWeight.Black
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Black,
+                fontSize = responsive.headerFontSize * 0.6f // Scale down for label style
             ),
-            color = colors.textPrimary.copy(alpha = 0.9f)
+            color = colors.textPrimary.copy(alpha = 0.9f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
+        // Right side: Actions
         Row(
             modifier = Modifier.widthIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,

@@ -38,6 +38,7 @@ import {
   getWeatherEmoji,
   getWeatherLabel,
   useColors,
+  useTheme,
 } from '../theme';
 import { formatPrecipitationProbability } from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
@@ -57,7 +58,7 @@ export function HomeScreen(): React.JSX.Element {
   const {theme, animationsEnabled} = useThemeStore();
   const {width: screenWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const C = useColors();
+  const { colors: C, spacing, fontSize, responsive, layout } = useTheme();
   const {isGuest} = useAuthStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -156,7 +157,7 @@ export function HomeScreen(): React.JSX.Element {
     setShowLocationModal(false);
   };
 
-  const s = makeStyles(C, insets);
+  const s = makeStyles(C, insets, spacing, fontSize, responsive, layout);
 
   if (isLoading) {
     return <HomeSkeleton />;
@@ -177,8 +178,6 @@ export function HomeScreen(): React.JSX.Element {
   const dailyItems = dailyQuery.data?.items ?? [];
   const todayDaily = dailyItems[0];
 
-  const cardWidth = screenWidth - Spacing.md * 2;
-
   return (
     <View style={s.container}>
       <StatusBar
@@ -193,154 +192,352 @@ export function HomeScreen(): React.JSX.Element {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} progressViewOffset={insets.top + 20} />
         }>
-
-        {/* ── Header ── */}
-        <View style={s.header}>
-          <TouchableOpacity
-            style={[s.locationBtn, {backgroundColor: C.bgCard}]}
-            activeOpacity={0.8}
-            onPress={() => setShowLocationModal(true)}>
-            <Text style={{fontSize: 16}}>📍</Text>
-            <Text style={s.locationText} numberOfLines={1}>{city}</Text>
-            <Text style={{fontSize: 12, color: C.textSecondary}}> ▼</Text>
-          </TouchableOpacity>
-
-          <View style={s.headerRight}>
+        <View style={s.centeredLayout}>
+          {/* ── Header ── */}
+          <View style={s.header}>
             <TouchableOpacity
-              style={s.iconBtn}
-              onPress={() => navigation.navigate('TravelCalendar')}>
-              <Text style={s.iconBtnText}>✈️</Text>
+              style={[s.locationBtn, {backgroundColor: C.bgCard}]}
+              activeOpacity={0.8}
+              onPress={() => setShowLocationModal(true)}>
+              <Text style={{fontSize: 16}}>📍</Text>
+              <Text style={s.locationText} numberOfLines={1}>{city}</Text>
+              <Text style={{fontSize: 12, color: C.textSecondary}}> ▼</Text>
             </TouchableOpacity>
+
+            <View style={s.headerRight}>
+              <TouchableOpacity
+                style={s.iconBtn}
+                onPress={() => navigation.navigate('TravelCalendar')}>
+                <Text style={s.iconBtnText}>✈️</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.iconBtn}
+                onPress={() => navigation.navigate('Alerts')}>
+                <Text style={s.iconBtnText}>⚡</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.iconBtn}
+                onPress={() => navigation.navigate('Map')}>
+                <Text style={s.iconBtnText}>🛰️</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── Ana Hava Durumu Kartı ── */}
+          <AtmosphericWeatherCard
+            city={city.split(',')[0]}
+            temperature={selectedWeather?.temperature ?? current.temperature}
+            description={selectedWeather?.description ?? getWeatherLabel(selectedWeather?.weather_code ?? current.weather_code)}
+            high={todayDaily?.temp_max ?? current.temperature}
+            low={todayDaily?.temp_min ?? current.temperature}
+            feelsLike={selectedWeather?.feels_like ?? selectedWeather?.apparent_temperature ?? current.feels_like}
+            weatherCode={selectedWeather?.weather_code ?? current.weather_code}
+            isDay={selectedWeather?.is_day ?? current.is_day}
+            humidity={selectedWeather?.humidity ?? current.humidity}
+            windSpeed={selectedWeather?.wind_speed ?? current.wind_speed}
+            uvIndex={selectedWeather?.uv_index ?? current.uv_index}
+            time={selectedWeather?.time}
+            sunrise={todayDaily?.sunrise}
+            sunset={todayDaily?.sunset}
+            lastUpdated={new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+            C={C}
+          />
+
+          {/* ── 24 Saatlik Tahmin (Saatlik Tahmin) ── */}
+          <View style={s.sectionCard}>
             <TouchableOpacity
-              style={s.iconBtn}
-              onPress={() => navigation.navigate('Alerts')}>
-              <Text style={s.iconBtnText}>⚡</Text>
+              style={s.sectionHeader}
+              onPress={() => navigation.navigate('Hourly', {lat, lon, city})}>
+              <Text style={s.sectionTitle}>{t('home.hourlyTitle').toUpperCase()}</Text>
+              <Text style={[s.sectionIcon, {color: C.accent}]}>{t('home.seeAll')} ›</Text>
             </TouchableOpacity>
+            <FlatList
+              horizontal
+              data={hourlyItems.slice(0, 8)}
+              keyExtractor={(item, idx) => `${item.time}-${idx}`}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{gap: spacing.sm, paddingHorizontal: 2, paddingVertical: spacing.xs}}
+              renderItem={({item, index}) => {
+                const isActive = selectedWeather?.time === item.time;
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => setSelectedWeather(item)}
+                    style={[
+                      s.hourCard,
+                      isActive ? s.hourCardActive : { backgroundColor: 'rgba(255,255,255,0.03)' }
+                    ]}>
+                    <Text style={[s.hourLabel, isActive && { color: '#FFF' }]}>
+                      {index === 0 ? t('home.today') : formatHour(item.time)}
+                    </Text>
+                    <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
+                    <Text style={[s.hourTemp, isActive && { color: '#FFF' }]}>{item.temperature}°</Text>
+                    {item.precipitation_probability > 20 && (
+                      <Text style={[s.hourPrecip, isActive && { color: '#FFF' }]}>
+                        💧{formatPrecipitationProbability(item.precipitation_probability)}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+
+          {/* ── Havamania Önerisi (AI Recommendation) ── */}
+          <HavamaniaRecommendationCard
+            weather={current}
+            profile={profileQuery.data}
+            onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
+            C={C}
+          />
+
+          {/* ── 10 Günlük Özet (7/10 Günlük Tahmin) ── */}
+          <View style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                <Text style={s.sectionIcon}>📅</Text>
+                <Text style={s.sectionTitle}>{t('home.forecastTitle').toUpperCase()}</Text>
+              </View>
+            </View>
+            {dailyItems.slice(0, 4).map((item, idx) => {
+              const itemDate = item.date;
+              const selectedDate = selectedWeather?.time?.split('T')[0] || selectedWeather?.date;
+              const isSelected = itemDate === selectedDate;
+
+              return (
+                <DailyRow
+                  key={item.date}
+                  item={item}
+                  isFirst={idx === 0}
+                  isSelected={isSelected}
+                  onPress={() => setSelectedWeather({
+                    ...item,
+                    time: item.date + 'T12:00', // Günlük seçimde öğle vaktini baz al
+                    temperature: item.temp_max,
+                    description: getWeatherLabel(item.weather_code),
+                    weather_code: item.weather_code,
+                    feels_like: item.temp_max,
+                    is_day: true
+                  })}
+                  C={C}
+                  t={t}
+                />
+              );
+            })}
             <TouchableOpacity
-              style={s.iconBtn}
-              onPress={() => navigation.navigate('Map')}>
-              <Text style={s.iconBtnText}>🛰️</Text>
+              style={s.viewMoreBtn}
+              onPress={() => navigation.navigate('Forecast', {lat, lon, city})}>
+              <Text style={s.viewMoreText}>{t('forecast.title')} ›</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* ── Ana Hava Durumu Kartı ── */}
-        <AtmosphericWeatherCard
-          city={city.split(',')[0]}
-          temperature={selectedWeather?.temperature ?? current.temperature}
-          description={selectedWeather?.description ?? getWeatherLabel(selectedWeather?.weather_code ?? current.weather_code)}
-          high={todayDaily?.temp_max ?? current.temperature}
-          low={todayDaily?.temp_min ?? current.temperature}
-          feelsLike={selectedWeather?.feels_like ?? selectedWeather?.apparent_temperature ?? current.feels_like}
-          weatherCode={selectedWeather?.weather_code ?? current.weather_code}
-          isDay={selectedWeather?.is_day ?? current.is_day}
-          humidity={selectedWeather?.humidity ?? current.humidity}
-          windSpeed={selectedWeather?.wind_speed ?? current.wind_speed}
-          uvIndex={selectedWeather?.uv_index ?? current.uv_index}
-          time={selectedWeather?.time}
-          sunrise={todayDaily?.sunrise}
-          sunset={todayDaily?.sunset}
-          lastUpdated={new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-          C={C}
-        />
-
-        {/* ── 24 Saatlik Tahmin (Saatlik Tahmin) ── */}
-        <View style={s.sectionCard}>
-          <TouchableOpacity
-            style={s.sectionHeader}
-            onPress={() => navigation.navigate('Hourly', {lat, lon, city})}>
-            <Text style={s.sectionTitle}>{t('home.hourlyTitle').toUpperCase()}</Text>
-            <Text style={[s.sectionIcon, {color: C.accent}]}>{t('home.seeAll')} ›</Text>
-          </TouchableOpacity>
-          <FlatList
-            horizontal
-            data={hourlyItems.slice(0, 8)}
-            keyExtractor={(item, idx) => `${item.time}-${idx}`}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{gap: Spacing.sm, paddingHorizontal: 2, paddingVertical: Spacing.xs}}
-            renderItem={({item, index}) => {
-              const isActive = selectedWeather?.time === item.time;
-              return (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setSelectedWeather(item)}
-                  style={[
-                    s.hourCard,
-                    isActive ? s.hourCardActive : { backgroundColor: 'rgba(255,255,255,0.03)' }
-                  ]}>
-                  <Text style={[s.hourLabel, isActive && { color: '#FFF' }]}>
-                    {index === 0 ? t('home.today') : formatHour(item.time)}
-                  </Text>
-                  <Text style={s.hourEmoji}>{getWeatherEmoji(item.weather_code)}</Text>
-                  <Text style={[s.hourTemp, isActive && { color: '#FFF' }]}>{item.temperature}°</Text>
-                  {item.precipitation_probability > 20 && (
-                    <Text style={[s.hourPrecip, isActive && { color: '#FFF' }]}>
-                      💧{formatPrecipitationProbability(item.precipitation_probability)}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            }}
+          {/* ── Premium Hava Detayları ── */}
+          <WeatherDetailsPanel
+            current={current}
+            todayDaily={todayDaily}
+            C={C}
           />
         </View>
 
-        {/* ── Havamania Önerisi (AI Recommendation) ── */}
-        <HavamaniaRecommendationCard
-          weather={current}
-          profile={profileQuery.data}
-          onPress={(query) => navigation.navigate('AIChat', {initialQuery: query})}
-          C={C}
-        />
-
-        {/* ── 10 Günlük Özet (7/10 Günlük Tahmin) ── */}
-        <View style={s.sectionCard}>
-          <View style={s.sectionHeader}>
-            <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
-              <Text style={s.sectionIcon}>📅</Text>
-              <Text style={s.sectionTitle}>{t('home.forecastTitle').toUpperCase()}</Text>
-            </View>
-          </View>
-          {dailyItems.slice(0, 4).map((item, idx) => {
-            const itemDate = item.date;
-            const selectedDate = selectedWeather?.time?.split('T')[0] || selectedWeather?.date;
-            const isSelected = itemDate === selectedDate;
-
-            return (
-              <DailyRow
-                key={item.date}
-                item={item}
-                isFirst={idx === 0}
-                isSelected={isSelected}
-                onPress={() => setSelectedWeather({
-                  ...item,
-                  time: item.date + 'T12:00', // Günlük seçimde öğle vaktini baz al
-                  temperature: item.temp_max,
-                  description: getWeatherLabel(item.weather_code),
-                  weather_code: item.weather_code,
-                  feels_like: item.temp_max,
-                  is_day: true
-                })}
-                C={C}
-                t={t}
-              />
-            );
-          })}
-          <TouchableOpacity
-            style={s.viewMoreBtn}
-            onPress={() => navigation.navigate('Forecast', {lat, lon, city})}>
-            <Text style={s.viewMoreText}>{t('forecast.title')} ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Premium Hava Detayları ── */}
-        <WeatherDetailsPanel
-          current={current}
-          todayDaily={todayDaily}
-          C={C}
-        />
-
         <View style={{height: 100 + insets.bottom}} />
       </ScrollView>
+
+      {/* ── Yeni Konum Modal (Premium) ── */}
+      <Modal visible={showLocationModal} animationType="slide" transparent onRequestClose={() => setShowLocationModal(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowLocationModal(false)}>
+          <View style={[s.locationModal, {backgroundColor: C.bgCard, borderTopColor: C.border}]}>
+            <View style={s.locationModalHandle} />
+            <Text style={[s.locationModalTitle, {color: C.text}]}>📍 {t('map.yourLocation')}</Text>
+
+            <View style={[s.locationSearchBar, {backgroundColor: C.bgInput, borderColor: C.border}]}>
+              <Icon name="search" size={20} color={C.textMuted} />
+              <TextInput
+                style={[s.locationSearchInput, {color: C.text}]}
+                placeholder={t('forecast.searchPlaceholder')}
+                placeholderTextColor={C.textMuted}
+                value={locationSearch}
+                onChangeText={setLocationSearch}
+                autoFocus
+              />
+              {searchingLocation && <ActivityIndicator size="small" color={C.accent} />}
+            </View>
+
+            {locationResults.length === 0 && !searchingLocation && locationSearch.length > 0 && (
+              <Text style={{color: C.textMuted, textAlign: 'center', marginTop: 20}}>Sonuç bulunamadı.</Text>
+            )}
+
+            <FlatList
+              data={locationResults}
+              keyExtractor={(item, i) => `${item.latitude}-${item.longitude}-${i}`}
+              showsVerticalScrollIndicator={false}
+              renderItem={({item}) => (
+                <TouchableOpacity
+                  style={[s.locationResultItem, {borderBottomColor: C.divider}]}
+                  activeOpacity={0.7}
+                  onPress={() => selectLocation({
+                    name: item.name,
+                    lat: item.latitude,
+                    lon: item.longitude
+                  } as any)}>
+                  <View style={s.resultIconBox}>
+                    <Icon name="location-outline" size={20} color={C.accent} />
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={[s.locationResultName, {color: C.text}]}>{item.name}</Text>
+                    <Text style={[s.locationResultSub, {color: C.textSecondary}]}>
+                        {item.admin1 ? `${item.admin1}, ` : ''}{item.country}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-forward" size={16} color={C.textMuted} />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
+function DailyRow({item, isFirst, isSelected, onPress, C, t}: {item: any; isFirst: boolean; isSelected: boolean; onPress: () => void; C: AppColors; t: any}) {
+  const barPct = Math.min(100, Math.max(15, ((item.temp_max - item.temp_min) / 15) * 80));
+  const { getDayName, formatDayShort, useTheme } = require('../theme');
+  const { spacing, fontSize, radius } = useTheme();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        dailyStyles(C, spacing, fontSize).row,
+        isSelected && {
+          backgroundColor: C.cardHourlyActive,
+          borderColor: C.accent,
+          borderWidth: 1,
+          borderRadius: radius.md,
+          marginVertical: 2,
+          paddingHorizontal: 8
+        }
+      ]}>
+      <View style={{width: 52}}>
+        <Text style={dailyStyles(C, spacing, fontSize).day}>{isFirst ? t('home.today') : getDayName(item.date)}</Text>
+        <Text style={dailyStyles(C, spacing, fontSize).dateSub}>{formatDayShort(item.date)}</Text>
+      </View>
+      <Text style={dailyStyles(C, spacing, fontSize).emoji}>{getWeatherEmoji(item.weather_code)}</Text>
+      <Text style={dailyStyles(C, spacing, fontSize).tempMin}>{item.temp_min}°</Text>
+      <View style={dailyStyles(C, spacing, fontSize).barTrack}><View style={[dailyStyles(C, spacing, fontSize).barFill, {width: `${barPct}%`}]} /></View>
+      <Text style={dailyStyles(C, spacing, fontSize).tempMax}>{item.temp_max}°</Text>
+    </TouchableOpacity>
+  );
+}
+
+const dailyStyles = (C: AppColors, spacing: any, fontSize: any) => StyleSheet.create({
+  row: {flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, gap: spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.divider},
+  day: {fontSize: fontSize.md, color: C.text, fontWeight: '700', lineHeight: 18},
+  dateSub: {fontSize: 10, color: C.textSecondary, fontWeight: '600'},
+  emoji: {fontSize: 22, width: 32, textAlign: 'center'},
+  tempMin: {fontSize: fontSize.sm, color: C.textSecondary, width: 30, textAlign: 'right'},
+  barTrack: {flex: 1, height: 4, backgroundColor: C.bgInput, borderRadius: 2, overflow: 'hidden', marginHorizontal: 8},
+  barFill: {height: '100%', backgroundColor: C.accent, borderRadius: 2},
+  tempMax: {fontSize: fontSize.sm, fontWeight: '700', color: C.text, width: 30},
+});
+
+function UvBar({value, C}: {value: number; C: AppColors}) {
+  const pct = Math.min(100, (value / 11) * 100);
+  const color = value <= 2 ? '#4CAF50' : value <= 5 ? '#FFC107' : value <= 7 ? '#FF9800' : '#F44336';
+  return (
+    <View style={{height: 4, backgroundColor: C.bgInput, borderRadius: 2, marginTop: 8, overflow: 'hidden'}}>
+      <View style={{width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 2}} />
+    </View>
+  );
+}
+
+const makeStyles = (C: AppColors, insets: any, spacing: any, fontSize: any, responsive: any, layout: any) => StyleSheet.create({
+  container: {flex: 1, backgroundColor: C.bg},
+  safe: {flex: 1},
+  scrollContent: {
+    paddingTop: Platform.OS === 'ios' ? 0 : insets.top,
+  },
+  centeredLayout: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: layout.maxContentWidth,
+  },
+  center: {flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12},
+  loadingText: {color: C.textSecondary, fontSize: fontSize.md, marginTop: 8},
+  errorText: {color: C.text, fontSize: fontSize.lg, fontWeight: '700'},
+  retryBtn: {backgroundColor: C.accent, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: Radius.full, marginTop: spacing.sm},
+  retryText: {color: '#FFFFFF', fontWeight: '700'},
+  header: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.pagePadding, paddingTop: Platform.OS === 'ios' ? spacing.md : spacing.md + insets.top, paddingBottom: spacing.sm, zIndex: 10},
+  locationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    flex: 1,
+    marginRight: 12,
+  },
+  locationText: {fontSize: fontSize.md, fontWeight: '700', color: C.text, flex: 1},
+  headerRight: {flexDirection: 'row', gap: spacing.xs},
+  iconBtn: {width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgCard, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border},
+  iconBtnText: {fontSize: 18},
+  weatherIllustration: {alignItems: 'center', marginBottom: spacing.xs, zIndex: 5},
+  weatherBigEmoji: {fontSize: 80},
+  tempBlockCard: {alignItems: 'center', zIndex: 5},
+  tempText: {fontSize: fontSize.temp, fontWeight: '800', color: C.text, lineHeight: 76},
+  descText: {fontSize: fontSize.xl, color: C.text, fontWeight: '500', marginBottom: 2},
+  hiLoText: {fontSize: fontSize.md, color: C.accent, fontWeight: '600'},
+  feelsLike: {fontSize: fontSize.sm, color: C.textSecondary, marginTop: 4},
+  sectionCard: {marginHorizontal: spacing.pagePadding, marginBottom: spacing.md, backgroundColor: C.bgCard, borderRadius: Radius.lg, padding: spacing.md, borderWidth: 1, borderColor: C.border, overflow: 'hidden'},
+  sectionHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm},
+  sectionTitle: {fontSize: fontSize.xs, fontWeight: '700', color: C.textSecondary, letterSpacing: 1},
+  sectionIcon: {fontSize: 13, color: C.textMuted},
+  hourCard: {
+    alignItems: 'center',
+    borderRadius: Radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    minWidth: 76,
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)'
+  },
+  hourCardActive: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  hourLabel: {fontSize: 13, color: C.textSecondary, fontWeight: '700'},
+  hourEmoji: {fontSize: 26, marginVertical: 2},
+  hourTemp: {fontSize: 17, fontWeight: '800', color: C.text},
+  hourPrecip: {fontSize: 11, fontWeight: '900', color: C.accent},
+  viewMoreBtn: {alignItems: 'center', paddingTop: spacing.md},
+  viewMoreText: {fontSize: fontSize.sm, color: C.accent, fontWeight: '700'},
+  metricsRow: {flexDirection: 'row', marginHorizontal: spacing.pagePadding, marginBottom: spacing.md, gap: spacing.sm},
+  metricCard: {backgroundColor: C.bgCard, borderRadius: Radius.lg, padding: spacing.md, borderWidth: 1, borderColor: C.border},
+  metricHeader: {flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs},
+  metricIcon: {fontSize: 13},
+  metricLabel: {fontSize: fontSize.xs, color: C.textSecondary, fontWeight: '700', letterSpacing: 0.8},
+  metricValue: {fontSize: fontSize.xxl, fontWeight: '800', color: C.text},
+  modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end'},
+  locationModal: {borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 40, maxHeight: '85%', borderWidth: 1, borderBottomWidth: 0},
+  locationModalHandle: {width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md},
+  locationModalTitle: {fontSize: fontSize.xl, fontWeight: '800', marginBottom: spacing.md, textAlign: 'center'},
+  locationSearchBar: {flexDirection: 'row', alignItems: 'center', borderRadius: Radius.xl, paddingHorizontal: spacing.md, paddingVertical: 12, gap: spacing.sm, borderWidth: 1, marginBottom: spacing.md},
+  locationSearchInput: {flex: 1, fontSize: fontSize.md, padding: 0},
+  locationResultItem: {flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 16, borderBottomWidth: 0.5},
+  resultIconBox: {width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(59, 130, 246, 0.1)', justifyContent: 'center', alignItems: 'center'},
+  locationResultName: {fontSize: fontSize.md, fontWeight: '700'},
+  locationResultSub: {fontSize: 12, marginTop: 2},
+});
 
       {/* ── Yeni Konum Modal (Premium) ── */}
       <Modal visible={showLocationModal} animationType="slide" transparent onRequestClose={() => setShowLocationModal(false)}>

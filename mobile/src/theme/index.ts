@@ -1,5 +1,6 @@
 import {useThemeStore} from '../store/themeStore';
 import i18next from 'i18next';
+import { useResponsive, getResponsiveSpacing, getResponsiveFontSize, Layout } from './responsive';
 
 export type AppColors = {
   bg: string;
@@ -105,6 +106,42 @@ export function useColors(): AppColors {
   }
 }
 
+export function useTheme() {
+  const colors = useColors();
+  const responsive = useResponsive();
+  const spacing = getResponsiveSpacing(responsive.isTablet, responsive.isCompact);
+
+  const fontSize = {
+    xs: getResponsiveFontSize(12, responsive.isTablet, responsive.isCompact),
+    sm: getResponsiveFontSize(14, responsive.isTablet, responsive.isCompact),
+    md: getResponsiveFontSize(16, responsive.isTablet, responsive.isCompact),
+    lg: getResponsiveFontSize(18, responsive.isTablet, responsive.isCompact),
+    xl: getResponsiveFontSize(20, responsive.isTablet, responsive.isCompact),
+    xxl: getResponsiveFontSize(24, responsive.isTablet, responsive.isCompact),
+    xxxl: getResponsiveFontSize(32, responsive.isTablet, responsive.isCompact),
+    temp: getResponsiveFontSize(72, responsive.isTablet, responsive.isCompact),
+  };
+
+  const radius = {
+    xs: responsive.isCompact ? 6 : 8,
+    sm: responsive.isCompact ? 10 : 12,
+    md: responsive.isCompact ? 14 : 16,
+    lg: responsive.isCompact ? 20 : 24,
+    xl: responsive.isCompact ? 28 : 32,
+    full: 9999,
+  };
+
+  return {
+    colors,
+    responsive,
+    spacing,
+    fontSize,
+    radius,
+    layout: Layout,
+  };
+}
+
+// Deprecated: use useTheme().spacing etc.
 export const Spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48, xxxl: 64 } as const;
 export const Radius = { xs: 8, sm: 12, md: 16, lg: 24, xl: 32, xxl: 40, full: 9999 } as const;
 export const FontSize = { xs: 12, sm: 14, md: 16, lg: 18, xl: 20, xxl: 24, xxxl: 32, temp: 72 } as const;

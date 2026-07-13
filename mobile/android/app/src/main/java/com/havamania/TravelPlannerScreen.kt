@@ -70,6 +70,9 @@ fun TravelPlannerScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var planToEdit by remember { mutableStateOf<TravelPlan?>(null) }
 
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
+
     // Prefill logic for NEW plan
     var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
 
@@ -119,82 +122,92 @@ fun TravelPlannerScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 8.dp) // Reduced padding for density
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .then(
+                            if (windowSize.isTablet || windowSize.isLargeTablet)
+                                Modifier.widthIn(max = responsive.maxContentWidth)
+                            else Modifier.fillMaxWidth()
+                        )
+                        .padding(horizontal = responsive.pagePadding, vertical = 8.dp)
                 ) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(themeColors.surface.copy(alpha = 0.5f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Rounded.ArrowBack, null, tint = themeColors.textPrimary)
-                    }
-                    Text(
-                        "Seyahat Planlayıcı",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                        color = themeColors.textPrimary
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (plans.isEmpty()) {
-                            Text(
-                                "Yeni şehir analizi oluşturmak için sağ üstteki + simgesine dokun.",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = themeColors.accent,
-                                modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .background(themeColors.accent.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
                         IconButton(
-                            onClick = { showAddDialog = true },
+                            onClick = onBack,
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(themeColors.accent)
+                                .background(themeColors.surface.copy(alpha = 0.5f))
                         ) {
-                            Icon(Icons.Rounded.Add, null, tint = themeColors.onAccent)
+                            Icon(Icons.Rounded.ArrowBack, null, tint = themeColors.textPrimary)
                         }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp)) // Reduced spacer
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TravelFilter.values().forEach { filter ->
-                        val count = when (filter) {
-                            TravelFilter.UPCOMING -> plans.count { !it.isArchived && !it.endDate.isBefore(LocalDate.now()) }
-                            TravelFilter.PAST -> plans.count { !it.isArchived && it.endDate.isBefore(LocalDate.now()) }
-                            TravelFilter.ARCHIVED -> plans.count { it.isArchived }
-                        }
-                        HavamaniaFilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { selectedFilter = filter },
-                            label = when (filter) {
-                                TravelFilter.UPCOMING -> "Yaklaşanlar ($count)"
-                                TravelFilter.PAST -> "Geçmiş ($count)"
-                                TravelFilter.ARCHIVED -> "Arşiv ($count)"
-                            }
+                        Text(
+                            "Seyahat Planlayıcı",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = responsive.headerFontSize
+                            ),
+                            color = themeColors.textPrimary
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (plans.isEmpty()) {
+                                Text(
+                                    "Yeni şehir analizi oluşturmak için sağ üstteki + simgesine dokun.",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = themeColors.accent,
+                                    modifier = Modifier
+                                        .padding(end = 8.dp)
+                                        .background(themeColors.accent.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { showAddDialog = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(themeColors.accent)
+                            ) {
+                                Icon(Icons.Rounded.Add, null, tint = themeColors.onAccent)
+                            }
+                        }
                     }
-                }
 
-                if (plans.isEmpty() && selectedFilter == TravelFilter.UPCOMING) {
-                    Spacer(Modifier.height(12.dp))
-                    TravelHowItWorksCard()
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        TravelFilter.entries.forEach { filter ->
+                            val count = when (filter) {
+                                TravelFilter.UPCOMING -> plans.count { !it.isArchived && !it.endDate.isBefore(LocalDate.now()) }
+                                TravelFilter.PAST -> plans.count { !it.isArchived && it.endDate.isBefore(LocalDate.now()) }
+                                TravelFilter.ARCHIVED -> plans.count { it.isArchived }
+                            }
+                            HavamaniaFilterChip(
+                                selected = selectedFilter == filter,
+                                onClick = { selectedFilter = filter },
+                                modifier = Modifier.weight(1f),
+                                label = when (filter) {
+                                    TravelFilter.UPCOMING -> "Yaklaşanlar ($count)"
+                                    TravelFilter.PAST -> "Geçmiş ($count)"
+                                    TravelFilter.ARCHIVED -> "Arşiv ($count)"
+                                }
+                            )
+                        }
+                    }
+
+                    if (plans.isEmpty() && selectedFilter == TravelFilter.UPCOMING) {
+                        Spacer(Modifier.height(12.dp))
+                        TravelHowItWorksCard()
+                    }
                 }
             }
         }
@@ -207,9 +220,15 @@ fun TravelPlannerScreen(
             } else {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = responsive.pagePadding, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .then(
+                            if (windowSize.isTablet || windowSize.isLargeTablet)
+                                Modifier.widthIn(max = responsive.maxContentWidth)
+                            else Modifier.fillMaxWidth()
+                        )
                 ) {
                     items(filteredPlans, key = { it.id }) { plan ->
                         TravelPlanCard(
@@ -1203,7 +1222,7 @@ fun ActionIconButton(icon: ImageVector, text: String, color: Color, onClick: () 
 }
 
 @Composable
-fun HavamaniaFilterChip(selected: Boolean, onClick: () -> Unit, label: String) {
+fun HavamaniaFilterChip(selected: Boolean, onClick: () -> Unit, label: String, modifier: Modifier = Modifier) {
     val themeColors = HavamaniaTheme.colors
     val bgColor by animateColorAsState(if (selected) themeColors.accent else themeColors.surface.copy(alpha = 0.5f), label = "chipBg")
     val textColor by animateColorAsState(if (selected) themeColors.onAccent else themeColors.textSecondary, label = "chipText")
@@ -1212,10 +1231,20 @@ fun HavamaniaFilterChip(selected: Boolean, onClick: () -> Unit, label: String) {
         onClick = onClick,
         color = bgColor,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.height(36.dp)
+        modifier = modifier.height(36.dp)
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = textColor)
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 4.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

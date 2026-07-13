@@ -164,11 +164,13 @@ fun HavamaniaTheme(
         LocalHavamaniaColors provides animatedColors,
         LocalHavamaniaStyles provides HavamaniaStyles()
     ) {
-        MaterialTheme(
-            colorScheme = ThemeManager.getColorScheme(finalTheme),
-            typography = AppTypography,
-            content = content
-        )
+        ProvideResponsiveLayout {
+            MaterialTheme(
+                colorScheme = ThemeManager.getColorScheme(finalTheme),
+                typography = AppTypography,
+                content = content
+            )
+        }
     }
 }
 

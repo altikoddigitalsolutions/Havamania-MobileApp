@@ -535,6 +535,9 @@ fun AiChatScreen(
     val assistantTone by themeViewModel.assistantTone.collectAsStateWithLifecycle()
     val language by themeViewModel.language.collectAsStateWithLifecycle()
 
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
+
     // Sync non-weather data with ViewModel
     LaunchedEffect(aboutMe, userInterests, assistantTone, language) {
         viewModel.userAboutMe = aboutMe
@@ -564,9 +567,18 @@ fun AiChatScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(bgColors)))
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            HavamaniaTopBar(
-                title = config?.name ?: "HAVAMANIA ASİSTAN",
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (windowSize.isTablet || windowSize.isLargeTablet)
+                            Modifier.widthIn(max = responsive.maxContentWidth)
+                        else Modifier
+                    )
+            ) {
+                HavamaniaTopBar(
+                    title = config?.name ?: "HAVAMANIA ASİSTAN",
                 onBack = {
                     if (messages.isNotEmpty()) {
                         viewModel.resetChat()
@@ -580,25 +592,31 @@ fun AiChatScreen(
                         Surface(
                             onClick = { showEndChatDialog = true },
                             color = themeColors.accent.copy(alpha = 0.15f),
-                            shape = CircleShape,
+                            shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f)),
-                            modifier = Modifier.padding(end = 12.dp)
+                            modifier = Modifier.heightIn(min = 40.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     Icons.Rounded.StopCircle,
                                     contentDescription = null,
                                     tint = themeColors.accent,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "Sohbeti Bitir",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = themeColors.accent
+                                    text = "Sohbeti Bitir",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp
+                                    ),
+                                    color = themeColors.accent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -613,7 +631,7 @@ fun AiChatScreen(
                             Icons.Rounded.AutoAwesome,
                             contentDescription = null,
                             tint = themeColors.accent,
-                            modifier = Modifier.size(24.dp).alpha(sparkleAlpha).padding(end = 12.dp)
+                            modifier = Modifier.size(24.dp).alpha(sparkleAlpha)
                         )
                     }
                 }
@@ -720,6 +738,7 @@ fun AiChatScreen(
             )
         }
     }
+}
 
     if (showEndChatDialog) {
         AlertDialog(
