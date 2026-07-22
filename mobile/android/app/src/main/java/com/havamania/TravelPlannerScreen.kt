@@ -80,6 +80,21 @@ fun TravelPlannerScreen(
     var deleteConfirmPlan by remember { mutableStateOf<TravelPlan?>(null) }
     val listState = rememberLazyListState()
 
+    val context = LocalContext.current
+    val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    val currentUid = auth.currentUser?.uid ?: "legacy"
+    val migrationChoiceMade by remember { ThemeManager.getMigrationChoiceMade(context, currentUid) }.collectAsState(initial = true)
+    var showMigrationDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentUid, plans) {
+        if (currentUid != "legacy" && !migrationChoiceMade) {
+            val legacyPlans = WeatherDatabase.getDatabase(context).weatherDao().getAllTravelPlans("legacy")
+            if (legacyPlans.isNotEmpty()) {
+                showMigrationDialog = true
+            }
+        }
+    }
+
     val filteredPlans = remember(plans, selectedFilter) {
         when (selectedFilter) {
             TravelFilter.UPCOMING -> plans.filter { !it.isArchived && !it.endDate.isBefore(LocalDate.now()) }
@@ -285,6 +300,22 @@ fun TravelPlannerScreen(
             icon = Icons.Rounded.DeleteForever,
             onConfirm = {
                 viewModel.deletePlan(deleteConfirmPlan!!.id)
+                deleteConfirmPlan = null
+            }
+        )
+    }
+
+    if (showMigrationDialog) {
+        HavamaniaDialog(
+            onDismissRequest = { showMigrationDialog = false; viewModel.declineMigration() },
+            title = "Verileri Aktar?",
+            text = "Bu cihazdaki eski seyahat ve tercih verilerini hesabına aktarmak ister misin?",
+            confirmText = "Hesabıma Aktar",
+            dismissText = "Aktarma",
+            icon = Icons.Rounded.CloudUpload,
+            onConfirm = {
+                viewModel.migrateLegacyDataToUser()
+                showMigrationDialog = false
             }
         )
     }
@@ -297,7 +328,9 @@ fun PastTravelDetailDialog(
     onDismiss: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val tone by remember { com.havamania.ui.theme.ThemeManager.getAssistantTone(context) }.collectAsState(initial = AssistantTone.DENGELI)
+    val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    val currentUid = auth.currentUser?.uid ?: "legacy"
+    val tone by remember { com.havamania.ui.theme.ThemeManager.getAssistantTone(context, currentUid) }.collectAsState(initial = AssistantTone.DENGELI)
 
     val themeColors = HavamaniaTheme.colors
     val summary = remember(plan, tone) { TravelAiHelper.generateHistorySummary(plan, tone) }
@@ -1183,9 +1216,9 @@ fun TravelEmptyState(filter: TravelFilter, onAdd: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         Text(
             when(filter) {
-                TravelFilter.UPCOMING -> "🧭 İlk Seyahat Planını Oluştur"
-                TravelFilter.PAST -> "✈ Henüz tamamlanan seyahat yok."
-                TravelFilter.ARCHIVED -> "📦 Henüz arşivlenmiş seyahat bulunmuyor."
+                TravelFilter.UPCOMING -> "Henüz bir seyahat planlamadın."
+                TravelFilter.PAST -> "Henüz tamamlanan seyahat yok."
+                TravelFilter.ARCHIVED -> "Henüz arşivlenmiş seyahat bulunmuyor."
             },
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
             color = themeColors.textPrimary,
@@ -1194,9 +1227,9 @@ fun TravelEmptyState(filter: TravelFilter, onAdd: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Text(
             when(filter) {
-                TravelFilter.UPCOMING -> "Şehir seç, tarih belirle, seyahat tipini seç ve kişisel önerilerini hemen al."
+                TravelFilter.UPCOMING -> "İlk seyahatini oluşturduğunda hava analizlerini, hazırlık önerilerini ve akıllı bildirimleri burada görebilirsin."
                 TravelFilter.PAST -> "Seyahatin bittiğinde analizlerin ve notların burada birikir."
-                TravelFilter.ARCHIVED -> "Kütüphanene eklediğin seyahat kayıtlarına buradan ulaşabilirsin."
+                TravelFilter.ARCHIVED -> "Arşivlediğin seyahatler burada saklanacak."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = themeColors.textMuted,
@@ -1205,7 +1238,7 @@ fun TravelEmptyState(filter: TravelFilter, onAdd: () -> Unit) {
         if (filter == TravelFilter.UPCOMING) {
             Spacer(Modifier.height(32.dp))
             HavamaniaPrimaryButton(
-                text = "Yeni Analiz Oluştur",
+                text = "İlk Seyahatimi Oluştur",
                 onClick = onAdd,
                 modifier = Modifier.width(240.dp).height(56.dp)
             )

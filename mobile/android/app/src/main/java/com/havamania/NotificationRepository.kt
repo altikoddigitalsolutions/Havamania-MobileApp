@@ -2,20 +2,22 @@ package com.havamania
 
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 class NotificationRepository(private val dao: NotificationDao) {
     private val TAG = "NotificationRepo"
 
-    val allNotifications: Flow<List<NotificationItem>> = dao.getAllNotifications().map { list ->
-        if (list.isEmpty()) {
-            Log.d(TAG, "Flow emission: List is empty. Returning DefaultNotifications as fallback.")
-            DefaultNotifications.create()
+    fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid).map { list ->
+        if (list.isEmpty() && uid == "legacy") {
+            Log.d(TAG, "Legacy user list is empty. Returning DefaultNotifications.")
+            DefaultNotifications.create(uid)
         } else {
             list
         }
     }
-    val unreadCount: Flow<Int> = dao.getUnreadCount()
+
+    fun getUnreadCount(uid: String): Flow<Int> = dao.getUnreadCount(uid)
 
     suspend fun insert(notification: NotificationItem) {
         try {
@@ -58,9 +60,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         }
     }
 
-    suspend fun markAllAsRead() {
+    suspend fun markAllAsRead(uid: String) {
         try {
-            dao.markAllAsRead()
+            dao.markAllAsRead(uid)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to mark all as read", e)
         }
@@ -82,48 +84,61 @@ class NotificationRepository(private val dao: NotificationDao) {
         }
     }
 
-    suspend fun deleteAll() {
+    suspend fun deleteAll(uid: String) {
         try {
-            dao.deleteAll()
+            dao.deleteAll(uid)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete all", e)
         }
     }
 
-    suspend fun seedInitialDataIfNeeded() {
+    suspend fun deleteByCategory(uid: String, category: NotificationCategory) {
         try {
-            val count = dao.getTotalCountFirst()
-            Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB: $count")
+            dao.deleteByCategory(uid, category.name)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete by category: $category", e)
+        }
+    }
 
-            if (count == 0) {
+    suspend fun seedInitialDataIfNeeded(context: android.content.Context, uid: String) {
+        try {
+            // New logic: If user is authenticated, they should start clean unless they migrated.
+            // For now, let's keep seeding only for "legacy" or if explicitly asked.
+            if (uid != "legacy") {
+                Log.d(TAG, "🚀 SEED SKIP: Authenticated user $uid starts clean.")
+                return
+            }
+
+            val hasSeeded = com.havamania.ui.theme.ThemeManager.getHasSeededNotifications(context, uid).first()
+            val count = dao.getTotalCountFirst(uid)
+            Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB for $uid: $count, hasSeeded: $hasSeeded")
+
+            if (count == 0 && !hasSeeded) {
                 Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating default test notifications...")
-                val demoList = DefaultNotifications.create()
+                val demoList = DefaultNotifications.create(uid)
                 Log.d("Notifications", "seed created size=${demoList.size}")
 
                 demoList.forEach {
                     dao.insert(it)
                     Log.v(TAG, "✅ SEEDED: ${it.id} (${it.category})")
                 }
+                com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(context, true, uid)
 
-                val checkCount = dao.getTotalCountFirst()
+                val checkCount = dao.getTotalCountFirst(uid)
                 Log.d(TAG, "📊 SEED DONE: New count: $checkCount")
             } else {
-                Log.d(TAG, "⏩ SEED SKIP: Database already has items.")
+                Log.d(TAG, "⏩ SEED SKIP: Database already has items or was already seeded.")
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ SEED ERROR: Critical failure during seeding", e)
         }
     }
 
-    private fun createSeedNotifications(): List<NotificationItem> {
-        return DefaultNotifications.create()
-    }
-
-    suspend fun refreshDemoNotifications() {
+    suspend fun refreshDemoNotifications(uid: String) {
         try {
             Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
-            dao.deleteAll()
-            val demoList = createSeedNotifications()
+            dao.deleteAll(uid)
+            val demoList = DefaultNotifications.create(uid)
             demoList.forEach { dao.insert(it) }
             Log.d(TAG, "Manual seed notifications inserted: ${demoList.size}")
         } catch (e: Exception) {

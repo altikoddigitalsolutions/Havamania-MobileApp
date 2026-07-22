@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -26,6 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.*
 
@@ -35,9 +38,13 @@ fun SettingsScreen(
     onBack: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToCities: () -> Unit = {},
+    onNavigateToLegal: (String, String) -> Unit = { _, _ -> },
     themeViewModel: ThemeViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel(),
-    aiHistoryViewModel: AiHistoryViewModel = viewModel()
+    aiHistoryViewModel: AiHistoryViewModel = viewModel(),
+    notificationViewModel: NotificationViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel(),
+    profileViewModel: ProfileViewModel = viewModel()
 ) {
     val scrollState = rememberScrollState()
     val currentTheme by themeViewModel.currentTheme.collectAsState()
@@ -54,6 +61,7 @@ fun SettingsScreen(
     var showToneDialog by remember { mutableStateOf(false) }
     var showUnitDialog by remember { mutableStateOf(false) }
     var showManageDataSheet by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
 
@@ -82,7 +90,7 @@ fun SettingsScreen(
                 SettingsDivider()
                 SettingsNavRow("Sıcaklık Birimi", tempUnit.title + " (" + tempUnit.symbol + ")", Icons.Rounded.Thermostat) { showUnitDialog = true }
                 SettingsDivider()
-                SettingsNavRow("Varsayılan Şehir", defaultCity.name, Icons.Rounded.LocationCity) { onNavigateToCities() }
+                SettingsNavRow("Varsayılan Şehir", defaultCity?.name ?: "Bilinmiyor", Icons.Rounded.LocationCity) { onNavigateToCities() }
             }
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -128,15 +136,31 @@ fun SettingsScreen(
                 SettingsNavRow("Profil Bilgileri", "İsim, bio ve kimlik", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
                 SettingsDivider()
                 SettingsNavRow("Verilerimi Yönet", "Güvenlik ve gizlilik", Icons.Rounded.Security) { showManageDataSheet = true }
+                SettingsDivider()
+                SettingsNavRow("Gizlilik Politikası", null, Icons.Rounded.PrivacyTip) {
+                    onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY)
+                }
+                SettingsDivider()
+                SettingsNavRow("Kullanım Şartları", null, Icons.Rounded.Description) {
+                    onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE)
+                }
+                SettingsDivider()
+                SettingsNavRow("Oturumu Kapat", "Hesabınızdan çıkış yapın", Icons.Rounded.Logout) { showLogoutDialog = true }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
-            Text(
-                text = "Havamania v1.2.0",
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                color = themeColors.textMuted.copy(alpha = 0.4f)
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Havamania Premium v1.5.0",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
+                    color = themeColors.textPrimary.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "Lansman Sürümü • 2026",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = themeColors.textMuted.copy(alpha = 0.4f)
+                )
+            }
             Spacer(modifier = Modifier.height(100.dp))
         }
 
@@ -163,13 +187,20 @@ fun SettingsScreen(
             ) {
                 ManageDataContent(
                     onClearAiHistory = { aiHistoryViewModel.clearAll() },
-                    onClearTravels = { travelViewModel.clearAllPlans() },
+                    onClearTravels = {
+                        travelViewModel.clearAllPlans()
+                        notificationViewModel.deleteTravelNotifications()
+                    },
                     onResetCities = { themeViewModel.resetCities() },
-                    onRemovePhoto = { themeViewModel.removeProfileImage() },
+                    onRemovePhoto = {
+                        profileViewModel.removeProfileImage()
+                    },
                     onResetAll = {
                         themeViewModel.resetAllData()
                         aiHistoryViewModel.clearAll()
                         travelViewModel.clearAllPlans()
+                        notificationViewModel.deleteAllNotifications()
+                        profileViewModel.removeProfileImage()
                     }
                 )
             }
@@ -195,13 +226,28 @@ fun SettingsScreen(
             SettingsOptionDialog("Sıcaklık Birimi", listOf("CELSIUS" to "Celsius (°C)", "FAHRENHEIT" to "Fahrenheit (°F)"), tempUnit.name, { themeViewModel.setTempUnit(TemperatureUnit.valueOf(it)); showUnitDialog = false }) { showUnitDialog = false }
         }
 
+        if (showLogoutDialog) {
+            HavamaniaDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                title = "OTURUMU KAPAT",
+                text = "Oturumunuzu kapatmak istediğinize emin misiniz?",
+                confirmText = "ÇIKIŞ YAP",
+                confirmColor = themeColors.error,
+                onConfirm = {
+                    authViewModel.signOut()
+                    showLogoutDialog = false
+                    onBack() // This will trigger the redirection logic in Activity
+                }
+            )
+        }
+
     if (showComingSoonDialog) {
         HavamaniaDialog(
             onDismissRequest = { showComingSoonDialog = false },
             title = "YAKINDA",
             text = comingSoonTitle,
             confirmText = "TAMAM",
-            onConfirm = { }
+            onConfirm = { showComingSoonDialog = false }
         )
     }
     }
@@ -220,19 +266,24 @@ fun ManageDataContent(
     var confirmTitle by remember { mutableStateOf("") }
     var confirmText by remember { mutableStateOf("") }
     var isExtraCritical by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
             .padding(bottom = 48.dp)
+            .alpha(if (isProcessing) 0.5f else 1f)
     ) {
+        // ... (Header text)
         Spacer(Modifier.height(8.dp))
         Text(
             "GİZLİLİK VE VERİ",
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp),
             color = themeColors.accent
         )
+        // ... (rest of text)
         Text(
             "Verilerimi Yönet",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
@@ -247,24 +298,28 @@ fun ManageDataContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         DataActionItem("AI Sohbet Geçmişini Temizle", Icons.Rounded.AutoAwesome) {
+            if (isProcessing) return@DataActionItem
             confirmTitle = "Geçmişi Temizle"
             confirmText = "Tüm AI sohbet kayıtlarınız kalıcı olarak silinecektir. Devam etmek istiyor musunuz?"
             confirmAction = onClearAiHistory
             isExtraCritical = false
         }
         DataActionItem("Tüm Seyahatleri Sil", Icons.Rounded.Route) {
+            if (isProcessing) return@DataActionItem
             confirmTitle = "Seyahatleri Sil"
             confirmText = "Oluşturduğunuz tüm seyahat planları ve analizleri silinecektir. Bu işlem geri alınamaz."
             confirmAction = onClearTravels
             isExtraCritical = false
         }
         DataActionItem("Lokasyon Listesini Sıfırla", Icons.Rounded.Map) {
+            if (isProcessing) return@DataActionItem
             confirmTitle = "Şehirleri Sıfırla"
             confirmText = "Kayıtlı tüm şehirler silinecek ve varsayılan ayarlara dönülecektir."
             confirmAction = onResetCities
             isExtraCritical = false
         }
         DataActionItem("Profil Fotoğrafını Kaldır", Icons.Rounded.NoPhotography) {
+            if (isProcessing) return@DataActionItem
             confirmTitle = "Fotoğrafı Kaldır"
             confirmText = "Profil fotoğrafınız kaldırılacak. Devam edilsin mi?"
             confirmAction = onRemovePhoto
@@ -276,6 +331,7 @@ fun ManageDataContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         DataActionItem("Tüm Verileri Sıfırla", Icons.Rounded.DeleteForever, themeColors.error) {
+            if (isProcessing) return@DataActionItem
             confirmTitle = "KRİTİK: Tüm Verileri Sıfırla"
             confirmText = "Bu işlem tüm profilinizi, seyahatlerinizi ve ayarlarınızı kalıcı olarak silecektir. Uygulama ilk yükleme anına dönecektir. Emin misiniz?"
             confirmAction = onResetAll
@@ -285,13 +341,23 @@ fun ManageDataContent(
 
     if (confirmAction != null) {
         HavamaniaDialog(
-            onDismissRequest = { confirmAction = null },
+            onDismissRequest = { if (!isProcessing) confirmAction = null },
             title = confirmTitle,
-            text = confirmText,
-            confirmText = if (isExtraCritical) "EVET, HER ŞEYİ SİL" else "SİL",
+            text = if (isProcessing) "İşlem yapılıyor, lütfen bekleyin..." else confirmText,
+            confirmText = if (isProcessing) "BEKLEYİN..." else if (isExtraCritical) "EVET, HER ŞEYİ SİL" else "SİL",
             confirmColor = themeColors.error,
+            confirmEnabled = !isProcessing,
+            dismissEnabled = !isProcessing,
             icon = if (isExtraCritical) Icons.Rounded.ReportProblem else Icons.Rounded.DeleteForever,
-            onConfirm = { confirmAction?.invoke() }
+            onConfirm = {
+                scope.launch {
+                    isProcessing = true
+                    confirmAction?.invoke()
+                    delay(800) // Visual feedback for completion
+                    isProcessing = false
+                    confirmAction = null
+                }
+            }
         )
     }
 }

@@ -125,10 +125,10 @@ fun DetailsGridSkeleton(brush: Brush) {
 }
 
 /**
- * Tüm Ana Ekran Yükleme Durumu
+ * Tüm Ana Ekran Yükleme Durumu (Eski Versiyon - Alternatif)
  */
 @Composable
-fun HomeScreenLoading() {
+fun HomeScreenLoadingLegacy() {
     val shimmerBrush = rememberShimmerBrush()
 
     Column(

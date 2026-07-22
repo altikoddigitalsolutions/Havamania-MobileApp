@@ -100,22 +100,22 @@ fun PremiumScreen(
                 PremiumFeatureItem(
                     icon = Icons.Rounded.Route,
                     title = "Gelişmiş Seyahat Analizi",
-                    desc = "10 günlük seyahat periyodunda valiz önerisinden rota güvenliğine her şey."
+                    desc = "15 günlük seyahat periyodunda valiz önerisinden rota güvenliğine kadar her detayı AI ile planlayın."
                 )
                 PremiumFeatureItem(
                     icon = Icons.Rounded.Compare,
                     title = "Tahmin Değişim Karşılaştırması",
-                    desc = "Önceki tahminlerle güncel veriler arasındaki farkları ve seyahat skorundaki değişimleri anlık takip edin."
+                    desc = "Hava tahminleri değiştikçe eski verilerle anlık kıyaslama yapın, sürprizlere yer bırakmayın."
                 )
                 PremiumFeatureItem(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "Akıllı Bildirimler",
-                    desc = "Anlık yağış, yüksek UV ve seyahat planınızdaki kritik hava değişiklikleri için kişisel uyarılar."
+                    desc = "Yağış, UV ve kritik rüzgar değişikliklerini sadece sizin için önemli olan anlarda bildirelim."
                 )
                 PremiumFeatureItem(
                     icon = Icons.Rounded.AutoAwesome,
-                    title = "Sınırsız AI Asistan",
-                    desc = "Sağlık hassasiyetlerinize ve ilgi alanlarınıza göre özelleşen hiper-kişiselleştirilmiş cevaplar."
+                    title = "Kişiselleştirilmiş AI",
+                    desc = "Sağlık hassasiyetlerinize, hobilerinize ve günlük rutininize göre şekillenen özel meteorolojik rehberlik."
                 )
                 PremiumFeatureItem(
                     icon = Icons.Rounded.History,

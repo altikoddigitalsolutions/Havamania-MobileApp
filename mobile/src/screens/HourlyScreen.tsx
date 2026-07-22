@@ -17,7 +17,6 @@ import {AppColors, FontSize, Radius, Spacing, formatHour, getWeatherEmoji, useCo
 import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
-import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Hourly'>;
@@ -27,13 +26,8 @@ export function HourlyScreen({route, navigation}: Props): React.JSX.Element {
   const C = useColors();
   const {lat, lon, city} = route.params;
 
-  const {isGuest} = useAuthStore();
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: getProfile,
-    enabled: !isGuest,
-  });
-  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+  const {userProfile} = useAuthStore();
+  const tempUnit = userProfile?.temperatureUnit ?? 'C';
 
   const hourlyQuery = useQuery({
     queryKey: ['weather', 'hourly', lat, lon, 48, tempUnit],

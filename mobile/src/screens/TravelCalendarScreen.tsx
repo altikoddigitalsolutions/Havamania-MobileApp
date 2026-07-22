@@ -74,7 +74,11 @@ const formatDateRange = (start: string, end: string) => {
 
 export function TravelCalendarScreen() {
   const { colors: C, spacing, fontSize, responsive, layout, radius } = useTheme();
-  const { plans, addPlan, removePlan, updatePlan, archivePlan, unarchivePlan } = useTravelStore();
+  const { plans, fetchPlans, addPlan, removePlan, updatePlan, archivePlan, unarchivePlan } = useTravelStore();
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [filter, setFilter] = useState<'Upcoming' | 'Past' | 'Archived'>('Upcoming');

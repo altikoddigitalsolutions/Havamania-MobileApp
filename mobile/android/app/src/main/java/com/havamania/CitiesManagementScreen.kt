@@ -133,7 +133,7 @@ fun CitiesManagementScreen(
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(registeredCities, key = { it.id }) { city ->
-                    val isDefault = city.id == defaultCity.id
+                    val isDefault = city.id == defaultCity?.id
                     CityListItem(
                         city = city,
                         isDefault = isDefault,

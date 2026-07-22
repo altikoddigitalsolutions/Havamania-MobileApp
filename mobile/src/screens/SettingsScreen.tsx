@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
@@ -24,12 +25,6 @@ try {
 }
 
 import {SettingsStackParamList} from '../navigation/SettingsStack';
-import {
-  getNotificationPreferences,
-  getProfile,
-  updateNotificationPreferences,
-  updateProfile,
-} from '../services/profileApi';
 import {useAuthStore} from '../store/authStore';
 import {useThemeStore} from '../store/themeStore';
 import {useTravelStore} from '../store/travelStore';
@@ -38,58 +33,21 @@ import {useTheme} from '../theme';
 type Props = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
 
 export function SettingsScreen({navigation}: Props): React.JSX.Element {
-  const queryClient = useQueryClient();
-  const {isGuest} = useAuthStore();
+  const {isGuest, userProfile, updateProfile, signOut, localProfileImage} = useAuthStore();
   const {theme, setTheme, animationsEnabled, setAnimationsEnabled} = useThemeStore();
   const { colors: C, spacing, fontSize, responsive, layout, radius } = useTheme();
-
-  const profileQuery = useQuery({queryKey: ['profile'], queryFn: getProfile, enabled: !isGuest});
-  const prefsQuery = useQuery({queryKey: ['profile', 'notifications'], queryFn: getNotificationPreferences, enabled: !isGuest});
-
-  const [localPrefs, setLocalPrefs] = useState<any>(null);
-
-  useEffect(() => {
-    if (prefsQuery.data) {
-      setLocalPrefs(prefsQuery.data);
-    }
-  }, [prefsQuery.data]);
-
-  const updateProfileMutation = useMutation({
-    mutationFn: updateProfile,
-    onSuccess: () => void queryClient.invalidateQueries({queryKey: ['profile']}),
-  });
-
-  const updatePrefsMutation = useMutation({
-    mutationFn: updateNotificationPreferences,
-    onMutate: async (newValues) => {
-      await queryClient.cancelQueries({queryKey: ['profile', 'notifications']});
-      const previous = queryClient.getQueryData(['profile', 'notifications']);
-      const updated = {...(previous as any), ...newValues};
-      setLocalPrefs(updated);
-      queryClient.setQueryData(['profile', 'notifications'], updated);
-      return {previous};
-    },
-    onError: (err: any, newValues, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['profile', 'notifications'], context.previous);
-        setLocalPrefs(context.previous);
-      }
-      Alert.alert('Hata', 'Ayar kaydedilemedi.');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({queryKey: ['profile', 'notifications']});
-    },
-  });
-
-  const profile = profileQuery.data;
-  const prefs = localPrefs || prefsQuery.data;
 
   const handleTogglePref = (key: string, value: boolean) => {
     if (isGuest) {
       Alert.alert('Üye Olmalısınız', 'Lütfen giriş yapın.');
       return;
     }
-    updatePrefsMutation.mutate({[key]: value});
+    updateProfile({
+      notificationPreferences: {
+        ...userProfile?.notificationPreferences,
+        [key]: value
+      }
+    } as any);
   };
 
   const themes = [
@@ -101,12 +59,49 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
     {id: 'winter', label: 'Kış', icon: 'snow-outline', color: '#06B6D4'},
   ];
 
+  const handleSignOut = () => {
+    Alert.alert(
+      'Oturumu Kapat',
+      'Hesabınızdan çıkış yapmak istediğinize emin misiniz?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Çıkış Yap',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+          }
+        }
+      ]
+    );
+  };
+
   const s = makeStyles(C, spacing, fontSize, responsive, layout, radius);
 
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
         <View style={s.centeredContainer}>
+          {/* Kullanıcı Profili Özeti */}
+          {!isGuest && userProfile && (
+            <TouchableOpacity
+              style={s.profileHeader}
+              onPress={() => (navigation as any).navigate('ProfileEdit')}>
+              <View style={s.avatarBox}>
+                {((userProfile.photoURL && userProfile.photoURL.length > 0) || (localProfileImage && localProfileImage.length > 0)) ? (
+                  <Image source={{ uri: userProfile.photoURL || localProfileImage || '' }} style={s.avatarSmall} />
+                ) : (
+                  <Icon name="person" size={40} color={C.textMuted} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.profileName}>{userProfile.name}</Text>
+                <Text style={s.profileEmail}>{userProfile.email}</Text>
+              </View>
+              <Icon name="chevron-forward" size={20} color={C.textMuted} />
+            </TouchableOpacity>
+          )}
+
           {/* Premium Promosyon */}
           <TouchableOpacity
             activeOpacity={0.9}
@@ -161,10 +156,10 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
               <SettingRow
                 icon="thermometer-outline"
                 label="Sıcaklık Birimi"
-                valueText={profile?.temperature_unit === 'F' ? 'Fahrenheit' : 'Celsius'}
+                valueText={userProfile?.temperatureUnit === 'F' ? 'Fahrenheit' : 'Celsius'}
                 onPress={() => {
-                  const newUnit = profile?.temperature_unit === 'F' ? 'C' : 'F';
-                  updateProfileMutation.mutate({ temperature_unit: newUnit });
+                  const newUnit = userProfile?.temperatureUnit === 'F' ? 'C' : 'F';
+                  updateProfile({ temperatureUnit: newUnit });
                 }}
                 C={C}
                 fontSize={fontSize}
@@ -175,6 +170,14 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
                 label="Uygulama Dili"
                 valueText="Türkçe"
                 onPress={() => {}}
+                C={C}
+                fontSize={fontSize}
+              />
+              <View style={s.divider} />
+              <SettingRow
+                icon="location-outline"
+                label="Kayıtlı Konumlar"
+                onPress={() => navigation.navigate('LocationManagement' as any)}
                 C={C}
                 fontSize={fontSize}
               />
@@ -196,18 +199,18 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
             <View style={s.card}>
               <SettingRow
                 icon="chatbubble-ellipses-outline"
-                label="Asistan Konuşma Dili"
+                label="Asistan Konuşma Tarzı"
                 valueText={
-                  profile?.assistant_tone === 'SAMIMI' ? 'Samimi' :
-                  profile?.assistant_tone === 'RESMI' ? 'Resmi' :
-                  profile?.assistant_tone === 'KISA_NET' ? 'Kısa ve Net' :
-                  profile?.assistant_tone === 'DETAYLI_UZMAN' ? 'Detaylı Uzman' : 'Dengeli'
+                  userProfile?.assistantTone === 'SAMIMI' ? 'Samimi' :
+                  userProfile?.assistantTone === 'RESMI' ? 'Resmi' :
+                  userProfile?.assistantTone === 'KISA_NET' ? 'Kısa ve Net' :
+                  userProfile?.assistantTone === 'DETAYLI_UZMAN' ? 'Detaylı Uzman' : 'Dengeli'
                 }
                 onPress={() => {
                   const tones = ['SAMIMI', 'RESMI', 'DENGELI', 'KISA_NET', 'DETAYLI_UZMAN'];
-                  const currentIdx = tones.indexOf(profile?.assistant_tone || 'DENGELI');
+                  const currentIdx = tones.indexOf(userProfile?.assistantTone || 'DENGELI');
                   const nextTone = tones[(currentIdx + 1) % tones.length];
-                  updateProfileMutation.mutate({ assistant_tone: nextTone });
+                  updateProfile({ assistantTone: nextTone });
                 }}
                 C={C}
                 fontSize={fontSize}
@@ -224,7 +227,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
                 label="Şiddetli Hava Uyarıları"
                 desc="Fırtına, sel gibi durumlarda anlık bilgi al."
                 type="switch"
-                value={Boolean(prefs?.severe_alert_enabled)}
+                value={Boolean(userProfile?.notificationPreferences?.severe_alert_enabled)}
                 onValueChange={v => handleTogglePref('severe_alert_enabled', v)}
                 C={C}
                 fontSize={fontSize}
@@ -235,7 +238,7 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
                 label="Günlük Hava Özeti"
                 desc="Her sabah o günün hava tahminini al."
                 type="switch"
-                value={Boolean(prefs?.daily_summary_enabled)}
+                value={Boolean(userProfile?.notificationPreferences?.daily_summary_enabled)}
                 onValueChange={v => handleTogglePref('daily_summary_enabled', v)}
                 C={C}
                 fontSize={fontSize}
@@ -306,6 +309,13 @@ export function SettingsScreen({navigation}: Props): React.JSX.Element {
             </View>
           </View>
 
+          {!isGuest && (
+            <TouchableOpacity style={s.signOutBtn} onPress={handleSignOut}>
+              <Icon name="log-out-outline" size={20} color="#EF4444" />
+              <Text style={s.signOutText}>Oturumu Kapat</Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={s.footerText}>Havamania © 2024</Text>
         </View>
       </ScrollView>
@@ -363,6 +373,11 @@ const makeStyles = (C: any, spacing: any, fontSize: any, responsive: any, layout
   safe: { flex: 1, backgroundColor: C.bg },
   centeredContainer: { alignSelf: 'center', width: '100%', maxWidth: layout.maxContentWidth },
   content: { padding: spacing.pagePadding },
+  profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 16, backgroundColor: C.bgCard, borderRadius: radius.md, marginBottom: 24, borderWidth: 1, borderColor: C.border },
+  avatarBox: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
+  avatarSmall: { width: 60, height: 60, borderRadius: 30 },
+  profileName: { fontSize: fontSize.lg, fontWeight: '700', color: C.text },
+  profileEmail: { fontSize: fontSize.sm, color: C.textSecondary, marginTop: 2 },
   premiumCard: { marginBottom: 24, borderRadius: radius.lg, overflow: 'hidden', elevation: 8, shadowColor: C.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 },
   premiumGradient: { padding: 20 },
   premiumContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -386,5 +401,7 @@ const makeStyles = (C: any, spacing: any, fontSize: any, responsive: any, layout
     borderColor: 'transparent'
   },
   themeLabel: { fontSize: 11, fontWeight: '700', marginTop: 8 },
+  signOutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 12, backgroundColor: 'rgba(239, 68, 68, 0.05)', marginTop: 8, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.1)' },
+  signOutText: { fontSize: 16, fontWeight: '700', color: '#EF4444' },
   footerText: { textAlign: 'center', fontSize: 12, color: C.textMuted, marginTop: 12, marginBottom: 24 },
 });

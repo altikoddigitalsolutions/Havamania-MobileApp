@@ -1,16 +1,13 @@
 import {create} from 'zustand';
-
 import i18n, {SUPPORTED_LANGUAGES, SupportedLanguage, getDeviceLanguage} from '../i18n';
 import {getStoredLanguage, saveLanguage} from '../services/preferencesStorage';
-import {updateProfile} from '../services/profileApi';
+import { useAuthStore } from './authStore';
 
 interface LanguageState {
   language: SupportedLanguage;
   initialized: boolean;
-  /** Uygulama açılışında çağrılır. Depodan veya cihaz dilinden okur. */
   init: () => Promise<void>;
-  /** Dili değiştirir, depoya kaydeder, sunucuyla senkronize eder. */
-  setLanguage: (lang: SupportedLanguage, syncToServer?: boolean) => Promise<void>;
+  setLanguage: (lang: SupportedLanguage) => Promise<void>;
 }
 
 export const useLanguageStore = create<LanguageState>((set, get) => ({
@@ -33,14 +30,14 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
     }
   },
 
-  setLanguage: async (lang, syncToServer = false) => {
+  setLanguage: async (lang) => {
     try {
       await i18n.changeLanguage(lang);
       set({language: lang});
       await saveLanguage(lang);
-
-      if (syncToServer) {
-        await updateProfile({language: lang});
+      const { isAuthenticated, updateProfile } = useAuthStore.getState();
+      if (isAuthenticated) {
+        updateProfile({ language: lang });
       }
     } catch (err) {
       console.error('[LanguageStore] Failed to set language:', err);

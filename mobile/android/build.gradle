@@ -20,6 +20,8 @@ buildscript {
         classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.0.21")
         // KSP Plugin eklendi
         classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:$kspVersion")
+        // Google Services Plugin eklendi
+        classpath("com.google.gms:google-services:4.4.2")
     }
 }
 

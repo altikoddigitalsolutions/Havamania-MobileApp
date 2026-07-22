@@ -20,14 +20,21 @@ import com.havamania.ui.theme.*
 @Composable
 fun EditProfileScreen(
     onBack: () -> Unit,
-    themeViewModel: ThemeViewModel = viewModel()
+    profileViewModel: ProfileViewModel = viewModel()
 ) {
-    val currentName by themeViewModel.userName.collectAsState()
-    val currentBio by themeViewModel.userBio.collectAsState()
+    val profileState by profileViewModel.profileState.collectAsState()
     val themeColors = HavamaniaTheme.colors
 
-    var name by remember { mutableStateOf(currentName) }
-    var bio by remember { mutableStateOf(currentBio) }
+    var name by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
+
+    LaunchedEffect(profileState) {
+        if (profileState is ProfileState.Success) {
+            val profile = (profileState as ProfileState.Success).profile
+            name = profile.name
+            bio = profile.bio
+        }
+    }
 
     HavamaniaScreen(
         topBar = {
@@ -102,7 +109,7 @@ fun EditProfileScreen(
             HavamaniaPrimaryButton(
                 text = "PROFİLİ GÜNCELLE",
                 onClick = {
-                    themeViewModel.updateProfile(name, bio)
+                    profileViewModel.updateProfile(name, bio)
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp)

@@ -88,167 +88,163 @@ object WeatherDataColors {
 }
 
 object ThemeManager {
-    private val THEME_KEY = stringPreferencesKey("app_theme")
-    private val LIVE_EFFECTS_KEY = booleanPreferencesKey("live_effects")
-    private val ANIMATIONS_KEY = booleanPreferencesKey("animations_enabled")
-    private val TILT_EFFECT_KEY = booleanPreferencesKey("tilt_effect_enabled")
-    private val EFFECT_INTENSITY_KEY = stringPreferencesKey("effect_intensity")
+    // User-Specific Key Helpers
+    private fun themeKey(uid: String) = stringPreferencesKey("havamania:$uid:app_theme")
+    private fun liveEffectsKey(uid: String) = booleanPreferencesKey("havamania:$uid:live_effects")
+    private fun animationsKey(uid: String) = booleanPreferencesKey("havamania:$uid:animations_enabled")
+    private fun tiltEffectKey(uid: String) = booleanPreferencesKey("havamania:$uid:tilt_effect_enabled")
+    private fun effectIntensityKey(uid: String) = stringPreferencesKey("havamania:$uid:effect_intensity")
+    private fun tempUnitKey(uid: String) = stringPreferencesKey("havamania:$uid:temp_unit")
+    private fun languageKey(uid: String) = stringPreferencesKey("havamania:$uid:language")
 
-    // Yeni Ayarlar
-    private val TEMP_UNIT_KEY = stringPreferencesKey("temp_unit")
-    private val LANGUAGE_KEY = stringPreferencesKey("language")
-    private val ASSISTANT_TONE_KEY = stringPreferencesKey("assistant_tone")
-    private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
+    private fun nameKey(uid: String) = stringPreferencesKey("havamania:$uid:user_name")
+    private fun bioKey(uid: String) = stringPreferencesKey("havamania:$uid:user_bio")
+    private fun imageUriKey(uid: String) = stringPreferencesKey("havamania:$uid:profileImagePath")
+    private fun interestsKey(uid: String) = stringPreferencesKey("havamania:$uid:user_interests")
+    private fun aboutMeKey(uid: String) = stringPreferencesKey("havamania:$uid:user_about_me")
+    private fun citiesKey(uid: String) = stringPreferencesKey("havamania:$uid:registered_cities")
+    private fun defaultCityKey(uid: String) = stringPreferencesKey("havamania:$uid:default_city")
+    private fun toneKey(uid: String) = stringPreferencesKey("havamania:$uid:assistant_tone")
+    private fun notificationsKey(uid: String) = booleanPreferencesKey("havamania:$uid:notifications_enabled")
+    private fun personalizationEnabledKey(uid: String) = booleanPreferencesKey("havamania:$uid:personalization_enabled")
+    private fun seededTripsKey(uid: String) = booleanPreferencesKey("havamania:$uid:has_seeded_trips")
+    private fun seededNotificationsKey(uid: String) = booleanPreferencesKey("havamania:$uid:has_seeded_notifications")
+    private fun onboardingCompletedKey(uid: String) = booleanPreferencesKey("havamania:$uid:onboarding_completed")
+    private fun migrationChoiceMadeKey(uid: String) = booleanPreferencesKey("havamania:$uid:migration_choice_made")
 
-    // Profil Ayarları
-    private val USER_NAME_KEY = stringPreferencesKey("user_name")
-    private val USER_BIO_KEY = stringPreferencesKey("user_bio")
-    private val USER_IMAGE_URI_KEY = stringPreferencesKey("user_image_uri")
-    private val USER_INTERESTS_KEY = stringPreferencesKey("user_interests")
-    private val USER_ABOUT_ME_KEY = stringPreferencesKey("user_about_me")
+    // Legacy / Global (Only used for guest users or non-critical device state if any)
+    private val GLOBAL_USER_NAME_KEY = stringPreferencesKey("user_name")
+    private val GLOBAL_USER_BIO_KEY = stringPreferencesKey("user_bio")
 
-    // Şehir Ayarları
-    private val REGISTERED_CITIES_KEY = stringPreferencesKey("registered_cities")
-    private val DEFAULT_CITY_KEY = stringPreferencesKey("default_city")
+    // --- User Specific Methods ---
 
-    suspend fun saveTheme(context: Context, theme: AppTheme) = context.dataStore.edit { it[THEME_KEY] = theme.name }
-
-    fun getTheme(context: Context): Flow<AppTheme> = context.dataStore.data.map {
-        val themeName = it[THEME_KEY] ?: AppTheme.DARK.name
-        try {
-            AppTheme.valueOf(themeName)
-        } catch (e: Exception) {
-            // Migration for old theme names
-            when (themeName) {
-                "SPRING" -> AppTheme.SPRING_DAY
-                "SUMMER" -> AppTheme.SUMMER_DAY
-                "AUTUMN" -> AppTheme.AUTUMN_DAY
-                "WINTER" -> AppTheme.WINTER_DAY
-                else -> AppTheme.DARK
-            }
-        }
+    suspend fun saveTheme(context: Context, theme: AppTheme, uid: String) = context.dataStore.edit { it[themeKey(uid)] = theme.name }
+    fun getTheme(context: Context, uid: String): Flow<AppTheme> = context.dataStore.data.map {
+        val themeName = it[themeKey(uid)] ?: AppTheme.DARK.name
+        try { AppTheme.valueOf(themeName) } catch (e: Exception) { AppTheme.DARK }
     }
 
-    suspend fun saveTempUnit(context: Context, unit: TemperatureUnit) = context.dataStore.edit { it[TEMP_UNIT_KEY] = unit.name }
-
-    fun getTempUnit(context: Context): Flow<TemperatureUnit> = context.dataStore.data.map {
-        try {
-            TemperatureUnit.valueOf(it[TEMP_UNIT_KEY] ?: TemperatureUnit.CELSIUS.name)
-        } catch (e: Exception) {
-            TemperatureUnit.CELSIUS
-        }
+    suspend fun saveTempUnit(context: Context, unit: TemperatureUnit, uid: String) = context.dataStore.edit { it[tempUnitKey(uid)] = unit.name }
+    fun getTempUnit(context: Context, uid: String): Flow<TemperatureUnit> = context.dataStore.data.map {
+        try { TemperatureUnit.valueOf(it[tempUnitKey(uid)] ?: TemperatureUnit.CELSIUS.name) } catch (e: Exception) { TemperatureUnit.CELSIUS }
     }
 
-    suspend fun saveLanguage(context: Context, lang: String) = context.dataStore.edit { it[LANGUAGE_KEY] = lang }
+    suspend fun saveLanguage(context: Context, lang: String, uid: String) = context.dataStore.edit { it[languageKey(uid)] = lang }
+    fun getLanguage(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[languageKey(uid)] ?: "TR" }
 
-    fun getLanguage(context: Context): Flow<String> = context.dataStore.data.map {
-        it[LANGUAGE_KEY] ?: "TR"
+    suspend fun saveAssistantTone(context: Context, uid: String, tone: AssistantTone) = context.dataStore.edit { it[toneKey(uid)] = tone.name }
+    fun getAssistantTone(context: Context, uid: String): Flow<AssistantTone> = context.dataStore.data.map {
+        try { AssistantTone.valueOf(it[toneKey(uid)] ?: AssistantTone.DENGELI.name) } catch (e: Exception) { AssistantTone.DENGELI }
     }
 
-    suspend fun saveAssistantTone(context: Context, tone: AssistantTone) = context.dataStore.edit { it[ASSISTANT_TONE_KEY] = tone.name }
+    suspend fun saveNotificationsEnabled(context: Context, uid: String, enabled: Boolean) = context.dataStore.edit { it[notificationsKey(uid)] = enabled }
+    fun getNotificationsEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[notificationsKey(uid)] ?: true }
 
-    fun getAssistantTone(context: Context): Flow<AssistantTone> = context.dataStore.data.map {
-        try {
-            AssistantTone.valueOf(it[ASSISTANT_TONE_KEY] ?: AssistantTone.DENGELI.name)
-        } catch (e: Exception) {
-            AssistantTone.DENGELI
-        }
+    suspend fun savePersonalizationEnabled(context: Context, uid: String, enabled: Boolean) = context.dataStore.edit { it[personalizationEnabledKey(uid)] = enabled }
+    fun getPersonalizationEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[personalizationEnabledKey(uid)] ?: true }
+
+    suspend fun saveHasSeededTrips(context: Context, seeded: Boolean, uid: String) = context.dataStore.edit { it[seededTripsKey(uid)] = seeded }
+    fun getHasSeededTrips(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[seededTripsKey(uid)] ?: false }
+
+    suspend fun saveHasSeededNotifications(context: Context, seeded: Boolean, uid: String) = context.dataStore.edit { it[seededNotificationsKey(uid)] = seeded }
+    fun getHasSeededNotifications(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[seededNotificationsKey(uid)] ?: false }
+
+    suspend fun saveOnboardingCompleted(context: Context, uid: String, completed: Boolean) = context.dataStore.edit { it[onboardingCompletedKey(uid)] = completed }
+    fun getOnboardingCompleted(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[onboardingCompletedKey(uid)] ?: false }
+
+    suspend fun saveMigrationChoiceMade(context: Context, uid: String, made: Boolean) = context.dataStore.edit { it[migrationChoiceMadeKey(uid)] = made }
+    fun getMigrationChoiceMade(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[migrationChoiceMadeKey(uid)] ?: false }
+
+    suspend fun saveUserName(context: Context, uid: String, name: String) = context.dataStore.edit { it[nameKey(uid)] = name }
+    fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
+
+    suspend fun saveUserBio(context: Context, uid: String, bio: String) = context.dataStore.edit { it[bioKey(uid)] = bio }
+    fun getUserBio(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[bioKey(uid)] ?: "" }
+
+    suspend fun saveUserImageUriByUid(context: Context, uid: String, path: String?) = context.dataStore.edit {
+        val key = imageUriKey(uid)
+        if (path == null) it.remove(key) else it[key] = path
     }
+    fun getUserImageUriByUid(context: Context, uid: String): Flow<String?> = context.dataStore.data.map { it[imageUriKey(uid)] }
 
-    suspend fun saveNotificationsEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[NOTIFICATIONS_KEY] = enabled }
-
-    fun getNotificationsEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
-        it[NOTIFICATIONS_KEY] ?: true
+    suspend fun saveUserInterests(context: Context, uid: String, interests: Set<String>) = context.dataStore.edit {
+        it[interestsKey(uid)] = interests.joinToString(",")
     }
-
-    suspend fun saveUserName(context: Context, name: String) = context.dataStore.edit { it[USER_NAME_KEY] = name }
-    fun getUserName(context: Context): Flow<String> = context.dataStore.data.map { it[USER_NAME_KEY] ?: "Gezgin" }
-
-    suspend fun saveUserBio(context: Context, bio: String) = context.dataStore.edit { it[USER_BIO_KEY] = bio }
-    fun getUserBio(context: Context): Flow<String> = context.dataStore.data.map { it[USER_BIO_KEY] ?: "Hava durumu meraklısı 🌤️" }
-
-    suspend fun saveUserImageUri(context: Context, uri: String?) = context.dataStore.edit {
-        if (uri == null) it.remove(USER_IMAGE_URI_KEY) else it[USER_IMAGE_URI_KEY] = uri
-    }
-    fun getUserImageUri(context: Context): Flow<String?> = context.dataStore.data.map { it[USER_IMAGE_URI_KEY] }
-
-    suspend fun saveUserInterests(context: Context, interests: Set<String>) = context.dataStore.edit {
-        it[USER_INTERESTS_KEY] = interests.joinToString(",")
-    }
-    fun getUserInterests(context: Context): Flow<Set<String>> = context.dataStore.data.map {
-        val str = it[USER_INTERESTS_KEY] ?: "Kamp,Yürüyüş,Seyahat"
+    fun getUserInterests(context: Context, uid: String): Flow<Set<String>> = context.dataStore.data.map {
+        val str = it[interestsKey(uid)] ?: ""
         if (str.isEmpty()) emptySet() else str.split(",").toSet()
     }
 
-    suspend fun saveUserAboutMe(context: Context, aboutMe: String) = context.dataStore.edit {
-        it[USER_ABOUT_ME_KEY] = aboutMe
-    }
-    fun getUserAboutMe(context: Context): Flow<String> = context.dataStore.data.map {
-        it[USER_ABOUT_ME_KEY] ?: ""
-    }
+    suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.dataStore.edit { it[aboutMeKey(uid)] = aboutMe }
+    fun getUserAboutMe(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[aboutMeKey(uid)] ?: "" }
 
-    suspend fun saveRegisteredCities(context: Context, cities: List<GeocodingResultDto>) = context.dataStore.edit {
-        it[REGISTERED_CITIES_KEY] = Json.encodeToString(cities)
+    suspend fun saveRegisteredCities(context: Context, uid: String, cities: List<GeocodingResultDto>) = context.dataStore.edit {
+        it[citiesKey(uid)] = Json.encodeToString(cities)
     }
-    fun getRegisteredCities(context: Context): Flow<List<GeocodingResultDto>> = context.dataStore.data.map {
-        val str = it[REGISTERED_CITIES_KEY] ?: ""
+    fun getRegisteredCities(context: Context, uid: String): Flow<List<GeocodingResultDto>> = context.dataStore.data.map {
+        val str = it[citiesKey(uid)] ?: ""
         if (str.isEmpty()) {
-            listOf(
-                GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
-            )
+            if (uid == "legacy") {
+                listOf(GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul"))
+            } else {
+                emptyList()
+            }
         } else {
             try { Json.decodeFromString(str) } catch(e: Exception) { emptyList() }
         }
     }
 
-    suspend fun saveDefaultCity(context: Context, city: GeocodingResultDto) = context.dataStore.edit {
-        it[DEFAULT_CITY_KEY] = Json.encodeToString(city)
+    suspend fun saveDefaultCity(context: Context, uid: String, city: GeocodingResultDto) = context.dataStore.edit {
+        it[defaultCityKey(uid)] = Json.encodeToString(city)
     }
-    fun getDefaultCity(context: Context): Flow<GeocodingResultDto> = context.dataStore.data.map {
-        val str = it[DEFAULT_CITY_KEY] ?: ""
+    fun getDefaultCity(context: Context, uid: String): Flow<GeocodingResultDto?> = context.dataStore.data.map {
+        val str = it[defaultCityKey(uid)] ?: ""
         if (str.isEmpty()) {
-            GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
+            if (uid == "legacy") {
+                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+            } else {
+                null
+            }
         } else {
-            try { Json.decodeFromString(str) } catch(e: Exception) {
-                GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
+            try { Json.decodeFromString<GeocodingResultDto>(str) } catch(e: Exception) {
+                if (uid == "legacy") GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul") else null
             }
         }
     }
 
-    suspend fun saveLiveEffects(context: Context, enabled: Boolean) = context.dataStore.edit { it[LIVE_EFFECTS_KEY] = enabled }
+    // --- System / UI Config ---
+    suspend fun saveLiveEffects(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[liveEffectsKey(uid)] = enabled }
+    fun getLiveEffects(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[liveEffectsKey(uid)] ?: true }
 
-    fun getLiveEffects(context: Context): Flow<Boolean> = context.dataStore.data.map {
-        it[LIVE_EFFECTS_KEY] ?: true
+    suspend fun saveAnimationsEnabled(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[animationsKey(uid)] = enabled }
+    fun getAnimationsEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[animationsKey(uid)] ?: true }
+
+    suspend fun saveTiltEffectEnabled(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[tiltEffectKey(uid)] = enabled }
+    fun getTiltEffectEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[tiltEffectKey(uid)] ?: true }
+
+    suspend fun saveEffectIntensity(context: Context, intensity: String, uid: String) = context.dataStore.edit { it[effectIntensityKey(uid)] = intensity }
+    fun getEffectIntensity(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[effectIntensityKey(uid)] ?: "MEDIUM" }
+
+    suspend fun clearRegisteredCities(context: Context, uid: String) = context.dataStore.edit {
+        val default = GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
+        it[citiesKey(uid)] = Json.encodeToString(listOf(default))
+        it[defaultCityKey(uid)] = Json.encodeToString(default)
     }
 
-    suspend fun saveAnimationsEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[ANIMATIONS_KEY] = enabled }
-
-    fun getAnimationsEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
-        it[ANIMATIONS_KEY] ?: true
+    suspend fun resetAll(context: Context, uid: String) = context.dataStore.edit {
+        it.remove(nameKey(uid))
+        it.remove(bioKey(uid))
+        it.remove(imageUriKey(uid))
+        it.remove(interestsKey(uid))
+        it.remove(aboutMeKey(uid))
+        it.remove(citiesKey(uid))
+        it.remove(defaultCityKey(uid))
+        it.remove(toneKey(uid))
+        it.remove(notificationsKey(uid))
+        it.remove(personalizationEnabledKey(uid))
     }
 
-    suspend fun saveTiltEffectEnabled(context: Context, enabled: Boolean) = context.dataStore.edit { it[TILT_EFFECT_KEY] = enabled }
-
-    fun getTiltEffectEnabled(context: Context): Flow<Boolean> = context.dataStore.data.map {
-        it[TILT_EFFECT_KEY] ?: true
-    }
-
-    suspend fun saveEffectIntensity(context: Context, intensity: String) = context.dataStore.edit { it[EFFECT_INTENSITY_KEY] = intensity }
-
-    fun getEffectIntensity(context: Context): Flow<String> = context.dataStore.data.map {
-        it[EFFECT_INTENSITY_KEY] ?: "MEDIUM"
-    }
-
-    suspend fun clearRegisteredCities(context: Context) = context.dataStore.edit {
-        val default = GeocodingResultDto(0, "Balıkesir", 39.6484, 27.8826, "Turkey", "TR", "Balıkesir")
-        val jsonStr = Json.encodeToString(listOf(default))
-        it[REGISTERED_CITIES_KEY] = jsonStr
-        it[DEFAULT_CITY_KEY] = Json.encodeToString(default)
-    }
-
-    suspend fun resetAll(context: Context) = context.dataStore.edit {
-        it.clear()
-    }
+    // ... (helper methods like getAutoTheme, getColorScheme)
 
     fun getAutoTheme(month: Int, isDay: Boolean): AppTheme {
         return when (month) {

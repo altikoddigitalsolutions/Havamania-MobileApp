@@ -35,11 +35,14 @@ class TravelNotificationWorker(
         val weatherDao = weatherDb.weatherDao()
         val notificationDao = notificationDb.notificationDao()
 
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val currentUid = auth.currentUser?.uid ?: "legacy"
+
         // Bildirimlerin açık olup olmadığını kontrol et
-        val notificationsEnabled = ThemeManager.getNotificationsEnabled(application).first()
+        val notificationsEnabled = ThemeManager.getNotificationsEnabled(application, currentUid).first()
         if (!notificationsEnabled) return Result.success()
 
-        val plans = weatherDao.getAllTravelPlans()
+        val plans = weatherDao.getAllTravelPlans(currentUid)
         val today = LocalDate.now()
         val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 

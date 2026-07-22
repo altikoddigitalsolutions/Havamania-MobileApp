@@ -1,7 +1,9 @@
 // ── Auth Stack ────────────────────────────────────────────────────────────────
 export type AuthStackParamList = {
+  AuthWelcome: undefined;
   Login: undefined;
-  SignUp: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
 };
 
 // ── Alt Sekmeler (3 tab) ──────────────────────────────────────────────────────
@@ -33,4 +35,6 @@ export type MainStackParamList = {
   TravelCalendar: undefined;
   Settings: undefined;
   Premium: undefined;
+  ProfileEdit: undefined;
+  LocationManagement: undefined;
 };

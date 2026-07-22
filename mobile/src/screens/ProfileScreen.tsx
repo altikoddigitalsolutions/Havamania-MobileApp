@@ -10,15 +10,13 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 
-import { getProfile } from '../services/profileApi';
-import { BASE_URL } from '../services/apiClient';
 import { useAuthStore } from '../store/authStore';
 import { useTravelStore } from '../store/travelStore';
+import * as userService from '../services/userService';
 import { useColors, Spacing, Radius, FontSize, AppColors } from '../theme';
 import { useThemeStore } from '../store/themeStore';
 
@@ -26,24 +24,23 @@ export function ProfileScreen(): React.JSX.Element {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { theme } = useThemeStore();
-  const { isGuest, logoutCurrentUser } = useAuthStore();
+  const { user, isGuest, userProfile, signOut, localProfileImage } = useAuthStore();
   const { plans } = useTravelStore();
   const C = useColors();
 
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: getProfile,
-    retry: false,
-    enabled: !isGuest,
-  });
+  const [locationCount, setLocationCount] = React.useState(0);
 
-  const profile = profileQuery.data;
+  React.useEffect(() => {
+    if (user && !isGuest) {
+      userService.getFavoriteLocations(user.uid).then(locs => setLocationCount(locs.length));
+    }
+  }, [user, isGuest]);
 
-  const displayName = profile?.full_name ?? (isGuest ? t('profile.guestUser') : 'Kullanıcı');
-  const email = profile?.email ?? (isGuest ? 'Misafir Modu' : '');
+  const displayName = userProfile?.name ?? (isGuest ? t('profile.guestUser') : 'Kullanıcı');
+  const email = userProfile?.email ?? (isGuest ? 'Misafir Modu' : '');
 
   const stats = [
-    { label: 'Şehirler', value: isGuest ? '0' : '12', icon: 'location' },
+    { label: 'Şehirler', value: locationCount.toString(), icon: 'location' },
     { label: 'Seyahatler', value: plans.length.toString(), icon: 'airplane' },
     { label: 'Soru', value: isGuest ? '0' : '42', icon: 'chatbubble' },
   ];
@@ -51,7 +48,7 @@ export function ProfileScreen(): React.JSX.Element {
   const handleLogout = () => {
     Alert.alert('Çıkış Yap', 'Hesabınızdan çıkış yapmak istediğinize emin misiniz?', [
       { text: 'İptal', style: 'cancel' },
-      { text: 'Çıkış Yap', style: 'destructive', onPress: () => logoutCurrentUser() },
+      { text: 'Çıkış Yap', style: 'destructive', onPress: () => signOut() },
     ]);
   };
 
@@ -66,14 +63,14 @@ export function ProfileScreen(): React.JSX.Element {
         <View style={s.headerCard}>
           <View style={s.profileInfo}>
             <View style={s.avatarContainer}>
-              {profile?.avatar_url ? (
-                <Image source={{ uri: `${BASE_URL}${profile.avatar_url}` }} style={s.avatar} />
+              {((userProfile?.photoURL && userProfile.photoURL.length > 0) || (localProfileImage && localProfileImage.length > 0)) ? (
+                <Image source={{ uri: userProfile?.photoURL || localProfileImage || '' }} style={s.avatar} />
               ) : (
                 <View style={[s.avatarPlaceholder, { backgroundColor: C.accent }]}>
                   <Text style={s.avatarInitial}>{displayName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
-              <TouchableOpacity style={s.editAvatarBadge}>
+              <TouchableOpacity style={s.editAvatarBadge} onPress={() => navigation.navigate('ProfileEdit')}>
                 <Icon name="camera" size={14} color="#FFF" />
               </TouchableOpacity>
             </View>
@@ -115,9 +112,9 @@ export function ProfileScreen(): React.JSX.Element {
             />
             <View style={s.divider} />
             <MenuRow
-              icon="time-outline"
-              label="Son Görüntülenenler"
-              onPress={() => Alert.alert('Bilgi', 'Son görüntülenenler özelliği çok yakında!')}
+              icon="location-outline"
+              label="Kayıtlı Konumlar"
+              onPress={() => navigation.navigate('LocationManagement')}
               C={C}
             />
           </View>
@@ -128,7 +125,7 @@ export function ProfileScreen(): React.JSX.Element {
           <View style={s.menuCard}>
             <MenuRow
               icon="person-outline"
-              label="Profil Bilgileri"
+              label="Profili Düzenle"
               onPress={() => navigation.navigate('ProfileEdit')}
               C={C}
             />
@@ -139,23 +136,17 @@ export function ProfileScreen(): React.JSX.Element {
               onPress={() => navigation.navigate('Settings')}
               C={C}
             />
-            <View style={s.divider} />
-            <MenuRow
-              icon="star-outline"
-              label="Premium'a Geç"
-              onPress={() => navigation.navigate('Premium')}
-              C={C}
-              rightElement={<View style={s.proBadge}><Text style={s.proText}>PRO</Text></View>}
-            />
           </View>
         </View>
 
-        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-          <Icon name="log-out-outline" size={20} color={C.error} />
-          <Text style={s.logoutText}>Çıkış Yap</Text>
-        </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
+            <Icon name="log-out-outline" size={20} color={C.error} />
+            <Text style={s.logoutText}>Çıkış Yap</Text>
+          </TouchableOpacity>
+        )}
 
-        <Text style={s.versionText}>Versiyon 1.2.0 (Build 45)</Text>
+        <Text style={s.versionText}>Havamania © 2024</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -189,37 +180,13 @@ const styles = StyleSheet.create({
 const makeStyles = (C: AppColors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   scrollContent: { padding: Spacing.lg },
-  headerCard: {
-    backgroundColor: C.bgCard,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: C.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4
-  },
+  headerCard: { backgroundColor: C.bgCard, borderRadius: 24, padding: 24, marginBottom: 32, borderWidth: 1, borderColor: C.border },
   profileInfo: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 24 },
   avatarContainer: { position: 'relative' },
   avatar: { width: 80, height: 80, borderRadius: 40 },
   avatarPlaceholder: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center' },
   avatarInitial: { fontSize: 32, fontWeight: '800', color: '#FFF' },
-  editAvatarBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: C.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: C.bgCard
-  },
+  editAvatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: C.accent, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: C.bgCard },
   nameContainer: { flex: 1 },
   displayName: { fontSize: 24, fontWeight: '800', color: C.text },
   emailText: { fontSize: 14, color: C.textSecondary, marginTop: 4 },
@@ -232,18 +199,7 @@ const makeStyles = (C: AppColors) => StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '800', color: C.textMuted, letterSpacing: 1.5, marginBottom: 12, marginLeft: 4 },
   menuCard: { backgroundColor: C.bgCard, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   divider: { height: 1, backgroundColor: C.divider, marginHorizontal: 16 },
-  proBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  proText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-    marginTop: 8
-  },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 16, backgroundColor: 'rgba(239, 68, 68, 0.05)', marginTop: 8 },
   logoutText: { color: C.error, fontSize: 16, fontWeight: '700' },
   versionText: { textAlign: 'center', fontSize: 12, color: C.textMuted, marginTop: 32, marginBottom: 16 },
 });

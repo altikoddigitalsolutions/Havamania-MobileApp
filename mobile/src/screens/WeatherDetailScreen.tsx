@@ -18,7 +18,6 @@ import {getMoonPhase, formatSunTime} from '../services/openMeteoApi';
 import {AppColors, FontSize, Radius, Spacing, getWeatherEmoji, useColors} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
-import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 import {WeatherDetailsPanel} from '../components/WeatherDetailsPanel';
 
@@ -30,13 +29,8 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
   const C = useColors();
   const {lat, lon} = route.params;
 
-  const {isGuest} = useAuthStore();
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: getProfile,
-    enabled: !isGuest,
-  });
-  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+  const {userProfile} = useAuthStore();
+  const tempUnit = userProfile?.temperatureUnit ?? 'C';
 
   const [currentQuery, dailyQuery] = useQueries({
     queries: [

@@ -22,15 +22,16 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
     const isDay = weather.is_day;
 
     // Profil bazlı veriler
-    const interests = profile?.interest?.toLowerCase() || "";
-    const health = profile?.health_sensitivities?.toLowerCase() || "";
+    const interests = profile?.interests?.join(', ').toLowerCase() || "";
+    const bio = profile?.bio?.toLowerCase() || "";
+    const name = profile?.name || "";
 
     let summary = "";
     const sections: { icon: string, text: string, title: string, color: string }[] = [];
 
     // 1. Özet & Yaşam Etkisi
     if (isDay) {
-        if (temp > 32) summary = "Bugün ekstrem sıcaklıklar bekleniyor. Özellikle öğle saatlerinde gölgede kalmanı öneririm.";
+        if (temp > 32) summary = `${name ? name + ', b' : 'B'}ugün ekstrem sıcaklıklar bekleniyor. Özellikle öğle saatlerinde gölgede kalmanı öneririm.`;
         else if (temp < 2) summary = "Hava oldukça dondurucu. Dışarı çıkarken kat kat giyinmen sağlığın için kritik.";
         else if (rain > 60) summary = "Kuvvetli yağış uyarısı! Bugün planlarını iç mekana kaydırmak mantıklı görünüyor.";
         else summary = `Hava ${temp}°C ve ${cond}. Günlük planların için genel olarak elverişli bir hava hakim.`;
@@ -49,14 +50,14 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
     sections.push({ icon: 'shirt-outline', title: 'KIYAFET', text: clothingText, color: '#60A5FA' });
 
     // 3. Sağlık & Risk (Kişiselleştirilmiş)
-    if (uv > 6 || health.includes("uv") || health.includes("cilt")) {
+    if (uv > 6 || bio.includes("uv") || bio.includes("cilt")) {
         sections.push({
           icon: 'sunny-outline',
           title: 'RİSK UYARISI',
           text: `UV seviyesi ${uv}. Güneş kremi ve gözlük kullanımı senin için çok önemli.`,
           color: '#F59E0B'
         });
-    } else if (health.includes("polen") && (cond.includes("güneş") || cond.includes("açık"))) {
+    } else if (bio.includes("polen") && (cond.includes("güneş") || cond.includes("açık"))) {
         sections.push({
           icon: 'medical-outline',
           title: 'RİSK UYARISI',

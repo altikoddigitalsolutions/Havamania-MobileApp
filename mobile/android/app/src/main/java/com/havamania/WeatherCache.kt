@@ -83,6 +83,7 @@ data class WeatherCacheEntity(
 @Entity(tableName = "travel_plans")
 data class TravelPlanEntity(
     @PrimaryKey val id: String,
+    val userId: String = "legacy",
     val city: String,
     val latitude: Double,
     val longitude: Double,
@@ -114,6 +115,7 @@ data class TravelPlanEntity(
 @Entity(tableName = "ai_history")
 data class AiHistoryEntity(
     @PrimaryKey val id: String,
+    val userId: String = "legacy",
     val title: String,
     val summary: String,
     val messages: List<AltikodChatMessage>,
@@ -136,11 +138,14 @@ interface WeatherDao {
     suspend fun deleteWeather(city: String)
 
     // Travel Plans
-    @Query("SELECT * FROM travel_plans ORDER BY startDate ASC")
-    suspend fun getAllTravelPlans(): List<TravelPlanEntity>
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
+    fun getAllTravelPlansFlow(uid: String): kotlinx.coroutines.flow.Flow<List<TravelPlanEntity>>
 
-    @Query("SELECT * FROM travel_plans WHERE isDemo = 0 ORDER BY startDate ASC")
-    suspend fun getUserTravelPlans(): List<TravelPlanEntity>
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
+    suspend fun getAllTravelPlans(uid: String): List<TravelPlanEntity>
+
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid AND isDemo = 0 ORDER BY startDate ASC")
+    suspend fun getUserTravelPlans(uid: String): List<TravelPlanEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTravelPlan(plan: TravelPlanEntity)
@@ -148,12 +153,15 @@ interface WeatherDao {
     @Query("DELETE FROM travel_plans WHERE id = :id")
     suspend fun deleteTravelPlan(id: String)
 
-    @Query("DELETE FROM travel_plans")
-    suspend fun clearAllTravelPlans()
+    @Query("DELETE FROM travel_plans WHERE userId = :uid")
+    suspend fun clearAllTravelPlans(uid: String)
+
+    @Query("DELETE FROM weather_cache")
+    suspend fun clearAllWeatherCache()
 
     // AI History
-    @Query("SELECT * FROM ai_history ORDER BY timestamp DESC")
-    suspend fun getAllAiHistory(): List<AiHistoryEntity>
+    @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY timestamp DESC")
+    suspend fun getAllAiHistory(uid: String): List<AiHistoryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiHistory(item: AiHistoryEntity)
@@ -161,14 +169,14 @@ interface WeatherDao {
     @Query("DELETE FROM ai_history WHERE id = :id")
     suspend fun deleteAiHistory(id: String)
 
-    @Query("DELETE FROM ai_history")
-    suspend fun clearAllAiHistory()
+    @Query("DELETE FROM ai_history WHERE userId = :uid")
+    suspend fun clearAllAiHistory(uid: String)
 }
 
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 10, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 11, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -177,19 +185,10 @@ abstract class WeatherDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: WeatherDatabase? = null
 
-        val MIGRATION_5_6 = object : Migration(5, 6) {
+        val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    "ALTER TABLE travel_plans ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0"
-                )
-            }
-        }
-
-        val MIGRATION_9_10 = object : Migration(9, 10) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    "ALTER TABLE travel_plans ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0"
-                )
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy'")
+                database.execSQL("ALTER TABLE ai_history ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy'")
             }
         }
 
@@ -201,7 +200,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                         WeatherDatabase::class.java,
                         "weather_database"
                     )
-                    .addMigrations(MIGRATION_5_6, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_10_11)
                     .fallbackToDestructiveMigration()
                     .build()
                     INSTANCE = instance

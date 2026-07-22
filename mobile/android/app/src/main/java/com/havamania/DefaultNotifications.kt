@@ -1,7 +1,7 @@
 package com.havamania
 
 object DefaultNotifications {
-    fun create(): List<NotificationItem> {
+    fun create(uid: String = "legacy"): List<NotificationItem> {
         val now = System.currentTimeMillis()
         val oneHour = 1000L * 60 * 60
         val oneDay = oneHour * 24
@@ -10,6 +10,7 @@ object DefaultNotifications {
             // SEYAHAT
             NotificationItem(
                 id = "def_travel_1",
+                userId = uid,
                 title = "Seyahat Güncellemesi",
                 message = "İzmir seyahatin için UV seviyesi yüksek görünüyor. Güneş koruyucu ve şapka almanı öneririm.",
                 category = NotificationCategory.TRAVEL,
@@ -22,6 +23,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_travel_2",
+                userId = uid,
                 title = "Seyahat Güncellemesi",
                 message = "Hasankeyf ve çevresindeki tarihi dokuyu keşfetmek için önümüzdeki günler oldukça elverişli.",
                 category = NotificationCategory.TRAVEL,
@@ -35,6 +37,7 @@ object DefaultNotifications {
             // YAĞMUR
             NotificationItem(
                 id = "def_rain_1",
+                userId = uid,
                 title = "Yağış Bilgilendirmesi",
                 message = "Yağış ihtimali %20'den %65'e yükseldi. Şemsiyeni yanına almalısın.",
                 category = NotificationCategory.RAIN,
@@ -47,6 +50,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_rain_2",
+                userId = uid,
                 title = "Yağış Bilgilendirmesi",
                 message = "Hafif yağış geçişleri ve açık hava etkinliklerine uygun günler sizi bekliyor.",
                 category = NotificationCategory.RAIN,
@@ -60,6 +64,7 @@ object DefaultNotifications {
             // UV
             NotificationItem(
                 id = "def_uv_1",
+                userId = uid,
                 title = "UV Uyarısı",
                 message = "UV indeksi 8 seviyesine ulaşacak. Koruyucu kullanmayı unutma.",
                 category = NotificationCategory.UV,
@@ -72,6 +77,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_uv_2",
+                userId = uid,
                 title = "UV Uyarısı",
                 message = "Açık hava aktiviteleri için hava koşulları ve UV seviyesi oldukça uygun görünüyor.",
                 category = NotificationCategory.UV,
@@ -85,6 +91,7 @@ object DefaultNotifications {
             // UYARI
             NotificationItem(
                 id = "def_warn_1",
+                userId = uid,
                 title = "Hava Durumu Uyarısı",
                 message = "Sıcaklık hızlı düşecek. Dışarıdaysan hafif ceket alman konforunu artıracaktır.",
                 category = NotificationCategory.WARNING,
@@ -97,6 +104,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_warn_2",
+                userId = uid,
                 title = "Hava Durumu Uyarısı",
                 message = "Kıyı kesimlerinde rüzgar hızı anlık 45 km/sa hıza ulaşabilir. Dikkatli olunmalıdır.",
                 category = NotificationCategory.WARNING,
@@ -110,6 +118,7 @@ object DefaultNotifications {
             // ÖZET
             NotificationItem(
                 id = "def_sum_1",
+                userId = uid,
                 title = "Hava Durumu Özeti",
                 message = "Sabah sisli, öğleden sonra parçalı bulutlu bir gökyüzü bekleniyor.",
                 category = NotificationCategory.SUMMARY,
@@ -122,6 +131,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_sum_2",
+                userId = uid,
                 title = "Hava Durumu Özeti",
                 message = "Planladığın rotalar için en uygun hava koşulları yaklaşıyor.",
                 category = NotificationCategory.SUMMARY,
@@ -135,6 +145,7 @@ object DefaultNotifications {
             // GÜNCELLEME
             NotificationItem(
                 id = "def_upd_1",
+                userId = uid,
                 title = "Uygulama Güncellemesi",
                 message = "Hava kartlarına rüzgar şiddetine göre değişen premium animasyonlar eklendi. Hemen keşfet!",
                 category = NotificationCategory.UPDATE,
@@ -147,6 +158,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_upd_2",
+                userId = uid,
                 title = "Uygulama Güncellemesi",
                 message = "Atmosferik efektler ve geçiş animasyonları daha düşük pil tüketimi için optimize edildi.",
                 category = NotificationCategory.UPDATE,
@@ -160,6 +172,7 @@ object DefaultNotifications {
             // GENEL
             NotificationItem(
                 id = "def_gen_1",
+                userId = uid,
                 title = "Havamania'ya Hoş Geldin",
                 message = "Tüm hava durumlarına özel astronomik fazlarla zenginleştirilmiş seyahat deneyimine hoş geldin.",
                 category = NotificationCategory.GENERAL,
@@ -172,6 +185,7 @@ object DefaultNotifications {
             ),
             NotificationItem(
                 id = "def_gen_2",
+                userId = uid,
                 title = "Havamania",
                 message = "Sana daha iyi öneriler sunabilmemiz için profilindeki ilgi alanlarını (kamp, spor, fotoğrafçılık vb.) güncel tutabilirsin.",
                 category = NotificationCategory.GENERAL,

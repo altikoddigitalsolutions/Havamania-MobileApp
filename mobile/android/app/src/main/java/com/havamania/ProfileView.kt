@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,22 +55,22 @@ fun ProfileScreen(
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToTravels: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
+    onNavigateToPersonalization: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
+    profileViewModel: ProfileViewModel = viewModel(),
     aiHistoryViewModel: AiHistoryViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel()
 ) {
     val scrollState = rememberScrollState()
     val themeColors = HavamaniaTheme.colors
 
+    val profileState by profileViewModel.profileState.collectAsState()
+    val uploadProgress by profileViewModel.uploadProgress.collectAsState()
+    val avatarVersion by profileViewModel.avatarVersion.collectAsState()
+
     val name by themeViewModel.userName.collectAsState()
     val bio by themeViewModel.userBio.collectAsState()
-    val imageUri by themeViewModel.userImageUri.collectAsState()
     val userInterests by themeViewModel.userInterests.collectAsState()
-    val registeredCities by themeViewModel.registeredCities.collectAsState()
-    val defaultCity by themeViewModel.defaultCity.collectAsState()
-    val tempUnit by themeViewModel.tempUnit.collectAsState()
-    val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
-    val currentTheme by themeViewModel.currentTheme.collectAsState()
     val aboutMe by themeViewModel.userAboutMe.collectAsState()
 
     val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsState()
@@ -81,10 +83,16 @@ fun ProfileScreen(
     // Stats Detail States
     var showStatsDetail by remember { mutableStateOf<String?>(null) }
 
+    // COMPATIBILITY FIX: Use GetContent() instead of PickVisualMedia() for better Android 12 support
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
+        contract = ActivityResultContracts.GetContent(),
         onResult = { uri ->
-            uri?.let { themeViewModel.setUserImageUri(it.toString()) }
+            if (uri != null) {
+                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 1 OK: Selected URI = $uri")
+                profileViewModel.uploadProfileImage(uri)
+            } else {
+                android.util.Log.w("PHOTO_DEBUG", "[PHOTO] Step 1 FAILED: User cancelled or no URI")
+            }
         }
     )
 
@@ -111,10 +119,25 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // 1. Premium Profile Header
+            val profile = (profileState as? ProfileState.Success)?.profile
+            val localImageUri by themeViewModel.userImageUri.collectAsState()
+
+            android.util.Log.i("PHOTO_DEBUG", "[PHOTO] UI State Trace: profileState=${profileState::class.simpleName}, profileObj=${profile?.uid}, photoURL=${profile?.photoURL}")
+
+            // CRITICAL FIX: Use DataStore as primary while Firestore is loading to prevent "Havamania Kullanıcısı" flicker
+            val displayNameToDisplay = if (profile != null) profile.name else name
+            val bioToDisplay = if (profile != null) profile.bio else bio
+            val photoToDisplay = if (profile != null) profile.photoURL else localImageUri
+
+            android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 9 OK: PremiumProfileHeader imageUri = $photoToDisplay")
+            android.util.Log.i("PHOTO_DEBUG", "[PHOTO] UI Source Check: profile.photoURL = ${profile?.photoURL}, localImageUri = $localImageUri")
+
             PremiumProfileHeader(
-                name = name,
-                bio = bio,
-                imageUri = imageUri,
+                name = displayNameToDisplay,
+                bio = bioToDisplay,
+                imageUri = photoToDisplay,
+                avatarVersion = avatarVersion,
+                isUploading = uploadProgress,
                 interests = userInterests,
                 aboutMe = aboutMe,
                 stats = mapOf(
@@ -124,9 +147,9 @@ fun ProfileScreen(
                     "Favori" to (travelPlans.groupBy { it.tripType }.maxByOrNull { it.value.size }?.key?.label ?: "Outdoor")
                 ),
                 onAvatarClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    if (!uploadProgress) {
+                        photoPickerLauncher.launch("image/*")
+                    }
                 },
                 onEditClick = onNavigateToEditProfile,
                 onStatClick = { showStatsDetail = it }
@@ -140,7 +163,7 @@ fun ProfileScreen(
                 onManageCities = onNavigateToCities,
                 onAiHistory = onNavigateToAiHistory,
                 onMyTravels = onNavigateToTravels,
-                onChooseTheme = onNavigateToSettings,
+                onPersonalization = onNavigateToPersonalization,
                 onEditProfile = onNavigateToEditProfile,
                 onPremium = {
                     comingSoonTitle = "Havamania yakında hizmetinizde olacak."
@@ -163,7 +186,7 @@ fun ProfileScreen(
             SectionHeader("HAVA TERCİHLERİ & İLGİ ALANLARI")
             PremiumInterestsSection(
                 selectedInterests = userInterests,
-                onInterestToggle = { themeViewModel.toggleInterest(it) }
+                onInterestToggle = { profileViewModel.toggleInterest(it, userInterests) }
             )
 
             Spacer(modifier = Modifier.height(100.dp))
@@ -178,7 +201,7 @@ fun ProfileScreen(
                 PremiumAboutMeContent(
                     initialText = aboutMe,
                     onSave = {
-                        themeViewModel.setUserAboutMe(it)
+                        profileViewModel.setUserAboutMe(it)
                         showAboutMeSheet = false
                     }
                 )
@@ -209,6 +232,18 @@ fun ProfileScreen(
                 onConfirm = { }
             )
         }
+
+        // --- NEW: Error Dialog for Profile Actions ---
+        if (profileState is ProfileState.Error) {
+            val errorMsg = (profileState as ProfileState.Error).message
+            HavamaniaDialog(
+                onDismissRequest = { profileViewModel.fetchProfile() },
+                title = "YÜKLEME HATASI",
+                text = "$errorMsg\n\nLütfen internet bağlantınızı ve Firebase Storage yetkilerini kontrol edin.",
+                confirmText = "TAMAM",
+                onConfirm = { profileViewModel.fetchProfile() }
+            )
+        }
     }
 }
 
@@ -217,6 +252,8 @@ fun PremiumProfileHeader(
     name: String,
     bio: String,
     imageUri: String?,
+    avatarVersion: Long = 0,
+    isUploading: Boolean = false,
     interests: Set<String>,
     aboutMe: String,
     stats: Map<String, String>,
@@ -225,6 +262,7 @@ fun PremiumProfileHeader(
     onStatClick: (String) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
+    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 9 OK: PremiumProfileHeader imageUri = $imageUri")
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         // Photo Section with Ambient Glow
@@ -253,18 +291,36 @@ fun PremiumProfileHeader(
                 contentAlignment = Alignment.Center
             ) {
                 if (!imageUri.isNullOrBlank()) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 12-13: Rendering image with URI: $imageUri (Version: $avatarVersion)")
                     AsyncImage(
-                        model = imageUri, contentDescription = null,
-                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(imageUri)
+                            .diskCacheKey("$imageUri-$avatarVersion")
+                            .memoryCacheKey("$imageUri-$avatarVersion")
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 12-13: Rendering DEFAULT avatar (imageUri is null/blank)")
                     Icon(Icons.Rounded.Person, null, tint = themeColors.textPrimary.copy(0.7f), modifier = Modifier.size(50.dp))
                 }
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Icon(Icons.Rounded.CameraAlt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.padding(bottom = 6.dp).size(14.dp))
+
+                if (isUploading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Icon(Icons.Rounded.CameraAlt, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.padding(bottom = 6.dp).size(14.dp))
+                    }
                 }
             }
         }
@@ -809,7 +865,7 @@ fun QuickActionsGrid(
     onManageCities: () -> Unit,
     onAiHistory: () -> Unit,
     onMyTravels: () -> Unit,
-    onChooseTheme: () -> Unit,
+    onPersonalization: () -> Unit,
     onEditProfile: () -> Unit,
     onPremium: () -> Unit
 ) {
@@ -820,7 +876,7 @@ fun QuickActionsGrid(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Seyahatlerim", Icons.Rounded.Route, Modifier.weight(1f), onMyTravels)
-            QuickActionItem("Tema Seç", Icons.Rounded.Palette, Modifier.weight(1f), onChooseTheme)
+            QuickActionItem("Tercihlerim", Icons.Rounded.AutoAwesome, Modifier.weight(1f), onPersonalization)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Premium", Icons.Rounded.WorkspacePremium, Modifier.weight(1f), onPremium)

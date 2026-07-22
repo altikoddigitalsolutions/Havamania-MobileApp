@@ -119,6 +119,7 @@ data class HavamaniaRecommendation(
  */
 sealed class WeatherUiState {
     object Loading : WeatherUiState()
+    object NoCity : WeatherUiState()
     data class Success(val data: WeatherData) : WeatherUiState()
     data class Error(val message: String) : WeatherUiState()
 }

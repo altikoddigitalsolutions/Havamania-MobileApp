@@ -103,6 +103,9 @@ fun HomeScreen(
         Crossfade(targetState = uiState, label = "state_transition", animationSpec = tween(1000)) { state ->
             when (state) {
                 is WeatherUiState.Loading -> HomeScreenLoading()
+                is WeatherUiState.NoCity -> {
+                    NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
+                }
                 is WeatherUiState.Success -> {
                     WeatherSuccessContent(
                         data = state.data,
@@ -121,7 +124,18 @@ fun HomeScreen(
                     )
                 }
                 is WeatherUiState.Error -> {
-                    WeatherErrorState(title = "Hata Oluştu", description = state.message, onRetry = { viewModel.refreshWeather() })
+                    val isOffline = !viewModel.isOnline.collectAsState().value
+                    if (isOffline) {
+                        OfflineErrorState(onRetry = { viewModel.refreshWeather() })
+                    } else if (state.message.contains("bulunamadı", ignoreCase = true)) {
+                        CityNotFoundErrorState(onRetry = { viewModel.refreshWeather() })
+                    } else {
+                        HavamaniaErrorState(
+                            title = "Bir Sorun Var",
+                            description = state.message,
+                            onRetry = { viewModel.refreshWeather() }
+                        )
+                    }
                 }
             }
         }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "35359908939",
+    "project_id": "havamania-be3df",
+    "storage_bucket": "havamania-be3df.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:35359908939:android:34828f587c16e11d1dd9ce",
+        "android_client_info": {
+          "package_name": "com.havamania"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFzmE8yXgMt06Howiaf1J1AxjHai-NlwE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

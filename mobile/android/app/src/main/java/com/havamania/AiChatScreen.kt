@@ -39,11 +39,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.havamania.ui.theme.*
+import com.havamania.ui.theme.HavamaniaColors
+import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.AssistantTone
+import com.havamania.ui.theme.LocalResponsiveValues
+import com.havamania.ui.theme.LocalWindowSize
+import com.havamania.ui.theme.ThemeViewModel
+import com.havamania.ui.theme.HavamaniaTopBar
+import com.havamania.ui.theme.HavamaniaPrimaryButton
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
@@ -61,21 +71,27 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val botId = "6"
     private var sessionId = UUID.randomUUID().toString()
 
+    private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+
     private val repository = WeatherRepository.getInstance(application)
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
-    val messages = _messages.asStateFlow()
+    val messages: StateFlow<List<AltikodChatMessage>> = _messages.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
-    val config = _config.asStateFlow()
+    val config: StateFlow<AltikodBotConfig?> = _config.asStateFlow()
 
     private val _weatherData = MutableStateFlow<WeatherData?>(null)
-    val weatherData = _weatherData.asStateFlow()
+    val weatherData: StateFlow<WeatherData?> = _weatherData.asStateFlow()
+
+    private val _weatherUiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
+    val weatherUiState: StateFlow<WeatherUiState> = _weatherUiState.asStateFlow()
 
     private val _activeTravels = MutableStateFlow<List<TravelPlan>>(emptyList())
     private var contextCity: String? = null
@@ -85,23 +101,43 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     var assistantTone: AssistantTone = AssistantTone.DENGELI
     var language: String = "TR"
 
+    private var weatherJob: kotlinx.coroutines.Job? = null
+    private var fetchJob: kotlinx.coroutines.Job? = null
+
+    // ...
     init {
+        android.util.Log.i("ASSISTANT_TRACE", "AiChatViewModel init (Assistant mounted)")
+        viewModelScope.launch {
+            auth.addAuthStateListener { firebaseAuth ->
+                val user = firebaseAuth.currentUser
+                val newUid = user?.uid ?: "legacy"
+                android.util.Log.i("ASSISTANT_TRACE", "Auth state changed. New UID: $newUid")
+                _messages.value = emptyList()
+                _weatherData.value = null
+                _weatherUiState.value = WeatherUiState.Loading
+                sessionId = java.util.UUID.randomUUID().toString()
+
+                // Restart observers for new UID
+                loadActiveTravels(newUid)
+                observeWeatherState(newUid)
+            }
+        }
         loadConfig()
-        observeWeatherState()
-        loadActiveTravels()
     }
 
-    private fun loadActiveTravels() {
+    private fun loadActiveTravels(uid: String = currentUid) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            android.util.Log.i("ASSISTANT_TRACE", "loadActiveTravels started for $uid")
             try {
-                val entities = dao.getAllTravelPlans()
+                val entities = dao.getAllTravelPlans(uid)
                 val today = LocalDate.now()
                 val active = entities.map { it.toDomain() }.filter {
                     !it.isArchived && !it.endDate.isBefore(today)
                 }
                 _activeTravels.value = active
+                android.util.Log.i("ASSISTANT_TRACE", "loadActiveTravels success. Active size: ${active.size}")
             } catch (e: Exception) {
-                android.util.Log.e("HAVAMANIA_AI", "Error loading travels", e)
+                android.util.Log.e("ASSISTANT_TRACE", "loadActiveTravels FAILED: ${e.message}", e)
             }
         }
     }
@@ -130,30 +166,63 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         lastDailyNotificationDate = lastDailyNotificationDate
     )
 
-    private fun observeWeatherState() {
-        viewModelScope.launch {
+    private fun observeWeatherState(uid: String) {
+        weatherJob?.cancel()
+        weatherJob = viewModelScope.launch {
+            android.util.Log.i("ASSISTANT_TRACE", "observeWeatherState started for $uid")
+
+            // Force a re-collection by checking initial state
+            val current = repository.currentWeatherState.value
+            if (current != null) {
+                android.util.Log.i("ASSISTANT_TRACE", "Initial weather found: ${current.cityName}")
+                _weatherData.value = current
+                _weatherUiState.value = WeatherUiState.Success(current)
+            } else {
+                android.util.Log.i("ASSISTANT_TRACE", "Initial weather NULL. Triggering tryAutoFetch.")
+                tryAutoFetch(uid)
+            }
+
             repository.currentWeatherState.collect { data ->
+                android.util.Log.i("ASSISTANT_TRACE", "repository.currentWeatherState emission: ${data?.cityName}")
                 _weatherData.value = data
                 if (data != null) {
-                    android.util.Log.d("HAVAMANIA_AI", "Shared weather data received: ${data.cityName}")
-                    logWeatherState(data)
-                } else {
-                    android.util.Log.w("HAVAMANIA_AI", "Shared weather data is NULL")
-                    tryAutoFetch()
+                    android.util.Log.i("ASSISTANT_TRACE", "Shared weather data received: ${data.cityName}. Setting Success.")
+                    _weatherUiState.value = WeatherUiState.Success(data)
                 }
             }
         }
     }
 
-    private fun tryAutoFetch() {
-        viewModelScope.launch {
+    private fun tryAutoFetch(uid: String) {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
+            android.util.Log.i("ASSISTANT_TRACE", "tryAutoFetch started for $uid")
+            _weatherUiState.value = WeatherUiState.Loading
             try {
-                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).firstOrNull()?.let { defaultCity ->
-                    android.util.Log.d("HAVAMANIA_AI", "Auto-fetching weather for ${defaultCity.name}")
-                    repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district).collect {}
+                android.util.Log.i("ASSISTANT_TRACE", "Fetching default city for $uid")
+
+                // STRICT TIMEOUT for DataStore read
+                val defaultCity = kotlinx.coroutines.withTimeoutOrNull(3000) {
+                    com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
+                }
+
+                if (defaultCity != null) {
+                    android.util.Log.i("ASSISTANT_TRACE", "Default city found: ${defaultCity.name}. Weather request starting.")
+
+                    kotlinx.coroutines.withTimeout(10000) {
+                        repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                            .collect {
+                                android.util.Log.i("ASSISTANT_TRACE", "Weather response received: ${it.cityName}. Setting Success.")
+                                _weatherUiState.value = WeatherUiState.Success(it)
+                            }
+                    }
+                } else {
+                    android.util.Log.w("ASSISTANT_TRACE", "No default city found for $uid. Setting NoCity.")
+                    _weatherUiState.value = WeatherUiState.NoCity
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HAVAMANIA_AI", "Auto-fetch failed: ${e.message}")
+                android.util.Log.e("ASSISTANT_TRACE", "CRITICAL ERROR in tryAutoFetch for $uid: ${e.message}", e)
+                _weatherUiState.value = WeatherUiState.Error(e.message ?: "Hava verisi alınamadı")
             }
         }
     }
@@ -245,8 +314,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         """.trimIndent()
     }
 
-    private fun buildToneInstruction(): String {
-        return when (assistantTone) {
+    private fun buildToneInstruction(tone: AssistantTone): String {
+        return when (tone) {
             AssistantTone.SAMIMI -> """
                 [SİSTEM ROLÜ: SAMİMİ ARKADAŞ PERSONASI]
                 - Karakter: Kullanıcının çok yakın, enerjik ve neşeli bir arkadaşısın.
@@ -280,26 +349,32 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 - Üslup: En detaylı mod. Neden-sonuç ilişkileri kur. Teknik açıklamalar ve meteorolojik yorumlar ekle.
                 - Kural: Uzman görüşü hissi ver.
             """.trimIndent()
+            else -> ""
         }
     }
 
     fun sendMessage(text: String, systemContext: String? = null, isRetry: Boolean = false) {
+        val tone = assistantTone
+        val interests = userInterests
+        val aboutMe = userAboutMe
+        val lang = language
+
         if (text.isBlank() || _isLoading.value) return
 
         val truncatedText = if (text.length > 4000) text.take(4000) else text
 
         if (!isRetry) {
             val userMsg = AltikodChatMessage(text = truncatedText, isUser = true)
-            _messages.value = _messages.value + userMsg
+            _messages.update { it + userMsg }
         }
 
         _isLoading.value = true
 
         val weatherContext = buildWeatherContext(truncatedText)
-        val toneInstruction = buildToneInstruction()
-        val languageInstruction = if (language == "EN") "IMPORTANT: Answer ONLY in English." else "ÖNEMLİ: Sadece Türkçe cevap ver."
-        val personalContext = if (userInterests.isNotEmpty() || userAboutMe.isNotBlank()) {
-            "KULLANICI PROFİLİ:\nİlgi Alanları: ${userInterests.joinToString()}\nBilgi: $userAboutMe\n"
+        val toneInstruction = buildToneInstruction(tone)
+        val languageInstruction = if (lang == "EN") "IMPORTANT: Answer ONLY in English." else "ÖNEMLİ: Sadece Türkçe cevap ver."
+        val personalContext = if (interests.isNotEmpty() || aboutMe.isNotBlank()) {
+            "KULLANICI PROFİLİ:\nİlgi Alanları: ${interests.joinToString()}\nBilgi: $aboutMe\n"
         } else ""
 
         val intent = AiIntentParser.detectIntent(truncatedText)
@@ -369,8 +444,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
                 // If it's a valid weather query but AI gave a generic "don't understand" answer,
                 // replace it with our local detailed weather answer.
-                var finalIsUnknown = isUnknownResponse
-                if (isWeatherQuery && isUnknownResponse && _weatherData.value != null) {
+                val finalIsUnknown = isUnknownResponse
+                if (isWeatherQuery && finalIsUnknown && _weatherData.value != null) {
                     answer = RecommendationEngine.generateAssistantFallbackReply(
                         userPrompt = truncatedText,
                         weatherData = _weatherData.value,
@@ -379,7 +454,6 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                         tone = assistantTone,
                         travelPlans = _activeTravels.value
                     )
-                    finalIsUnknown = false // It's now a known response (fallback)
                 }
 
                 // Enrich with action if applicable (Only if we have a successful weather-related answer and it's a DIFFERENT city)
@@ -399,8 +473,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 } else null
 
                 val finalAnswer = if (detectedAction != null) {
-                    val today = LocalDate.now()
-                    val startDate = detectedAction.startDate?.let { LocalDate.parse(it) }
+                    val action = detectedAction
+                    val todayVal = LocalDate.now()
+                    val startDate = action.startDate?.let { LocalDate.parse(it) }
 
                     val invitationText = if (startDate != null) {
                         val d = startDate
@@ -408,30 +483,30 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                         val dateLabel = "${d.dayOfMonth} $monthName"
 
                         when (assistantTone) {
-                            AssistantTone.SAMIMI -> "Eğer $dateLabel tarihinde ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
-                            AssistantTone.RESMI -> "$dateLabel tarihinde ${detectedAction.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
-                            AssistantTone.KISA_NET -> "Seyahat Planla: ${detectedAction.city} ($dateLabel)"
-                            AssistantTone.DETAYLI_UZMAN -> "$dateLabel tarihinde ${detectedAction.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
-                            else -> "Eğer $dateLabel tarihinde ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
+                            AssistantTone.SAMIMI -> "Eğer $dateLabel tarihinde ${action.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
+                            AssistantTone.RESMI -> "$dateLabel tarihinde ${action.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
+                            AssistantTone.KISA_NET -> "Seyahat Planla: ${action.city} ($dateLabel)"
+                            AssistantTone.DETAYLI_UZMAN -> "$dateLabel tarihinde ${action.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
+                            else -> "Eğer $dateLabel tarihinde ${action.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
                         }
                     } else {
                         when (assistantTone) {
-                            AssistantTone.SAMIMI -> "Eğer ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
-                            AssistantTone.RESMI -> "${detectedAction.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
-                            AssistantTone.KISA_NET -> "Seyahat Planla: ${detectedAction.city}"
-                            AssistantTone.DETAYLI_UZMAN -> "${detectedAction.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
-                            else -> "Eğer ${detectedAction.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
+                            AssistantTone.SAMIMI -> "Eğer ${action.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim! 😊"
+                            AssistantTone.RESMI -> "${action.city} şehrine gerçekleştirmeyi planladığınız seyahat için sistemimiz üzerinden bir seyahat planı oluşturabilirsiniz."
+                            AssistantTone.KISA_NET -> "Seyahat Planla: ${action.city}"
+                            AssistantTone.DETAYLI_UZMAN -> "${action.city} bölgesine yapacağınız seyahatin meteorolojik risk analizini içeren kapsamlı bir seyahat planı oluşturmamı ister misiniz?"
+                            else -> "Eğer ${action.city}’e gitmeyi planlıyorsan, senin için harika bir seyahat planı oluşturabilirim."
                         }
                     }
 
                     "$answer\n\n$invitationText"
                 } else answer
 
-                _messages.value = _messages.value + AltikodChatMessage(
+                _messages.update { it + AltikodChatMessage(
                     text = finalAnswer,
                     isUser = false,
                     action = detectedAction
-                )
+                )}
             } catch (e: Exception) {
                 android.util.Log.e("HAVAMANIA_AI", "AI ERROR: ${e.message}")
                 addErrorMessage(truncatedText, "Asistan şu an yoğun, yerel verilere göre yanıt veriyorum.")
@@ -482,34 +557,34 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 } else null
             } else null
 
-            _messages.value = _messages.value + AltikodChatMessage(
+            _messages.update { it + AltikodChatMessage(
                 text = combinedMessage,
                 isUser = false,
                 isFallback = true,
                 retryPrompt = userPrompt,
                 action = detectedAction
-            )
+            )}
         } catch (e: Exception) {
-            _messages.value = _messages.value + AltikodChatMessage(
+            _messages.update { it + AltikodChatMessage(
                 text = "Hava durumuna şu an ulaşılamıyor, lütfen daha sonra tekrar deneyin.",
                 isUser = false,
                 isFallback = true,
                 retryPrompt = userPrompt
-            )
+            )}
         }
     }
 
     fun finishChat(onFinished: (List<AltikodChatMessage>) -> Unit) {
         val currentMessages = _messages.value
-        if (currentMessages.isEmpty()) return
-
-        onFinished(currentMessages)
-        resetChat()
+        if (currentMessages.isNotEmpty()) {
+            onFinished(currentMessages)
+            resetChat()
+        }
     }
 
     fun resetChat() {
         _messages.value = emptyList()
-        sessionId = UUID.randomUUID().toString()
+        sessionId = java.util.UUID.randomUUID().toString()
     }
 }
 
@@ -526,10 +601,11 @@ fun AiChatScreen(
     themeViewModel: ThemeViewModel = viewModel()
 ) {
     val themeColors = HavamaniaTheme.colors
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val config by viewModel.config.collectAsStateWithLifecycle()
-    val currentWeatherData by viewModel.weatherData.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle(emptyList())
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(false)
+    val config by viewModel.config.collectAsStateWithLifecycle(null)
+    val weatherUiState by viewModel.weatherUiState.collectAsStateWithLifecycle()
+    val currentWeatherData by viewModel.weatherData.collectAsStateWithLifecycle(null)
     val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
     val assistantTone by themeViewModel.assistantTone.collectAsStateWithLifecycle()
@@ -579,168 +655,190 @@ fun AiChatScreen(
             ) {
                 HavamaniaTopBar(
                     title = config?.name ?: "HAVAMANIA ASİSTAN",
-                onBack = {
-                    if (messages.isNotEmpty()) {
-                        viewModel.resetChat()
-                    } else {
-                        onBack()
-                    }
-                },
-                // ... rest of the TopBar logic ...
-                actions = {
-                    if (messages.isNotEmpty()) {
-                        Surface(
-                            onClick = { showEndChatDialog = true },
-                            color = themeColors.accent.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f)),
-                            modifier = Modifier.heightIn(min = 40.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                    onBack = {
+                        if (messages.isNotEmpty()) {
+                            viewModel.resetChat()
+                        } else {
+                            onBack()
+                        }
+                    },
+                    actions = {
+                        if (messages.isNotEmpty()) {
+                            Surface(
+                                onClick = { showEndChatDialog = true },
+                                color = themeColors.accent.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.3f)),
+                                modifier = Modifier.heightIn(min = 40.dp)
                             ) {
-                                Icon(
-                                    Icons.Rounded.StopCircle,
-                                    contentDescription = null,
-                                    tint = themeColors.accent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = "Sohbeti Bitir",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 11.sp
-                                    ),
-                                    color = themeColors.accent,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Visible,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    } else {
-                        val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
-                        val sparkleAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.4f, targetValue = 1f,
-                            animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-                            label = "alpha"
-                        )
-                        Icon(
-                            Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            tint = themeColors.accent,
-                            modifier = Modifier.size(24.dp).alpha(sparkleAlpha)
-                        )
-                    }
-                }
-            )
-
-            if (currentWeatherData == null && messages.isEmpty()) {
-                // Weather Loading State
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(color = themeColors.accent)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "Hava verisi yükleniyor...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = themeColors.textPrimary.copy(alpha = 0.7f)
-                    )
-                }
-            } else if (messages.isEmpty()) {
-                // Başlangıç Ekranı (Empty State)
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    Spacer(Modifier.height(12.dp))
-                    WelcomeCard(config?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?", themeColors)
-
-                    if (aboutMe.isNotBlank() || userInterests.isNotEmpty()) {
-                        PersonalizedContextCard(aboutMe, themeColors)
-                    }
-
-                    // 1. ANA HAVA DURUMU KARTI (PREMIUM)
-                    if (currentWeatherData != null) {
-                        AssistantWeatherCard(currentWeatherData!!, themeColors)
-                    }
-
-                    // 2. BUGÜN İÇİN ÖZET (AI ANALİZİ)
-                    if (currentWeatherData != null) {
-                        TodaySummarySection(currentWeatherData!!, themeColors)
-                    }
-
-                    // 3. NELER YAPABİLİRİM? (ÖZELLİKLER)
-                    AssistantSectionLabel("NELER YAPABİLİRİM?")
-                    FeatureCards(
-                        themeColors = themeColors,
-                        onCardClick = { prompt ->
-                            val context = buildPersonalizedContext(aboutMe, userInterests)
-                            viewModel.sendMessage(prompt, systemContext = context)
-                        }
-                    )
-
-                    // 4. HIZLI SORULAR
-                    AssistantSectionLabel("HIZLI SORULAR")
-                    QuickSuggestions(
-                        onSuggestionClick = { prompt ->
-                            val context = buildPersonalizedContext(aboutMe, userInterests)
-                            viewModel.sendMessage(prompt, systemContext = context)
-                        },
-                        themeColors = themeColors
-                    )
-
-                    Spacer(Modifier.height(32.dp))
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(messages, key = { it.id }) { message ->
-                        ChatBubble(
-                            message = message,
-                            themeColors = themeColors,
-                            onRetry = { prompt ->
-                                viewModel.sendMessage(prompt, isRetry = true)
-                            },
-                            onActionClick = { action ->
-                                if (action.type == AssistantActionType.CREATE_TRAVEL_PLAN) {
-                                    onNavigateToTravelCreate(action.city ?: "", action.startDate)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.StopCircle,
+                                        contentDescription = null,
+                                        tint = themeColors.accent,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Sohbeti Bitir",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 11.sp
+                                        ),
+                                        color = themeColors.accent,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Visible,
+                                        softWrap = false
+                                    )
                                 }
                             }
-                        )
+                        } else {
+                            val infiniteTransition = rememberInfiniteTransition(label = "sparkle")
+                            val sparkleAlpha by infiniteTransition.animateFloat(
+                                initialValue = 0.4f, targetValue = 1f,
+                                animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+                                label = "alpha"
+                            )
+                            Icon(
+                                Icons.Rounded.AutoAwesome,
+                                contentDescription = null,
+                                tint = themeColors.accent,
+                                modifier = Modifier.size(24.dp).alpha(sparkleAlpha)
+                            )
+                        }
                     }
-                    if (isLoading) {
-                        item {
-                            TypingIndicator(themeColors)
+                )
+
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        weatherUiState is WeatherUiState.Loading && messages.isEmpty() -> {
+                            // Weather Loading State - Only for AI context
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = themeColors.accent)
+                            }
+                        }
+                        weatherUiState is WeatherUiState.NoCity && messages.isEmpty() -> {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(32.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(Icons.Rounded.LocationOff, null, tint = themeColors.accent.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
+                                Spacer(Modifier.height(24.dp))
+                                Text(
+                                    "Önce bir şehir ekleyin",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                                    color = themeColors.textPrimary,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    "Asistanın size yardımcı olabilmesi için bir varsayılan konumunuz olmalı.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = themeColors.textSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        messages.isEmpty() -> {
+                            // Başlangıç Ekranı (Empty State)
+                            val currentConfig = config
+                            Column(
+                                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.Top
+                            ) {
+                                Spacer(Modifier.height(12.dp))
+                                WelcomeCard(currentConfig?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?", themeColors)
+
+                                if (aboutMe.isNotBlank() || userInterests.isNotEmpty()) {
+                                    PersonalizedContextCard(aboutMe, themeColors)
+                                }
+
+                                // 1. ANA HAVA DURUMU KARTI (PREMIUM)
+                                val data = currentWeatherData
+                                if (data != null) {
+                                    AssistantWeatherCard(data, themeColors)
+
+                                    // 2. BUGÜN İÇİN ÖZET (AI ANALİZİ)
+                                    TodaySummarySection(data, themeColors)
+                                }
+
+                                // 3. NELER YAPABİLİRİM? (ÖZELLİKLER)
+                                AssistantSectionLabel("NELER YAPABİLİRİM?")
+                                FeatureCards(
+                                    themeColors = themeColors,
+                                    onCardClick = { prompt ->
+                                        val context = buildPersonalizedContext(aboutMe, userInterests)
+                                        viewModel.sendMessage(prompt, systemContext = context)
+                                    }
+                                )
+
+                                // 4. HIZLI SORULAR
+                                AssistantSectionLabel("HIZLI SORULAR")
+                                QuickSuggestions(
+                                    onSuggestionClick = { prompt ->
+                                        val context = buildPersonalizedContext(aboutMe, userInterests)
+                                        viewModel.sendMessage(prompt, systemContext = context)
+                                    },
+                                    themeColors = themeColors
+                                )
+
+                                Spacer(Modifier.height(32.dp))
+                            }
+                        }
+                        else -> {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(messages, key = { it.id }) { message ->
+                                    ChatBubble(
+                                        message = message,
+                                        themeColors = themeColors,
+                                        onRetry = { prompt ->
+                                            viewModel.sendMessage(prompt, isRetry = true)
+                                        },
+                                        onActionClick = { action ->
+                                            if (action.type == AssistantActionType.CREATE_TRAVEL_PLAN) {
+                                                onNavigateToTravelCreate(action.city ?: "", action.startDate)
+                                            }
+                                        }
+                                    )
+                                }
+                                if (isLoading) {
+                                    item {
+                                        TypingIndicator(themeColors)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            ChatInput(
-                onSend = { prompt ->
-                    val context = if (messages.isEmpty()) {
-                        buildPersonalizedContext(aboutMe, userInterests)
-                    } else null
-                    viewModel.sendMessage(prompt, systemContext = context)
-                },
-                isLoading = isLoading,
-                themeColors = themeColors
-            )
+                ChatInput(
+                    onSend = { prompt ->
+                        val context = if (messages.isEmpty()) {
+                            buildPersonalizedContext(aboutMe, userInterests)
+                        } else null
+                        viewModel.sendMessage(prompt, systemContext = context)
+                    },
+                    isLoading = isLoading,
+                    themeColors = themeColors
+                )
+            }
         }
     }
-}
 
     if (showEndChatDialog) {
+        val currentMessages = messages
         AlertDialog(
             onDismissRequest = { showEndChatDialog = false },
             containerColor = themeColors.surface,
@@ -1276,9 +1374,10 @@ fun ChatBubble(
                 )
 
                 if (message.action != null) {
+                    val action = message.action
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { onActionClick(message.action) },
+                        onClick = { onActionClick(action) },
                         colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
@@ -1286,7 +1385,7 @@ fun ChatBubble(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Route, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(message.action.label, fontWeight = FontWeight.Bold)
+                            Text(action.label, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

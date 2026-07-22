@@ -6,19 +6,23 @@ import {MainStack} from './MainStack';
 import {useAuthStore} from '../store/authStore';
 import {useLanguageStore} from '../store/languageStore';
 import {TravelInspiredSplash} from '../components/TravelInspiredSplash';
+import {onAuthStateChanged} from '../services/firebaseAuth';
 
 export function RootNavigator(): React.JSX.Element {
-  const {isAuthenticated, initializing, initSession} = useAuthStore();
+  const {isAuthenticated, isGuest, initializing, setUser, loadLocalProfile} = useAuthStore();
   const initLanguage = useLanguageStore(s => s.init);
   const [showSplash, setShowSplash] = React.useState(true);
 
   React.useEffect(() => {
-    // Tüm init işlemlerini birleştir
+    // Firebase Auth aboneliği
+    const unsubscribe = onAuthStateChanged(user => {
+      setUser(user);
+    });
+
     const initApp = async () => {
       try {
         await initLanguage();
-        // initSession zaten kendi içinde catch barındırıyor ama garantiye alalım
-        await initSession();
+        await loadLocalProfile();
       } catch (err) {
         console.error('[CRITICAL] App initialization failed:', err);
       }
@@ -31,20 +35,23 @@ export function RootNavigator(): React.JSX.Element {
       setShowSplash(false);
     }, 5000);
 
-    return () => clearTimeout(safetyTimer);
-  }, [initSession, initLanguage]);
+    return () => {
+      unsubscribe();
+      clearTimeout(safetyTimer);
+    };
+  }, [setUser, initLanguage]);
 
-  // Splash ekranı süresini yönet
+  // Auth durumu ve init bittiğinde splash'i kapat
   React.useEffect(() => {
     if (!initializing) {
       const timer = setTimeout(() => {
         setShowSplash(false);
-      }, 2000);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [initializing]);
 
-  if (showSplash) {
+  if (showSplash || (initializing && !isGuest)) {
     return (
       <>
         <StatusBar
@@ -57,8 +64,5 @@ export function RootNavigator(): React.JSX.Element {
     );
   }
 
-  // Burada isAuthenticated kontrolü var. Eğer kullanıcı login değilse AuthNavigator (Login) açılır.
-  // Kullanıcı "doğrudan Hava ekranı" diyorsa, login olmasa bile Guest olarak girmesini istiyor olabilir.
-  // Ancak mevcut yapıyı bozmadan en güvenli geçişi sağlıyoruz.
-  return isAuthenticated ? <MainStack /> : <AuthNavigator />;
+  return isAuthenticated || isGuest ? <MainStack /> : <AuthNavigator />;
 }

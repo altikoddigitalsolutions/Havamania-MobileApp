@@ -20,20 +20,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
 
+import androidx.compose.material.icons.rounded.LocationOff
+import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.SignalWifiOff
+import androidx.compose.material.icons.rounded.ErrorOutline
+
 /**
  * Modern ve Premium Hata Durumu Ekranı
- * İnternet yok veya veri çekilemediğinde kullanılır.
  */
 @Composable
-fun WeatherErrorState(
-    title: String = "Bağlantı Hatası",
-    description: String = "Hava durumu verilerine şu an ulaşılamıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.",
-    icon: ImageVector = Icons.Rounded.WifiOff,
+fun HavamaniaErrorState(
+    title: String,
+    description: String,
+    icon: ImageVector = Icons.Rounded.ErrorOutline,
     onRetry: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val themeStyles = HavamaniaTheme.styles
-    val errorColor = Color(0xFFEF4444)
+    val errorColor = themeColors.accent // Use theme accent or a soft red
 
     Box(
         modifier = Modifier
@@ -45,7 +48,6 @@ fun WeatherErrorState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // İkon Bölümü (Arka plan parıltılı)
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
@@ -69,7 +71,6 @@ fun WeatherErrorState(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Metin İçeriği
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -87,13 +88,12 @@ fun WeatherErrorState(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     lineHeight = 22.sp
                 ),
-                color = themeColors.textSecondary.copy(alpha = 0.5f),
+                color = themeColors.textSecondary.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Tekrar Dene Butonu (Premium Tasarım)
             HavamaniaPrimaryButton(
                 text = "TEKRAR DENE",
                 onClick = onRetry,
@@ -104,10 +104,45 @@ fun WeatherErrorState(
     }
 }
 
+// Predefined error states
+@Composable
+fun OfflineErrorState(onRetry: () -> Unit) {
+    HavamaniaErrorState(
+        title = "İnternet Yok",
+        description = "Hava durumu verilerine şu an ulaşılamıyor. Lütfen internet bağlantınızı kontrol edin.",
+        icon = Icons.Rounded.SignalWifiOff,
+        onRetry = onRetry
+    )
+}
+
+@Composable
+fun LocationPermissionErrorState(onRetry: () -> Unit) {
+    HavamaniaErrorState(
+        title = "Konum İzni Gerekli",
+        description = "Havamania, bulunduğun şehre göre anlık hava analizi sunmak için konumunu kullanır.",
+        icon = Icons.Rounded.LocationOff,
+        onRetry = onRetry
+    )
+}
+
+@Composable
+fun CityNotFoundErrorState(onRetry: () -> Unit) {
+    HavamaniaErrorState(
+        title = "Şehir Bulunamadı",
+        description = "Aradığın şehre ait meteorolojik verilere şu an ulaşamıyoruz. Lütfen yazımı kontrol et.",
+        icon = Icons.Rounded.SearchOff,
+        onRetry = onRetry
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewWeatherErrorState() {
     HavamaniaTheme {
-        WeatherErrorState(onRetry = {})
+        HavamaniaErrorState(
+            title = "Hata Oluştu",
+            description = "Beklenmedik bir sorun yaşandı.",
+            onRetry = {}
+        )
     }
 }

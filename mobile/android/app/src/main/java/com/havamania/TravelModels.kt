@@ -10,7 +10,7 @@ import java.util.*
 /**
  * Modern Travel Planner Models
  */
-const val TRIP_ANALYSIS_WINDOW_DAYS = 10
+const val TRIP_ANALYSIS_WINDOW_DAYS = 15
 
 enum class TripType(val label: String, val icon: ImageVector) {
     BUSINESS("💼 İş", Icons.Rounded.BusinessCenter),
@@ -109,6 +109,7 @@ data class TravelWeatherAnalysis(
 
 data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
+    val userId: String = "legacy",
     val city: String,
     val latitude: Double,
     val longitude: Double,

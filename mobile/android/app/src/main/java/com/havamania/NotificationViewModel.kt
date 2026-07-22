@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import com.google.firebase.auth.FirebaseAuth
 
 data class NotificationUiState(
     val notifications: List<NotificationItem> = emptyList(),
@@ -23,32 +24,51 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val TAG = "NotificationVM"
     private val repository: NotificationRepository
     private var didSeedInThisSession = false
+    private val auth = FirebaseAuth.getInstance()
+    private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
     private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
+
+    private var collectJob: kotlinx.coroutines.Job? = null
 
     init {
         val database = NotificationDatabase.getDatabase(application)
         repository = NotificationRepository(database.notificationDao())
 
         viewModelScope.launch {
+            auth.addAuthStateListener { firebaseAuth ->
+                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+                Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+                _uiState.value = NotificationUiState(isLoading = true)
+                didSeedInThisSession = false
+                startCollectingNotifications(newUid)
+            }
+        }
+    }
+
+    private fun startCollectingNotifications(uid: String) {
+        collectJob?.cancel()
+        collectJob = viewModelScope.launch {
             try {
-                repository.allNotifications
+                repository.getAllNotificationsFlow(uid)
                     .catch { e ->
-                        Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting defaults.", e)
-                        emit(DefaultNotifications.create())
+                        Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting empty for $uid.", e)
+                        emit(emptyList())
                     }
                     .collect { list ->
-                        Log.d("Notifications", "collected size=${list.size}")
+                        Log.d("Notifications", "collected size=${list.size} for $uid")
 
-                        if (list.isEmpty()) {
-                            Log.d("Notifications", "List is truly empty. Forcing DefaultNotifications UI fallback.")
-                            updateStateWithList(DefaultNotifications.create())
+                        // If user is legacy, we might want to seed.
+                        // If user is authenticated, we start clean (size 0).
+                        if (list.isEmpty() && uid == "legacy") {
+                            Log.d("Notifications", "Legacy user list is empty. Forcing DefaultNotifications.")
+                            updateStateWithList(DefaultNotifications.create(uid))
 
                             if (!didSeedInThisSession) {
                                 didSeedInThisSession = true
                                 withContext(Dispatchers.IO) {
-                                    repository.seedInitialDataIfNeeded()
+                                    repository.seedInitialDataIfNeeded(getApplication(), uid)
                                 }
                             }
                         } else {
@@ -56,15 +76,15 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         }
                     }
             } catch (e: Exception) {
-                Log.e(TAG, "Fatal error in collect chain. Forcing defaults.", e)
-                updateStateWithList(DefaultNotifications.create())
+                Log.e(TAG, "Fatal error in collect chain for $uid", e)
+                updateStateWithList(emptyList())
             }
         }
     }
 
     fun ensureSeeded() {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.seedInitialDataIfNeeded()
+            repository.seedInitialDataIfNeeded(getApplication(), currentUid)
         }
     }
 
@@ -179,16 +199,28 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun markAllAsRead() {
         viewModelScope.launch {
-            repository.markAllAsRead()
+            repository.markAllAsRead(currentUid)
         }
     }
 
     fun deleteAllNotifications() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.deleteAll()
+                val uid = currentUid
+                repository.deleteAll(uid)
+                com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(getApplication(), true, uid)
             } catch (e: Exception) {
                 Log.e("NotificationVM", "Error in deleteAllNotifications", e)
+            }
+        }
+    }
+
+    fun deleteTravelNotifications() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.deleteByCategory(currentUid, NotificationCategory.TRAVEL)
+            } catch (e: Exception) {
+                Log.e("NotificationVM", "Error in deleteTravelNotifications", e)
             }
         }
     }
@@ -196,7 +228,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     fun refreshDemoNotifications() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.refreshDemoNotifications()
+                repository.refreshDemoNotifications(currentUid)
             } catch (e: Exception) {
                 Log.e("NotificationVM", "Error in refreshDemoNotifications", e)
             }

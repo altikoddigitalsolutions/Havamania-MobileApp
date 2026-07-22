@@ -30,7 +30,6 @@ import {
 import {formatPrecipitationProbability} from '../utils/weatherUtils';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
-import {getProfile} from '../services/profileApi';
 import {MainStackParamList} from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Forecast'>;
@@ -47,13 +46,8 @@ export function ForecastScreen({route, navigation}: Props): React.JSX.Element {
   const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  const {isGuest} = useAuthStore();
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: getProfile,
-    enabled: !isGuest,
-  });
-  const tempUnit = profileQuery.data?.temperature_unit ?? 'C';
+  const {userProfile} = useAuthStore();
+  const tempUnit = userProfile?.temperatureUnit ?? 'C';
 
   const dailyQuery = useQuery({
     queryKey: ['weather', 'daily', lat, lon, 10, tempUnit],

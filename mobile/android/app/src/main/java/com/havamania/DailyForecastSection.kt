@@ -108,9 +108,10 @@ fun DailyForecastPanel(
     onDayClick: (DailyForecast) -> Unit
 ) {
     var expandedForecast by remember { mutableStateOf(false) }
-    val visibleForecast = if (expandedForecast) forecasts.take(10) else forecasts.take(7)
+    val visibleForecast = if (expandedForecast) forecasts else forecasts.take(7)
 
     val themeColors = HavamaniaTheme.colors
+    // ...
     val themeStyles = HavamaniaTheme.styles
     Box(
         modifier = Modifier
@@ -152,7 +153,7 @@ fun DailyForecastPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "10 GÜNLÜK TAHMİN",
+                    text = "${forecasts.size} GÜNLÜK TAHMİN",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
@@ -234,7 +235,7 @@ fun ForecastExpandButton(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = if (expanded) "7 güne düşür" else "10 günü göster",
+                text = if (expanded) "7 güne düşür" else "Tüm günleri göster",
                 style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.Bold,
                     color = themeColors.textPrimary.copy(alpha = 0.8f),

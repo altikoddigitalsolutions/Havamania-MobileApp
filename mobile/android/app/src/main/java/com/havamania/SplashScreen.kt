@@ -33,7 +33,7 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
 
     // Animasyon State'leri
     val contentAlpha = remember { Animatable(0f) }
-    val contentScale = remember { Animatable(0.98f) }
+    val contentScale = remember { Animatable(1.0f) } // Ölçeği 1'den başlat (Sistem splash ile uyum)
     val progress = remember { Animatable(0f) }
 
     // Kaynak Kontrolleri
@@ -43,10 +43,8 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
 
     LaunchedEffect(Unit) {
         launch {
-            contentAlpha.animateTo(1f, tween(1500, easing = EaseOutCubic))
-        }
-        launch {
-            contentScale.animateTo(1f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow))
+            // İçerik (yazılar vs) yavaşça gelsin
+            contentAlpha.animateTo(1f, tween(1000, easing = EaseOutCubic))
         }
 
         progress.animateTo(1f, tween(2000, easing = LinearOutSlowInEasing))
@@ -57,15 +55,16 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         // --- 1. SİNEMATİK ARKA PLAN ---
+        // Sistem splash ile aynı renk arka plan (Süreklilik için)
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A)))
+
         if (bgResId != 0) {
             Image(
                 painter = painterResource(id = bgResId),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().alpha(contentAlpha.value),
                 contentScale = ContentScale.Crop
             )
-        } else {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A)))
         }
 
         // --- 2. PREMIUM OVERLAY (Okunabilirlik ve Derinlik) ---
@@ -82,52 +81,58 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
         )
 
         // --- 3. ANA MERKEZ BLOĞU ---
+        // Logo sistem splash ile tam aynı konumda (Tam Merkez)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.Center)
-                .offset(y = (-40).dp)
-                .scale(contentScale.value)
-                .alpha(contentAlpha.value),
+                .align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // LOGO (Border ve Debug Border Kaldırıldı)
+            // LOGO (Sistem splash ile aynı ölçek ve konum)
             if (logoResId != 0) {
                 Image(
                     painter = painterResource(id = logoResId),
                     contentDescription = "Havamania Logo",
-                    modifier = Modifier.size(110.dp),
+                    modifier = Modifier.size(160.dp), // Sistem splash ikon boyutuyla eşleştirme
                     contentScale = ContentScale.Fit
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // Metinler ve Slogan (Bunlar animasyonlu gelebilir)
+            Column(
+                modifier = Modifier
+                    .alpha(contentAlpha.value)
+                    .scale(contentScale.value),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(20.dp))
 
-            // MARKA ADI
-            Text(
-                text = "Havamania",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    fontSize = 32.sp
-                ),
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
+                // MARKA ADI
+                Text(
+                    text = "Havamania",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        fontSize = 32.sp
+                    ),
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // SLOGAN
-            Text(
-                text = "Hava durumunu akıllıca takip et,\nseyahatlerini akıllıca planla.",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight.Normal
-                ),
-                color = Color.White.copy(alpha = 0.85f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 40.dp)
-            )
+                // SLOGAN
+                Text(
+                    text = "Hava durumunu akıllıca takip et,\nseyahatlerini akıllıca planla.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    color = Color.White.copy(alpha = 0.85f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 40.dp)
+                )
+            }
         }
 
         // --- 4. ALT KISIM: ZARİF LOADING ALANI ---

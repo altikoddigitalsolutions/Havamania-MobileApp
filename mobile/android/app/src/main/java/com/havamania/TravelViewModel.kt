@@ -11,18 +11,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.google.firebase.auth.FirebaseAuth
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.UUID
 
 class TravelViewModel(application: Application) : AndroidViewModel(application) {
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
     private val repository = WeatherRepository.getInstance(application)
     private val apiService = NetworkModule.apiService
+    private val auth = FirebaseAuth.getInstance()
+    private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
     private val _plans = MutableStateFlow<List<TravelPlan>>(emptyList())
     val plans: StateFlow<List<TravelPlan>> = _plans.asStateFlow()
@@ -38,23 +42,47 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val FLOW_TAG = "TripCreateFlow"
 
     private val CITY_FALLBACKS = mapOf(
-        "ankara" to Pair(39.9334, 32.8597),
         "istanbul" to Pair(41.0082, 28.9784),
+        "ankara" to Pair(39.9334, 32.8597),
         "izmir" to Pair(38.4237, 27.1428),
-        "balikesir" to Pair(39.6533, 27.8903),
         "antalya" to Pair(36.8969, 30.7133),
+        "balikesir" to Pair(39.6484, 27.8826),
         "trabzon" to Pair(41.0027, 39.7168),
-        "kars" to Pair(40.6013, 43.0975),
-        "edirne" to Pair(41.6771, 26.5557),
-        "batman" to Pair(37.8812, 41.1351),
-        "cankiri" to Pair(40.6013, 33.6134),
-        "mardin" to Pair(37.3212, 40.7245),
+        "mardin" to Pair(37.3129, 40.7350),
         "gaziantep" to Pair(37.0662, 37.3833),
-        "ordu" to Pair(40.9839, 37.8764)
+        "batman" to Pair(37.8812, 41.1322),
+        "bali" to Pair(-8.4095, 115.1889)
     )
 
     init {
+        viewModelScope.launch {
+            auth.addAuthStateListener { firebaseAuth ->
+                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+                Log.d(TAG, "Auth state changed. New UID: $newUid")
+                // Reset state immediately
+                _plans.value = emptyList()
+                _isLoading.value = true
+
+                // Restart data flow if needed, but since getAllTravelPlansFlow
+                // is likely collected in a child coroutine, I should manage it.
+                loadPlansForUid(newUid)
+            }
+        }
         seedInitialDataIfNeeded()
+    }
+
+    private var plansJob: kotlinx.coroutines.Job? = null
+
+    private fun loadPlansForUid(uid: String) {
+        plansJob?.cancel()
+        plansJob = viewModelScope.launch {
+            dao.getAllTravelPlansFlow(uid).collect { entities ->
+                val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
+                _plans.value = domainPlans
+                checkAndTriggerAutoAnalysis(domainPlans)
+                _isLoading.value = false
+            }
+        }
     }
 
     private fun normalizeCityName(name: String): String {
@@ -70,64 +98,63 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     fun seedInitialDataIfNeeded(force: Boolean = false) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // Yeni kullanıcılar tamamen boş başlamalı.
+            if (currentUid != "legacy" && !force) {
+                Log.d(TAG, "Logged in user: $currentUid starting with empty list.")
+                loadPlans()
+                return@launch
+            }
+
             _isLoading.value = true
-            val entities = if (force) emptyList() else dao.getAllTravelPlans()
-            if (entities.isEmpty()) {
-                if (force) dao.clearAllTravelPlans()
-                val today = LocalDate.now()
-                val currentYear = today.year
+            val hasSeeded = ThemeManager.getHasSeededTrips(getApplication(), currentUid).first()
+            val entities = if (force) emptyList() else dao.getAllTravelPlans(currentUid)
 
-                val seedPlans = listOf(
-                    TravelPlan(
-                        city = "Batman",
-                        latitude = 37.8812,
-                        longitude = 41.1322,
-                        tripType = TripType.EVENT,
-                        startDate = LocalDate.of(currentYear, 5, 15),
-                        endDate = LocalDate.of(currentYear, 5, 16),
-                        isDemo = true
-                    ),
-                    TravelPlan(
-                        city = "Bali",
-                        latitude = -8.4095,
-                        longitude = 115.1889,
-                        tripType = TripType.WEEKEND,
-                        startDate = LocalDate.of(currentYear, 5, 28),
-                        endDate = LocalDate.of(currentYear, 5, 30),
-                        isDemo = true
-                    ),
-                    TravelPlan(
-                        city = "Trabzon",
-                        latitude = 41.0027,
-                        longitude = 39.7168,
-                        tripType = TripType.SHOPPING,
-                        startDate = LocalDate.of(currentYear, 5, 18),
-                        endDate = LocalDate.of(currentYear, 5, 21),
-                        isDemo = true
-                    ),
-                    TravelPlan(
-                        city = "Balıkesir",
-                        latitude = 39.6533,
-                        longitude = 27.8903,
-                        tripType = TripType.GASTRONOMY,
-                        startDate = LocalDate.of(currentYear, 6, 10),
-                        endDate = LocalDate.of(currentYear, 6, 11),
-                        isDemo = true
-                    ),
-                    TravelPlan(
-                        city = "Mardin",
-                        latitude = 37.3212,
-                        longitude = 40.7245,
-                        tripType = TripType.CULTURE,
-                        startDate = today.plusDays(7),
-                        endDate = today.plusDays(9),
-                        isDemo = true
+            // Sadece giriş yapmamış (legacy) kullanıcılar için ilk seferde örnek veri ekle
+            if (entities.isEmpty() && (!hasSeeded || force)) {
+                if (force) dao.clearAllTravelPlans(currentUid)
+
+                if (currentUid == "legacy") {
+                    val today = LocalDate.now()
+                    val currentYear = today.year
+
+                    val seedPlans = listOf(
+                        TravelPlan(
+                            userId = "legacy",
+                            city = "Batman",
+                            latitude = 37.8812,
+                            longitude = 41.1322,
+                            tripType = TripType.EVENT,
+                            startDate = LocalDate.of(currentYear, 5, 15),
+                            endDate = LocalDate.of(currentYear, 5, 16),
+                            isDemo = true
+                        ),
+                        TravelPlan(
+                            userId = "legacy",
+                            city = "Bali",
+                            latitude = -8.4095,
+                            longitude = 115.1889,
+                            tripType = TripType.WEEKEND,
+                            startDate = LocalDate.of(currentYear, 5, 28),
+                            endDate = LocalDate.of(currentYear, 5, 30),
+                            isDemo = true
+                        ),
+                        TravelPlan(
+                            userId = "legacy",
+                            city = "Trabzon",
+                            latitude = 41.0027,
+                            longitude = 39.7168,
+                            tripType = TripType.SHOPPING,
+                            startDate = LocalDate.of(currentYear, 5, 18),
+                            endDate = LocalDate.of(currentYear, 5, 21),
+                            isDemo = true
+                        )
                     )
-                )
 
-                seedPlans.forEach { plan ->
-                    dao.insertTravelPlan(plan.toEntity())
+                    seedPlans.forEach { plan ->
+                        dao.insertTravelPlan(plan.toEntity())
+                    }
                 }
+                ThemeManager.saveHasSeededTrips(getApplication(), true, currentUid)
             }
             loadPlans()
         }
@@ -136,8 +163,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     fun loadPlans() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _isLoading.value = true
-            val entities = dao.getAllTravelPlans()
-            Log.d(TAG, "Source: Room DB, Loaded ${entities.size} entities")
+            val entities = dao.getAllTravelPlans(currentUid)
+            Log.d(TAG, "Source: Room DB, Loaded ${entities.size} entities for $currentUid")
 
             val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
             _plans.value = domainPlans
@@ -205,7 +232,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
         val isWithinWindow = daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS
 
-        val tone = ThemeManager.getAssistantTone(getApplication()).first()
+        val tone = ThemeManager.getAssistantTone(getApplication(), currentUid).first()
 
         Log.i(TAG, "performAnalysis TripId=${plan.id} City=${plan.city} DaysUntil=$daysUntil Tone=$tone")
 
@@ -401,8 +428,20 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
+        // Get Personalization
+        val interests = ThemeManager.getUserInterests(getApplication(), currentUid).first()
+        val personalizationEnabled = ThemeManager.getPersonalizationEnabled(getApplication(), currentUid).first()
+        val personalization = PersonalizationProfile(
+            uid = currentUid,
+            selectedInterests = interests.toList(),
+            personalizationEnabled = personalizationEnabled
+        )
+
         // FINAL STEP: Always generate an analysis if within window, even if snapshot is null (Offline Fallback)
-        val aiResult = TravelAiHelper.generateTravelAiSuggestion(plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot, daysUntil, tone = tone)
+        val aiResult = TravelAiHelper.generateTravelAiSuggestion(
+            plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot,
+            daysUntil, tone = tone, personalization = personalization
+        )
 
         val score = snapshot?.travelScore ?: 75
         val avgTemp = if (snapshot != null) (((snapshot.minTemp ?: 0.0) + (snapshot.maxTemp ?: 0.0)) / 2.0) else 0.0
@@ -556,11 +595,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
             val isUpcoming = !plan.startDate.isBefore(today)
 
-            Log.i(FLOW_TAG, "TripCreated=true TripId=${plan.id} City=${plan.city} DaysUntil=$daysUntil")
+            val planWithUid = if (plan.userId == "legacy" && currentUid != "legacy") plan.copy(userId = currentUid) else plan
 
-            dao.insertTravelPlan(plan.toEntity())
+            Log.i(FLOW_TAG, "TripCreated=true TripId=${planWithUid.id} City=${planWithUid.city} DaysUntil=$daysUntil for $currentUid")
 
-            val entities = dao.getAllTravelPlans()
+            dao.insertTravelPlan(planWithUid.toEntity())
+
+            val entities = dao.getAllTravelPlans(currentUid)
             val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
 
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -569,7 +610,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
                 if (isUpcoming && daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS) {
                     Log.i(FLOW_TAG, "AutoAnalysisStarted=true")
-                    analyzeTravelWeather(plan)
+                    analyzeTravelWeather(planWithUid)
                 }
             }
         }
@@ -583,8 +624,11 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun clearAllPlans() {
-        viewModelScope.launch {
-            dao.clearAllTravelPlans()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val uid = currentUid
+            dao.clearAllTravelPlans(uid)
+            dao.clearAllWeatherCache() // Seyahatlerle ilgili hava durumu önbelleğini de temizle
+            ThemeManager.saveHasSeededTrips(getApplication(), true, uid)
             _plans.value = emptyList()
         }
     }
@@ -626,8 +670,30 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun migrateLegacyDataToUser() {
+        if (currentUid == "legacy") return
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val legacyPlans = dao.getAllTravelPlans("legacy")
+            if (legacyPlans.isNotEmpty()) {
+                legacyPlans.forEach { entity ->
+                    dao.insertTravelPlan(entity.copy(id = UUID.randomUUID().toString(), userId = currentUid))
+                }
+            }
+            ThemeManager.saveMigrationChoiceMade(getApplication(), currentUid, true)
+            loadPlans()
+        }
+    }
+
+    fun declineMigration() {
+        if (currentUid == "legacy") return
+        viewModelScope.launch {
+            ThemeManager.saveMigrationChoiceMade(getApplication(), currentUid, true)
+        }
+    }
+
     private fun TravelPlanEntity.toDomain() = TravelPlan(
         id = id,
+        userId = userId,
         city = city,
         latitude = latitude,
         longitude = longitude,
@@ -653,6 +719,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
         id = id,
+        userId = userId,
         city = city,
         latitude = latitude,
         longitude = longitude,

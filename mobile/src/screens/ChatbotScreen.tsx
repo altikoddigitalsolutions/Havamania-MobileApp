@@ -21,7 +21,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 
 import {askChatbot} from '../services/chatbotApi';
 import {getCurrentWeather} from '../services/weatherApi';
-import {getProfile} from '../services/profileApi';
 import {Spacing, Radius, FontSize, useColors, getWeatherEmoji, getWeatherLabel} from '../theme';
 import {useThemeStore} from '../store/themeStore';
 import {useAuthStore} from '../store/authStore';
@@ -70,18 +69,12 @@ export function ChatbotScreen(): React.JSX.Element {
   const navigation = useNavigation();
   const C = useColors();
   const {theme} = useThemeStore();
-  const {isGuest, user} = useAuthStore();
+  const {isGuest, user, userProfile} = useAuthStore();
   const flatRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-
-  const profileQuery = useQuery({
-    queryKey: ['profile'],
-    queryFn: getProfile,
-    enabled: !isGuest,
-  });
 
   const weatherQuery = useQuery({
     queryKey: ['weather', 'current', DEFAULT_LAT, DEFAULT_LON],
@@ -91,10 +84,10 @@ export function ChatbotScreen(): React.JSX.Element {
 
   const askMutation = useMutation({
     mutationFn: (question: string) => {
-      const tone = profileQuery.data?.assistant_tone || 'DENGELI';
+      const tone = userProfile?.assistantTone || 'DENGELI';
       if (isGuest) {
         return new Promise((resolve) => {
-            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data, profileQuery.data, tone)), 1000);
+            setTimeout(() => resolve(buildLocalAnswer(question, weatherQuery.data, userProfile, tone)), 1000);
         });
       }
       return askChatbot(question, tone);
@@ -183,7 +176,7 @@ export function ChatbotScreen(): React.JSX.Element {
 
         {messages.length === 0 ? (
           <WelcomeView
-            userName={user?.name || 'Gezgin'}
+            userName={userProfile?.name || (isGuest ? 'Misafir' : 'Gezgin')}
             onAction={send}
             onSuggestion={send}
             C={C}
@@ -345,8 +338,8 @@ function buildLocalAnswer(question: string, weather: any, profile: any, tone: st
   const wind = weather.wind_speed || 0;
   const uv = weather.uv_index || 0;
 
-  const interests = profile?.interest?.toLowerCase() || "";
-  const health = profile?.health_sensitivities?.toLowerCase() || "";
+  const interests = profile?.interests?.join(', ').toLowerCase() || "";
+  const health = profile?.bio?.toLowerCase() || ""; // Bio'yu hassasiyetler için geçici kullanıyoruz
 
   if (tone === 'KISA_NET') {
     return { answer: `Hava ${desc}, ${temp}°C. Yağış ihtimali %${precip}. Rüzgar ${wind} km/s.` };

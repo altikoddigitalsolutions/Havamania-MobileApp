@@ -1,5 +1,10 @@
 <resources>
     <string name="app_name">Havamania</string>
+    <string name="location_rationale_title">Konum İzni Gerekli</string>
+    <string name="location_rationale_desc">Havamania, bulunduğun şehre göre anlık hava analizi ve kişisel öneriler sunmak için konumunu kullanır. Bu bilgi sadece sana özel öneriler üretmek için kullanılır.</string>
+    <string name="notification_rationale_title">Bildirim İzni Gerekli</string>
+    <string name="notification_rationale_desc">Yağış, UV ve seyahat analizlerindeki önemli değişiklikleri zamanında bildirebilmemiz için bildirim iznine ihtiyacımız var.</string>
+
     <string name="notification_mark_read">Okundu Yap</string>
     <string name="notification_mark_unread">Okunmadı Yap</string>
     <string name="notification_delete">Sil</string>

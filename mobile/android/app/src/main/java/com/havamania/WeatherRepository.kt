@@ -43,6 +43,10 @@ class WeatherRepository(
         }
     }
 
+    fun clearCurrentWeather() {
+        _currentWeatherState.value = null
+    }
+
     /**
      * Şehir arama fonksiyonu
      */
@@ -72,29 +76,33 @@ class WeatherRepository(
 
         // 1. Cache'den oku
         val cachedEntity = weatherDao.getCachedWeather(cacheKey)
-        var isCacheValid = false
+        var isCacheStrictlyValid = false
 
         if (cachedEntity != null) {
             try {
                 val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
-                val isRecent = (System.currentTimeMillis() - cachedEntity.timestamp) < cacheTimeoutMillis
+                val age = System.currentTimeMillis() - cachedEntity.timestamp
+                val isRecent = age < cacheTimeoutMillis
 
-                // Eğer kritik veriler null değilse cache'i dön
-                if (cachedData.humidity != null && cachedData.pressure != null && cachedData.windSpeed != null) {
+                // Eğer kritik veriler null değilse ve cache aşırı eski değilse (örn 1 saat)
+                if (cachedData.humidity != null && cachedData.pressure != null) {
                     emit(cachedData)
                     hasEmitted = true
+
                     if (isRecent && !forceRefresh) {
-                        isCacheValid = true
+                        isCacheStrictlyValid = true
+                        android.util.Log.d("WeatherRepo", "Using valid cache for $cacheKey (Age: ${age/1000}s)")
                     }
                 }
             } catch (e: Exception) {
-                // Cache bozuksa görmezden gel
+                android.util.Log.e("WeatherRepo", "Cache decode failed", e)
             }
         }
 
-        // 2. Network'ten çek (Sadece forceRefresh true ise veya cache eskiyse/yoksa)
-        if (!isCacheValid || forceRefresh) {
+        // 2. Network'ten çek (Sadece forceRefresh true ise veya cache geçersizse)
+        if (!isCacheStrictlyValid || forceRefresh) {
             try {
+                android.util.Log.i("WeatherRepo", "Fetching from Network for $cacheKey (Force: $forceRefresh)")
                 val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover,uv_index"
                 val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
 
@@ -114,6 +122,7 @@ class WeatherRepository(
                 emit(domainData)
                 hasEmitted = true
             } catch (e: Exception) {
+                android.util.Log.e("WeatherRepo", "Network fetch failed", e)
                 // Eğer hiçbir veri dönemediysek (ne cache ne network) hata fırlat
                 if (!hasEmitted) throw e
             }

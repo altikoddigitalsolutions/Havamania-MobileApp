@@ -75,7 +75,7 @@ dependencies {
     implementation("com.facebook.react:react-android")
 
     // Google Play Services for Location
-    implementation "com.google.android.gms:play-services-location:21.3.0"
+    implementation "com.google.android.gms:play-services-location:21.0.1"
 
     // Jetpack Compose
     def composeBom = platform("androidx.compose:compose-bom:2024.09.03")
@@ -116,6 +116,13 @@ dependencies {
     // Image Loading
     implementation "io.coil-kt:coil-compose:2.7.0"
 
+    // Firebase
+    implementation platform("com.google.firebase:firebase-bom:33.1.1")
+    implementation "com.google.firebase:firebase-auth-ktx"
+    implementation "com.google.firebase:firebase-firestore-ktx"
+    implementation "com.google.firebase:firebase-storage-ktx"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1"
+
     // Android 12+ Splash Screen API
     implementation "androidx.core:core-splashscreen:1.0.1"
 
@@ -134,3 +141,4 @@ project.ext.vectoricons = [
 ]
 
 apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+apply plugin: "com.google.gms.google-services"

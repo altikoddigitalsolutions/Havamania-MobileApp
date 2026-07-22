@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,12 +44,14 @@ fun HavamaniaDialog(
     onConfirm: () -> Unit,
     dismissText: String? = "Vazgeç",
     confirmColor: Color = HavamaniaTheme.colors.accent,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    confirmEnabled: Boolean = true,
+    dismissEnabled: Boolean = true
 ) {
     val themeColors = HavamaniaTheme.colors
 
     AlertDialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = if (dismissEnabled) onDismissRequest else ({}),
         containerColor = themeColors.surface,
         titleContentColor = themeColors.textPrimary,
         textContentColor = themeColors.textSecondary,
@@ -70,15 +74,15 @@ fun HavamaniaDialog(
         },
         confirmButton = {
             TextButton(
+                enabled = confirmEnabled,
                 onClick = {
                     onConfirm()
-                    onDismissRequest()
                 },
                 modifier = Modifier.padding(horizontal = 8.dp)
             ) {
                 Text(
                     text = confirmText.uppercase(),
-                    color = confirmColor,
+                    color = if (confirmEnabled) confirmColor else themeColors.textMuted,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.sp
                 )
@@ -86,10 +90,10 @@ fun HavamaniaDialog(
         },
         dismissButton = dismissText?.let {
             {
-                TextButton(onClick = onDismissRequest) {
+                TextButton(enabled = dismissEnabled, onClick = onDismissRequest) {
                     Text(
                         text = it.uppercase(),
-                        color = themeColors.textMuted,
+                        color = if (dismissEnabled) themeColors.textMuted else Color.Transparent,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
@@ -123,14 +127,23 @@ fun HavamaniaScreen(
         Box(
             modifier = Modifier.havamaniaScreenBackground()
         ) {
-            // Subtle atmosphere glow (Top Right)
+            // Atmosferik parlama (Sağ Üst)
+            // Tabletlerde kare kesilmeyi (clipping) önlemek için gradyan tabanlı çizim kullanıyoruz
+            val accentColor = colors.accent.copy(alpha = 0.15f)
             Box(
                 modifier = Modifier
-                    .size(400.dp)
-                    .align(Alignment.TopEnd)
-                    .offset(x = 100.dp, y = (-100).dp)
-                    .blur(100.dp)
-                    .background(colors.accent.copy(alpha = 0.05f), RoundedCornerShape(200.dp))
+                    .fillMaxSize()
+                    .drawBehind {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(accentColor, Color.Transparent),
+                                center = Offset(size.width * 0.9f, size.height * 0.1f),
+                                radius = size.width * 0.6f
+                            ),
+                            center = Offset(size.width * 0.9f, size.height * 0.1f),
+                            radius = size.width * 0.6f
+                        )
+                    }
             )
 
             content(paddingValues)
@@ -441,6 +454,54 @@ fun DetailSmallCard(
                     color = themeColors.textPrimary
                 )
             )
+        }
+    }
+}
+
+/**
+ * Premium Error Info Card
+ */
+@Composable
+fun HavamaniaErrorCard(
+    message: String,
+    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit = {}
+) {
+    val themeColors = HavamaniaTheme.colors
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        color = themeColors.error.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.error.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = themeColors.error,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = themeColors.error,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Kapat",
+                    tint = themeColors.error.copy(alpha = 0.5f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }

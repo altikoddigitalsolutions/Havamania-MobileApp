@@ -36,6 +36,7 @@ enum class NotificationActionType {
 data class NotificationItem(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
+    val userId: String = "legacy",
     val title: String = "",
     val message: String = "",
     val category: NotificationCategory = NotificationCategory.GENERAL,

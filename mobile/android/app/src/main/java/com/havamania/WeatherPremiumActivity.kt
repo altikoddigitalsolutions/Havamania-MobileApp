@@ -16,7 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.ThemeViewModel
+import com.havamania.*
 
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -31,14 +34,34 @@ import androidx.navigation.NavType
 
 class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        var isReady by mutableStateOf(false)
+
+        // Keep the splash screen on-screen until the condition is met
+        splashScreen.setKeepOnScreenCondition { !isReady }
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
         setContent {
             HavamaniaTheme {
+                val authViewModel: AuthViewModel = viewModel()
+                val profileViewModel: ProfileViewModel = viewModel()
+                val themeViewModel: ThemeViewModel = viewModel()
+
+                val authState by authViewModel.authState.collectAsState()
+                val profileState by profileViewModel.profileState.collectAsState()
+
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER_ROOT
+
+                // Profile Sync Logic
+                LaunchedEffect(profileState) {
+                    if (profileState is ProfileState.Success) {
+                        themeViewModel.syncWithFirebase((profileState as ProfileState.Success).profile)
+                    }
+                }
 
                 var appState by remember { mutableStateOf("splash") }
                 val themeColors = HavamaniaTheme.colors
@@ -46,10 +69,58 @@ class WeatherPremiumActivity : ComponentActivity() {
                     Brush.verticalGradient(themeColors.gradientPrimary)
                 }
 
-                // Emniyet: Splash ekranının 5 saniyeden fazla kalmamasını garanti et
-                LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(5000)
-                    if (appState == "splash") {
+                // Startup Logic: Execute critical path before showing anything
+                LaunchedEffect(authState) {
+                    val currentUser = authViewModel.currentUser
+                    if (currentUser == null) {
+                        themeViewModel.clearLocalUserData()
+                        isReady = true // Show login/welcome
+                    } else {
+                        // Giriş yapılmışsa profili bekle
+                        profileViewModel.fetchProfile()
+                    }
+                }
+
+                LaunchedEffect(profileState) {
+                    if (profileState is ProfileState.Success || profileState is ProfileState.Error) {
+                        isReady = true // Veri hazır veya hata olsa bile artık içeri al
+                    }
+                }
+
+                // Auth Redirection Logic
+                LaunchedEffect(appState, authState, isReady) {
+                    if (isReady && appState == "main") {
+                        val currentUser = authViewModel.currentUser
+                        if (currentUser == null) {
+                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
+                                navController.navigate(Routes.AUTH_WELCOME) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                        } else {
+                            if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
+                                if (profileState is ProfileState.Success) {
+                                    val profile = (profileState as ProfileState.Success).profile
+                                    if (!profile.onboardingCompleted) {
+                                        navController.navigate(Routes.PERSONALIZATION) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    } else {
+                                        navController.navigate(Routes.WEATHER_ROOT) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Havamania Splash (Sloganlı) süresini ayarla
+                LaunchedEffect(isReady) {
+                    if (isReady) {
+                        // Eğer isReady ise 2 saniye sloganlı splash göster ve ana ekrana geç
+                        kotlinx.coroutines.delay(2000)
                         appState = "main"
                     }
                 }
@@ -70,7 +141,11 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 Routes.EDIT_PROFILE,
                                 Routes.CITIES,
                                 Routes.AI_HISTORY,
-                                Routes.NOTIFICATION_CENTER
+                                Routes.NOTIFICATION_CENTER,
+                                Routes.AUTH_WELCOME,
+                                Routes.LOGIN,
+                                Routes.REGISTER,
+                                Routes.FORGOT_PASSWORD
                             )
                             val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
 
@@ -102,7 +177,56 @@ class WeatherPremiumActivity : ComponentActivity() {
                             .background(backgroundGradient)
                             .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("sub_ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
-                            NavHost(navController = navController, startDestination = Routes.WEATHER_ROOT) {
+                            NavHost(
+                                navController = navController,
+                                startDestination = if (authViewModel.currentUser != null) Routes.WEATHER_ROOT else Routes.AUTH_WELCOME
+                            ) {
+                                // --- AUTH ROUTES ---
+                                composable(Routes.AUTH_WELCOME) {
+                                    AuthWelcomeScreen(
+                                        onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
+                                        onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
+                                        onNavigateToLegal = { title, url ->
+                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+                                            navController.navigate(
+                                                Routes.LEGAL_WEBVIEW
+                                                    .replace("{title}", title)
+                                                    .replace("{url}", encodedUrl)
+                                            )
+                                        }
+                                    )
+                                }
+                                composable(Routes.LOGIN) {
+                                    LoginScreen(
+                                        viewModel = authViewModel,
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToRegister = {
+                                            navController.navigate(Routes.REGISTER) {
+                                                popUpTo(Routes.AUTH_WELCOME)
+                                            }
+                                        },
+                                        onNavigateToForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) }
+                                    )
+                                }
+                                composable(Routes.REGISTER) {
+                                    RegisterScreen(
+                                        viewModel = authViewModel,
+                                        onBack = { navController.popBackStack() },
+                                        onNavigateToLogin = {
+                                            navController.navigate(Routes.LOGIN) {
+                                                popUpTo(Routes.AUTH_WELCOME)
+                                            }
+                                        }
+                                    )
+                                }
+                                composable(Routes.FORGOT_PASSWORD) {
+                                    ForgotPasswordScreen(
+                                        viewModel = authViewModel,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
+
+                                // --- APP ROUTES ---
                                 composable(
                                     Routes.WEATHER_ROOT,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
@@ -153,6 +277,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
                                         onNavigateToAiHistory = { navController.navigate(Routes.AI_HISTORY) },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
+                                        onNavigateToPersonalization = { navController.navigate(Routes.PERSONALIZATION) },
                                         onNavigateToTravels = {
                                             val startDestId = navController.graph.findStartDestination().id
                                             navController.navigate(Routes.CALENDAR_ROOT) {
@@ -190,7 +315,26 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     SettingsScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) }
+                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
+                                        onNavigateToLegal = { title, url ->
+                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+                                            navController.navigate(
+                                                Routes.LEGAL_WEBVIEW
+                                                    .replace("{title}", title)
+                                                    .replace("{url}", encodedUrl)
+                                            )
+                                        }
+                                    )
+                                }
+                                composable(Routes.PERSONALIZATION) {
+                                    PersonalizationScreen(
+                                        profileViewModel = profileViewModel,
+                                        onComplete = {
+                                            navController.navigate(Routes.WEATHER_ROOT) {
+                                                popUpTo(Routes.PERSONALIZATION) { inclusive = true }
+                                            }
+                                        },
+                                        onBack = { navController.popBackStack() }
                                     )
                                 }
                                 composable(Routes.NOTIFICATION_CENTER) {
@@ -208,6 +352,21 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
+                                    )
+                                }
+                                composable(
+                                    Routes.LEGAL_WEBVIEW,
+                                    arguments = listOf(
+                                        navArgument("title") { type = NavType.StringType },
+                                        navArgument("url") { type = NavType.StringType }
+                                    )
+                                ) { backStackEntry ->
+                                    val title = backStackEntry.arguments?.getString("title") ?: "Yasal Metin"
+                                    val url = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("url") ?: "", "UTF-8")
+                                    LegalWebViewScreen(
+                                        title = title,
+                                        url = url,
+                                        onBack = { navController.popBackStack() }
                                     )
                                 }
                             }

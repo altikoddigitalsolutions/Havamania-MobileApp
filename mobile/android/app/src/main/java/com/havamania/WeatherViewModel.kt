@@ -1,6 +1,7 @@
 package com.havamania
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
@@ -22,6 +24,8 @@ class WeatherViewModel(
 ) : AndroidViewModel(application) {
 
     private val repository = WeatherRepository.getInstance(application)
+    private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
     private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
 
@@ -64,13 +68,8 @@ class WeatherViewModel(
         NotificationRepository(database.notificationDao())
     }
 
-    val unreadNotificationCount: StateFlow<Int> = notificationRepository.unreadCount
-        .catch { emit(0) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0
-        )
+    private val _unreadNotificationCount = MutableStateFlow(0)
+    val unreadNotificationCount: StateFlow<Int> = _unreadNotificationCount.asStateFlow()
 
     private var lastCity = "Balıkesir"
     private var lastDistrict: String? = null
@@ -79,22 +78,62 @@ class WeatherViewModel(
 
     init {
         viewModelScope.launch {
-            try {
-                com.havamania.ui.theme.ThemeManager.getAssistantTone(getApplication()).collect { tone ->
+            auth.addAuthStateListener { firebaseAuth ->
+                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+                Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+                _uiState.value = WeatherUiState.Loading
+                _todayRecommendation.value = null
+                observeUserData(newUid)
+            }
+        }
+    }
+
+    private var userDataJob: kotlinx.coroutines.Job? = null
+
+    private fun observeUserData(uid: String) {
+        userDataJob?.cancel()
+        userDataJob = viewModelScope.launch {
+            // Tone observation
+            launch {
+                com.havamania.ui.theme.ThemeManager.getAssistantTone(getApplication(), uid).collect { tone ->
                     _assistantTone.value = tone
                     updateRecommendation()
                 }
-            } catch (e: Exception) {}
-        }
+            }
 
-        viewModelScope.launch {
-            try {
-                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication()).collect { defaultCity ->
-                    fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+            // Notifications observation
+            launch {
+                notificationRepository.getUnreadCount(uid)
+                    .catch { emit(0) }
+                    .collect { _unreadNotificationCount.value = it }
+            }
+
+            // City observation
+            launch {
+                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).collect { defaultCity ->
+                    Log.d("WeatherVM", "Default city observed for $uid: ${defaultCity?.name}")
+                    if (defaultCity != null) {
+                        fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                    } else {
+                        if (uid != "legacy") {
+                            _uiState.value = WeatherUiState.NoCity
+                        } else {
+                            // Guest user starts with Balıkesir if no default set
+                            fetchWeather(39.6484, 27.8826, "Balıkesir")
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                // Emniyet: Hata olsa bile varsayılan Balıkesir ile başlat
-                fetchWeather(39.6484, 27.8826, "Balıkesir")
+            }
+
+            // Safety check: If nothing emitted NoCity or Success after a while, check again
+            launch {
+                kotlinx.coroutines.delay(8000)
+                if (_uiState.value is WeatherUiState.Loading) {
+                    val currentCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).first()
+                    if (currentCity == null && uid != "legacy") {
+                        _uiState.value = WeatherUiState.NoCity
+                    }
+                }
             }
         }
     }
@@ -107,31 +146,43 @@ class WeatherViewModel(
 
         viewModelScope.launch {
             _uiState.value = WeatherUiState.Loading
-            repository.getWeatherData(lat, lon, cityName, districtName)
-                .catch { e ->
-                    _uiState.value = WeatherUiState.Error(
-                        if (!isOnline.value) "İnternet bağlantınız yok. Lütfen kontrol edin."
-                        else e.message ?: "Veriler alınırken bir hata oluştu."
-                    )
-                }
-                .collect { data ->
-                    _uiState.value = WeatherUiState.Success(data)
-                    // Reset to today
-                    val todayDate = LocalDate.now()
-                    _selectedForecastDate.value = todayDate
-                    val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
-                    _selectedDailyForecast.value = todayForecast
 
-                    // Initial hourly selection: current hour or next available
-                    val nowHour = java.time.LocalTime.now().hour
-                    val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
-                    _selectedHourlyWeather.value = todayHourly.find {
-                        val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                        h >= nowHour
-                    } ?: todayHourly.firstOrNull()
+            try {
+                // Wrap in timeout to prevent infinite loading
+                kotlinx.coroutines.withTimeout(20000) {
+                    repository.getWeatherData(lat, lon, cityName, districtName)
+                        .catch { e ->
+                            android.util.Log.e("WeatherVM", "Fetch error", e)
+                            _uiState.value = WeatherUiState.Error(
+                                if (!isOnline.value) "İnternet bağlantınız yok. Lütfen kontrol edin."
+                                else if (e is java.net.UnknownHostException || e is java.io.IOException) "Meteoroloji sunucularına şu an ulaşılamıyor. Lütfen birazdan tekrar dene."
+                                else "Hava durumu verileri hazırlanırken beklenmedik bir durum oluştu."
+                            )
+                        }
+                        .collect { data ->
+                            _uiState.value = WeatherUiState.Success(data)
+                            // Reset to today
+                            val todayDate = LocalDate.now()
+                            _selectedForecastDate.value = todayDate
+                            val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
+                            _selectedDailyForecast.value = todayForecast
 
-                    updateRecommendation()
+                            // Initial hourly selection: current hour or next available
+                            val nowHour = java.time.LocalTime.now().hour
+                            val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
+                            _selectedHourlyWeather.value = todayHourly.find {
+                                val h = it.time.split(":")[0].toIntOrNull() ?: 0
+                                h >= nowHour
+                            } ?: todayHourly.firstOrNull()
+
+                            updateRecommendation()
+                        }
                 }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _uiState.value = WeatherUiState.Error("Zaman aşımı: Hava durumu verileri çok uzun sürdü.")
+            } catch (e: Exception) {
+                _uiState.value = WeatherUiState.Error("Hava durumu yüklenirken bir hata oluştu.")
+            }
         }
     }
 

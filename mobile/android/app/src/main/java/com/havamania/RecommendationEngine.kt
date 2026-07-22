@@ -35,7 +35,7 @@ object RecommendationEngine {
         aboutMe: String? = null,
         tone: AssistantTone = AssistantTone.DENGELI
     ): HavamaniaRecommendation {
-        val message = generateGeneralWeatherReply(weatherData, tone, userInterests, aboutMe)
+        val message = generateStructuredWeatherReply(weatherData, tone, userInterests, aboutMe)
 
         val uv = weatherData.uvIndex ?: 0
         val precip = weatherData.precipitationProbability ?: 0
@@ -46,7 +46,7 @@ object RecommendationEngine {
         if (precip > 40) highlights.add("yağış")
         if (wind > 30) highlights.add("rüzgar")
         if (userInterests.contains("uv_hassasiyeti") && uv >= 4) highlights.add("hassasiyet")
-        if (userInterests.contains("kamp") && (precip > 20 || tempToFloat(weatherData.temperature) < 10)) highlights.add("kamp")
+        if (userInterests.contains("kamp") && (precip > 20 || tempToFloat(weatherData.temperature) < 10f)) highlights.add("kamp")
 
         return HavamaniaRecommendation(
             message = message,
@@ -57,7 +57,50 @@ object RecommendationEngine {
     }
 
     private fun tempToFloat(tempStr: String): Float {
-        return tempStr.filter { it.isDigit() || it == '-' || it == '.' }.toFloatOrNull() ?: 20f
+        return tempStr.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 20f
+    }
+
+    private fun generateStructuredWeatherReply(weather: WeatherData, tone: AssistantTone, interests: Set<String>, aboutMe: String?): String {
+        val city = weather.cityName
+        val temp = weather.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+        val cond = weather.condition.lowercase(Locale("tr"))
+        val uv = weather.uvIndex ?: 0
+        val precip = weather.precipitationProbability ?: 0
+        val wind = weather.windSpeed ?: 0.0
+
+        val sb = StringBuilder()
+
+        // 1. Hava Özeti
+        sb.append("Bugün $city'de hava $temp°C ve $cond. ")
+
+        // 2. Günlük Yaşam Etkisi
+        if (precip > 50) sb.append("Yağış ihtimali gününüzü etkileyebilir, dışarıda uzun süre kalacaksanız dikkatli olmanızda fayda var. ")
+        else if (temp > 32) sb.append("Aşırı sıcaklar nedeniyle öğle saatlerinde serin yerleri tercih etmenizi öneririm. ")
+        else sb.append("Hava genel olarak günlük planlarınız için oldukça elverişli görünüyor. ")
+
+        // 3. Kıyafet Önerisi
+        val clothing = when {
+            temp > 25 -> "İnce ve pamuklu kıyafetler"
+            temp > 15 -> "Hafif bir ceket veya sweatshirt"
+            else -> "Kalın bir mont ve koruyucu kıyafetler"
+        }
+        sb.append("\n\n👕 Giyim: $clothing bugün en konforlu seçim olacaktır. ")
+
+        // 4. Aktivite & Kişiselleştirme
+        if (interests.contains("koşu") && temp in 10..24 && precip < 20) {
+            sb.append("\n🏃 Aktivite: Koşu için harika bir hava! Sabah saatlerini değerlendirebilirsin. ")
+        } else if (interests.contains("kamp") && precip > 30) {
+            sb.append("\n⛺ Aktivite: Kamp planların varsa zemin ıslaklığına ve yağış geçişlerine dikkat etmelisin. ")
+        }
+
+        // 5. Risk Uyarısı
+        if (uv >= 6 || (interests.contains("uv_hassasiyeti") && uv >= 4)) {
+            sb.append("\n⚠️ Risk: UV indeksi ($uv) yüksek! Güneş kremi ve gözlük kullanmayı ihmal etme.")
+        } else if (wind > 35) {
+            sb.append("\n⚠️ Risk: Sert rüzgar uyarısı! Dışarıda savrulabilecek eşyalara dikkat.")
+        }
+
+        return sb.toString().trim()
     }
 
     /**
@@ -71,7 +114,7 @@ object RecommendationEngine {
         tone: AssistantTone = AssistantTone.DENGELI,
         travelPlans: List<TravelPlan> = emptyList()
     ): String {
-        if (weatherData == null) return "Hava durumu verilerine şu an erişilemiyor."
+        if (weatherData == null) return "Hava durumu verilerine şu an erişilemiyor. Lütfen kısa süre sonra tekrar dene."
 
         val intent = AiIntentParser.detectIntent(userPrompt)
         val today = LocalDate.now()
@@ -99,11 +142,11 @@ object RecommendationEngine {
                 if (userPrompt.contains("yağmur", ignoreCase = true) || userPrompt.contains("yağış", ignoreCase = true)) {
                     generateRainReply(targetCity, precip, weatherData, tone)
                 } else {
-                    generateGeneralWeatherReply(weatherData, tone, interests, aboutMe)
+                    generateStructuredWeatherReply(weatherData, tone, interests, aboutMe)
                 }
             }
             AiIntent.TRAVEL -> generateTravelReply(userPrompt, weatherData, travelPlans, tone)
-            else -> generateGeneralWeatherReply(weatherData, tone, interests, aboutMe)
+            else -> generateStructuredWeatherReply(weatherData, tone, interests, aboutMe)
         }
     }
 

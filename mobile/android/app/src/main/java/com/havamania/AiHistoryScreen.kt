@@ -194,14 +194,14 @@ fun AiHistoryEmptyState() {
         }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "Henüz AI geçmişin yok",
+            "Henüz bir sohbet geçmişin yok.",
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "Asistanla konuştuğunda analizlerin burada görünecek.",
+            "Havamania Dijital Asistanına hava, seyahat veya günlük planların hakkında soru sorabilirsin.",
             style = MaterialTheme.typography.bodyMedium,
             color = themeColors.textSecondary,
             textAlign = TextAlign.Center
