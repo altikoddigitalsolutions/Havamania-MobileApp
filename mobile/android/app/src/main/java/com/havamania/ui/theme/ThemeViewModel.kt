@@ -23,6 +23,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _tempUnit = MutableStateFlow(TemperatureUnit.CELSIUS)
     val tempUnit: StateFlow<TemperatureUnit> = _tempUnit.asStateFlow()
 
+    private val _windUnit = MutableStateFlow(WindSpeedUnit.KMH)
+    val windUnit: StateFlow<WindSpeedUnit> = _windUnit.asStateFlow()
+
+    private val _pressureUnit = MutableStateFlow(PressureUnit.HPA)
+    val pressureUnit: StateFlow<PressureUnit> = _pressureUnit.asStateFlow()
+
     private val _language = MutableStateFlow("TR")
     val language: StateFlow<String> = _language.asStateFlow()
 
@@ -50,6 +56,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _userAboutMe = MutableStateFlow("")
     val userAboutMe: StateFlow<String> = _userAboutMe.asStateFlow()
 
+    private val _isPremium = MutableStateFlow(false)
+    val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
+
     private val _registeredCities = MutableStateFlow<List<com.havamania.GeocodingResultDto>>(emptyList())
     val registeredCities: StateFlow<List<com.havamania.GeocodingResultDto>> = _registeredCities.asStateFlow()
 
@@ -68,6 +77,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _userEffectIntensity = MutableStateFlow(com.havamania.WeatherEffectIntensity.MEDIUM)
     val userEffectIntensity: StateFlow<com.havamania.WeatherEffectIntensity> = _userEffectIntensity.asStateFlow()
 
+    private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
+    val locationMode: StateFlow<LocationMode> = _locationMode.asStateFlow()
+
     init {
         loadSettings()
 
@@ -84,6 +96,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { ThemeManager.getTheme(getApplication(), uid).collect { _currentTheme.value = it } }
         viewModelScope.launch { ThemeManager.getAnimationsEnabled(getApplication(), uid).collect { _animationsEnabled.value = it } }
         viewModelScope.launch { ThemeManager.getTempUnit(getApplication(), uid).collect { _tempUnit.value = it } }
+        viewModelScope.launch { ThemeManager.getWindUnit(getApplication(), uid).collect { _windUnit.value = it } }
+        viewModelScope.launch { ThemeManager.getPressureUnit(getApplication(), uid).collect { _pressureUnit.value = it } }
         viewModelScope.launch { ThemeManager.getLanguage(getApplication(), uid).collect { _language.value = it } }
 
         viewModelScope.launch { ThemeManager.getNotificationsEnabled(getApplication(), uid).collect { _notificationsEnabled.value = it } }
@@ -96,6 +110,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { ThemeManager.getUserAboutMe(getApplication(), uid).collect { _userAboutMe.value = it } }
         viewModelScope.launch { ThemeManager.getRegisteredCities(getApplication(), uid).collect { _registeredCities.value = it } }
         viewModelScope.launch { ThemeManager.getDefaultCity(getApplication(), uid).collect { _defaultCity.value = it } }
+        viewModelScope.launch { ThemeManager.getLocationMode(getApplication(), uid).collect { _locationMode.value = it } }
 
         viewModelScope.launch { ThemeManager.getTiltEffectEnabled(getApplication(), uid).collect { _tiltEffectEnabled.value = it } }
         viewModelScope.launch { ThemeManager.getLiveEffects(getApplication(), uid).collect { _liveEffectsEnabled.value = it } }
@@ -126,6 +141,22 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             ThemeManager.saveTempUnit(getApplication(), unit, uid)
             _tempUnit.value = unit
+        }
+    }
+
+    fun setWindUnit(unit: WindSpeedUnit) {
+        val uid = currentUid
+        viewModelScope.launch {
+            ThemeManager.saveWindUnit(getApplication(), unit, uid)
+            _windUnit.value = unit
+        }
+    }
+
+    fun setPressureUnit(unit: PressureUnit) {
+        val uid = currentUid
+        viewModelScope.launch {
+            ThemeManager.savePressureUnit(getApplication(), unit, uid)
+            _pressureUnit.value = unit
         }
     }
 
@@ -200,6 +231,29 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setLocationMode(mode: LocationMode) {
+        viewModelScope.launch {
+            ThemeManager.saveLocationMode(getApplication(), currentUid, mode)
+            _locationMode.value = mode
+        }
+    }
+
+    fun checkInitialLocationMode() {
+        viewModelScope.launch {
+            val uid = currentUid
+            val context = getApplication<Application>()
+
+            val fineLocation = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val coarseLocation = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val onboardingCompleted = ThemeManager.getOnboardingCompleted(context, uid).first()
+
+            if (!onboardingCompleted && (fineLocation || coarseLocation)) {
+                setLocationMode(LocationMode.AUTO)
+            }
+        }
+    }
+
     fun setTiltEffectEnabled(enabled: Boolean) {
         val uid = currentUid
         viewModelScope.launch {
@@ -264,6 +318,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     ThemeManager.saveUserAboutMe(getApplication(), uid, profile.aboutMe)
                     _userAboutMe.value = profile.aboutMe
                 }
+
+                _isPremium.value = profile.isPremium
 
                 profile.personalizationProfile?.let {
                     ThemeManager.saveUserInterests(getApplication(), uid, it.selectedInterests.toSet())

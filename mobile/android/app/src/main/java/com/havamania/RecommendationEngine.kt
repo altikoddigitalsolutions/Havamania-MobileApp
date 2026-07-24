@@ -6,7 +6,7 @@ import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-enum class TripStatus {
+enum class RecommendationTripStatus {
     UPCOMING_LOCKED,
     UPCOMING_ACTIVE,
     ONGOING,
@@ -15,13 +15,13 @@ enum class TripStatus {
 
 object RecommendationEngine {
 
-    fun getTripStatus(today: LocalDate, startDate: LocalDate, endDate: LocalDate): TripStatus {
+    fun getTripStatus(today: LocalDate, startDate: LocalDate, endDate: LocalDate): RecommendationTripStatus {
         return when {
-            today.isAfter(endDate) -> TripStatus.PAST
-            !today.isBefore(startDate) && !today.isAfter(endDate) -> TripStatus.ONGOING
+            today.isAfter(endDate) -> RecommendationTripStatus.PAST
+            !today.isBefore(startDate) && !today.isAfter(endDate) -> RecommendationTripStatus.ONGOING
             else -> {
                 val daysUntil = ChronoUnit.DAYS.between(today, startDate)
-                if (daysUntil > TRIP_ANALYSIS_WINDOW_DAYS) TripStatus.UPCOMING_LOCKED else TripStatus.UPCOMING_ACTIVE
+                if (daysUntil > TRIP_ANALYSIS_WINDOW_DAYS) RecommendationTripStatus.UPCOMING_LOCKED else RecommendationTripStatus.UPCOMING_ACTIVE
             }
         }
     }
@@ -33,9 +33,10 @@ object RecommendationEngine {
         weatherData: WeatherData,
         userInterests: Set<String> = emptySet(),
         aboutMe: String? = null,
-        tone: AssistantTone = AssistantTone.DENGELI
+        tone: AssistantTone = AssistantTone.DENGELI,
+        personalization: PersonalizationProfile? = null
     ): HavamaniaRecommendation {
-        val message = generateStructuredWeatherReply(weatherData, tone, userInterests, aboutMe)
+        val message = generateStructuredWeatherReply(weatherData, tone, userInterests, aboutMe, personalization)
 
         val uv = weatherData.uvIndex ?: 0
         val precip = weatherData.precipitationProbability ?: 0
@@ -60,44 +61,60 @@ object RecommendationEngine {
         return tempStr.filter { it.isDigit() || it == '-' }.toFloatOrNull() ?: 20f
     }
 
-    private fun generateStructuredWeatherReply(weather: WeatherData, tone: AssistantTone, interests: Set<String>, aboutMe: String?): String {
+    private fun generateStructuredWeatherReply(
+        weather: WeatherData,
+        tone: AssistantTone,
+        interests: Set<String>,
+        aboutMe: String?,
+        personalization: PersonalizationProfile? = null
+    ): String {
         val city = weather.cityName
-        val temp = weather.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+        val tempValue = weather.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
         val cond = weather.condition.lowercase(Locale("tr"))
         val uv = weather.uvIndex ?: 0
         val precip = weather.precipitationProbability ?: 0
         val wind = weather.windSpeed ?: 0.0
 
+        val prefs = personalization?.weatherPreferences ?: WeatherPreferences()
+
         val sb = StringBuilder()
 
         // 1. Hava Özeti
-        sb.append("Bugün $city'de hava $temp°C ve $cond. ")
+        sb.append("Bugün $city'de hava $tempValue°C ve $cond. ")
 
         // 2. Günlük Yaşam Etkisi
-        if (precip > 50) sb.append("Yağış ihtimali gününüzü etkileyebilir, dışarıda uzun süre kalacaksanız dikkatli olmanızda fayda var. ")
-        else if (temp > 32) sb.append("Aşırı sıcaklar nedeniyle öğle saatlerinde serin yerleri tercih etmenizi öneririm. ")
-        else sb.append("Hava genel olarak günlük planlarınız için oldukça elverişli görünüyor. ")
+        if (precip > 50 || (prefs.rainSensitive && precip > 20)) {
+            sb.append("Yağış ihtimali gününüzü etkileyebilir, dışarıda uzun süre kalacaksanız dikkatli olmanızda fayda var. ")
+        } else if (tempValue > 32 || (prefs.likesCool && tempValue > 25)) {
+            sb.append("Sıcak hava nedeniyle öğle saatlerinde serin yerleri tercih etmenizi öneririm. ")
+        } else {
+            sb.append("Hava genel olarak günlük planlarınız için oldukça elverişli görünüyor. ")
+        }
+
+        sb.append("[SEP]")
 
         // 3. Kıyafet Önerisi
         val clothing = when {
-            temp > 25 -> "İnce ve pamuklu kıyafetler"
-            temp > 15 -> "Hafif bir ceket veya sweatshirt"
+            tempValue > 25 -> "İnce ve pamuklu kıyafetler"
+            tempValue > 15 -> "Hafif bir ceket veya sweatshirt"
             else -> "Kalın bir mont ve koruyucu kıyafetler"
         }
-        sb.append("\n\n👕 Giyim: $clothing bugün en konforlu seçim olacaktır. ")
+        sb.append("👕 GİYSİ| $clothing bugün en konforlu seçim olacaktır. ")
 
         // 4. Aktivite & Kişiselleştirme
-        if (interests.contains("koşu") && temp in 10..24 && precip < 20) {
-            sb.append("\n🏃 Aktivite: Koşu için harika bir hava! Sabah saatlerini değerlendirebilirsin. ")
-        } else if (interests.contains("kamp") && precip > 30) {
-            sb.append("\n⛺ Aktivite: Kamp planların varsa zemin ıslaklığına ve yağış geçişlerine dikkat etmelisin. ")
+        if (interests.any { it.contains("koşu", true) } && tempValue in 10..24 && precip < 20) {
+            sb.append("[SEP]🏃 KOŞU| Koşu için harika bir hava! Sabah saatlerini değerlendirebilirsin. ")
+        } else if (interests.any { it.contains("kamp", true) } && precip > 30) {
+            sb.append("[SEP]⛺ KAMP| Kamp planların varsa zemin ıslaklığına ve yağış geçişlerine dikkat etmelisin. ")
+        } else if (interests.contains("Kayak") || interests.contains("Kış Sporları")) {
+             if (tempValue < 5) sb.append("[SEP]❄️ SPOR| Kış sporları için taze kar ve soğuk hava oldukça uygun görünüyor.")
         }
 
         // 5. Risk Uyarısı
-        if (uv >= 6 || (interests.contains("uv_hassasiyeti") && uv >= 4)) {
-            sb.append("\n⚠️ Risk: UV indeksi ($uv) yüksek! Güneş kremi ve gözlük kullanmayı ihmal etme.")
-        } else if (wind > 35) {
-            sb.append("\n⚠️ Risk: Sert rüzgar uyarısı! Dışarıda savrulabilecek eşyalara dikkat.")
+        if (uv >= 6 || (interests.contains("uv_hassasiyeti") && uv >= 4) || (prefs.uvSensitive && uv >= 4)) {
+            sb.append("[SEP]⚠️ RİSK| UV indeksi ($uv) yüksek! Güneş kremi ve gözlük kullanmayı ihmal etme.")
+        } else if (wind > 35 || (prefs.windSensitive && wind > 20)) {
+            sb.append("[SEP]⚠️ RİSK| Sert rüzgar uyarısı! Dışarıda savrulabilecek eşyalara dikkat.")
         }
 
         return sb.toString().trim()
@@ -272,7 +289,7 @@ object RecommendationEngine {
         val today = LocalDate.now()
         val status = getTripStatus(today, plan.startDate, plan.endDate)
 
-        if (status == TripStatus.UPCOMING_LOCKED) {
+        if (status == RecommendationTripStatus.UPCOMING_LOCKED) {
             return "${plan.city} seyahatin için valiz hazırlığına biraz daha vakit var canım! ✨ Hava tahminleri netleştiğinde (seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala) sana en uygun listeyi burada sunacağım."
         }
 
@@ -294,11 +311,11 @@ object RecommendationEngine {
         val listStr = items.joinToString(", ")
 
         return when (tone) {
-            AssistantTone.SAMIMI -> "$city seyahatin için valizini ben hazırladım bile canım! ✨ Hava gündüz $temp°, gece ise $minTemp° civarında olacak. Şu listeyi unutma: $listStr. Şimdiden iyi yolculuklar! ✈️"
-            AssistantTone.RESMI -> "$city seyahatiniz için hazırlanan ekipman listesi: Gündüz sıcaklığı $temp°C, gece $minTemp°C olarak öngörüldüğünden valizinizde $listStr bulunması tavsiye edilir."
+            AssistantTone.SAMIMI -> "$city seyahatin için valizini ben hazırladım bile canım! ✨ Sıcaklık $temp°, gece ise $minTemp° civarında olacak. Şu listeyi unutma: $listStr. Şimdiden iyi yolculuklar! ✈️"
+            AssistantTone.RESMI -> "$city seyahatiniz için hazırlanan ekipman listesi: Maksimum sıcaklık $temp°C, gece $minTemp°C olarak öngörüldüğünden valizinizde $listStr bulunması tavsiye edilir."
             AssistantTone.DETAYLI_UZMAN -> "Destinasyon Lojistik Analizi ($city): Termal spektrum $minTemp°C ile $temp°C arasındadır. Presipitasyon riski %$precip seviyesindedir. Optimizasyon için önerilen materyaller: $listStr. Hazırlıklarınızı bu verilere göre tamamlayınız."
             AssistantTone.KISA_NET -> "$city Valizi ($temp°/$minTemp°): $listStr."
-            else -> "$city seyahatin için valizine şunları almanı öneririm: $listStr. Gündüz hava $temp° iken akşam $minTemp° dereceara kadar düşebilir, hazırlıklı olmalısın."
+            else -> "$city seyahatin için valizine şunları almanı öneririm: $listStr. Hava $temp° iken akşam $minTemp° dereceara kadar düşebilir, hazırlıklı olmalısın."
         }
     }
 
@@ -371,7 +388,7 @@ object RecommendationEngine {
     }
 
     /**
-     * Gelişmiş Seyahat Önerisi - Kart Görünümü İçin
+     * Gelişmiş Seyahat Önerisi - Kart Görünümü İçin (Issue #4 & #3)
      */
     fun generateTravelRecommendation(
         plan: TravelPlan,
@@ -382,17 +399,16 @@ object RecommendationEngine {
         val today = LocalDate.now()
         val status = getTripStatus(today, plan.startDate, plan.endDate)
 
-        if (status == TripStatus.UPCOMING_LOCKED) {
-            return "${plan.city} seyahatin kayıt altında. Detaylı hava analizi seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala burada belirecek."
+        if (status == RecommendationTripStatus.UPCOMING_LOCKED) {
+            return "Detaylı seyahat önerileri yakında hazır olacak. Hava tahminleri seyahat tarihiniz yaklaştıkça daha güvenilir hale gelir."
         }
 
-        if (currentSnapshot == null) return "${plan.city} seyahati için hazırlıklar başlasın! ✈️"
+        if (currentSnapshot == null) return "${plan.city} seyahati için hazırlıklar başlasın! ✈️ Hava verilerini güncellemek için dokunabilirsin."
 
         val cond = currentSnapshot.conditionSummary?.lowercase(Locale("tr")) ?: "değişken"
         val maxT = currentSnapshot.maxTemp?.toInt() ?: 20
-        val rain = currentSnapshot.precipitationProbability ?: 0
 
-        if (status == TripStatus.ONGOING) {
+        if (status == RecommendationTripStatus.ONGOING) {
             val daysIntoTrip = ChronoUnit.DAYS.between(plan.startDate, today) + 1
             return when (tone) {
                 AssistantTone.SAMIMI -> "${plan.city} seyahatin şu anda devam ediyor canım! 😊 Bugün seyahatinin $daysIntoTrip. günü. Hava $maxT° ve $cond. Keyfini çıkar!"
@@ -402,9 +418,9 @@ object RecommendationEngine {
         }
 
         return when (tone) {
-            AssistantTone.SAMIMI -> "${plan.city} seyahatin yaklaşıyor canım! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. 😊"
-            AssistantTone.RESMI -> "${plan.city} seyahatiniz yaklaşmaktadır. Tahmin edilen hava durumu $maxT°C ve $cond olarak bildirilmiştir."
-            else -> "${plan.city} seyahatin yaklaşıyor! Seni $maxT° sıcaklıkta $cond bir hava bekliyor."
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin yaklaşıyor canım! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. Şimdiden hazırlıklara başla derim! 😊"
+            AssistantTone.RESMI -> "${plan.city} istikametine yapacağınız seyahat yaklaşmaktadır. Tahmin edilen hava durumu $maxT°C ve $cond olarak bildirilmiştir."
+            else -> "${plan.city} seyahatin yaklaşıyor! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. İyi yolculuklar!"
         }
     }
 }

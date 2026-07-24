@@ -800,14 +800,17 @@ fun PremiumWeatherContent(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(modifier = Modifier.clip(RoundedCornerShape(16.dp))
                 .background(if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.06f))
-                .clickable { onCityClick() }
+                .clickable(
+                    onClickLabel = "Konumu Değiştir",
+                    onClick = { onCityClick() }
+                )
                 .padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.LocationOn, null, tint = spec.accentColor, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.LocationOn, contentDescription = "Konum İkonu", tint = spec.accentColor, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
-                        Icon(Icons.Rounded.KeyboardArrowDown, null, tint = secondaryColor, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Şehir Seçiciyi Aç", tint = secondaryColor, modifier = Modifier.size(16.dp))
                     }
                     Text("Konumu değiştir", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
                 }
@@ -816,7 +819,7 @@ fun PremiumWeatherContent(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PremiumNotificationButton(unreadCount, isDark, textColor, onNotificationsClick)
                 Spacer(Modifier.width(16.dp)) // Increased spacing
-                Icon(spec.icon, null, tint = spec.accentColor, modifier = Modifier.size(34.dp))
+                Icon(spec.icon, contentDescription = "Hava Durumu İkonu: $conditionLabel", tint = spec.accentColor, modifier = Modifier.size(34.dp))
             }
         }
 
@@ -867,8 +870,25 @@ fun PremiumWeatherContent(
 
 @Composable
 fun PremiumNotificationButton(unreadCount: Int, isDark: Boolean, tint: Color, onClick: () -> Unit) {
-    Box(modifier = Modifier.size(48.dp).zIndex(120f).clip(CircleShape).background(Brush.verticalGradient(if (isDark) listOf(Color.White.copy(0.25f), Color.White.copy(0.1f)) else listOf(Color.Black.copy(0.12f), Color.Black.copy(0.05f)))).border(1.dp, if (isDark) Color.White.copy(0.3f) else Color.Black.copy(0.15f), CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.Notifications, null, tint = tint, modifier = Modifier.size(22.dp))
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .zIndex(120f)
+            .clip(CircleShape)
+            .background(Brush.verticalGradient(if (isDark) listOf(Color.White.copy(0.25f), Color.White.copy(0.1f)) else listOf(Color.Black.copy(0.12f), Color.Black.copy(0.05f))))
+            .border(1.dp, if (isDark) Color.White.copy(0.3f) else Color.Black.copy(0.15f), CircleShape)
+            .clickable(
+                onClickLabel = "Bildirim Merkezi",
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Rounded.Notifications,
+            contentDescription = if (unreadCount > 0) "$unreadCount okunmamış bildirim" else "Bildirimler",
+            tint = tint,
+            modifier = Modifier.size(22.dp)
+        )
         if (unreadCount > 0) Box(modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(10.dp).clip(CircleShape).background(Color(0xFF3B82F6)).border(1.5.dp, if (isDark) Color(0xFF1E293B) else Color.White, CircleShape))
     }
 }

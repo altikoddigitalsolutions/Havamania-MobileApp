@@ -1,14 +1,17 @@
-# Havamania Kullanıcı Verisi İzolasyonu Görev Listesi
+# Production-Ready Yayına Hazırlık Görev Listesi
 
-- [ ] **1. Veri Katmanı ve Ayarlar**
-    - [ ] `AppThemeManager.kt`: Genel ayarları (Tema, Birim, Dil) UID bazlı hale getir ve varsayılanları temizle.
-- [ ] **2. ViewModel İzolasyonu ve Temizlik**
-    - [ ] `WeatherViewModel.kt`: Auth listener ekle, state'leri anında temizle ve `NoCity` durumunu yönet.
-    - [ ] `TravelViewModel.kt`: Auth listener ekle ve seyahat listesini temizle.
-    - [ ] `AiHistoryViewModel.kt`: Auth listener ekle ve geçmişi temizle.
-    - [ ] `AiChatScreen.kt` (ViewModel): Auth listener ekle ve mesajları temizle.
-- [ ] **3. UI Güncellemeleri**
-    - [ ] `WeatherView.kt`: `WeatherUiState.NoCity` durumunda uygun Empty State'i göster.
-- [ ] **4. Doğrulama**
-    - [ ] Kullanıcı A ve B arasında veri sızıntısı olmadığını doğrula.
-    - [ ] Yeni kullanıcı başlangıcının tamamen boş olduğunu kontrol et.
+- `[x]` Güvenlik ve Manifest Düzenlemeleri
+    - `[x]` `AndroidManifest.xml`: Backup ve cleartext traffic ayarlarını production seviyesine çek.
+    - `[x]` İzin denetimi ve query kısıtlamaları.
+- `[x]` Yasal Uyumluluk (KVKK/GDPR)
+    - `[x]` `AuthScreens.kt`: Kayıt ekranına yasal onay kutusu ve linkleri ekle.
+- `[x]` String Resource ve Yerelleştirme
+    - `[x]` Kod içindeki kritik hardcoded metinleri `strings.xml`'e taşı.
+    - `[x]` Yazım denetimi ve tutarlılık kontrolü.
+- `[x]` Kullanıcı Dostu Hata Yönetimi
+    - `[x]` `AuthViewModel.kt`: Teknik Firebase hatalarını anlaşılır Türkçe mesajlara çevir.
+    - `[x]` `WeatherViewModel.kt`: Network ve API hatalarını UX standartlarına getir.
+- `[x]` Erişilebilirlik ve UX Cila
+    - `[x]` Kritik ikon ve butonlara `contentDescription` ekle.
+    - `[x]` Dokunma alanlarını (touch targets) doğrula.
+- `[x]` Final Release Derlemesi ve Raporlama

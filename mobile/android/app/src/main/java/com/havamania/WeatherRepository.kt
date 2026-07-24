@@ -61,7 +61,7 @@ class WeatherRepository(
 
     /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker.
-     * Eğer cache yeterince yeniyse (örneğin < 15 dk) network isteği atmaz.
+     * Stale-while-revalidate stratejisi (Business Rule 6)
      */
     fun getWeatherData(
         lat: Double,
@@ -74,35 +74,29 @@ class WeatherRepository(
         val cacheKey = if (districtName != null) "$cityName-$districtName" else cityName
         val cacheTimeoutMillis = 15 * 60 * 1000L // 15 dakika
 
-        // 1. Cache'den oku
+        // 1. Her zaman önce Cache'den oku ve varsa anında dön (Business Rule 7: Offline-first)
         val cachedEntity = weatherDao.getCachedWeather(cacheKey)
-        var isCacheStrictlyValid = false
+        var isCacheFresh = false
 
         if (cachedEntity != null) {
             try {
                 val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
                 val age = System.currentTimeMillis() - cachedEntity.timestamp
-                val isRecent = age < cacheTimeoutMillis
+                isCacheFresh = age < cacheTimeoutMillis
 
-                // Eğer kritik veriler null değilse ve cache aşırı eski değilse (örn 1 saat)
-                if (cachedData.humidity != null && cachedData.pressure != null) {
-                    emit(cachedData)
-                    hasEmitted = true
-
-                    if (isRecent && !forceRefresh) {
-                        isCacheStrictlyValid = true
-                        android.util.Log.d("WeatherRepo", "Using valid cache for $cacheKey (Age: ${age/1000}s)")
-                    }
-                }
+                // KURAL 6.1: Eski de olsa cache verisini anında göster
+                emit(cachedData)
+                hasEmitted = true
+                android.util.Log.d("WeatherRepo", "Cache emitted for $cacheKey (Age: ${age/1000}s, Fresh: $isCacheFresh)")
             } catch (e: Exception) {
                 android.util.Log.e("WeatherRepo", "Cache decode failed", e)
             }
         }
 
-        // 2. Network'ten çek (Sadece forceRefresh true ise veya cache geçersizse)
-        if (!isCacheStrictlyValid || forceRefresh) {
+        // 2. Network'ten çek (Cache taze değilse VEYA forceRefresh ise)
+        if (!isCacheFresh || forceRefresh) {
             try {
-                android.util.Log.i("WeatherRepo", "Fetching from Network for $cacheKey (Force: $forceRefresh)")
+                android.util.Log.i("WeatherRepo", "Fetching from Network for $cacheKey (Reason: ${if (forceRefresh) "Force" else "Stale"})")
                 val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover,uv_index"
                 val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
 
@@ -114,11 +108,10 @@ class WeatherRepository(
                 )
                 val domainData = WeatherMapper.mapToDomain(response, cityName, districtName)
 
-                // 3. Cache'i güncelle
+                // 3. Cache'i ve State'i güncelle
                 val jsonString = json.encodeToString(domainData)
                 weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString))
 
-                // 4. Güncel veriyi dön
                 emit(domainData)
                 hasEmitted = true
             } catch (e: Exception) {

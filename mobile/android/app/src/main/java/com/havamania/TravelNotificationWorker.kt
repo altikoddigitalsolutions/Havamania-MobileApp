@@ -138,7 +138,7 @@ class TravelNotificationWorker(
             minTemp = snapshot?.minTemp,
             maxTemp = snapshot?.maxTemp,
             windRisk = WeatherUtils.formatWindWithLevel(snapshot?.windSpeed),
-            previousAnalysisSummary = plan.lastWeatherAnalysisText,
+            previousAnalysisSummary = plan.weatherSummary,
             comparisonText = comparisonText,
             recommendedItems = recommendedItems
         )
@@ -231,6 +231,7 @@ class TravelNotificationWorker(
 
     private fun TravelPlanEntity.toDomain() = TravelPlan(
         id = id,
+        userId = userId,
         city = city,
         latitude = latitude,
         longitude = longitude,
@@ -238,21 +239,31 @@ class TravelNotificationWorker(
         startDate = Instant.ofEpochMilli(startDate).atZone(ZoneId.systemDefault()).toLocalDate(),
         endDate = Instant.ofEpochMilli(endDate).atZone(ZoneId.systemDefault()).toLocalDate(),
         createdAt = createdAt,
+        updatedAt = updatedAt,
+        archivedAt = archivedAt,
+        lastAnalysisAt = lastAnalysisAt,
         weatherSummary = weatherSummary,
+        packingAdvice = packingAdvice,
+        mustSee = mustSee,
+        foodAdvice = foodAdvice,
+        localAdvice = localAdvice,
         aiSuggestion = aiSuggestion,
-        lastWeatherAnalysisText = lastWeatherAnalysisText,
-        lastWeatherAnalysisDate = lastWeatherAnalysisDate,
-        lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot,
-        nextAnalysisEligibleDate = nextAnalysisEligibleDate,
+        comfortScore = comfortScore,
+        userNote = userNote,
+        userRating = userRating,
+        isAnalyzing = false,
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
         isArchived = isArchived,
         analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo,
+        lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
         id = id,
+        userId = userId,
         city = city,
         latitude = latitude,
         longitude = longitude,
@@ -260,17 +271,28 @@ class TravelNotificationWorker(
         startDate = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
         endDate = endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
         createdAt = createdAt,
+        updatedAt = updatedAt,
+        archivedAt = archivedAt,
+        lastAnalysisAt = lastAnalysisAt,
         weatherSummary = weatherSummary,
+        packingAdvice = packingAdvice,
+        mustSee = mustSee,
+        foodAdvice = foodAdvice,
+        localAdvice = localAdvice,
         aiSuggestion = aiSuggestion,
-        lastWeatherAnalysisText = lastWeatherAnalysisText,
-        lastWeatherAnalysisDate = lastWeatherAnalysisDate,
+        comfortScore = comfortScore,
+        userNote = userNote,
+        userRating = userRating,
+        lastWeatherAnalysisText = if (weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) "Bekleniyor" else "Hazır",
+        lastWeatherAnalysisDate = lastAnalysisAt,
         lastForecastSnapshot = lastForecastSnapshot,
         previousForecastSnapshot = previousForecastSnapshot,
-        nextAnalysisEligibleDate = nextAnalysisEligibleDate,
+        nextAnalysisEligibleDate = null,
         weatherAnalysisStatus = weatherAnalysisStatus.name,
         isArchived = isArchived,
         analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo
     )
 
     companion object {

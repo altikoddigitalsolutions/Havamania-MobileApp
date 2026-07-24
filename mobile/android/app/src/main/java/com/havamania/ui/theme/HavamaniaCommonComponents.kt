@@ -46,9 +46,11 @@ fun HavamaniaDialog(
     confirmColor: Color = HavamaniaTheme.colors.accent,
     icon: ImageVector? = null,
     confirmEnabled: Boolean = true,
-    dismissEnabled: Boolean = true
+    dismissEnabled: Boolean = true,
+    content: @Composable (() -> Unit)? = null
 ) {
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
 
     AlertDialog(
         onDismissRequest = if (dismissEnabled) onDismissRequest else ({}),
@@ -65,12 +67,20 @@ fun HavamaniaDialog(
             )
         },
         text = {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (content != null) {
+                    content()
+                }
+            }
         },
         confirmButton = {
             TextButton(
@@ -78,7 +88,9 @@ fun HavamaniaDialog(
                 onClick = {
                     onConfirm()
                 },
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier
+                    .padding(horizontal = themeStyles.spacingSmall)
+                    .minimumInteractiveComponentSize() // Ensures 48dp
             ) {
                 Text(
                     text = confirmText.uppercase(),
@@ -90,7 +102,11 @@ fun HavamaniaDialog(
         },
         dismissButton = dismissText?.let {
             {
-                TextButton(enabled = dismissEnabled, onClick = onDismissRequest) {
+                TextButton(
+                    enabled = dismissEnabled,
+                    onClick = onDismissRequest,
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
                     Text(
                         text = it.uppercase(),
                         color = if (dismissEnabled) themeColors.textMuted else Color.Transparent,
@@ -100,7 +116,7 @@ fun HavamaniaDialog(
                 }
             }
         },
-        shape = RoundedCornerShape(28.dp)
+        shape = RoundedCornerShape(themeStyles.radiusLarge)
     )
 }
 
@@ -157,18 +173,18 @@ fun HavamaniaScreen(
 @Composable
 fun HavamaniaGlassCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = LocalResponsiveValues.current.cardRadius,
+    cornerRadius: Dp = HavamaniaTheme.styles.cardCornerRadius,
     alpha: Float = 0.7f,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
     val isPressed = isPressedState.value
 
     val windowSize = LocalWindowSize.current
-    val responsive = LocalResponsiveValues.current
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed && onClick != null) 0.97f else 1f,
@@ -185,13 +201,13 @@ fun HavamaniaGlassCard(
                 if (onClick != null) {
                     Modifier.clickable(
                         interactionSource = interactionSource,
-                        indication = null, // Custom feedback via scale
+                        indication = null,
                         onClick = onClick
                     )
                 } else Modifier
             )
             .border(
-                width = 1.dp,
+                width = themeStyles.cardBorderWidth,
                 brush = Brush.verticalGradient(
                     colors = listOf(colors.border, Color.Transparent)
                 ),
@@ -199,7 +215,10 @@ fun HavamaniaGlassCard(
             )
     ) {
         Column(
-            modifier = Modifier.padding(if (windowSize.isCompact) 14.dp else 20.dp),
+            modifier = Modifier.padding(
+                if (windowSize.isCompact) themeStyles.spacingMedium
+                else themeStyles.spacingLarge
+            ),
             content = content
         )
     }
@@ -218,6 +237,7 @@ fun HavamaniaPrimaryButton(
     isLoading: Boolean = false
 ) {
     val colors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
     val isPressed = isPressedState.value
@@ -254,13 +274,13 @@ fun HavamaniaPrimaryButton(
                 if (enabled && !isLoading) {
                     drawRoundRect(
                         color = colors.accent.copy(alpha = glowAlpha * 0.3f),
-                        cornerRadius = CornerRadius(18.dp.toPx()),
+                        cornerRadius = CornerRadius(themeStyles.radiusSmall.toPx()),
                         size = size.copy(width = size.width + 4.dp.toPx(), height = size.height + 4.dp.toPx()),
                         topLeft = Offset(-2.dp.toPx(), -2.dp.toPx())
                     )
                 }
             },
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(themeStyles.radiusSmall),
         color = Color.Transparent,
         interactionSource = interactionSource
     ) {
@@ -279,11 +299,12 @@ fun HavamaniaPrimaryButton(
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = themeStyles.spacingMedium)
                 ) {
                     if (icon != null) {
                         Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(themeStyles.spacingSmall))
                     }
                     Text(
                         text = text.uppercase(),

@@ -219,21 +219,26 @@ object TravelAiHelper {
         if (forecastSnapshot != null) {
             val precip = forecastSnapshot.precipitationProbability ?: 0
             val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
-            packingBlock = when {
-                precip > 50 -> "Yağmura karşı şık bir yağmurluk and su geçirmeyen bir ayakkabı hayat kurtarır. Valizine mutlaka bir şemsiye eklemelisin."
-                maxTemp > 28 -> "Pamuklu and ferah kıyafetler seçmeni öneririm. Güneş gözlüğün and koruyucu kremin bu seyahatin olmazsa olmazı."
-                maxTemp < 12 -> "Kalın bir mont and atkı/bere ikilisini valizine eklemelisin. Kat kat giyinmek seni gün boyu soğuktan koruyacaktır."
+            val minTemp = forecastSnapshot.minTemp?.toInt() ?: 15
+
+            val basePacking = when {
+                precip > 50 -> "Hava yağışlı geçeceği için şık bir yağmurluk ve su geçirmeyen bir ayakkabı hayat kurtarır. Valizine mutlaka sağlam bir şemsiye eklemelisin."
+                maxTemp > 28 -> "Hava oldukça sıcak geçecek; pamuklu ve ferah kıyafetler seçmeni öneririm. Güneş gözlüğün ve yüksek koruyucu kremin olmazsa olmazın."
+                maxTemp < 12 -> "Hava sert; kalın bir mont, atkı ve bere ikilisini valizine eklemelisin. Kat kat giyinmek seni gün boyu soğuktan koruyacaktır."
                 else -> "Hafif bir ceket veya sweatshirt yanına almak mantıklı olur. Akşam serinliği için tedarikli olmakta fayda var."
             }
 
+            packingBlock = basePacking
+
             // Kişiselleştirilmiş Valiz Önerisi
             if (isPersonalizationActive) {
-                if (interests.contains("Kamp")) packingBlock += " Uyku tulumu ve matını kontrol etmeyi unutma."
-                if (interests.contains("Koşu")) packingBlock += " En rahat koşu ayakkabılarını yanına almayı ihmal etme."
-                if (interests.contains("Fotoğrafçılık")) packingBlock += " Yedek piller ve lens temizleme kiti hayat kurtarabilir."
+                if (interests.any { it.contains("kamp", true) }) packingBlock += " ⛺ Uyku tulumu ve matını kontrol etmeyi unutma."
+                if (interests.any { it.contains("koşu", true) }) packingBlock += " 🏃 En rahat koşu ayakkabılarını yanına almayı ihmal etme."
+                if (interests.any { it.contains("fotoğraf", true) }) packingBlock += " 📷 Yedek piller ve lens temizleme kiti hayat kurtarabilir."
+                if (maxTemp - minTemp > 10) packingBlock += " 🧥 Gün içindeki sıcaklık farkı fazla, hırka almanı öneririm."
             }
         } else {
-            packingBlock = "Rahat bir yürüyüş ayakkabısı and her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
+            packingBlock = "Rahat bir yürüyüş ayakkabısı ve her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
         }
 
         val tripAdvice = when(tripType) {

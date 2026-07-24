@@ -63,7 +63,6 @@ fun HavamaniaTheme(
     content: @Composable () -> Unit
 ) {
     val currentThemeSelection by themeViewModel.currentTheme.collectAsState()
-    val weatherUiState by weatherViewModel.uiState.collectAsState()
 
     // Real-time time tracking for Auto Theme
     var currentDateTime by remember { mutableStateOf(LocalDateTime.now()) }
@@ -77,17 +76,7 @@ fun HavamaniaTheme(
     }
 
     val finalTheme = if (currentThemeSelection == AppTheme.AUTO) {
-        val isDay = if (weatherUiState is WeatherUiState.Success) {
-            val data = (weatherUiState as WeatherUiState.Success).data
-            val sunrise = try { java.time.LocalTime.parse(data.sunriseTime) } catch (e: Exception) { java.time.LocalTime.of(6, 30) }
-            val sunset = try { java.time.LocalTime.parse(data.sunsetTime) } catch (e: Exception) { java.time.LocalTime.of(19, 30) }
-            val now = java.time.LocalTime.now()
-            !now.isBefore(sunrise) && now.isBefore(sunset)
-        } else {
-            val hour = currentDateTime.hour
-            hour in 6..18
-        }
-        ThemeManager.getAutoTheme(currentDateTime.monthValue, isDay)
+        ThemeManager.getSeasonalTheme(currentDateTime.monthValue)
     } else {
         currentThemeSelection
     }

@@ -114,18 +114,29 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateProfile(name: String, bio: String) {
+        val trimmedName = name.trim()
+        val trimmedBio = bio.trim()
+
+        if (trimmedName.isEmpty()) {
+            _profileState.value = ProfileState.Error("İsim boş olamaz.")
+            return
+        }
+
+        val finalName = if (trimmedName.length > 50) trimmedName.take(50) else trimmedName
+        val finalBio = if (trimmedBio.length > 500) trimmedBio.take(500) else trimmedBio
+
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             try {
                 val updates = mapOf(
-                    "name" to name,
-                    "bio" to bio,
+                    "name" to finalName,
+                    "bio" to finalBio,
                     "updatedAt" to System.currentTimeMillis()
                 )
                 db.collection("users").document(uid).update(updates).await()
 
                 auth.currentUser?.updateProfile(com.google.firebase.auth.userProfileChangeRequest {
-                    displayName = name
+                    displayName = finalName
                 })?.await()
 
                 fetchProfile()

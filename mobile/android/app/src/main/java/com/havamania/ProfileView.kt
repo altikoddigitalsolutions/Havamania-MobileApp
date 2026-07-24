@@ -209,13 +209,14 @@ fun ProfileScreen(
         }
 
         if (showStatsDetail != null) {
+            val statsType = showStatsDetail ?: "interest" // Safety fallback
             ModalBottomSheet(
                 onDismissRequest = { showStatsDetail = null },
                 containerColor = themeColors.surface,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
             ) {
                 StatsDetailContent(
-                    type = showStatsDetail!!,
+                    type = statsType,
                     userInterests = userInterests,
                     travelPlans = travelPlans,
                     aiHistory = aiHistoryItems

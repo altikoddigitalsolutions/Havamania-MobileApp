@@ -13,6 +13,7 @@ data class UserProfile(
     val personalizationEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val profileCompleted: Boolean = false,
+    val isPremium: Boolean = false,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
     val personalizationProfile: FirestorePersonalizationProfile? = null

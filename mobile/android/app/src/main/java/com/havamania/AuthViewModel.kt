@@ -139,6 +139,36 @@ class AuthViewModel : ViewModel() {
         _authState.value = AuthState.Idle
     }
 
+    /**
+     * Account Deletion with Safety (Business Rule 9)
+     */
+    fun deleteAccount(password: String, onComplete: (Boolean, String?) -> Unit) {
+        val user = auth.currentUser ?: return
+        val email = user.email ?: return
+
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                // 1. Re-authenticate
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
+                user.reauthenticate(credential).await()
+
+                // 2. Delete Firestore Data
+                db.collection("users").document(user.uid).delete().await()
+
+                // 3. Delete Auth Account
+                user.delete().await()
+
+                _authState.value = AuthState.Idle
+                onComplete(true, null)
+            } catch (e: Exception) {
+                val error = mapFirebaseError(e)
+                _authState.value = AuthState.Error(error)
+                onComplete(false, error)
+            }
+        }
+    }
+
     fun clearError() {
         _authState.value = AuthState.Idle
     }

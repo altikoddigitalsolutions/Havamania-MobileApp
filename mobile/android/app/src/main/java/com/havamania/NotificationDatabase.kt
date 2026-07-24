@@ -46,9 +46,12 @@ interface NotificationDao {
 
     @Query("DELETE FROM notifications WHERE userId = :uid AND category = :category")
     suspend fun deleteByCategory(uid: String, category: String)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM notifications WHERE userId = :uid AND deduplicationKey = :key LIMIT 1)")
+    suspend fun existsWithKey(uid: String, key: String): Boolean
 }
 
-@Database(entities = [NotificationItem::class], version = 4, exportSchema = false)
+@Database(entities = [NotificationItem::class], version = 5, exportSchema = false)
 @TypeConverters(NotificationConverters::class)
 abstract class NotificationDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao

@@ -126,8 +126,8 @@ const WeatherSuitabilityCard: React.FC<{ current: CurrentWeatherData; today?: Da
   return (
     <View style={[styles.fullWidthCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
       <View style={styles.cardHeader}>
-        <Icon name="sparkles-outline" size={16} color={C.accent} />
-        <Text style={[styles.cardLabel, { color: C.textSecondary }]}>HAVAMANIA DURUM SKORU</Text>
+        <Icon name="sparkles-outline" size = { 16 } color = { C.accent } />
+        <Text style={[styles.cardLabel, { color: C.textSecondary }]}>HAVAMANİA DURUM SKORU</Text>
       </View>
       <View style={styles.suitabilityRow}>
         <View style={[styles.suitabilityIconContainer, { backgroundColor: `${suitability.color}20` }]}>

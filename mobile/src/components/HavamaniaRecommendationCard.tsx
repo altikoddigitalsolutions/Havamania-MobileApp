@@ -101,7 +101,7 @@ export const HavamaniaRecommendationCard: React.FC<HavamaniaRecommendationCardPr
         <View style={[styles.iconBox, { backgroundColor: C.accent + '15' }]}>
            <Icon name="sparkles" size={16} color={C.accent} />
         </View>
-        <Text style={[styles.headerText, { color: C.accent }]}>HAVAMANIA AI ANALİZİ</Text>
+        <Text style={[styles.headerText, { color: C.accent }]}>HAVAMANİA AI ANALİZİ</Text>
       </View>
 
       <Text style={[styles.summary, { color: C.text }]}>{rec.summary}</Text>

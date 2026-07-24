@@ -12,6 +12,9 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
 import com.havamania.BuildConfig
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.MainScope
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
@@ -35,15 +38,17 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
-    SoLoader.init(this, false)
 
-    // Schedule daily travel weather analysis
-    TravelNotificationWorker.schedule(this)
+    // Move heavy init to background thread to speed up UI thread
+    MainScope().launch {
+        com.facebook.soloader.SoLoader.init(this@MainApplication, false)
 
-    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-      // Yeni mimari etkinse giriş noktasını yüklüyoruz.
-      // Context/Application örneğini (this) geçiyoruz.
-      load()
+        // Schedule daily travel weather analysis
+        TravelNotificationWorker.schedule(this@MainApplication)
+
+        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+            load()
+        }
     }
   }
 }

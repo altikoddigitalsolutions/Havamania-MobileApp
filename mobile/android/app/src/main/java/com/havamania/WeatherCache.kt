@@ -91,16 +91,24 @@ data class TravelPlanEntity(
     val startDate: Long,
     val endDate: Long,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val archivedAt: Long? = null,
+    val lastAnalysisAt: Long? = null,
     val weatherSummary: String? = null,
+    val packingAdvice: String? = null,
+    val mustSee: String? = null,
+    val foodAdvice: String? = null,
+    val localAdvice: String? = null,
     val aiSuggestion: String? = null,
+    val comfortScore: Int? = null,
     val userNote: String? = null,
     val userRating: Int? = 0,
-    val lastWeatherAnalysisText: String? = null,
-    val lastWeatherAnalysisDate: Long? = null,
+    val lastWeatherAnalysisText: String? = null, // Can be removed later if redundant
+    val lastWeatherAnalysisDate: Long? = null, // Can be removed later if redundant
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
-    val weatherAnalysisStatus: String = "TOO_EARLY",
+    val weatherAnalysisStatus: String = "WAITING_FOR_WINDOW",
     @ColumnInfo(defaultValue = "0")
     val isArchived: Boolean = false,
     val analyses: List<TravelWeatherAnalysis> = emptyList(),
@@ -114,13 +122,14 @@ data class TravelPlanEntity(
  */
 @Entity(tableName = "ai_history")
 data class AiHistoryEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val id: String, // Acts as conversationId
     val userId: String = "legacy",
     val title: String,
     val summary: String,
     val messages: List<AltikodChatMessage>,
     val cityName: String?,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**
@@ -160,8 +169,11 @@ interface WeatherDao {
     suspend fun clearAllWeatherCache()
 
     // AI History
-    @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY timestamp DESC")
+    @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY updatedAt DESC")
     suspend fun getAllAiHistory(uid: String): List<AiHistoryEntity>
+
+    @Query("SELECT * FROM ai_history WHERE id = :id LIMIT 1")
+    suspend fun getAiHistoryItem(id: String): AiHistoryEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiHistory(item: AiHistoryEntity)
@@ -176,7 +188,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 11, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 13, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao

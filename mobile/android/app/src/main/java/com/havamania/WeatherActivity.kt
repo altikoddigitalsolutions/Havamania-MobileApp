@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.*
 
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -191,8 +192,8 @@ class WeatherActivity : ComponentActivity() {
                                 composable(Routes.AI_HISTORY) {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
-                                        onNavigateToDetail = { id ->
-                                            navController.navigate(Routes.AI_HISTORY_DETAIL.replace("{itemId}", id))
+                                        onNavigateToChat = { id ->
+                                            navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
                                         }
                                     )
                                 }
@@ -210,7 +211,16 @@ class WeatherActivity : ComponentActivity() {
                                     SettingsScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) }
+                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
+                                        onNavigateToLegal = { title, url ->
+                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+                                            navController.navigate(
+                                                Routes.LEGAL_WEBVIEW
+                                                    .replace("{title}", title)
+                                                    .replace("{url}", encodedUrl)
+                                            )
+                                        },
+                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
                                     )
                                 }
                                 composable(Routes.NOTIFICATION_CENTER) {

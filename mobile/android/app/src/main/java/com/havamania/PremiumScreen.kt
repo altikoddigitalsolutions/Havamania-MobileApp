@@ -30,7 +30,7 @@ fun PremiumScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "HAVAMANIA PREMIUM",
+                title = "HAVAMANİA PREMIUM",
                 onBack = onBack
             )
         }
@@ -121,6 +121,11 @@ fun PremiumScreen(
                     icon = Icons.Rounded.History,
                     title = "AI Sohbet Geçmişi",
                     desc = "Asistanınızla yaptığınız tüm seyahat planlarını ve hava durumu analizlerini arşivleyin."
+                )
+                PremiumFeatureItem(
+                    icon = Icons.Rounded.AutoFixHigh,
+                    title = "Atmosferik Görseller",
+                    desc = "Hava durumuna göre dinamikleşen, ultra yüksek çözünürlüklü premium efektler ve temalar."
                 )
             }
 

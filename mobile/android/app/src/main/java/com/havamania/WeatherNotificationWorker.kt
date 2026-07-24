@@ -6,6 +6,8 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import java.util.concurrent.TimeUnit
 
 /**
@@ -17,14 +19,56 @@ class WeatherNotificationWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        // Burada normalde API'den güncel veri çekilir
-        // Şimdilik örnek bir bildirim gönderiyoruz
-        // Standart başlık kullanımı
-        showNotification(
-            "Hava Durumu Özeti",
-            "İstanbul'da bugün hava parçalı bulutlu ve 12°. Şemsiyeni almayı unutma!"
-        )
-        return Result.success()
+        val application = applicationContext as? android.app.Application ?: return Result.failure()
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val uid = auth.currentUser?.uid ?: "legacy"
+
+        val repository = WeatherRepository.getInstance(application)
+        val database = NotificationDatabase.getDatabase(application)
+        val notifRepo = NotificationRepository(database.notificationDao())
+
+        try {
+            // 1. Fetch current weather for default city
+            val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(application, uid).firstOrNull() ?: return Result.success()
+
+            val weatherData = repository.getWeatherData(
+                defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.admin1
+            ).firstOrNull() ?: return Result.retry()
+
+            // 2. Check Smart Alerts
+            val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(application, uid).first()
+            val alerts = SmartAlertEngine.generateAlerts(weatherData, config, uid)
+
+            // 3. Filter and Show Notifications (Business Rule 5: Deduplication)
+            alerts.forEach { alert ->
+                val key = alert.deduplicationKey
+                val alreadyNotified = if (key.isNotEmpty()) {
+                    database.notificationDao().existsWithKey(uid, key)
+                } else false
+
+                if (!alreadyNotified) {
+                    val notificationItem = NotificationItem(
+                        userId = uid,
+                        title = alert.title,
+                        message = alert.description,
+                        category = when(alert.id) {
+                            "rain" -> NotificationCategory.RAIN
+                            "uv" -> NotificationCategory.UV
+                            "storm" -> NotificationCategory.WARNING
+                            else -> NotificationCategory.GENERAL
+                        },
+                        severity = if (alert.severity == AlertSeverity.CRITICAL) "HIGH" else "NORMAL",
+                        deduplicationKey = if (key.isNotEmpty()) key else null
+                    )
+                    notifRepo.insert(notificationItem)
+                    showNotification(alert.title, alert.description)
+                }
+            }
+
+            return Result.success()
+        } catch (e: Exception) {
+            return Result.retry()
+        }
     }
 
     private fun showNotification(title: String, message: String) {

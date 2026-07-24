@@ -8,4 +8,34 @@
     <string name="notification_mark_read">Okundu Yap</string>
     <string name="notification_mark_unread">Okunmadı Yap</string>
     <string name="notification_delete">Sil</string>
+
+    <!-- General UI -->
+    <string name="generic_error">Bir sorun oluştu. Lütfen tekrar deneyin.</string>
+    <string name="network_error">İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin.</string>
+    <string name="auth_failed">Giriş işlemi tamamlanamadı.</string>
+    <string name="registration_failed">Kayıt oluşturulamadı.</string>
+    <string name="invalid_credentials">E-posta adresi veya şifre hatalı.</string>
+    <string name="email_already_in_use">Bu e-posta adresi zaten kullanımda.</string>
+    <string name="weak_password">Şifre çok zayıf. Lütfen en az 6 karakter kullanın.</string>
+    <string name="passwords_do_not_match">Şifreler uyuşmuyor.</string>
+    <string name="legal_consent_required">Lütfen kullanım koşullarını kabul edin.</string>
+    <string name="legal_consent_part1">Kullanım Koşullarını ve Gizlilik</string>
+    <string name="legal_consent_part2">Politikasını okudum, kabul ediyorum.</string>
+    <string name="auth_welcome_title">Havamania</string>
+    <string name="auth_welcome_slogan">Hava durumunu akıllıca takip et,\nseyahatlerini akıllıca planla.</string>
+    <string name="login_title">Giriş Yap</string>
+    <string name="register_title">Kayıt Ol</string>
+    <string name="forgot_password_link">Şifremi Unuttum</string>
+    <string name="no_account_text">Henüz hesabın yok mu?</string>
+    <string name="has_account_text">Zaten hesabın var mı?</string>
+    <string name="new_account_title">Yeni Hesap Oluştur</string>
+    <string name="forgot_password_title">Şifre Sıfırlama</string>
+    <string name="send_link_btn">BAĞLANTI GÖNDER</string>
+    <string name="email_sent_title">E-posta Gönderildi</string>
+    <string name="email_sent_desc">Lütfen e-posta kutunuzu kontrol edin ve talimatları izleyin.</string>
+
+    <!-- Legal Headers -->
+    <string name="privacy_policy_title">GİZLİLİK POLİTİKASI</string>
+    <string name="terms_of_use_title">KULLANIM KOŞULLARI</string>
+    <string name="kvkk_title">KVKK AYDINLATMA METNİ</string>
 </resources>

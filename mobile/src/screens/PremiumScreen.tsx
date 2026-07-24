@@ -56,7 +56,7 @@ export function PremiumScreen() {
             <View style={s.crownIcon}>
               <Icon name="ribbon" size={40} color="#FFF" />
             </View>
-            <Text style={s.headerTitle}>HAVAMANIA PREMIUM</Text>
+            <Text style={s.headerTitle}>HAVAMANİA PREMIUM</Text>
             <Text style={s.headerSubtitle}>Sınırsız hava analizi ve AI asistan deneyimini başlatın</Text>
           </View>
         </LinearGradient>

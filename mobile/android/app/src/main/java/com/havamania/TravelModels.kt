@@ -10,7 +10,7 @@ import java.util.*
 /**
  * Modern Travel Planner Models
  */
-const val TRIP_ANALYSIS_WINDOW_DAYS = 15
+const val TRIP_ANALYSIS_WINDOW_DAYS = 10
 
 enum class TripType(val label: String, val icon: ImageVector) {
     BUSINESS("💼 İş", Icons.Rounded.BusinessCenter),
@@ -32,6 +32,12 @@ enum class TripType(val label: String, val icon: ImageVector) {
     EVENT("🎉 Festival", Icons.Rounded.Event),
     ROAD_TRIP("🚗 Yolculuk", Icons.Rounded.DirectionsCar),
     OTHER("✨ Diğer", Icons.Rounded.MoreHoriz)
+}
+
+enum class TripStatus {
+    UPCOMING,
+    ACTIVE,
+    COMPLETED
 }
 
 enum class TravelWeatherAnalysisStatus {
@@ -111,25 +117,40 @@ data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
     val userId: String = "legacy",
     val city: String,
-    val latitude: Double,
-    val longitude: Double,
-    val tripType: TripType,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val tripType: TripType = TripType.OTHER,
     val startDate: LocalDate,
     val endDate: LocalDate,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val lastAnalysisAt: Long? = null,
+    val archivedAt: Long? = null,
+
+    // AI & Weather Data
     val weatherSummary: String? = null,
-    val aiSuggestion: String? = null,
+    val packingAdvice: String? = null,
+    val mustSee: String? = null,
+    val foodAdvice: String? = null,
+    val localAdvice: String? = null,
+    val aiSuggestion: String? = null, // Full raw suggestion
+    val comfortScore: Int? = null,
+
+    // User Input
     val userNote: String? = null,
     val userRating: Int? = 0,
+
+    // Status & Logic
     val isAnalyzing: Boolean = false,
-    val lastWeatherAnalysisText: String? = null,
-    val lastWeatherAnalysisDate: Long? = null,
-    val lastForecastSnapshot: ForecastSnapshot? = null,
-    val previousForecastSnapshot: ForecastSnapshot? = null,
-    val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: TravelWeatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
     val isArchived: Boolean = false,
+    val isDemo: Boolean = false,
+
+    // Detailed History
     val analyses: List<TravelWeatherAnalysis> = emptyList(),
-    val lastDailyNotificationDate: String? = null, // YYYY-MM-DD
-    val isDemo: Boolean = false
+    val lastForecastSnapshot: ForecastSnapshot? = null,
+    val previousForecastSnapshot: ForecastSnapshot? = null,
+
+    // Notifications tracking
+    val lastDailyNotificationDate: String? = null // YYYY-MM-DD
 )

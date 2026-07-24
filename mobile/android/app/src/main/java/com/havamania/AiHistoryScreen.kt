@@ -31,13 +31,14 @@ import java.util.Locale
 @Composable
 fun AiHistoryScreen(
     onBack: () -> Unit,
-    onNavigateToDetail: (String) -> Unit,
+    onNavigateToChat: (String) -> Unit,
     viewModel: AiHistoryViewModel = viewModel()
 ) {
     val historyItems by viewModel.historyItems.collectAsState()
     val themeColors = HavamaniaTheme.colors
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<String?>(null) }
 
     HavamaniaScreen(
         topBar = {
@@ -61,13 +62,13 @@ fun AiHistoryScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
                     contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(historyItems, key = { it.id }) { item ->
                         AiHistoryCard(
                             item = item,
-                            onClick = { onNavigateToDetail(item.id) },
-                            onDelete = { viewModel.deleteItem(item.id) }
+                            onClick = { onNavigateToChat(item.id) },
+                            onDelete = { itemToDelete = item.id }
                         )
                     }
                 }
@@ -77,13 +78,29 @@ fun AiHistoryScreen(
         if (showDeleteConfirm) {
             HavamaniaDialog(
                 onDismissRequest = { showDeleteConfirm = false },
-                title = "Geçmişi Sil?",
-                text = "Tüm AI sohbet geçmişiniz kalıcı olarak silinecektir.",
+                title = "Geçmişi Temizle?",
+                text = "Tüm AI sohbet geçmişiniz kalıcı olarak silinecektir. Devam etmek istiyor musunuz?",
                 confirmText = "Temizle",
                 confirmColor = themeColors.error,
                 icon = Icons.Rounded.DeleteSweep,
                 onConfirm = {
                     viewModel.clearAll()
+                    showDeleteConfirm = false
+                }
+            )
+        }
+
+        if (itemToDelete != null) {
+            HavamaniaDialog(
+                onDismissRequest = { itemToDelete = null },
+                title = "Sohbeti Sil?",
+                text = "Bu sohbet kaydı kalıcı olarak silinecektir.",
+                confirmText = "Sil",
+                confirmColor = themeColors.error,
+                icon = Icons.Rounded.DeleteOutline,
+                onConfirm = {
+                    itemToDelete?.let { viewModel.deleteItem(it) }
+                    itemToDelete = null
                 }
             )
         }
@@ -107,47 +124,51 @@ fun AiHistoryCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(themeColors.accent.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.HistoryEdu, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.HistoryEdu, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
             }
 
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.Top) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Black, fontSize = 14.sp),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            lineHeight = 20.sp
+                        ),
                         color = themeColors.textPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
                     if (item.cityName != null) {
                         Surface(
                             color = themeColors.accent.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.padding(start = 6.dp)
+                            modifier = Modifier.padding(start = 8.dp)
                         ) {
                             Text(
                                 item.cityName,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                                 color = themeColors.accent
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = item.summary,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
@@ -155,16 +176,25 @@ fun AiHistoryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = dateStr,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                    color = themeColors.textMuted.copy(alpha = 0.6f)
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    ),
+                    color = themeColors.textMuted.copy(alpha = 0.8f)
                 )
             }
 
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Rounded.DeleteOutline, null, tint = themeColors.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Rounded.DeleteOutline,
+                    null,
+                    tint = themeColors.textMuted.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

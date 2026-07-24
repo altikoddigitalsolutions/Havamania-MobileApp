@@ -107,7 +107,7 @@ enum class RecommendationPriority {
 }
 
 data class HavamaniaRecommendation(
-    val title: String = "HAVAMANIA ÖNERİSİ",
+    val title: String = "HAVAMANİA ÖNERİSİ",
     val message: String,
     val type: RecommendationType,
     val highlightedWords: List<String>,

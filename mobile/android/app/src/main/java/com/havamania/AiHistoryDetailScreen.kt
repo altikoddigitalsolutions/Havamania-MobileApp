@@ -25,6 +25,8 @@ fun AiHistoryDetailScreen(
     val historyItems by viewModel.historyItems.collectAsState()
     val item = remember(historyItems, itemId) { historyItems.find { it.id == itemId } }
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+    val scrollState = rememberScrollState()
 
     HavamaniaScreen(
         topBar = {
@@ -42,15 +44,15 @@ fun AiHistoryDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(24.dp)
+                    .verticalScroll(scrollState)
+                    .padding(themeStyles.pagePadding)
             ) {
                 Text(
                     text = dateStr,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = themeColors.accent
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(themeStyles.spacingSmall))
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
@@ -64,17 +66,18 @@ fun AiHistoryDetailScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(themeStyles.spacingExtraLarge))
 
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMedium)) {
                     item.messages.forEach { msg ->
                         ChatBubble(msg, themeColors)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(100.dp))
+                Spacer(modifier = Modifier.height(80.dp))
             }
-        } else {
+        }
+else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text("Kayıt bulunamadı", color = themeColors.textPrimary)
             }

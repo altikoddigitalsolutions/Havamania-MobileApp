@@ -138,13 +138,13 @@ fun NotificationCenterScreen(
                 actions = {
                     if (state.isSelectionMode) {
                         IconButton(onClick = { viewModel.selectAll() }) {
-                            Icon(Icons.Rounded.SelectAll, null, tint = themeColors.textPrimary)
+                            Icon(Icons.Rounded.SelectAll, contentDescription = "Tümünü Seç", tint = themeColors.textPrimary)
                         }
                         IconButton(onClick = { viewModel.markSelectedAsRead() }) {
-                            Icon(Icons.Rounded.DoneAll, null, tint = themeColors.accent)
+                            Icon(Icons.Rounded.DoneAll, contentDescription = "Seçilenleri Okundu Yap", tint = themeColors.accent)
                         }
                         IconButton(onClick = { viewModel.deleteSelected() }) {
-                            Icon(Icons.Rounded.Delete, null, tint = themeColors.error)
+                            Icon(Icons.Rounded.Delete, contentDescription = "Seçilenleri Sil", tint = themeColors.error)
                         }
                     } else {
                         if (state.notifications.isNotEmpty()) {
@@ -153,12 +153,12 @@ fun NotificationCenterScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "Tümünü Sil",
+                                    contentDescription = "Tüm Bildirimleri Sil",
                                     tint = themeColors.error
                                 )
                             }
                             IconButton(onClick = { viewModel.markAllAsRead() }) {
-                                Icon(Icons.Rounded.DoneAll, null, tint = themeColors.accent)
+                                Icon(Icons.Rounded.DoneAll, contentDescription = "Tümünü Okundu Yap", tint = themeColors.accent)
                             }
                         }
                     }
@@ -206,7 +206,7 @@ fun NotificationCenterScreen(
 
                     // Tekrar edenleri grupla (Başlık ve Mesaj aynı olanları en yeniye göre teke düşür)
                     base.groupBy { it.getSafeTitle() + it.getSafeMessage() }
-                        .map { it.value.maxByOrNull { n -> n.createdAt }!! }
+                        .mapNotNull { it.value.maxByOrNull { n -> n.createdAt } }
                         .sortedByDescending { it.createdAt }
                 }
 
@@ -409,9 +409,18 @@ fun NotificationCard(
     onNavigateToDetail: (String, Map<String, String>?) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val timeStr = remember(notification.createdAt) {
-        NotificationDateFormatter.formatCreatedAt(notification.createdAt)
+
+    // Dynamic time calculation (Business Rule 7)
+    var timeStr by remember { mutableStateOf(NotificationDateFormatter.formatCreatedAt(notification.createdAt)) }
+
+    // Refresh time every minute
+    LaunchedEffect(notification.createdAt) {
+        while(true) {
+            timeStr = NotificationDateFormatter.formatCreatedAt(notification.createdAt)
+            kotlinx.coroutines.delay(60000)
+        }
     }
+
     val eventTimeStr = remember(notification.eventAt) {
         notification.eventAt?.let { NotificationDateFormatter.formatEventTime(it) }
     }

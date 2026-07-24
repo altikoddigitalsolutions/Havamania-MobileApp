@@ -1,8 +1,10 @@
 package com.havamania
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,23 +16,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.havamania.ui.theme.HavamaniaDialog
+import com.havamania.*
 import com.havamania.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +46,7 @@ fun SettingsScreen(
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToCities: () -> Unit = {},
     onNavigateToLegal: (String, String) -> Unit = { _, _ -> },
+    onNavigateToSmartAlerts: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel(),
     aiHistoryViewModel: AiHistoryViewModel = viewModel(),
@@ -51,21 +59,24 @@ fun SettingsScreen(
     val tempUnit by themeViewModel.tempUnit.collectAsState()
     val language by themeViewModel.language.collectAsState()
     val assistantTone by themeViewModel.assistantTone.collectAsState()
-    val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
-    val defaultCity by themeViewModel.defaultCity.collectAsState()
+
+    val notificationsEnabled: Boolean by themeViewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val defaultCity: com.havamania.GeocodingResultDto? by themeViewModel.defaultCity.collectAsStateWithLifecycle(initialValue = null)
+    val locationMode: LocationMode by themeViewModel.locationMode.collectAsStateWithLifecycle(initialValue = LocationMode.MANUAL)
+    val isPremium: Boolean by themeViewModel.isPremium.collectAsStateWithLifecycle(initialValue = false)
 
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
 
     var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showToneDialog by remember { mutableStateOf(false) }
-    var showUnitDialog by remember { mutableStateOf(false) }
-    var showManageDataSheet by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
 
-    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
 
     HavamaniaScreen(
         topBar = {
@@ -74,695 +85,452 @@ fun SettingsScreen(
                 onBack = onBack
             )
         }
-    ) { innerPadding ->
+    ) { padding ->
         Column(
             modifier = Modifier
+                .padding(padding)
                 .fillMaxSize()
-                .padding(innerPadding)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp)
+                .padding(themeStyles.pagePadding)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            // Profil Bölümü
+            SettingsGroupLabel("HESAP VE PROFİL")
+            SettingsCard {
+                SettingsNavRow("Profili Düzenle", "Kişisel bilgiler ve biyografi", Icons.Rounded.Person) {
+                    onNavigateToEditProfile()
+                }
+                SettingsDivider()
+                SettingsNavRow("Kayıtlı Şehirler", "Konum tercihlerinizi yönetin", Icons.Rounded.LocationCity) {
+                    onNavigateToCities()
+                }
+            }
 
+            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+
+            // Genel Ayarlar
             SettingsGroupLabel("GENEL")
-            HavamaniaGlassCard {
-                SettingsNavRow("Dil", if (language == "TR") "Türkçe" else "English", Icons.Rounded.Language) { showLanguageDialog = true }
+            SettingsCard {
+                SettingsClickRow("Görünüm", currentTheme.title, Icons.Rounded.Palette) {
+                    showThemeSheet = true
+                }
                 SettingsDivider()
-                SettingsNavRow("Sıcaklık Birimi", tempUnit.title + " (" + tempUnit.symbol + ")", Icons.Rounded.Thermostat) { showUnitDialog = true }
+                SettingsClickRow("Dil", if (language == "TR") "Türkçe" else "English", Icons.Rounded.Language) {
+                    showLanguageDialog = true
+                }
                 SettingsDivider()
-                SettingsNavRow("Varsayılan Şehir", defaultCity?.name ?: "Bilinmiyor", Icons.Rounded.LocationCity) { onNavigateToCities() }
+                SettingsClickRow("Birimler", if (tempUnit == TemperatureUnit.CELSIUS) "°C" else "°F", Icons.Rounded.Thermostat) {
+                    themeViewModel.setTempUnit(if (tempUnit == TemperatureUnit.CELSIUS) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS)
+                }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
 
-            SettingsGroupLabel("GÖRÜNÜM")
-            HavamaniaGlassCard {
-                PremiumThemeRow(selectedTheme = currentTheme, onClick = { showThemeSheet = true })
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            SettingsGroupLabel("ASİSTAN")
-            HavamaniaGlassCard {
-                SettingsNavRow("Asistan Konuşma Dili", assistantTone.title, Icons.Rounded.AutoAwesome) { showToneDialog = true }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            SettingsGroupLabel("BİLDİRİMLER")
-            HavamaniaGlassCard {
-                SettingsToggleRow("Hava Durumu Uyarıları", "Anlık meteorolojik bildirimler", Icons.Rounded.Notifications, notificationsEnabled) {
+            // Asistan Ayarları
+            SettingsGroupLabel("YAPAY ZEKA ASİSTAN")
+            SettingsCard {
+                SettingsClickRow("Asistan Üslubu", assistantTone.title, Icons.Rounded.AutoAwesome) {
+                    showToneDialog = true
+                }
+                SettingsDivider()
+                SettingsToggleRow("Bildirimler", "Günlük analiz ve uyarılar", Icons.Rounded.NotificationsActive, notificationsEnabled) {
                     themeViewModel.setNotificationsEnabled(it)
                 }
                 SettingsDivider()
                 SettingsNavRow("Akıllı Uyarılar", "Kişiselleştirilmiş tercihler", Icons.Rounded.SettingsSuggest) {
-                    comingSoonTitle = "Akıllı hava uyarıları yakında eklenecek."
-                    showComingSoonDialog = true
+                    onNavigateToSmartAlerts()
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
 
             SettingsGroupLabel("PREMIUM")
-            PremiumSettingsCard(onClick = {
-                comingSoonTitle = "Havamania Premium yakında tüm özellikleri ile açılacak."
-                showComingSoonDialog = true
-            })
+            PremiumSettingsCard(
+                isPremium = isPremium,
+                onClick = {
+                    if (!isPremium) {
+                        comingSoonTitle = "Havamania Premium yakında tüm özellikleri ile açılacak."
+                        showComingSoonDialog = true
+                    }
+                }
+            )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
 
-            SettingsGroupLabel("HESAP VE VERİ")
-            HavamaniaGlassCard {
-                SettingsNavRow("Profil Bilgileri", "İsim, bio ve kimlik", Icons.Rounded.AccountCircle, onNavigateToEditProfile)
-                SettingsDivider()
-                SettingsNavRow("Verilerimi Yönet", "Güvenlik ve gizlilik", Icons.Rounded.Security) { showManageDataSheet = true }
+            // Veri Yönetimi
+            SettingsGroupLabel("VERİ VE GİZLİLİK")
+            SettingsCard {
+                SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
+                    onNavigateToLegal("KVKK AYDINLATMA METNİ", LegalUrls.KVKK)
+                }
                 SettingsDivider()
                 SettingsNavRow("Gizlilik Politikası", null, Icons.Rounded.PrivacyTip) {
                     onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY)
                 }
                 SettingsDivider()
-                SettingsNavRow("Kullanım Şartları", null, Icons.Rounded.Description) {
+                SettingsNavRow("Kullanım Koşulları", null, Icons.Rounded.Description) {
                     onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE)
                 }
                 SettingsDivider()
-                SettingsNavRow("Oturumu Kapat", "Hesabınızdan çıkış yapın", Icons.Rounded.Logout) { showLogoutDialog = true }
+                SettingsClickRow("Önbelleği Temizle", "Hava verilerini yenile", Icons.Rounded.Cached) {
+                    travelViewModel.clearAllPlans()
+                    comingSoonTitle = "Hava durumu önbelleği temizlendi."
+                    showComingSoonDialog = true
+                }
+            }
+
+            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+
+            // Tehlikeli Alan
+            SettingsGroupLabel("DİĞER")
+            SettingsCard {
+                SettingsClickRow("Çıkış Yap", null, Icons.Rounded.Logout, contentColor = themeColors.textPrimary) {
+                    showLogoutDialog = true
+                }
+                SettingsDivider()
+                SettingsClickRow("Hesabımı Sil", "Tüm veriler kalıcı olarak silinir", Icons.Rounded.DeleteForever, contentColor = themeColors.error) {
+                    showDeleteDialog = true
+                }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Havamania Premium v1.5.0",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
-                    color = themeColors.textPrimary.copy(alpha = 0.5f)
-                )
-                Text(
-                    text = "Lansman Sürümü • 2026",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = themeColors.textMuted.copy(alpha = 0.4f)
-                )
-            }
-            Spacer(modifier = Modifier.height(100.dp))
-        }
 
-        // --- DIALOGS & SHEETS ---
-
-        if (showThemeSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showThemeSheet = false },
-                sheetState = sheetState,
-                containerColor = themeColors.surface,
-                dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
-            ) {
-                ThemeSelectionContent(selectedTheme = currentTheme) {
-                    themeViewModel.setTheme(it)
-                    showThemeSheet = false
-                }
-            }
-        }
-
-        if (showManageDataSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showManageDataSheet = false },
-                containerColor = themeColors.surface
-            ) {
-                ManageDataContent(
-                    onClearAiHistory = { aiHistoryViewModel.clearAll() },
-                    onClearTravels = {
-                        travelViewModel.clearAllPlans()
-                        notificationViewModel.deleteTravelNotifications()
-                    },
-                    onResetCities = { themeViewModel.resetCities() },
-                    onRemovePhoto = {
-                        profileViewModel.removeProfileImage()
-                    },
-                    onResetAll = {
-                        themeViewModel.resetAllData()
-                        aiHistoryViewModel.clearAll()
-                        travelViewModel.clearAllPlans()
-                        notificationViewModel.deleteAllNotifications()
-                        profileViewModel.removeProfileImage()
-                    }
-                )
-            }
-        }
-
-        if (showLanguageDialog) {
-            SettingsOptionDialog("Dil Seçin", listOf("TR" to "Türkçe", "EN" to "English"), language, { themeViewModel.setLanguage(it); showLanguageDialog = false }) { showLanguageDialog = false }
-        }
-
-        if (showToneDialog) {
-            SettingsOptionDialog(
-                title = "Asistan Konuşma Dili",
-                options = AssistantTone.entries.map { it.name to it.title },
-                currentValue = assistantTone.name,
-                onSelect = {
-                    themeViewModel.setAssistantTone(AssistantTone.valueOf(it))
-                    showToneDialog = false
-                }
-            ) { showToneDialog = false }
-        }
-
-        if (showUnitDialog) {
-            SettingsOptionDialog("Sıcaklık Birimi", listOf("CELSIUS" to "Celsius (°C)", "FAHRENHEIT" to "Fahrenheit (°F)"), tempUnit.name, { themeViewModel.setTempUnit(TemperatureUnit.valueOf(it)); showUnitDialog = false }) { showUnitDialog = false }
-        }
-
-        if (showLogoutDialog) {
-            HavamaniaDialog(
-                onDismissRequest = { showLogoutDialog = false },
-                title = "OTURUMU KAPAT",
-                text = "Oturumunuzu kapatmak istediğinize emin misiniz?",
-                confirmText = "ÇIKIŞ YAP",
-                confirmColor = themeColors.error,
-                onConfirm = {
-                    authViewModel.signOut()
-                    showLogoutDialog = false
-                    onBack() // This will trigger the redirection logic in Activity
-                }
+            // Versiyon Bilgisi
+            Text(
+                text = "Havamania v2.5.0\nPremium Early Access",
+                style = MaterialTheme.typography.labelSmall,
+                color = themeColors.textMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().alpha(0.5f)
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Dialogs...
+    if (showThemeSheet) {
+        ThemeSelectionDialog(
+            currentTheme = currentTheme,
+            onThemeSelected = { themeViewModel.setTheme(it); showThemeSheet = false },
+            onDismiss = { showThemeSheet = false }
+        )
+    }
+
+    if (showLanguageDialog) {
+        LanguageSelectionDialog(
+            currentLanguage = language,
+            onLanguageSelected = { themeViewModel.setLanguage(it); showLanguageDialog = false },
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    if (showToneDialog) {
+        ToneSelectionDialog(
+            currentTone = assistantTone,
+            onToneSelected = { themeViewModel.setAssistantTone(it); showToneDialog = false },
+            onDismiss = { showToneDialog = false }
+        )
+    }
+
+    if (showLogoutDialog) {
+        HavamaniaDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = "Çıkış Yap?",
+            text = "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+            confirmText = "Çıkış Yap",
+            onConfirm = {
+                authViewModel.signOut()
+                showLogoutDialog = false
+            }
+        )
+    }
+
+    if (showDeleteDialog) {
+        AccountDeleteDialog(
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = { password ->
+                authViewModel.deleteAccount(password = password, onComplete = { success, _ ->
+                    if (success) {
+                        showDeleteDialog = false
+                    }
+                })
+            }
+        )
+    }
 
     if (showComingSoonDialog) {
         HavamaniaDialog(
             onDismissRequest = { showComingSoonDialog = false },
-            title = "YAKINDA",
+            title = "BİLGİ",
             text = comingSoonTitle,
             confirmText = "TAMAM",
             onConfirm = { showComingSoonDialog = false }
         )
     }
-    }
 }
 
 @Composable
-fun ManageDataContent(
-    onClearAiHistory: () -> Unit,
-    onClearTravels: () -> Unit,
-    onResetCities: () -> Unit,
-    onRemovePhoto: () -> Unit,
-    onResetAll: () -> Unit
-) {
-    val themeColors = HavamaniaTheme.colors
-    var confirmAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var confirmTitle by remember { mutableStateOf("") }
-    var confirmText by remember { mutableStateOf("") }
-    var isExtraCritical by remember { mutableStateOf(false) }
-    var isProcessing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 48.dp)
-            .alpha(if (isProcessing) 0.5f else 1f)
-    ) {
-        // ... (Header text)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "GİZLİLİK VE VERİ",
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp),
-            color = themeColors.accent
-        )
-        // ... (rest of text)
-        Text(
-            "Verilerimi Yönet",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-            color = themeColors.textPrimary
-        )
-        Text(
-            "Uygulama verilerini buradan kontrol edebilir veya sıfırlayabilirsiniz.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = themeColors.textSecondary
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        DataActionItem("AI Sohbet Geçmişini Temizle", Icons.Rounded.AutoAwesome) {
-            if (isProcessing) return@DataActionItem
-            confirmTitle = "Geçmişi Temizle"
-            confirmText = "Tüm AI sohbet kayıtlarınız kalıcı olarak silinecektir. Devam etmek istiyor musunuz?"
-            confirmAction = onClearAiHistory
-            isExtraCritical = false
-        }
-        DataActionItem("Tüm Seyahatleri Sil", Icons.Rounded.Route) {
-            if (isProcessing) return@DataActionItem
-            confirmTitle = "Seyahatleri Sil"
-            confirmText = "Oluşturduğunuz tüm seyahat planları ve analizleri silinecektir. Bu işlem geri alınamaz."
-            confirmAction = onClearTravels
-            isExtraCritical = false
-        }
-        DataActionItem("Lokasyon Listesini Sıfırla", Icons.Rounded.Map) {
-            if (isProcessing) return@DataActionItem
-            confirmTitle = "Şehirleri Sıfırla"
-            confirmText = "Kayıtlı tüm şehirler silinecek ve varsayılan ayarlara dönülecektir."
-            confirmAction = onResetCities
-            isExtraCritical = false
-        }
-        DataActionItem("Profil Fotoğrafını Kaldır", Icons.Rounded.NoPhotography) {
-            if (isProcessing) return@DataActionItem
-            confirmTitle = "Fotoğrafı Kaldır"
-            confirmText = "Profil fotoğrafınız kaldırılacak. Devam edilsin mi?"
-            confirmAction = onRemovePhoto
-            isExtraCritical = false
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        HorizontalDivider(color = themeColors.border.copy(alpha = 0.05f))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        DataActionItem("Tüm Verileri Sıfırla", Icons.Rounded.DeleteForever, themeColors.error) {
-            if (isProcessing) return@DataActionItem
-            confirmTitle = "KRİTİK: Tüm Verileri Sıfırla"
-            confirmText = "Bu işlem tüm profilinizi, seyahatlerinizi ve ayarlarınızı kalıcı olarak silecektir. Uygulama ilk yükleme anına dönecektir. Emin misiniz?"
-            confirmAction = onResetAll
-            isExtraCritical = true
-        }
-    }
-
-    if (confirmAction != null) {
-        HavamaniaDialog(
-            onDismissRequest = { if (!isProcessing) confirmAction = null },
-            title = confirmTitle,
-            text = if (isProcessing) "İşlem yapılıyor, lütfen bekleyin..." else confirmText,
-            confirmText = if (isProcessing) "BEKLEYİN..." else if (isExtraCritical) "EVET, HER ŞEYİ SİL" else "SİL",
-            confirmColor = themeColors.error,
-            confirmEnabled = !isProcessing,
-            dismissEnabled = !isProcessing,
-            icon = if (isExtraCritical) Icons.Rounded.ReportProblem else Icons.Rounded.DeleteForever,
-            onConfirm = {
-                scope.launch {
-                    isProcessing = true
-                    confirmAction?.invoke()
-                    delay(800) // Visual feedback for completion
-                    isProcessing = false
-                    confirmAction = null
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun DataActionItem(label: String, icon: ImageVector, color: Color = HavamaniaTheme.colors.textPrimary, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = color.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = color)
-    }
-}
-
-@Composable
-fun ConfirmDialog(title: String, text: String, confirmBtn: String, confirmColor: Color, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = themeColors.surface,
-        title = { Text(title, fontWeight = FontWeight.Black, color = themeColors.textPrimary) },
-        text = { Text(text, color = themeColors.textSecondary) },
-        confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text(confirmBtn, color = confirmColor, fontWeight = FontWeight.Black) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("VAZGEÇ", color = themeColors.textPrimary, fontWeight = FontWeight.Black) } }
+private fun SettingsGroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp),
+        color = HavamaniaTheme.colors.accent,
+        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
     )
 }
 
 @Composable
-fun SettingsOptionDialog(
-    title: String,
-    options: List<Pair<String, String>>,
-    currentValue: String,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val themeColors = HavamaniaTheme.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = themeColors.surface,
-        shape = RoundedCornerShape(28.dp),
-        title = {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                color = themeColors.textPrimary
-            )
-        },
-        text = {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                options.forEach { (value, label) ->
-                    val isSelected = value == currentValue
-                    Surface(
-                        onClick = { onSelect(value) },
-                        color = if (isSelected) themeColors.accent.copy(alpha = 0.05f) else Color.Transparent,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = { onSelect(value) },
-                                colors = RadioButtonDefaults.colors(selectedColor = themeColors.accent)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                ),
-                                color = if (isSelected) themeColors.accent else themeColors.textPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("KAPAT", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textMuted)
-            }
-        }
-    )
-}
-
-@Composable
-fun PremiumSettingsCard(onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    Surface(
-        onClick = onClick,
-        color = themeColors.accent,
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Background Pattern or Shine
-            Icon(
-                Icons.Rounded.AutoAwesome,
-                null,
-                tint = Color.White.copy(alpha = 0.1f),
-                modifier = Modifier.size(120.dp).align(Alignment.BottomEnd).offset(x = 20.dp, y = 20.dp)
-            )
-
-            Row(
-                modifier = Modifier.padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Havamania Premium",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                        color = Color.White
-                    )
-                    Text(
-                        "Gelişmiş seyahat analizleri ve AI kişiselleştirme.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-                Surface(
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        Icons.Rounded.ArrowForward,
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier.padding(8.dp).size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PremiumThemeRow(selectedTheme: AppTheme, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    val configuration = LocalConfiguration.current
-    val isSmallScreen = configuration.screenWidthDp < 380 // Telefon genişliği eşiği
-
-    Surface(onClick = onClick, color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 18.dp, horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconBoxContainer(Icons.Rounded.Palette, themeColors.accent)
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Uygulama Teması",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = if (isSmallScreen) 15.sp else 16.sp
-                    ),
-                    color = themeColors.textPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = selectedTheme.title,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = if (isSmallScreen) 11.sp else 12.sp
-                    ),
-                    color = themeColors.accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.Rounded.ChevronRight,
-                null,
-                tint = themeColors.textSecondary.copy(alpha = 0.3f),
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun ThemeSelectionContent(selectedTheme: AppTheme, onThemeSelected: (AppTheme) -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    val displayThemes = listOf(
-        AppTheme.AUTO,
-        AppTheme.LIGHT,
-        AppTheme.DARK,
-        AppTheme.SPRING_DAY,
-        AppTheme.SUMMER_DAY,
-        AppTheme.AUTUMN_DAY,
-        AppTheme.WINTER_DAY
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 24.dp)
-    ) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "TEMA SEÇİN",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp
-            ),
-            color = themeColors.textPrimary
-        )
-        Text(
-            "Havamania deneyiminizi ruh halinize göre kişiselleştirin",
-            style = MaterialTheme.typography.bodyMedium,
-            color = themeColors.textSecondary
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 2-Column Grid Layout
-        val rows = displayThemes.chunked(2)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            rows.forEach { rowThemes ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    rowThemes.forEach { theme ->
-                        ThemeCardPremium(
-                            theme = theme,
-                            isSelected = selectedTheme == theme,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onThemeSelected(theme) }
-                        )
-                    }
-                    if (rowThemes.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-fun ThemeCardPremium(theme: AppTheme, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    val themeStyleColors = ThemeFactory.createColors(theme)
-    val displayName = when(theme) {
-        AppTheme.SPRING_DAY -> "İlkbahar"
-        AppTheme.SUMMER_DAY -> "Yaz"
-        AppTheme.AUTUMN_DAY -> "Sonbahar"
-        AppTheme.WINTER_DAY -> "Kış"
-        AppTheme.AUTO -> "Otomatik"
-        AppTheme.LIGHT -> "Açık"
-        AppTheme.DARK -> "Koyu"
-        else -> theme.title
-    }
-
-    val isRecommended = theme == AppTheme.AUTO
-
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     HavamaniaGlassCard(
-        modifier = modifier.height(140.dp),
-        cornerRadius = 20.dp,
-        alpha = if (isSelected) 0.9f else 0.4f,
-        onClick = onClick
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = HavamaniaTheme.styles.radiusMedium,
+        alpha = 0.4f
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            displayName,
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = FontWeight.Black,
-                                fontSize = 15.sp
-                            ),
-                            color = if (isSelected) themeColors.accent else themeColors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (isSelected) {
-                            Spacer(Modifier.width(4.dp))
-                            Icon(Icons.Rounded.CheckCircle, null, tint = themeColors.accent, modifier = Modifier.size(14.dp))
-                        }
-                    }
-                    if (isRecommended) {
-                        Surface(
-                            color = themeColors.accent.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Text(
-                                "ÖNERİLEN",
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Black),
-                                color = themeColors.accent
-                            )
-                        }
-                    }
-                }
-
-                // Gradient Preview
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val previewColors = themeStyleColors.gradientPrimary
-                    previewColors.take(3).forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(color)
-                        )
-                    }
-                }
-            }
-
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(1.5.dp, themeColors.accent, RoundedCornerShape(20.dp))
-                )
-            }
-        }
-    }
-}
-
-
-fun getThemeDesc(theme: AppTheme): String = when(theme) {
-    AppTheme.AUTO -> "Mevsime ve günün saatine göre otomatik değişir"
-    AppTheme.LIGHT -> "Temiz ve ferah gökyüzü tonları"
-    AppTheme.DARK -> "Koyu ve modern gece atmosferi"
-    AppTheme.SPRING_DAY -> "Taze bahar esintisi ve yeşil dokular"
-    AppTheme.SPRING_NIGHT -> "Huzurlu bahar gecesi atmosferi"
-    AppTheme.SUMMER_DAY -> "Sıcak yaz güneşi ve canlı renkler"
-    AppTheme.SUMMER_NIGHT -> "Ferah yaz gecesi esintisi"
-    AppTheme.AUTUMN_DAY -> "Huzurlu sonbahar ve toprak tonları"
-    AppTheme.AUTUMN_NIGHT -> "Gizemli sonbahar gecesi renkleri"
-    AppTheme.WINTER_DAY -> "Soğuk kış esintisi ve buzsu maviler"
-    AppTheme.WINTER_NIGHT -> "Derin kış gecesi ve kristal tonlar"
-}
-
-@Composable
-fun SettingsGroupLabel(title: String) {
-    val themeColors = HavamaniaTheme.colors
-    Text(text = title, style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black), color = themeColors.accent.copy(alpha = 0.7f), modifier = Modifier.padding(start = 12.dp, bottom = 12.dp))
-}
-
-@Composable
-fun SettingsNavRow(title: String, subtitle: String? = null, icon: ImageVector, onClick: () -> Unit = {}) {
-    val themeColors = HavamaniaTheme.colors
-    Surface(onClick = onClick, color = Color.Transparent) {
-        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconBoxContainer(icon, themeColors.accent)
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
-                if (subtitle != null) { Text(subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary) }
-            }
-            Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textSecondary.copy(alpha = 0.3f), modifier = Modifier.size(18.dp))
+        Column {
+            content()
         }
     }
 }
 
 @Composable
-fun SettingsToggleRow(title: String, subtitle: String, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SettingsNavRow(title: String, subtitle: String?, icon: ImageVector, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconBoxContainer(icon, themeColors.accent)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            color = themeColors.accent.copy(alpha = 0.1f),
+            shape = CircleShape,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+            }
+        }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
-            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+            }
+        }
+        Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted)
+    }
+}
+
+@Composable
+private fun SettingsClickRow(title: String, value: String?, icon: ImageVector, contentColor: Color = HavamaniaTheme.colors.textPrimary, onClick: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(title, style = MaterialTheme.typography.bodyLarge, color = contentColor, modifier = Modifier.weight(1f))
+        if (value != null) {
+            Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted, modifier = Modifier.size(16.dp))
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(title: String, subtitle: String?, icon: ImageVector, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = themeColors.textPrimary)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+            }
         }
         HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
 @Composable
-fun IconBoxContainer(icon: ImageVector, color: Color) {
-    Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+private fun SettingsDivider() {
+    Divider(modifier = Modifier.padding(horizontal = 16.dp), color = HavamaniaTheme.colors.divider.copy(alpha = 0.05f))
+}
+
+@Composable
+private fun PremiumSettingsCard(isPremium: Boolean, onClick: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+
+    Surface(
+        onClick = onClick,
+        color = if (isPremium) themeColors.success.copy(alpha = 0.1f) else themeColors.accent.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(themeStyles.radiusMedium),
+        border = BorderStroke(1.dp, if (isPremium) themeColors.success.copy(alpha = 0.3f) else themeColors.accent.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(48.dp).background(if (isPremium) themeColors.success.copy(alpha = 0.2f) else themeColors.accent.copy(alpha = 0.2f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (isPremium) Icons.Rounded.VerifiedUser else Icons.Rounded.AutoAwesome,
+                    null,
+                    tint = if (isPremium) themeColors.success else themeColors.accent,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (isPremium) "Havamania Premium Üyesi" else "Premium'a Yükselt",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black),
+                    color = themeColors.textPrimary
+                )
+                Text(
+                    if (isPremium) "Tüm özellikler açık." else "AI analizleri ve sınırsız seyahat.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = themeColors.textSecondary
+                )
+            }
+            if (!isPremium) {
+                Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.accent)
+            }
+        }
     }
 }
 
 @Composable
-fun SettingsDivider() {
+fun ThemeSelectionDialog(currentTheme: AppTheme, onThemeSelected: (AppTheme) -> Unit, onDismiss: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), thickness = 0.5.dp, color = themeColors.textPrimary.copy(alpha = 0.05f))
+    HavamaniaDialog(
+        onDismissRequest = onDismiss,
+        title = "Görünüm Seç",
+        text = "",
+        confirmText = "İPTAL",
+        onConfirm = onDismiss,
+        content = {
+            Column {
+                AppTheme.entries.filter { it != AppTheme.AUTO }.forEach { theme ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onThemeSelected(theme) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = theme == currentTheme, onClick = { onThemeSelected(theme) })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(theme.title, color = themeColors.textPrimary)
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun LanguageSelectionDialog(currentLanguage: String, onLanguageSelected: (String) -> Unit, onDismiss: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    HavamaniaDialog(
+        onDismissRequest = onDismiss,
+        title = "Dil Seç",
+        text = "",
+        confirmText = "İPTAL",
+        onConfirm = onDismiss,
+        content = {
+            Column {
+                listOf("TR" to "Türkçe", "EN" to "English").forEach { (code, name) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onLanguageSelected(code) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = code == currentLanguage, onClick = { onLanguageSelected(code) })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(name, color = themeColors.textPrimary)
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun ToneSelectionDialog(currentTone: AssistantTone, onToneSelected: (AssistantTone) -> Unit, onDismiss: () -> Unit) {
+    val themeColors = HavamaniaTheme.colors
+    HavamaniaDialog(
+        onDismissRequest = onDismiss,
+        title = "Asistan Üslubu",
+        text = "",
+        confirmText = "İPTAL",
+        onConfirm = onDismiss,
+        content = {
+            Column(modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                AssistantTone.entries.forEach { tone ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onToneSelected(tone) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = tone == currentTone, onClick = { onToneSelected(tone) })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(tone.title, fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
+                            Text(tone.description, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun AccountDeleteDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    var confirmText by remember { mutableStateOf("") }
+    val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+
+    HavamaniaDialog(
+        onDismissRequest = onDismiss,
+        title = "Hesabımı Sil",
+        text = "Hesabınız, verileriniz ve analizleriniz kalıcı olarak silinecektir. Devam etmek için şifrenizi girin ve 'SİL' yazın.",
+        confirmText = "HESABI SİL",
+        confirmColor = themeColors.error,
+        confirmEnabled = confirmText == "SİL" && password.isNotBlank(),
+        onConfirm = { onConfirm(password) },
+        content = {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Şifre") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    shape = RoundedCornerShape(themeStyles.radiusSmall)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = confirmText,
+                    onValueChange = { confirmText = it },
+                    label = { Text("Onaylamak için 'SİL' yazın") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(themeStyles.radiusSmall),
+                    placeholder = { Text("SİL") }
+                )
+            }
+        }
+    )
 }

@@ -34,7 +34,7 @@ object InterestsData {
             )
         ),
         InterestCategory(
-            title = "Ulaşım & Yol",
+            title = "Ulaşım",
             icon = Icons.Rounded.DirectionsCar,
             description = "Yolculuklarınızı hava durumuna göre planlayın.",
             interests = listOf(
@@ -48,7 +48,7 @@ object InterestsData {
             )
         ),
         InterestCategory(
-            title = "Outdoor & Macera",
+            title = "Outdoor",
             icon = Icons.Rounded.Landscape,
             description = "Doğa aktiviteleri için en uygun zamanı bulun.",
             interests = listOf(
@@ -61,7 +61,7 @@ object InterestsData {
             )
         ),
         InterestCategory(
-            title = "Sağlık Hassasiyetleri",
+            title = "Sağlık",
             icon = Icons.Rounded.Healing,
             description = "Hava durumunun sağlığınız üzerindeki etkilerini izleyin.",
             interests = listOf(

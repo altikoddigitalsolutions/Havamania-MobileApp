@@ -73,7 +73,7 @@ export function PaywallScreen({navigation}: any): React.JSX.Element {
             <View style={s.badgeContainer}>
               <Icon name="sparkles" size={32} color="#F59E0B" />
             </View>
-            <Text style={s.title}>HAVAMANIA</Text>
+            <Text style={s.title}>HAVAMANİA</Text>
             <View style={s.proTag}><Text style={s.proTagText}>PREMIUM</Text></View>
             <Text style={s.subtitle}>Hava durumunu kişisel bir yaşam asistanına dönüştürün.</Text>
           </View>

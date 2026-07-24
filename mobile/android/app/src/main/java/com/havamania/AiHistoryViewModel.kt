@@ -38,16 +38,29 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         loadHistoryForUid(currentUid)
     }
 
-    fun addHistoryItem(title: String, summary: String, messages: List<AltikodChatMessage>, cityName: String?) {
+    fun addHistoryItem(
+        id: String? = null,
+        title: String,
+        summary: String,
+        messages: List<AltikodChatMessage>,
+        cityName: String?
+    ) {
         val uid = currentUid
         viewModelScope.launch {
+            val finalId = id ?: java.util.UUID.randomUUID().toString()
+
+            // Fetch existing to preserve timestamp if updating
+            val existing = dao.getAiHistoryItem(finalId)
+
             val item = AiHistoryEntity(
-                id = java.util.UUID.randomUUID().toString(),
+                id = finalId,
                 userId = uid,
                 title = title,
                 summary = summary,
                 messages = messages,
-                cityName = cityName
+                cityName = cityName,
+                timestamp = existing?.timestamp ?: System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis()
             )
             dao.insertAiHistory(item)
             loadHistoryForUid(uid)

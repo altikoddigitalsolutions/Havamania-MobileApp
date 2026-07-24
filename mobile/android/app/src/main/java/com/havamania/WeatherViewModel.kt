@@ -10,11 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
+import com.havamania.ui.theme.LocationMode
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -28,6 +29,13 @@ class WeatherViewModel(
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
     private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
+
+    private val locationTracker: LocationTracker by lazy {
+        DefaultLocationTracker(
+            com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(application),
+            application
+        )
+    }
 
     // İnternet durumunu flow olarak takip et
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
@@ -57,6 +65,7 @@ class WeatherViewModel(
 
     private var currentUserInterests: Set<String> = emptySet()
     private var currentUserAboutMe: String? = null
+    private var currentPersonalization: PersonalizationProfile? = null
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
@@ -71,18 +80,30 @@ class WeatherViewModel(
     private val _unreadNotificationCount = MutableStateFlow(0)
     val unreadNotificationCount: StateFlow<Int> = _unreadNotificationCount.asStateFlow()
 
+    private val _smartAlerts = MutableStateFlow<List<SmartAlert>>(emptyList())
+    val smartAlerts: StateFlow<List<SmartAlert>> = _smartAlerts.asStateFlow()
+
+    private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
+    val locationMode: StateFlow<LocationMode> = _locationMode.asStateFlow()
+
     private var lastCity = "Balıkesir"
     private var lastDistrict: String? = null
     private var lastLat = 39.6484
     private var lastLon = 27.8826
+
+    private var fetchJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch {
             auth.addAuthStateListener { firebaseAuth ->
                 val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
                 Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+
+                // Clear UI state to prevent showing old user's data
                 _uiState.value = WeatherUiState.Loading
                 _todayRecommendation.value = null
+                _smartAlerts.value = emptyList()
+
                 observeUserData(newUid)
             }
         }
@@ -108,18 +129,37 @@ class WeatherViewModel(
                     .collect { _unreadNotificationCount.value = it }
             }
 
+            // Location Mode observation
+            launch {
+                com.havamania.ui.theme.ThemeManager.getLocationMode(getApplication(), uid).collect { mode ->
+                    _locationMode.value = mode
+                    if (mode == LocationMode.AUTO) {
+                        // KURAL 2: OTOMATİK modda izin kontrolü ve güncel şehir alımı
+                        refreshWeatherWithCurrentLocation()
+                    } else {
+                        // KURAL 2: MANUEL modda GPS çağrısı yapılmaz, son varsayılan şehir kullanılır
+                        val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
+                        if (defaultCity != null) {
+                            fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                        }
+                    }
+                }
+            }
+
             // City observation
             launch {
                 com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).collect { defaultCity ->
                     Log.d("WeatherVM", "Default city observed for $uid: ${defaultCity?.name}")
-                    if (defaultCity != null) {
-                        fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
-                    } else {
-                        if (uid != "legacy") {
-                            _uiState.value = WeatherUiState.NoCity
+                    if (_locationMode.value == LocationMode.MANUAL) {
+                        if (defaultCity != null) {
+                            fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
                         } else {
-                            // Guest user starts with Balıkesir if no default set
-                            fetchWeather(39.6484, 27.8826, "Balıkesir")
+                            if (uid != "legacy") {
+                                _uiState.value = WeatherUiState.NoCity
+                            } else {
+                                // Guest user starts with Balıkesir if no default set
+                                fetchWeather(39.6484, 27.8826, "Balıkesir")
+                            }
                         }
                     }
                 }
@@ -138,13 +178,32 @@ class WeatherViewModel(
         }
     }
 
+    fun refreshWeatherWithCurrentLocation() {
+        viewModelScope.launch {
+            val city = locationTracker.getCurrentCity()
+            if (city != null) {
+                fetchWeather(city.latitude, city.longitude, city.name, city.admin1)
+            } else {
+                // If failed, fall back to default city from settings
+                val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), currentUid).firstOrNull()
+                if (defaultCity != null) {
+                    fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                }
+            }
+        }
+    }
+
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
+        // Business Rule 5: Deduplication
+        if (fetchJob?.isActive == true && lastLat == lat && lastLon == lon) return
+
         lastLat = lat
         lastLon = lon
         lastCity = cityName
         lastDistrict = districtName
 
-        viewModelScope.launch {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
             _uiState.value = WeatherUiState.Loading
 
             try {
@@ -154,13 +213,19 @@ class WeatherViewModel(
                         .catch { e ->
                             android.util.Log.e("WeatherVM", "Fetch error", e)
                             _uiState.value = WeatherUiState.Error(
-                                if (!isOnline.value) "İnternet bağlantınız yok. Lütfen kontrol edin."
-                                else if (e is java.net.UnknownHostException || e is java.io.IOException) "Meteoroloji sunucularına şu an ulaşılamıyor. Lütfen birazdan tekrar dene."
-                                else "Hava durumu verileri hazırlanırken beklenmedik bir durum oluştu."
+                                if (!isOnline.value) "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
+                                else "Hava durumu sunucularına şu an ulaşılamıyor. Lütfen daha sonra tekrar deneyin."
                             )
                         }
                         .collect { data ->
                             _uiState.value = WeatherUiState.Success(data)
+
+                            // Calculate Smart Alerts
+                            viewModelScope.launch {
+                                val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), currentUid).first()
+                                _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, currentUid)
+                            }
+
                             // Reset to today
                             val todayDate = LocalDate.now()
                             _selectedForecastDate.value = todayDate
@@ -187,11 +252,12 @@ class WeatherViewModel(
     }
 
     fun refreshWeather() {
-        if (!isOnline.value) {
+        if (!isOnline.value || _isRefreshing.value) {
             return
         }
 
-        viewModelScope.launch {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
             _isRefreshing.value = true
             val cacheKey = if (lastDistrict != null) "$lastCity-$lastDistrict" else lastCity
             repository.clearCache(cacheKey)
@@ -202,6 +268,13 @@ class WeatherViewModel(
                 }
                 .collect { data ->
                     _uiState.value = WeatherUiState.Success(data)
+
+                    // Calculate Smart Alerts
+                    viewModelScope.launch {
+                        val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), currentUid).first()
+                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config)
+                    }
+
                     val todayDate = LocalDate.now()
                     _selectedForecastDate.value = todayDate
                     val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
@@ -250,12 +323,19 @@ class WeatherViewModel(
         _selectedHourlyWeather.value = hour
     }
 
-    fun updateRecommendation(interests: Set<String>? = null, aboutMe: String? = null) {
+    fun updateRecommendation(
+        interests: Set<String>? = null,
+        aboutMe: String? = null,
+        personalization: PersonalizationProfile? = null
+    ) {
         if (interests != null) {
             currentUserInterests = interests
         }
         if (aboutMe != null) {
             currentUserAboutMe = aboutMe
+        }
+        if (personalization != null) {
+            currentPersonalization = personalization
         }
 
         val currentUiState = _uiState.value
@@ -267,7 +347,8 @@ class WeatherViewModel(
                     weatherData = weather,
                     userInterests = currentUserInterests,
                     aboutMe = currentUserAboutMe,
-                    tone = _assistantTone.value
+                    tone = _assistantTone.value,
+                    personalization = currentPersonalization
                 )
             }
         }

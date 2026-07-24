@@ -1,15 +1,11 @@
 package com.havamania
 
-import android.util.Log
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.havamania.*
 import com.havamania.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -49,6 +48,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 enum class TravelFilter { UPCOMING, PAST, ARCHIVED }
 
@@ -58,49 +58,71 @@ fun TravelPlannerScreen(
     viewModel: TravelViewModel = viewModel(),
     initialCity: String? = null,
     initialTripType: String? = null,
-    initialStartDate: String? = null, // YYYY-MM-DD
+    initialStartDate: String? = null,
     focusId: String? = null,
     highlight: String? = null,
     onBack: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val plans by viewModel.plans.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val themeStyles = HavamaniaTheme.styles
+    val plans by viewModel.plans.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
     var showAddDialog by remember { mutableStateOf(false) }
     var planToEdit by remember { mutableStateOf<TravelPlan?>(null) }
+    var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
 
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    // Prefill logic for NEW plan
-    var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
+    // UI Events (Snackbar)
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            if (event.startsWith("DUPLICATE_TRIP|")) {
+                snackbarHostState.showSnackbar(event.substringAfter("|"))
+            } else {
+                snackbarHostState.showSnackbar(event)
+            }
+        }
+    }
 
     var planForSummary by remember { mutableStateOf<TravelPlan?>(null) }
     var deleteConfirmPlan by remember { mutableStateOf<TravelPlan?>(null) }
+    val showMigrationDialog = remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val context = LocalContext.current
     val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
     val currentUid = auth.currentUser?.uid ?: "legacy"
+
     val migrationChoiceMade by remember { ThemeManager.getMigrationChoiceMade(context, currentUid) }.collectAsState(initial = true)
-    var showMigrationDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentUid, plans) {
         if (currentUid != "legacy" && !migrationChoiceMade) {
             val legacyPlans = WeatherDatabase.getDatabase(context).weatherDao().getAllTravelPlans("legacy")
             if (legacyPlans.isNotEmpty()) {
-                showMigrationDialog = true
+                showMigrationDialog.value = true
             }
         }
     }
 
-    val filteredPlans = remember(plans, selectedFilter) {
-        when (selectedFilter) {
-            TravelFilter.UPCOMING -> plans.filter { !it.isArchived && !it.endDate.isBefore(LocalDate.now()) }
-            TravelFilter.PAST -> plans.filter { !it.isArchived && it.endDate.isBefore(LocalDate.now()) }
-            TravelFilter.ARCHIVED -> plans.filter { it.isArchived }
-        }
+    // Business Rule 3: Precise Tab Syncing
+    val upcomingPlans = remember(plans) {
+        plans.filter { !it.isArchived && viewModel.getTripStatus(it) != TripStatus.COMPLETED }
+    }
+    val pastPlans = remember(plans) {
+        plans.filter { !it.isArchived && viewModel.getTripStatus(it) == TripStatus.COMPLETED }
+    }
+    val archivedPlans = remember(plans) {
+        plans.filter { it.isArchived }
+    }
+
+    val filteredPlans = when (selectedFilter) {
+        TravelFilter.UPCOMING -> upcomingPlans
+        TravelFilter.PAST -> pastPlans
+        TravelFilter.ARCHIVED -> archivedPlans
     }
 
     LaunchedEffect(initialCity, initialTripType, initialStartDate) {
@@ -136,6 +158,7 @@ fun TravelPlannerScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(
@@ -170,27 +193,14 @@ fun TravelPlannerScreen(
                             ),
                             color = themeColors.textPrimary
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (plans.isEmpty()) {
-                                Text(
-                                    "Yeni şehir analizi oluşturmak için sağ üstteki + simgesine dokun.",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = themeColors.accent,
-                                    modifier = Modifier
-                                        .padding(end = 8.dp)
-                                        .background(themeColors.accent.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = { showAddDialog = true },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(themeColors.accent)
-                            ) {
-                                Icon(Icons.Rounded.Add, null, tint = themeColors.onAccent)
-                            }
+                        IconButton(
+                            onClick = { showAddDialog = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(themeColors.accent)
+                        ) {
+                            Icon(Icons.Rounded.Add, null, tint = themeColors.onAccent)
                         }
                     }
 
@@ -202,9 +212,9 @@ fun TravelPlannerScreen(
                     ) {
                         TravelFilter.entries.forEach { filter ->
                             val count = when (filter) {
-                                TravelFilter.UPCOMING -> plans.count { !it.isArchived && !it.endDate.isBefore(LocalDate.now()) }
-                                TravelFilter.PAST -> plans.count { !it.isArchived && it.endDate.isBefore(LocalDate.now()) }
-                                TravelFilter.ARCHIVED -> plans.count { it.isArchived }
+                                TravelFilter.UPCOMING -> upcomingPlans.size
+                                TravelFilter.PAST -> pastPlans.size
+                                TravelFilter.ARCHIVED -> archivedPlans.size
                             }
                             HavamaniaFilterChip(
                                 selected = selectedFilter == filter,
@@ -236,7 +246,7 @@ fun TravelPlannerScreen(
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(horizontal = responsive.pagePadding, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp), // Increased spacing for UX
                     modifier = Modifier
                         .fillMaxHeight()
                         .then(
@@ -257,7 +267,8 @@ fun TravelPlannerScreen(
                             onArchive = { viewModel.archiveTrip(plan.id) },
                             onUnarchive = { viewModel.unarchiveTrip(plan.id) },
                             onShowDetail = { planForSummary = plan },
-                            onReanalyze = { viewModel.analyzeTravelWeather(plan) }
+                            onReanalyze = { viewModel.analyzeTravelWeather(plan) },
+                            viewModel = viewModel
                         )
                     }
                 }
@@ -284,38 +295,44 @@ fun TravelPlannerScreen(
     }
 
     if (planForSummary != null) {
-        PastTravelDetailDialog(
-            plan = planForSummary!!,
-            onDismiss = { planForSummary = null }
-        )
+        val plan = planForSummary
+        if (plan != null) {
+            PastTravelDetailDialog(
+                plan = plan,
+                onDismiss = { planForSummary = null }
+            )
+        }
     }
 
     if (deleteConfirmPlan != null) {
-        HavamaniaDialog(
-            onDismissRequest = { deleteConfirmPlan = null },
-            title = "Seyahati Sil?",
-            text = "${deleteConfirmPlan?.city} seyahati kalıcı olarak silinecektir.",
-            confirmText = "Sil",
-            confirmColor = themeColors.error,
-            icon = Icons.Rounded.DeleteForever,
-            onConfirm = {
-                viewModel.deletePlan(deleteConfirmPlan!!.id)
-                deleteConfirmPlan = null
-            }
-        )
+        val plan = deleteConfirmPlan
+        if (plan != null) {
+            HavamaniaDialog(
+                onDismissRequest = { deleteConfirmPlan = null },
+                title = "Seyahati Sil?",
+                text = "${plan.city} seyahati kalıcı olarak silinecektir.",
+                confirmText = "Sil",
+                confirmColor = themeColors.error,
+                icon = Icons.Rounded.DeleteForever,
+                onConfirm = {
+                    viewModel.deletePlan(plan.id)
+                    deleteConfirmPlan = null
+                }
+            )
+        }
     }
 
-    if (showMigrationDialog) {
+    if (showMigrationDialog.value) {
         HavamaniaDialog(
-            onDismissRequest = { showMigrationDialog = false; viewModel.declineMigration() },
+            onDismissRequest = { showMigrationDialog.value = false; viewModel.declineMigration() },
             title = "Verileri Aktar?",
             text = "Bu cihazdaki eski seyahat ve tercih verilerini hesabına aktarmak ister misin?",
-            confirmText = "Hesabıma Aktar",
+            confirmText = "Hesabı Aktar",
             dismissText = "Aktarma",
             icon = Icons.Rounded.CloudUpload,
             onConfirm = {
                 viewModel.migrateLegacyDataToUser()
-                showMigrationDialog = false
+                showMigrationDialog.value = false
             }
         )
     }
@@ -549,14 +566,15 @@ fun TravelPlanCard(
     onArchive: () -> Unit,
     onUnarchive: () -> Unit,
     onShowDetail: () -> Unit,
-    onReanalyze: () -> Unit
+    onReanalyze: () -> Unit,
+    viewModel: TravelViewModel
 ) {
     val themeColors = HavamaniaTheme.colors
     val today = LocalDate.now()
     val tripStatus = RecommendationEngine.getTripStatus(today, plan.startDate, plan.endDate)
-    val isPast = tripStatus == TripStatus.PAST
-    val isOngoing = tripStatus == TripStatus.ONGOING
-    val isLocked = tripStatus == TripStatus.UPCOMING_LOCKED
+    val isPast = tripStatus == RecommendationTripStatus.PAST
+    val isOngoing = tripStatus == RecommendationTripStatus.ONGOING
+    val isLocked = tripStatus == RecommendationTripStatus.UPCOMING_LOCKED
     val isArchived = plan.isArchived
     var isExpanded by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -573,7 +591,7 @@ fun TravelPlanCard(
     Surface(
         color = themeColors.surfaceGlass.copy(alpha = if (themeColors.isDark) 0.6f else 0.8f),
         shape = RoundedCornerShape(24.dp),
-        shadowElevation = 0.dp, // Premium feel with no shadow, just glass
+        shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
@@ -591,17 +609,17 @@ fun TravelPlanCard(
                 }
             )
     ) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) { // Compact padding
             Row(verticalAlignment = Alignment.Top) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(40.dp) // Smaller icon box
                         .background(
                             Brush.linearGradient(
                                 colors = if (isArchived) listOf(themeColors.textMuted.copy(0.2f), themeColors.textMuted.copy(0.1f))
                                 else themeColors.buttonGradient?.map { it.copy(alpha = 0.9f) } ?: listOf(themeColors.accent, themeColors.accent.copy(alpha = 0.8f))
                             ),
-                            RoundedCornerShape(14.dp)
+                            RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -609,23 +627,23 @@ fun TravelPlanCard(
                         if (isArchived) Icons.Rounded.Archive else plan.tripType.icon,
                         null,
                         tint = if (isArchived) themeColors.textMuted else themeColors.onAccent,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = plan.city,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 17.sp, letterSpacing = 0.2.sp),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 0.2.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = themeColors.textPrimary
                     )
                     Text(
                         text = dateRange.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, fontSize = 10.sp),
                         color = themeColors.accent.copy(alpha = 0.8f)
                     )
                 }
@@ -633,17 +651,17 @@ fun TravelPlanCard(
                 if (isOngoing && !isArchived) {
                     Surface(
                         color = Color(0xFF10B981).copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.2f))
                     ) {
                         Text(
-                            text = "DEVAM EDİYOR",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 9.sp),
+                            text = "CANLI", // Shorter label
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 8.sp),
                             color = Color(0xFF10B981)
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                 }
 
                 if (latestAnalysis != null && !isArchived && !isLocked) {
@@ -654,21 +672,21 @@ fun TravelPlanCard(
                     }
                     Surface(
                         color = scoreColor.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.2f))
                     ) {
                         Text(
                             text = "%${latestAnalysis.travelScore}",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
                             color = scoreColor
                         )
                     }
                 }
 
-                Box(modifier = Modifier.padding(start = 6.dp)) {
-                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Rounded.MoreHoriz, null, tint = themeColors.textMuted, modifier = Modifier.size(20.dp))
+                Box(modifier = Modifier.padding(start = 4.dp)) {
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Rounded.MoreHoriz, null, tint = themeColors.textMuted, modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -705,14 +723,14 @@ fun TravelPlanCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // Chips Row
+            // Chips Row (Always visible for quick context)
             if (latestAnalysis != null && !isArchived && !isLocked) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CompactInfoChip(
                         Icons.Rounded.WaterDrop,
-                        "Yağış: %${latestAnalysis.rainRiskPercent ?: 0}",
+                        "%${latestAnalysis.rainRiskPercent ?: 0}",
                         if ((latestAnalysis.rainRiskPercent ?: 0) > 40) themeColors.error else themeColors.accent
                     )
                     CompactInfoChip(
@@ -720,71 +738,69 @@ fun TravelPlanCard(
                         "${latestAnalysis.averageTemperature?.toInt() ?: "--"}°C",
                         themeColors.textSecondary
                     )
-                    val statusLabel = if (isOngoing) "Seyahattesin" else if (isPast) "Tamamlandı" else if (plan.isAnalyzing) "Analiz ediliyor" else "Planlandı"
+                    val statusLabel = if (isOngoing) "Seyahattesin" else if (isPast) "Tamamlandı" else "Planlandı"
                     CompactInfoChip(
                         if (isPast) Icons.Rounded.CheckCircle else if (isOngoing) Icons.Rounded.AirplaneTicket else Icons.Rounded.Event,
                         statusLabel,
                         if (isPast || isOngoing) Color(0xFF10B981) else themeColors.accent
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
             }
 
-            if (!isArchived) {
-                val detailText = latestAnalysis?.summary ?: "${plan.city} seyahatin kayıt altında. Detaylı hava analizi seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala burada belirecek."
-                Text(
-                    text = detailText,
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp, fontSize = 13.sp),
-                    color = themeColors.textPrimary.copy(alpha = 0.85f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Text(
-                    text = "Bu seyahat arşivde saklanıyor.",
-                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-                    color = themeColors.textMuted
-                )
+            // Analysis details under expandable block
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(500)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = tween(500)) + fadeOut()
+            ) {
+                Column {
+                    if (isPast) {
+                        plan.analyses.lastOrNull()?.let { analysis ->
+                            PastTripContent(plan, analysis, (ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1))
+                        }
+                    } else if (isArchived) {
+                        val archiveFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr"))
+                        ArchiveContent(plan, latestAnalysis, (ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1), archiveFormatter)
+                    } else {
+                        UpcomingTripContent(plan, latestAnalysis, isExpanded, isLocked) { isExpanded = !isExpanded }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
             }
-
-            Spacer(Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!isArchived && !isPast && !isLocked) {
+                if (!isArchived && !isPast && !isLocked && isExpanded) {
+                    val isOnline: Boolean by viewModel.isOnline.collectAsStateWithLifecycle(initialValue = true)
+                    val isOffline = !isOnline
+
                     TextButton(
                         onClick = onReanalyze,
-                        enabled = !plan.isAnalyzing,
-                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        enabled = !plan.isAnalyzing && !isOffline,
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         colors = ButtonDefaults.textButtonColors(contentColor = themeColors.accent)
                     ) {
-                        Icon(if (plan.isAnalyzing) Icons.Rounded.Sync else Icons.Rounded.Refresh, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("GÜNCELLE", fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                        Icon(if (plan.isAnalyzing) Icons.Rounded.Sync else Icons.Rounded.Refresh, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (isOffline) "İnternet bağlantısı bulunamadı." else "GÜNCELLE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
                     }
                     Spacer(Modifier.width(8.dp))
                 }
 
                 HavamaniaPrimaryButton(
-                    text = if (isPast || isArchived) "RAPORU GÖR" else "DETAYLAR",
+                    text = if (isPast || isArchived) "RAPORU GÖR" else if (isExpanded) "GİZLE" else "AYRINTILARI GÖSTER",
                     onClick = { if (isPast || isArchived) onShowDetail() else isExpanded = !isExpanded },
-                    modifier = Modifier.height(38.dp).width(120.dp)
+                    modifier = Modifier.height(34.dp).width(if (isPast || isArchived) 120.dp else 160.dp)
                 )
-            }
-
-            AnimatedVisibility(visible = isExpanded) {
-                Column {
-                    if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
-                        Spacer(Modifier.height(16.dp))
-                        ComparisonSection(latestAnalysis.comparisonText, latestAnalysis.previousAnalysisId != null)
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                    PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
-                }
             }
         }
     }
@@ -792,7 +808,7 @@ fun TravelPlanCard(
 
 
 @Composable
-fun PastTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, duration: Int) {
+fun PastTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis, duration: Int) {
     val themeColors = HavamaniaTheme.colors
     Column {
         Text(
@@ -807,9 +823,9 @@ fun PastTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, duration
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val weatherLabel = analysis?.summary?.split(" ")?.lastOrNull() ?: "Veri yok"
+            val weatherLabel = analysis.summary.split(" ").lastOrNull() ?: "Veri yok"
             CompactInfoChip(Icons.Rounded.WbSunny, "Hava: $weatherLabel", themeColors.accent)
-            CompactInfoChip(Icons.Rounded.AutoAwesome, "Skor: %${analysis?.travelScore ?: "--"}", Color(0xFFFBBF24))
+            CompactInfoChip(Icons.Rounded.AutoAwesome, "Skor: %${analysis.travelScore}", Color(0xFFFBBF24))
         }
 
         if (!plan.userNote.isNullOrBlank()) {
@@ -859,63 +875,129 @@ fun ArchiveContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, duration:
 }
 
 @Composable
-fun UpcomingTripContent(plan: TravelPlan, analysis: TravelWeatherAnalysis?, isExpanded: Boolean, onToggleExpand: () -> Unit) {
+fun UpcomingTripContent(
+    plan: TravelPlan,
+    analysis: TravelWeatherAnalysis?,
+    isExpanded: Boolean,
+    isLocked: Boolean,
+    onToggleExpand: () -> Unit
+) {
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
     val today = LocalDate.now()
     val daysUntilTrip = ChronoUnit.DAYS.between(today, plan.startDate)
     val hasAnalysisData = analysis != null
-    val isWeatherReal = analysis?.averageTemperature != 0.0 && analysis?.averageTemperature != null
 
     Column {
-        val statusText = when {
-            plan.isAnalyzing -> "Analiz hazırlanıyor..."
-            hasAnalysisData && isWeatherReal -> "✅ Seyahat Önerilerin Hazır"
-            hasAnalysisData -> "✅ Temel Öneriler Hazır"
-            daysUntilTrip > TRIP_ANALYSIS_WINDOW_DAYS -> "📅 $TRIP_ANALYSIS_WINDOW_DAYS gün kala hazırlanacak"
-            else -> "❌ Veri Alınamadı"
-        }
-
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
-            color = if (hasAnalysisData) themeColors.accent else themeColors.textMuted
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            text = analysis?.summary ?: "Detaylı şehir analizi seyahate $TRIP_ANALYSIS_WINDOW_DAYS gün kala otomatik olarak burada belirecek.",
-            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-            color = themeColors.textPrimary.copy(alpha = 0.9f),
-            maxLines = if (isExpanded) Int.MAX_VALUE else 2,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        if (hasAnalysisData) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        if (isLocked) {
+            // Redesigned Card for Issue #4 & #10
+            Surface(
+                color = themeColors.accent.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(themeStyles.radiusMedium),
+                border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f)),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    AnalysisMetric("SKOR", WeatherUtils.formatRainProbability(analysis.travelScore), themeColors.accent)
-                    AnalysisMetric("YAĞIŞ", WeatherUtils.getPrecipitationRiskText(analysis.rainRiskPercent, 0.0, 0), if((analysis.rainRiskPercent ?: 0) > 40) themeColors.error else themeColors.textPrimary)
-                }
-
-                TextButton(onClick = onToggleExpand, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text(if (isExpanded) "Küçült ▲" else "Detaylar ▼", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Rounded.Route,
+                        contentDescription = null,
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Planınız hazır, hava detayları yakında eklenecek",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                        color = themeColors.textPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Hava tahminleri seyahat tarihiniz yaklaştıkça daha güvenilir olur. Size özel hava değerlendirmesi ve seyahat önerileri, yolculuğunuza 10 gün kala otomatik olarak hazırlanacak.",
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                        color = themeColors.textSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Surface(
+                        color = themeColors.accent.copy(alpha = 0.1f),
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "Seyahatinize $daysUntilTrip gün kaldı.",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = themeColors.accent,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
+        } else {
+            // Handle analysis states (Issue #3 & #9)
+            if (!hasAnalysisData && !plan.isAnalyzing) {
+                // Not yet attempted or failed state
+                Surface(
+                    color = themeColors.surface.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, themeColors.divider.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Rounded.CloudOff, null, tint = themeColors.textMuted, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_FAILED)
+                                "Öneriler şu anda hazırlanamadı"
+                                else "Seyahat önerileriniz henüz hazırlanmadı",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = themeColors.textPrimary
+                        )
+                        Text(
+                            text = if (plan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_FAILED)
+                                "Bağlantınızı kontrol edip biraz sonra yeniden deneyebilirsiniz."
+                                else "Hava durumuna göre kişisel önerilerinizi oluşturmak için aşağıdaki butonu kullanabilirsiniz.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = themeColors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            } else {
+                // Success or Loading
+                val statusText = when {
+                    plan.isAnalyzing -> "Analiz hazırlanıyor..."
+                    hasAnalysisData -> "✅ Seyahat Önerilerin Hazır"
+                    else -> "Daha sonra tekrar deneyebilirsiniz." // Fallback, shouldn't reach here due to IF above
+                }
 
-            AnimatedVisibility(visible = isExpanded) {
-                Column {
-                    if (analysis?.comparisonText != null && !analysis.comparisonText.contains("ilk analiz")) {
-                        Spacer(Modifier.height(12.dp))
-                        ComparisonSection(analysis.comparisonText, analysis.previousAnalysisId != null)
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                    color = if (hasAnalysisData) themeColors.accent else themeColors.textMuted
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                if (hasAnalysisData) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            AnalysisMetric("SKOR", WeatherUtils.formatRainProbability(analysis!!.travelScore), themeColors.accent)
+                            AnalysisMetric("YAĞIŞ", WeatherUtils.getPrecipitationRiskText(analysis.rainRiskPercent, 0.0, 0), if((analysis.rainRiskPercent ?: 0) > 40) themeColors.error else themeColors.textPrimary)
+                        }
                     }
 
                     Spacer(Modifier.height(12.dp))
+
+                    if (analysis!!.comparisonText != null && !analysis.comparisonText!!.contains("ilk analiz")) {
+                        ComparisonSection(analysis.comparisonText!!, analysis.previousAnalysisId != null)
+                        Spacer(Modifier.height(12.dp))
+                    }
+
                     PremiumAnalysisBlocks(plan.aiSuggestion ?: "")
                 }
             }
@@ -1340,7 +1422,8 @@ fun AddTravelPlanDialog(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = if (editPlan != null) "Şehir Analizini Düzenle" else "Yeni Şehir Analizi Oluştur",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black)
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                    color = themeColors.textPrimary
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -1406,9 +1489,9 @@ fun AddTravelPlanDialog(
 
                 Spacer(Modifier.height(16.dp))
 
-                Text("Seyahat Tipi", style = MaterialTheme.typography.labelLarge)
+                Text("Seyahat Tipi", style = MaterialTheme.typography.labelLarge, color = themeColors.textPrimary)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(TripType.values()) { type ->
+                    items(TripType.entries.toTypedArray()) { type ->
                         HavamaniaFilterChip(
                             selected = tripType == type,
                             onClick = { tripType = type },
@@ -1432,7 +1515,7 @@ fun AddTravelPlanDialog(
                             color = Color.Transparent,
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(startDate.format(displayFormatter), modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold)
+                            Text(startDate.format(displayFormatter), modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -1447,31 +1530,25 @@ fun AddTravelPlanDialog(
                             color = Color.Transparent,
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text(endDate.format(displayFormatter), modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold)
+                            Text(endDate.format(displayFormatter), modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold, color = themeColors.textPrimary)
                         }
                     }
                 }
 
                 Spacer(Modifier.height(24.dp))
 
+                val isFormValid = selectedCity != null && startDate != null && endDate != null && !startDate.isAfter(endDate)
+                val isProcessingState by viewModel.isLoading.collectAsState()
+                val isProcessing = isProcessingState
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("İptal") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("İptal", color = themeColors.textSecondary) }
                     HavamaniaPrimaryButton(
                         text = "ANALİZ OLUŞTUR",
+                        enabled = isFormValid && !isProcessing,
+                        isLoading = isProcessing,
                         onClick = {
-                            // Validations
-                            if (selectedCity == null && !turkishCities.contains(citySearch.trim())) {
-                                Toast.makeText(context, "Lütfen listeden bir şehir seçin.", Toast.LENGTH_SHORT).show()
-                                return@HavamaniaPrimaryButton
-                            }
-
                             val finalCity = selectedCity ?: citySearch.trim()
-
-                            if (startDate.isAfter(endDate)) {
-                                Toast.makeText(context, "Başlangıç tarihi bitiş tarihinden sonra olamaz.", Toast.LENGTH_SHORT).show()
-                                return@HavamaniaPrimaryButton
-                            }
-
                             val plan = (editPlan ?: TravelPlan(
                                 city = finalCity,
                                 tripType = tripType,
@@ -1489,4 +1566,3 @@ fun AddTravelPlanDialog(
         }
     }
 }
-

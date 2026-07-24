@@ -1,40 +1,44 @@
-# Havamania Profil Fotoğrafı Yükleme - Root Cause Analysis (RCA) Planı
+# Havamania Production-Ready Yayına Hazırlık Planı
 
-Bu plan, profil fotoğrafı yükleme sürecindeki hataları adım adım izleyerek gerçek kök nedeni (root cause) saptamayı ve kalıcı olarak düzeltmeyi hedefler.
+Bu plan, Havamania uygulamasının Google Play Store yayını öncesi tüm teknik ve yasal eksiklerini tamamlamayı, güvenliği artırmayı ve üretim kalitesine (production-ready) ulaşmayı hedefler.
 
-## User Review Required
+## Kullanıcı İncelemesi Gerekenler
 
 > [!IMPORTANT]
-> **Detaylı Loglama:** `ProfileViewModel` ve `ProfileView` içerisindeki tüm kritik adımlara (URI alımı, resim işleme, Storage yükleme, Firestore güncelleme) numaralandırılmış loglar eklenecektir.
-> **Hata Yakalama:** `StorageException` tüm detaylarıyla (ErrorCode, HTTP Code, Cause) loglanacaktır.
+> **Yasal Onaylar:** Kayıt ekranına "Kullanım Koşullarını ve Gizlilik Politikasını okudum, kabul ediyorum" onay kutusu eklenecektir. Bu onay verilmeden hesap oluşturulamayacaktır.
+> **Release Build:** Uygulama `release` modunda derlenecek, ProGuard/R8 etkinleştirilecek ve debug logları tamamen temizlenecektir.
 
-## Proposed Changes
+## Önerilen Değişiklikler
 
-### 1. ViewModel Tracing ve Hata Analizi
-- **[MODIFY] [ProfileViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/ProfileViewModel.kt)**:
-    - `uploadProfileImage` fonksiyonu, yükleme başlamadan önce `bucket`, `path`, `UID` ve `MIME type` bilgilerini loglayacak.
-    - `putBytes` çağrısı öncesi ve sonrası açıkça belirtilecek.
-    - `downloadUrl` alımı ve Firestore güncellemesi ayrı ayrı loglanacak.
-    - `fetchProfile` fonksiyonunda Firestore'dan dönen verinin ham hali (`doc.data`) yazdırılacak.
+### 1. Android Manifest ve Güvenlik
+- **[MODIFY] [AndroidManifest.xml](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/AndroidManifest.xml)**:
+    - `android:allowBackup="false"` (Veri güvenliği için).
+    - `android:usesCleartextTraffic="false"` (Güvenli ağ iletişimi için).
+    - Gereksiz izinlerin (`READ_EXTERNAL_STORAGE` gibi eğer kullanılmıyorsa) denetimi ve temizliği.
 
-### 2. UI Tracing
-- **[MODIFY] [ProfileView.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/ProfileView.kt)**:
-    - `photoPickerLauncher` sonucunda dönen URI loglanacak.
-    - `PremiumProfileHeader` bileşenine gelen `imageUri` her render sırasında (timestamp ile birlikte) loglanacak.
+### 2. Yasal Uyumluluk (KVKK/GDPR)
+- **[MODIFY] [AuthScreens.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AuthScreens.kt)**:
+    - Kayıt ekranına (`RegisterScreen`) interaktif onay kutusu (Checkbox) ve yasal metin linkleri eklenecek.
+- **[MODIFY] [LegalScreens.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/LegalScreens.kt)**:
+    - Metinler son kez gözden geçirilecek ve tutarlılık sağlanacak.
 
-### 3. Bucket ve Konfigürasyon Doğrulaması
-- `google-services.json` içindeki bucket (`havamania-be3df.firebasestorage.app`) ile kodda kullanılan adresin uyumu tekrar kontrol edilecek.
+### 3. String Kaynakları ve Yerelleştirme
+- **[MODIFY] [strings.xml](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/res/values/strings.xml)**:
+    - Kod içindeki tüm hardcoded Türkçe metinler bu dosyaya taşınacak.
+    - Yazım ve noktalama hataları düzeltilecek.
 
-## Araştırma Soruları (Loglardan Beklenen Yanıtlar)
-1. **URI Geçerli mi?** (`Selected URI = ...`)
-2. **Resim İşleme Başarılı mı?** (Step 2.2 OK)
-3. **Storage Hatası Nedir?** (HTTP Code ve ErrorCode)
-4. **Firestore Güncelleniyor mu?** (Step 6.1 OK)
-5. **UI Neden Null Görüyor?** (Firestore'dan gelen veri UI state'ine aktarılamıyor mu?)
+### 4. Hata Mesajları ve UX
+- **[MODIFY] [AuthViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AuthViewModel.kt)** & **[WeatherViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/WeatherViewModel.kt)**:
+    - "FirebaseException", "HttpException" gibi teknik terimler temizlenip "Bağlantı sorunu yaşandı" gibi kullanıcı dostu mesajlara dönüştürülecek.
 
-## Verification Plan
+### 5. Erişilebilirlik (Accessibility)
+- Tüm butonlara ve ikonlara `contentDescription` eklenecek.
+- Dokunma alanları (Touch targets) kontrol edilecek.
 
-### Manual Verification
-1. **Tracing:** Logcat'te `PHOTO_DEBUG` etiketiyle akış izlenecek.
-2. **Root Cause Tespiti:** Hatanın durduğu adım saptanacak (Örn: Step 4'e ulaşılamadı).
-3. **Fix Uygulama:** Saptanan nedene göre (Yetki, Path, Model uyuşmazlığı) düzeltme yapılacak.
+## Doğrulama Planı
+
+### Smoke Test Senaryoları
+1. **Yasal Onay Testi:** Onay kutusu işaretlenmeden kayıt butonunun çalışmadığı doğrulanacak.
+2. **Hata Mesajı Testi:** Yanlış şifre girildiğinde teknik kod yerine Türkçe hata mesajı alındığı görülecek.
+3. **Release Build Testi:** Projenin release modunda hatasız derlendiği ve açıldığı teyit edilecek.
+4. **Offline Durum:** İnternet kapalıyken uygulamanın pürüzsüz bir "çevrimdışı" deneyimi sunduğu doğrulanacak.

@@ -2,10 +2,7 @@ package com.havamania
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +31,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun AuthHeader(
@@ -59,7 +57,7 @@ fun AuthHeader(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Havamania",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.sp
@@ -70,7 +68,7 @@ fun AuthHeader(
         if (showSlogan) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Hava durumunu akıllıca takip et,\nseyahatlerini akıllıca planla.",
+                text = stringResource(R.string.auth_welcome_slogan),
                 style = MaterialTheme.typography.bodyMedium,
                 color = themeColors.textSecondary.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
@@ -94,15 +92,15 @@ fun AuthWelcomeScreen(
     onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
 ) {
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
     val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
 
     HavamaniaScreen {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding()
-                .padding(24.dp),
+                .padding(themeStyles.pagePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
@@ -118,24 +116,24 @@ fun AuthWelcomeScreen(
 
             Column(
                 modifier = Modifier.widthIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMedium)
             ) {
                 HavamaniaPrimaryButton(
-                    text = "GİRİŞ YAP",
+                    text = stringResource(R.string.login_title),
                     onClick = onNavigateToLogin
                 )
 
                 HavamaniaSecondaryButton(
-                    text = "HESAP OLUŞTUR",
+                    text = stringResource(R.string.register_title),
                     onClick = onNavigateToRegister
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingExtraLarge))
 
             // Legal Links
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -146,7 +144,7 @@ fun AuthWelcomeScreen(
                 LegalLink("Kullanım Koşulları") { onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE) }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingMedium))
         }
     }
 }
@@ -163,9 +161,6 @@ fun LoginScreen(
     val authState by viewModel.authState.collectAsState()
     val themeColors = HavamaniaTheme.colors
 
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
-
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(title = "", onBack = onBack)
@@ -180,7 +175,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(modifier = Modifier.widthIn(max = 500.dp)) {
-                AuthHeader(title = "Hoş Geldiniz")
+                AuthHeader(title = stringResource(R.string.login_title))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -219,7 +214,7 @@ fun LoginScreen(
 
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         Text(
-                            text = "Şifremi Unuttum",
+                            text = stringResource(R.string.forgot_password_link),
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 textDecoration = TextDecoration.Underline
@@ -232,7 +227,7 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     HavamaniaPrimaryButton(
-                        text = "GİRİŞ YAP",
+                        text = stringResource(R.string.login_title).uppercase(),
                         onClick = { viewModel.signIn(email, password) },
                         isLoading = authState is AuthState.Loading,
                         enabled = email.isNotEmpty() && password.isNotEmpty()
@@ -242,9 +237,9 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(40.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Henüz hesabın yok mu?", color = themeColors.textSecondary)
+                    Text(stringResource(R.string.no_account_text), color = themeColors.textSecondary)
                     Text(
-                        text = " Kayıt Ol",
+                        text = " " + stringResource(R.string.register_title),
                         color = themeColors.accent,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.clickable { onNavigateToRegister() }
@@ -261,18 +256,19 @@ fun LoginScreen(
 fun RegisterScreen(
     viewModel: AuthViewModel,
     onBack: () -> Unit,
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var termsAccepted by remember { mutableStateOf(false) }
 
     val authState by viewModel.authState.collectAsState()
     val themeColors = HavamaniaTheme.colors
-
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
+    val themeStyles = HavamaniaTheme.styles
 
     HavamaniaScreen(
         topBar = {
@@ -288,7 +284,7 @@ fun RegisterScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(modifier = Modifier.widthIn(max = 500.dp)) {
-                AuthHeader(title = "Yeni Hesap Oluştur")
+                AuthHeader(title = stringResource(R.string.new_account_title))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -339,20 +335,58 @@ fun RegisterScreen(
                         placeholder = "Şifre Tekrar"
                     )
 
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                onClickLabel = stringResource(R.string.legal_consent_part1),
+                                onClick = { termsAccepted = !termsAccepted }
+                            )
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = { termsAccepted = it },
+                            colors = CheckboxDefaults.colors(checkedColor = themeColors.accent)
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.legal_consent_part1),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = themeColors.textPrimary
+                            )
+                            Text(
+                                text = stringResource(R.string.legal_consent_part2),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    textDecoration = TextDecoration.Underline
+                                ),
+                                color = themeColors.accent,
+                                modifier = Modifier.clickable(
+                                    onClickLabel = stringResource(R.string.privacy_policy_title),
+                                    onClick = { onNavigateToLegal(context.getString(R.string.privacy_policy_title), LegalUrls.PRIVACY_POLICY) }
+                                )
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
 
                     val passwordsMatch = password == confirmPassword && password.isNotEmpty()
 
                     HavamaniaPrimaryButton(
-                        text = "KAYIT OL",
+                        text = stringResource(R.string.register_title).uppercase(),
                         onClick = { viewModel.signUp(name, email, password) },
                         isLoading = authState is AuthState.Loading,
-                        enabled = name.isNotEmpty() && email.isNotEmpty() && passwordsMatch
+                        enabled = name.isNotEmpty() && email.isNotEmpty() && passwordsMatch && termsAccepted
                     )
 
                     if (!passwordsMatch && confirmPassword.isNotEmpty()) {
                         Text(
-                            text = "Şifreler uyuşmuyor",
+                            text = stringResource(R.string.passwords_do_not_match),
                             color = themeColors.error.copy(alpha = 0.8f),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally)
@@ -363,9 +397,9 @@ fun RegisterScreen(
                 Spacer(modifier = Modifier.height(40.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Zaten hesabın var mı?", color = themeColors.textSecondary)
+                    Text(stringResource(R.string.has_account_text), color = themeColors.textSecondary)
                     Text(
-                        text = " Giriş Yap",
+                        text = " " + stringResource(R.string.login_title),
                         color = themeColors.accent,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier.clickable { onNavigateToLogin() }
@@ -402,7 +436,7 @@ fun ForgotPasswordScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(modifier = Modifier.widthIn(max = 500.dp)) {
-                AuthHeader(title = "Şifre Sıfırlama")
+                AuthHeader(title = stringResource(R.string.forgot_password_title))
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -443,7 +477,7 @@ fun ForgotPasswordScreen(
                         Spacer(modifier = Modifier.height(24.dp))
 
                         HavamaniaPrimaryButton(
-                            text = "BAĞLANTI GÖNDER",
+                            text = stringResource(R.string.send_link_btn),
                             onClick = {
                                 viewModel.resetPassword(email)
                                 successSent = true
@@ -464,14 +498,14 @@ fun ForgotPasswordScreen(
                             )
                             Spacer(modifier = Modifier.height(24.dp))
                             Text(
-                                text = "E-posta Gönderildi",
+                                text = stringResource(R.string.email_sent_title),
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
                                 color = themeColors.textPrimary,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Lütfen e-posta kutunuzu kontrol edin ve talimatları izleyin.",
+                                text = stringResource(R.string.email_sent_desc),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = themeColors.textSecondary,
                                 textAlign = TextAlign.Center
@@ -614,12 +648,18 @@ fun HavamaniaSecondaryButton(
 
 @Composable
 fun LegalLink(text: String, onClick: () -> Unit = {}) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-        color = HavamaniaTheme.colors.textMuted.copy(alpha = 0.6f),
-        modifier = Modifier.clickable { onClick() }
-    )
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.minimumInteractiveComponentSize()
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            color = HavamaniaTheme.colors.textMuted.copy(alpha = 0.8f),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+        )
+    }
 }
 
 @Composable

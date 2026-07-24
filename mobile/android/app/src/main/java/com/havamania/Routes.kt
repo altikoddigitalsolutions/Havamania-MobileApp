@@ -10,7 +10,7 @@ object Routes {
     // Root Tabs
     const val WEATHER_ROOT = "root_weather"
     const val CALENDAR_ROOT = "root_calendar"
-    const val AI_ROOT = "root_ai"
+    const val AI_ROOT = "root_ai?conversationId={conversationId}"
     const val PROFILE_ROOT = "root_profile"
 
     // Sub Screens
@@ -21,5 +21,6 @@ object Routes {
     const val SETTINGS = "sub_settings"
     const val PERSONALIZATION = "sub_personalization"
     const val NOTIFICATION_CENTER = "sub_notification_center"
+    const val SMART_ALERTS = "sub_smart_alerts"
     const val LEGAL_WEBVIEW = "sub_legal_webview/{title}/{url}"
 }

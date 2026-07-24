@@ -57,37 +57,51 @@ fun CitiesManagementScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Şehir Ekleme Alanı
-            Text(
-                "YENİ ŞEHİR/İLÇE EKLE",
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
-                color = themeColors.accent.copy(alpha = 0.8f)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            // 1. Arama Alanı (Daha Belirgin)
+            HavamaniaGlassCard(
+                alpha = 0.6f,
+                cornerRadius = 24.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Text(
+                        "ŞEHİR VEYA İLÇE EKLE",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Black
+                        ),
+                        color = themeColors.accent
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Aramak için yazın...", color = themeColors.textMuted.copy(0.5f)) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, null, tint = themeColors.accent) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
+                            focusedBorderColor = themeColors.accent,
+                            focusedTextColor = themeColors.textPrimary,
+                            unfocusedTextColor = themeColors.textPrimary,
+                            cursorColor = themeColors.accent
+                        ),
+                        singleLine = true
+                    )
+                }
+            }
 
-            OutlinedTextField(
-                value = searchText,
-                onValueChange = { searchText = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("İl veya ilçe ismi girin...", color = themeColors.textMuted) },
-                leadingIcon = { Icon(Icons.Rounded.Search, null, tint = themeColors.accent) },
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = themeColors.surfaceGlass,
-                    unfocusedContainerColor = themeColors.surfaceGlass,
-                    unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
-                    focusedBorderColor = themeColors.accent,
-                    focusedTextColor = themeColors.textPrimary,
-                    unfocusedTextColor = themeColors.textPrimary,
-                    cursorColor = themeColors.accent
-                ),
-                singleLine = true
-            )
-
-            // Autocomplete Suggestions
+            // Autocomplete Suggestions (Z-Index mantığı ile listenin üzerine biner)
             if (citySuggestions.isNotEmpty() && searchText.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                HavamaniaGlassCard(alpha = 0.9f) {
+                HavamaniaGlassCard(
+                    alpha = 0.95f,
+                    cornerRadius = 20.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Column {
                         citySuggestions.take(5).forEach { suggestion ->
                             Row(
@@ -103,11 +117,12 @@ fun CitiesManagementScreen(
                             ) {
                                 Column {
                                     Text(suggestion.name, color = themeColors.textPrimary, fontWeight = FontWeight.Bold)
-                                    if (suggestion.admin1 != null && suggestion.admin1 != suggestion.name) {
-                                        Text(suggestion.admin1!!, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+                                    val admin = suggestion.admin1
+                                    if (admin != null && admin != suggestion.name) {
+                                        Text(admin, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
                                     }
                                 }
-                                Icon(Icons.Rounded.Add, null, tint = themeColors.accent)
+                                Icon(Icons.Rounded.AddCircle, null, tint = themeColors.accent)
                             }
                             if (suggestion != citySuggestions.take(5).last()) {
                                 HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
@@ -119,32 +134,47 @@ fun CitiesManagementScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Kayıtlı Şehirler Listesi
-            Text(
-                "KAYITLI LOKASYONLAR",
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Black),
-                color = themeColors.accent.copy(alpha = 0.8f)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(registeredCities, key = { it.id }) { city ->
-                    val isDefault = city.id == defaultCity?.id
-                    CityListItem(
-                        city = city,
-                        isDefault = isDefault,
-                        canDelete = registeredCities.size > 1,
-                        onDelete = { themeViewModel.removeCity(city) },
-                        onSetDefault = { themeViewModel.setDefaultCity(city) }
+            // 2. Şehir Listesi veya Boş Durum
+            if (registeredCities.isEmpty()) {
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    WeatherEmptyState(
+                        icon = Icons.Rounded.LocationCity,
+                        title = "Henüz kayıtlı şehir bulunmuyor",
+                        description = "Yukarıdaki arama kutusundan şehir veya ilçe ekleyerek hava durumunu takip edebilirsin.",
+                        accentColor = themeColors.accent
                     )
+                }
+            } else {
+                Text(
+                    "KAYITLI LOKASYONLAR",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.5.sp,
+                        fontWeight = FontWeight.Black
+                    ),
+                    color = themeColors.accent.copy(alpha = 0.8f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(registeredCities, key = { it.id }) { city ->
+                        val isDefault = city.id == defaultCity?.id
+                        CityListItem(
+                            city = city,
+                            isDefault = isDefault,
+                            canDelete = registeredCities.size > 1,
+                            onDelete = { themeViewModel.removeCity(city) },
+                            onSetDefault = { themeViewModel.setDefaultCity(city) }
+                        )
+                    }
                 }
             }
 
-            if (registeredCities.size <= 1) {
+            // Sabit Alt Bilgi
+            if (registeredCities.size == 1) {
                 Surface(
                     color = themeColors.accent.copy(alpha = 0.05f),
                     shape = RoundedCornerShape(12.dp),
@@ -165,7 +195,7 @@ fun CitiesManagementScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

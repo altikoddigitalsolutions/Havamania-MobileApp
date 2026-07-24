@@ -108,8 +108,8 @@ fun HavamaniaErrorState(
 @Composable
 fun OfflineErrorState(onRetry: () -> Unit) {
     HavamaniaErrorState(
-        title = "İnternet Yok",
-        description = "Hava durumu verilerine şu an ulaşılamıyor. Lütfen internet bağlantınızı kontrol edin.",
+        title = "Bağlantı Sorunu",
+        description = "Şu an internete ulaşılamıyor. Kısa süreli bir kesinti olabilir, tekrar deneyebilirsin.",
         icon = Icons.Rounded.SignalWifiOff,
         onRetry = onRetry
     )
@@ -118,8 +118,8 @@ fun OfflineErrorState(onRetry: () -> Unit) {
 @Composable
 fun LocationPermissionErrorState(onRetry: () -> Unit) {
     HavamaniaErrorState(
-        title = "Konum İzni Gerekli",
-        description = "Havamania, bulunduğun şehre göre anlık hava analizi sunmak için konumunu kullanır.",
+        title = "Konum Gerekli",
+        description = "Canlı konumunuzu gösterip size özel analizler yapabilmemiz için konum iznine ihtiyacımız var.",
         icon = Icons.Rounded.LocationOff,
         onRetry = onRetry
     )
@@ -129,8 +129,18 @@ fun LocationPermissionErrorState(onRetry: () -> Unit) {
 fun CityNotFoundErrorState(onRetry: () -> Unit) {
     HavamaniaErrorState(
         title = "Şehir Bulunamadı",
-        description = "Aradığın şehre ait meteorolojik verilere şu an ulaşamıyoruz. Lütfen yazımı kontrol et.",
+        description = "Aradığın şehrin hava verilerine şu an ulaşamıyoruz. Yazımı kontrol edip tekrar deneyebilirsin.",
         icon = Icons.Rounded.SearchOff,
+        onRetry = onRetry
+    )
+}
+
+@Composable
+fun ApiErrorState(onRetry: () -> Unit) {
+    HavamaniaErrorState(
+        title = "Sunucu Meşgul",
+        description = "Meteoroloji servislerinden veri alırken bir gecikme yaşandı. Tekrar denemeye ne dersin?",
+        icon = Icons.Rounded.ErrorOutline,
         onRetry = onRetry
     )
 }

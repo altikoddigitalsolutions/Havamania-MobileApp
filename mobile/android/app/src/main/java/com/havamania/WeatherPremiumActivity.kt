@@ -64,6 +64,13 @@ class WeatherPremiumActivity : ComponentActivity() {
                 }
 
                 var appState by remember { mutableStateOf("splash") }
+                var splashMinimumTimedOut by remember { mutableStateOf(false) }
+
+                // Splash Screen Minimum Duration Timer
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(2500)
+                    splashMinimumTimedOut = true
+                }
                 val themeColors = HavamaniaTheme.colors
                 val backgroundGradient = remember(themeColors) {
                     Brush.verticalGradient(themeColors.gradientPrimary)
@@ -78,6 +85,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                     } else {
                         // Giriş yapılmışsa profili bekle
                         profileViewModel.fetchProfile()
+                        themeViewModel.checkInitialLocationMode()
                     }
                 }
 
@@ -117,10 +125,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                 }
 
                 // Havamania Splash (Sloganlı) süresini ayarla
-                LaunchedEffect(isReady) {
-                    if (isReady) {
-                        // Eğer isReady ise 2 saniye sloganlı splash göster ve ana ekrana geç
-                        kotlinx.coroutines.delay(2000)
+                LaunchedEffect(isReady, splashMinimumTimedOut) {
+                    if (isReady && splashMinimumTimedOut) {
+                        // Uygulama verisi hazır VE minimum süre dolduysa ana ekrana geçiş yapıyoruz.
                         appState = "main"
                     }
                 }
@@ -128,9 +135,13 @@ class WeatherPremiumActivity : ComponentActivity() {
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
                 var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
+                // Splash Screen Logic (Issue #1)
                 if (appState == "splash") {
                     TravelInspiredSplashScreen(onNavigateToHome = {
-                        appState = "main"
+                        // Animation finished, but only proceed if data is ready AND min time passed
+                        if (isReady && splashMinimumTimedOut) {
+                            appState = "main"
+                        }
                     })
                 } else {
                     Scaffold(
@@ -216,6 +227,14 @@ class WeatherPremiumActivity : ComponentActivity() {
                                             navController.navigate(Routes.LOGIN) {
                                                 popUpTo(Routes.AUTH_WELCOME)
                                             }
+                                        },
+                                        onNavigateToLegal = { title, url ->
+                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+                                            navController.navigate(
+                                                Routes.LEGAL_WEBVIEW
+                                                    .replace("{title}", title)
+                                                    .replace("{url}", encodedUrl)
+                                            )
                                         }
                                     )
                                 }
@@ -258,9 +277,16 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         initialStartDate = date
                                     )
                                 }
-                                composable(Routes.AI_ROOT) {
+                                composable(
+                                    Routes.AI_ROOT,
+                                    arguments = listOf(
+                                        navArgument("conversationId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                    )
+                                ) { backStackEntry ->
+                                    val conversationId = backStackEntry.arguments?.getString("conversationId")
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
+                                        conversationId = conversationId,
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
@@ -296,8 +322,8 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 composable(Routes.AI_HISTORY) {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
-                                        onNavigateToDetail = { id ->
-                                            navController.navigate(Routes.AI_HISTORY_DETAIL.replace("{itemId}", id))
+                                        onNavigateToChat = { id ->
+                                            navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
                                         }
                                     )
                                 }
@@ -316,6 +342,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
+                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
                                         onNavigateToLegal = { title, url ->
                                             val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
                                             navController.navigate(
@@ -325,6 +352,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                             )
                                         }
                                     )
+                                }
+                                composable(Routes.SMART_ALERTS) {
+                                    SmartAlertsScreen(onBack = { navController.popBackStack() })
                                 }
                                 composable(Routes.PERSONALIZATION) {
                                     PersonalizationScreen(

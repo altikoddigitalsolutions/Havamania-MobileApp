@@ -21,21 +21,34 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 enum class AppTheme(val title: String) {
-    AUTO("Otomatik"),
-    LIGHT("Açık Tema"),
-    DARK("Koyu Tema"),
-    SPRING_DAY("İlkbahar Gündüz"),
-    SPRING_NIGHT("İlkbahar Gece"),
-    SUMMER_DAY("Yaz Gündüz"),
-    SUMMER_NIGHT("Yaz Gece"),
-    AUTUMN_DAY("Sonbahar Gündüz"),
-    AUTUMN_NIGHT("Sonbahar Gece"),
-    WINTER_DAY("Kış Gündüz"),
-    WINTER_NIGHT("Kış Gece")
+    AUTO("🤖 Otomatik"),
+    SPRING("🌸 İlkbahar"),
+    SUMMER("☀️ Yaz"),
+    AUTUMN("🍂 Sonbahar"),
+    WINTER("❄️ Kış"),
+    LIGHT("⚪ Açık"),
+    DARK("⚫ Koyu")
+}
+
+enum class LocationMode(val title: String) {
+    AUTO("Otomatik (GPS)"),
+    MANUAL("Manuel")
 }
 
 enum class TemperatureUnit(val symbol: String, val title: String) {
     CELSIUS("°C", "Celsius"), FAHRENHEIT("°F", "Fahrenheit")
+}
+
+enum class WindSpeedUnit(val symbol: String, val title: String) {
+    KMH("km/sa", "Kilometre/Saat"),
+    MPH("mph", "Mil/Saat"),
+    MS("m/s", "Metre/Saniye")
+}
+
+enum class PressureUnit(val symbol: String, val title: String) {
+    HPA("hPa", "Hektopaskal"),
+    MBAR("mbar", "Milibar"),
+    INHG("inHg", "İnç Civa")
 }
 
 enum class AssistantTone(val title: String, val description: String) {
@@ -95,6 +108,8 @@ object ThemeManager {
     private fun tiltEffectKey(uid: String) = booleanPreferencesKey("havamania:$uid:tilt_effect_enabled")
     private fun effectIntensityKey(uid: String) = stringPreferencesKey("havamania:$uid:effect_intensity")
     private fun tempUnitKey(uid: String) = stringPreferencesKey("havamania:$uid:temp_unit")
+    private fun windUnitKey(uid: String) = stringPreferencesKey("havamania:$uid:wind_unit")
+    private fun pressureUnitKey(uid: String) = stringPreferencesKey("havamania:$uid:pressure_unit")
     private fun languageKey(uid: String) = stringPreferencesKey("havamania:$uid:language")
 
     private fun nameKey(uid: String) = stringPreferencesKey("havamania:$uid:user_name")
@@ -111,6 +126,18 @@ object ThemeManager {
     private fun seededNotificationsKey(uid: String) = booleanPreferencesKey("havamania:$uid:has_seeded_notifications")
     private fun onboardingCompletedKey(uid: String) = booleanPreferencesKey("havamania:$uid:onboarding_completed")
     private fun migrationChoiceMadeKey(uid: String) = booleanPreferencesKey("havamania:$uid:migration_choice_made")
+    private fun locationModeKey(uid: String) = stringPreferencesKey("havamania:$uid:location_mode")
+
+    // Smart Alert Keys
+    private fun rainAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_rain")
+    private fun windAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_wind")
+    private fun heatAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_heat")
+    private fun frostAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_frost")
+    private fun fogAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_fog")
+    private fun stormAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_storm")
+    private fun uvAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_uv")
+    private fun pollenAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_pollen")
+    private fun airQualityAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_aqi")
 
     // Legacy / Global (Only used for guest users or non-critical device state if any)
     private val GLOBAL_USER_NAME_KEY = stringPreferencesKey("user_name")
@@ -127,6 +154,16 @@ object ThemeManager {
     suspend fun saveTempUnit(context: Context, unit: TemperatureUnit, uid: String) = context.dataStore.edit { it[tempUnitKey(uid)] = unit.name }
     fun getTempUnit(context: Context, uid: String): Flow<TemperatureUnit> = context.dataStore.data.map {
         try { TemperatureUnit.valueOf(it[tempUnitKey(uid)] ?: TemperatureUnit.CELSIUS.name) } catch (e: Exception) { TemperatureUnit.CELSIUS }
+    }
+
+    suspend fun saveWindUnit(context: Context, unit: WindSpeedUnit, uid: String) = context.dataStore.edit { it[windUnitKey(uid)] = unit.name }
+    fun getWindUnit(context: Context, uid: String): Flow<WindSpeedUnit> = context.dataStore.data.map {
+        try { WindSpeedUnit.valueOf(it[windUnitKey(uid)] ?: WindSpeedUnit.KMH.name) } catch (e: Exception) { WindSpeedUnit.KMH }
+    }
+
+    suspend fun savePressureUnit(context: Context, unit: PressureUnit, uid: String) = context.dataStore.edit { it[pressureUnitKey(uid)] = unit.name }
+    fun getPressureUnit(context: Context, uid: String): Flow<PressureUnit> = context.dataStore.data.map {
+        try { PressureUnit.valueOf(it[pressureUnitKey(uid)] ?: PressureUnit.HPA.name) } catch (e: Exception) { PressureUnit.HPA }
     }
 
     suspend fun saveLanguage(context: Context, lang: String, uid: String) = context.dataStore.edit { it[languageKey(uid)] = lang }
@@ -154,6 +191,12 @@ object ThemeManager {
 
     suspend fun saveMigrationChoiceMade(context: Context, uid: String, made: Boolean) = context.dataStore.edit { it[migrationChoiceMadeKey(uid)] = made }
     fun getMigrationChoiceMade(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[migrationChoiceMadeKey(uid)] ?: false }
+
+    suspend fun saveLocationMode(context: Context, uid: String, mode: LocationMode) = context.dataStore.edit { it[locationModeKey(uid)] = mode.name }
+    fun getLocationMode(context: Context, uid: String): Flow<LocationMode> = context.dataStore.data.map {
+        val modeName = it[locationModeKey(uid)] ?: LocationMode.MANUAL.name
+        try { LocationMode.valueOf(modeName) } catch (e: Exception) { LocationMode.MANUAL }
+    }
 
     suspend fun saveUserName(context: Context, uid: String, name: String) = context.dataStore.edit { it[nameKey(uid)] = name }
     fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
@@ -244,21 +287,79 @@ object ThemeManager {
         it.remove(personalizationEnabledKey(uid))
     }
 
+    // --- Smart Alert Methods ---
+
+    suspend fun saveSmartAlertConfig(context: Context, uid: String, config: com.havamania.SmartAlertConfig) = context.dataStore.edit {
+        it[rainAlertKey(uid)] = config.rainEnabled
+        it[windAlertKey(uid)] = config.windEnabled
+        it[heatAlertKey(uid)] = config.heatEnabled
+        it[frostAlertKey(uid)] = config.frostEnabled
+        it[fogAlertKey(uid)] = config.fogEnabled
+        it[stormAlertKey(uid)] = config.stormEnabled
+        it[uvAlertKey(uid)] = config.uvEnabled
+        it[pollenAlertKey(uid)] = config.pollenEnabled
+        it[airQualityAlertKey(uid)] = config.airQualityEnabled
+    }
+
+    fun getSmartAlertConfig(context: Context, uid: String): Flow<com.havamania.SmartAlertConfig> = context.dataStore.data.map {
+        com.havamania.SmartAlertConfig(
+            rainEnabled = it[rainAlertKey(uid)] ?: true,
+            windEnabled = it[windAlertKey(uid)] ?: true,
+            heatEnabled = it[heatAlertKey(uid)] ?: true,
+            frostEnabled = it[frostAlertKey(uid)] ?: true,
+            fogEnabled = it[fogAlertKey(uid)] ?: true,
+            stormEnabled = it[stormAlertKey(uid)] ?: true,
+            uvEnabled = it[uvAlertKey(uid)] ?: true,
+            pollenEnabled = it[pollenAlertKey(uid)] ?: false,
+            airQualityEnabled = it[airQualityAlertKey(uid)] ?: false
+        )
+    }
+
+    suspend fun saveSingleAlertSetting(context: Context, uid: String, alertId: String, enabled: Boolean) = context.dataStore.edit {
+        val key = when(alertId) {
+            "rain" -> rainAlertKey(uid)
+            "wind" -> windAlertKey(uid)
+            "heat" -> heatAlertKey(uid)
+            "frost" -> frostAlertKey(uid)
+            "fog" -> fogAlertKey(uid)
+            "storm" -> stormAlertKey(uid)
+            "uv" -> uvAlertKey(uid)
+            "pollen" -> pollenAlertKey(uid)
+            "aqi" -> airQualityAlertKey(uid)
+            else -> null
+        }
+        key?.let { k -> it[k] = enabled }
+    }
+
     // ... (helper methods like getAutoTheme, getColorScheme)
 
-    fun getAutoTheme(month: Int, isDay: Boolean): AppTheme {
+    fun getSeasonalTheme(month: Int): AppTheme {
         return when (month) {
-            3, 4, 5 -> if (isDay) AppTheme.SPRING_DAY else AppTheme.SPRING_NIGHT
-            6, 7, 8 -> if (isDay) AppTheme.SUMMER_DAY else AppTheme.SUMMER_NIGHT
-            9, 10, 11 -> if (isDay) AppTheme.AUTUMN_DAY else AppTheme.AUTUMN_NIGHT
-            12, 1, 2 -> if (isDay) AppTheme.WINTER_DAY else AppTheme.WINTER_NIGHT
-            else -> if (isDay) AppTheme.SUMMER_DAY else AppTheme.DARK
+            3, 4, 5 -> AppTheme.SPRING
+            6, 7, 8 -> AppTheme.SUMMER
+            9, 10, 11 -> AppTheme.AUTUMN
+            12, 1, 2 -> AppTheme.WINTER
+            else -> AppTheme.SUMMER
+        }
+    }
+
+    /**
+     * Otomatik tema kontrolü - Aylar bazında (Business Rule 3)
+     */
+    fun getCurrentThemeSelection(context: Context, uid: String): Flow<AppTheme> = context.dataStore.data.map {
+        val themeName = it[themeKey(uid)] ?: AppTheme.AUTO.name
+        val theme = try { AppTheme.valueOf(themeName) } catch (e: Exception) { AppTheme.DARK }
+
+        if (theme == AppTheme.AUTO) {
+            getSeasonalTheme(java.time.LocalDate.now().monthValue)
+        } else {
+            theme
         }
     }
 
     fun getColorScheme(theme: AppTheme): ColorScheme {
         return when (theme) {
-            AppTheme.DARK, AppTheme.SPRING_NIGHT, AppTheme.SUMMER_NIGHT, AppTheme.AUTUMN_NIGHT, AppTheme.WINTER_NIGHT -> darkColorScheme(
+            AppTheme.DARK, AppTheme.AUTUMN, AppTheme.WINTER -> darkColorScheme(
                 primary = Color(0xFF00C2FF),
                 secondary = Color(0xFF38BDF8),
                 background = Color(0xFF0B0F14),
@@ -269,7 +370,7 @@ object ThemeManager {
                 onSurfaceVariant = Color(0xFFA3B3C9),
                 outline = Color(0xFF30363D)
             )
-            AppTheme.LIGHT -> lightColorScheme(
+            AppTheme.LIGHT, AppTheme.SPRING, AppTheme.SUMMER -> lightColorScheme(
                 primary = Color(0xFF0077FF),
                 secondary = Color(0xFF38BDF8),
                 background = Color(0xFFF5F7FA),
@@ -280,47 +381,7 @@ object ThemeManager {
                 onSurfaceVariant = Color(0xFF6B7280),
                 outline = Color(0xFFE2E8F0)
             )
-            AppTheme.SPRING_DAY -> lightColorScheme(
-                primary = Color(0xFF4ADE80),
-                secondary = Color(0xFFF472B6),
-                background = Color(0xFFF0FFF4),
-                surface = Color(0xFFFFFFFF),
-                surfaceVariant = Color(0xFFE6F9ED),
-                onBackground = Color(0xFF1F2937),
-                onSurface = Color(0xFF1F2937),
-                onSurfaceVariant = Color(0xFF6B7280)
-            )
-            AppTheme.SUMMER_DAY -> lightColorScheme(
-                primary = Color(0xFF00B4D8),
-                secondary = Color(0xFFFFD60A),
-                background = Color(0xFFE0F7FF),
-                surface = Color(0xFFFFFFFF),
-                surfaceVariant = Color(0xFFD6F4FF),
-                onBackground = Color(0xFF0F172A),
-                onSurface = Color(0xFF0F172A),
-                onSurfaceVariant = Color(0xFF475569)
-            )
-            AppTheme.AUTUMN_DAY -> lightColorScheme(
-                primary = Color(0xFFF97316),
-                secondary = Color(0xFFA16207),
-                background = Color(0xFFFFF7ED),
-                surface = Color(0xFFFFFFFF),
-                surfaceVariant = Color(0xFFFFEAD5),
-                onBackground = Color(0xFF3F2A1D),
-                onSurface = Color(0xFF3F2A1D),
-                onSurfaceVariant = Color(0xFF7C5A3C)
-            )
-            AppTheme.WINTER_DAY -> lightColorScheme(
-                primary = Color(0xFF60A5FA),
-                secondary = Color(0xFF1E3A8A),
-                background = Color(0xFFF1F5F9),
-                surface = Color(0xFFFFFFFF),
-                surfaceVariant = Color(0xFFE2E8F0),
-                onBackground = Color(0xFF0F172A),
-                onSurface = Color(0xFF0F172A),
-                onSurfaceVariant = Color(0xFF64748B)
-            )
-            AppTheme.AUTO -> getColorScheme(AppTheme.DARK)
+            AppTheme.AUTO -> getColorScheme(getSeasonalTheme(java.time.LocalDate.now().monthValue))
         }
     }
 }

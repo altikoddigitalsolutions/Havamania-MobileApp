@@ -44,7 +44,7 @@ data class RecommendationStyle(
 
 object RecommendationMapper {
     fun getStyle(type: RecommendationType): RecommendationStyle {
-        val fixedTitle = "HAVAMANIA ÖNERİSİ"
+        val fixedTitle = "HAVAMANİA ÖNERİSİ"
         return RecommendationStyle(
             icon = Icons.Rounded.AutoAwesome,
             label = fixedTitle
@@ -217,13 +217,54 @@ fun RecommendationCard(
 
                 Spacer(Modifier.height(20.dp))
 
+                val sections = recommendation.message.split("[SEP]")
+                val mainText = sections.first()
+                val subSections = sections.drop(1)
+
                 Text(
-                    text = buildHighlightedText(recommendation.message, recommendation.highlightedWords, accentColor),
+                    text = buildHighlightedText(mainText, recommendation.highlightedWords, accentColor),
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = 26.sp,
-                        color = themeColors.textPrimary.copy(alpha = 0.85f)
+                        lineHeight = 24.sp,
+                        color = themeColors.textPrimary.copy(alpha = 0.9f)
                     )
                 )
+
+                if (subSections.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        subSections.forEach { section ->
+                            val parts = section.split("|")
+                            if (parts.size == 2) {
+                                val title = parts[0].trim()
+                                val content = parts[1].trim()
+
+                                Surface(
+                                    color = accentColor.copy(alpha = 0.05f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.1f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                                            color = accentColor
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = content,
+                                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                                            color = themeColors.textPrimary.copy(alpha = 0.85f),
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(24.dp))
 
