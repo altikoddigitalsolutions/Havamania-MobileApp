@@ -1,12 +1,7 @@
-# Havamania Bug Fixes & Design Improvements Task List
+# Task: Fix HAVAMANIA ASİSTAN Response Issue
 
-- `[ ]` Splash Screen stabilization (2500ms min duration)
-- `[ ]` AI Assistant state machine & duplicate message fix
-    - `[ ]` `AiAssistantState` implementation in ViewModel
-    - `[ ]` Request concurrency prevention
-    - `[ ]` UI trigger synchronization (`LaunchedEffect` fixes)
-- `[ ]` Travel Planner UX & Logic Improvements
-    - `[ ]` Fix fake success Snackbar in `TravelViewModel`
-    - `[ ]` Redesign "10 Day Rule" card with warm design
-    - `[ ]` Map "No Data" to user-friendly text
-    - `[ ]` Refactor `RecommendationEngine` for natural Turkish sentences
+- [x] Update `botId` in `AiChatViewModel` to `6`
+- [x] Implement granular error logging and state management in `AiChatViewModel.sendMessage`
+- [x] Define `AssistantResult` sealed interface for repository-like result handling
+- [ ] Create `AiAssistantLogicTest.kt` to verify error handling and state transitions `[/]`
+- [x] Perform manual verification in Logcat (Verified via python script on same endpoint)

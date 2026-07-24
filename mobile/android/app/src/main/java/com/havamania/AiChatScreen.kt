@@ -63,8 +63,7 @@ enum class AssistantRequestState { IDLE, LOADING, SUCCESS, ERROR }
 
 // --- VIEWMODEL ---
 class AiChatViewModel(application: Application) : AndroidViewModel(application) {
-    private val api = AltikodChatFactory.create()
-    private val botId = "6724b94f6f1c48010ba457c1"
+    private val assistantRepository = AiAssistantRepository()
     var currentConversationId: String = UUID.randomUUID().toString()
         private set
 
@@ -254,11 +253,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadConfig() {
         viewModelScope.launch {
-            try {
-                val cfg = api.getConfig(botId)
+            val cfg = assistantRepository.getBotConfig()
+            if (cfg != null) {
                 _config.value = cfg
-            } catch (e: Exception) {
-                android.util.Log.e("HAVAMANIA_AI", "Config loading Error", e)
             }
         }
     }
@@ -372,10 +369,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val trimmedText = text.trim()
         if (trimmedText.isBlank() || _requestState.value == AssistantRequestState.LOADING) return
 
-        val requestId = UUID.randomUUID().toString()
+        val requestId = java.util.UUID.randomUUID().toString()
         lastRequestId = requestId
 
-        // Weather State Validation (Business Rule 2)
+        // Weather State Validation
         val weatherState = _weatherUiState.value
         if (!isRetry) {
              if (weatherState is WeatherUiState.Loading) {
@@ -390,72 +387,54 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         _isSending.value = true
 
         if (!isRetry) {
-            val userMsg = AltikodChatMessage(text = trimmedText, isUser = true)
-            _messages.update { it + userMsg }
+            _messages.update { it + AltikodChatMessage(text = trimmedText, isUser = true) }
         }
 
         val weatherContext = buildWeatherContext(trimmedText)
-        val toneInstruction = buildToneInstruction(assistantTone)
-        val languageInstruction = if (language == "EN") "IMPORTANT: Answer ONLY in English." else "ÖNEMLİ: Sadece Türkçe cevap ver."
         val personalContext = if (userInterests.isNotEmpty() || userAboutMe.isNotBlank()) {
             "KULLANICI PROFİLİ:\nİlgi Alanları: ${userInterests.joinToString()}\nBilgi: $userAboutMe\n"
         } else ""
 
         val intent = AiIntentParser.detectIntent(trimmedText)
         val intentInstruction = when(intent) {
-            AiIntent.CLOTHING -> "Giyim önerisine odaklan. Direkt ne giymesi gerektiğini söyle."
-            AiIntent.ACTIVITY -> "Aktivite uygunluğuna odaklan. En iyi saatleri belirt."
-            AiIntent.TRAVEL -> "Seyahat planlamasına odaklan. Rota ve hava riski analizi yap."
-            AiIntent.PACKING -> "Valiz listesi üret. ✓ ikonlarını kullan."
-            AiIntent.CALENDAR -> "Takvimdeki seyahatleri analiz et ve riskleri belirt."
-            AiIntent.WEEKEND_FORECAST -> "Sadece hafta sonu hava durumuna odaklan."
-            else -> "Hava durumunun genel bir özetini ve meteorolojik analizini ver."
+            AiIntent.CLOTHING -> "Giyim önerisine odaklan."
+            AiIntent.ACTIVITY -> "Aktivite uygunluğuna odaklan."
+            else -> "Genel analiz ver."
         }
 
-        val explicitTonePrompt = """
-            [TALİMATLAR]
-            DİL: $languageInstruction
-            ÜSLUP: $toneInstruction
-            ODAK: $intentInstruction
-            KİŞİSELLEŞTİRME: Kullanıcı profilini ve takvimini doğalca kullan.
-        """.trimIndent()
-
-        val fullQuestion = "$weatherContext\n$personalContext\n$explicitTonePrompt\n\nKullanıcı Sorusu: $trimmedText"
+        val fullQuestion = "$weatherContext\n$personalContext\n$intentInstruction\n\nKullanıcı: $trimmedText"
 
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
             try {
-                coroutineContext.ensureActive()
-
-                val response = kotlinx.coroutines.withTimeout(30000) {
-                    api.sendMessage(botId, AltikodChatRequest(question = fullQuestion, session_id = currentConversationId))
-                }
-
-                val answer = cleanMarkdown(response.answer)
-                if (answer.isBlank()) throw Exception("Empty response")
+                val result = assistantRepository.getAssistantResponse(fullQuestion, currentConversationId)
 
                 if (lastRequestId == requestId) {
-                    coroutineContext.ensureActive()
+                    when (result) {
+                        is AssistantResult.Success -> {
+                            val answer = cleanMarkdown(result.content)
+                            val assistantMsg = AltikodChatMessage(text = answer, isUser = false)
+                            _messages.update { it + assistantMsg }
+                            _requestState.value = AssistantRequestState.SUCCESS
 
-                    val assistantMsg = AltikodChatMessage(text = answer, isUser = false)
-                    _messages.update { it + assistantMsg }
-                    _requestState.value = AssistantRequestState.SUCCESS
-
-                    // Automatically sync with history (IDEMPOTENT)
-                    val currentMsgs = _messages.value
-                    val firstUserMsg = currentMsgs.firstOrNull { it.isUser }?.text ?: "AI Sohbet"
-                    com.havamania.AiHistoryViewModel(getApplication()).addHistoryItem(
-                        id = currentConversationId,
-                        title = firstUserMsg,
-                        summary = answer.take(100) + "...",
-                        messages = currentMsgs,
-                        cityName = _weatherData.value?.cityName
-                    )
+                            // History Sync
+                            val currentMsgs = _messages.value
+                            val firstUserMsg = currentMsgs.firstOrNull { it.isUser }?.text ?: "Sohbet"
+                            com.havamania.AiHistoryViewModel(getApplication()).addHistoryItem(
+                                id = currentConversationId,
+                                title = firstUserMsg,
+                                summary = answer.take(100),
+                                messages = currentMsgs,
+                                cityName = _weatherData.value?.cityName
+                            )
+                        }
+                        else -> {
+                            _requestState.value = AssistantRequestState.ERROR
+                        }
+                    }
                 }
-
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException && lastRequestId == requestId) {
-                    android.util.Log.e("HAVAMANIA_AI", "AI ERROR: ${e.message}")
                     _requestState.value = AssistantRequestState.ERROR
                 }
             } finally {

@@ -1,5 +1,16 @@
 package com.havamania
 
+sealed interface AssistantResult {
+    data class Success(val content: String) : AssistantResult
+    data object ConfigurationError : AssistantResult
+    data class HttpError(val code: Int) : AssistantResult
+    data object NetworkError : AssistantResult
+    data object Timeout : AssistantResult
+    data object ParseError : AssistantResult
+    data object EmptyResponse : AssistantResult
+    data class UnknownError(val type: String) : AssistantResult
+}
+
 sealed interface AiResult {
     data class Success(val content: String) : AiResult
     data class HttpError(val code: Int) : AiResult
