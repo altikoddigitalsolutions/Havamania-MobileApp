@@ -100,12 +100,13 @@ class WeatherPremiumActivity : ComponentActivity() {
                     if (isReady && appState == "main") {
                         val currentUser = authViewModel.currentUser
                         if (currentUser == null) {
-                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
+                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.KVKK, Routes.PRIVACY_POLICY, Routes.TERMS_OF_USE)) {
                                 navController.navigate(Routes.AUTH_WELCOME) {
                                     popUpTo(0) { inclusive = true }
                                 }
                             }
                         } else {
+                            // If in Auth root, move to Main root
                             if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
                                 if (profileState is ProfileState.Success) {
                                     val profile = (profileState as ProfileState.Success).profile
@@ -144,67 +145,29 @@ class WeatherPremiumActivity : ComponentActivity() {
                         }
                     })
                 } else {
-                    Scaffold(
-                        containerColor = themeColors.background,
-                        bottomBar = {
-                            val hideBottomBarRoutes = listOf(
-                                Routes.SETTINGS,
-                                Routes.EDIT_PROFILE,
-                                Routes.CITIES,
-                                Routes.AI_HISTORY,
-                                Routes.NOTIFICATION_CENTER,
-                                Routes.AUTH_WELCOME,
-                                Routes.LOGIN,
-                                Routes.REGISTER,
-                                Routes.FORGOT_PASSWORD
-                            )
-                            val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
+                    val authRoutes = listOf(
+                        Routes.AUTH_WELCOME,
+                        Routes.LOGIN,
+                        Routes.REGISTER,
+                        Routes.FORGOT_PASSWORD,
+                        Routes.KVKK,
+                        Routes.PRIVACY_POLICY,
+                        Routes.TERMS_OF_USE
+                    )
+                    val isAuthRoute = currentRoute in authRoutes
 
-                            if (shouldShowBottomBar) {
-                                WeatherBottomBar(
-                                    currentRoute = currentRoute,
-                                    onNavigate = { route ->
-                                        try {
-                                            val startDestId = navController.graph.findStartDestination().id
-                                            val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT
-
-                                            navController.navigate(route) {
-                                                popUpTo(startDestId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = !shouldResetState
-                                            }
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("Nav", "Navigation failed to $route", e)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    ) { innerPadding ->
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .background(backgroundGradient)
-                            .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("sub_ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
-                        ) {
+                    if (isAuthRoute) {
+                        // AUTH NAVIGATION - NO SCAFFOLD, NO BOTTOM BAR
+                        Box(modifier = Modifier.fillMaxSize().background(backgroundGradient)) {
                             NavHost(
                                 navController = navController,
-                                startDestination = if (authViewModel.currentUser != null) Routes.WEATHER_ROOT else Routes.AUTH_WELCOME
+                                startDestination = Routes.AUTH_WELCOME
                             ) {
-                                // --- AUTH ROUTES ---
                                 composable(Routes.AUTH_WELCOME) {
                                     AuthWelcomeScreen(
                                         onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
                                         onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
+                                        onNavigateToLegal = { route -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.LOGIN) {
@@ -228,14 +191,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 popUpTo(Routes.AUTH_WELCOME)
                                             }
                                         },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
+                                        onNavigateToLegal = { route -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.FORGOT_PASSWORD) {
@@ -244,165 +200,196 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
+                                composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
+                            }
+                        }
+                    } else {
+                        // MAIN NAVIGATION - WITH SCAFFOLD AND BOTTOM BAR
+                        Scaffold(
+                            containerColor = themeColors.background,
+                            bottomBar = {
+                                val hideBottomBarRoutes = listOf(
+                                    Routes.SETTINGS,
+                                    Routes.EDIT_PROFILE,
+                                    Routes.CITIES,
+                                    Routes.AI_HISTORY,
+                                    Routes.NOTIFICATION_CENTER
+                                )
+                                val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
 
-                                // --- APP ROUTES ---
-                                composable(
-                                    Routes.WEATHER_ROOT,
-                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
-                                ) {
-                                    HomeScreen(onNavigateToAi = { rec, data ->
-                                        pendingRecommendation = rec
-                                        activeWeatherData = data
-                                        navController.navigate(Routes.AI_ROOT)
-                                    }, onNavigateToNotifications = {
-                                        navController.navigate(Routes.NOTIFICATION_CENTER)
-                                    })
-                                }
-                                composable(
-                                    "${Routes.CALENDAR_ROOT}?focusId={focusId}&city={city}&date={date}",
-                                    arguments = listOf(
-                                        navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null },
-                                        navArgument("city") { type = NavType.StringType; nullable = true; defaultValue = null },
-                                        navArgument("date") { type = NavType.StringType; nullable = true; defaultValue = null }
-                                    ),
-                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}&city={city}&date={date}" })
-                                ) { backStackEntry ->
-                                    val focusId = backStackEntry.arguments?.getString("focusId")
-                                    val city = backStackEntry.arguments?.getString("city")
-                                    val date = backStackEntry.arguments?.getString("date")
-                                    TravelPlannerScreen(
-                                        onBack = { navController.popBackStack() },
-                                        focusId = focusId,
-                                        initialCity = city,
-                                        initialStartDate = date
-                                    )
-                                }
-                                composable(
-                                    Routes.AI_ROOT,
-                                    arguments = listOf(
-                                        navArgument("conversationId") { type = NavType.StringType; nullable = true; defaultValue = null }
-                                    )
-                                ) { backStackEntry ->
-                                    val conversationId = backStackEntry.arguments?.getString("conversationId")
-                                    AiChatScreen(
-                                        initialRecommendation = pendingRecommendation,
-                                        conversationId = conversationId,
-                                        onBack = {
-                                            pendingRecommendation = null
-                                            navController.popBackStack()
-                                        },
-                                        onNavigateToTravelCreate = { city, date ->
-                                            navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")
-                                        }
-                                    )
-                                }
-                                composable(Routes.PROFILE_ROOT) {
-                                    ProfileScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToAiHistory = { navController.navigate(Routes.AI_HISTORY) },
-                                        onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToPersonalization = { navController.navigate(Routes.PERSONALIZATION) },
-                                        onNavigateToTravels = {
-                                            val startDestId = navController.graph.findStartDestination().id
-                                            navController.navigate(Routes.CALENDAR_ROOT) {
-                                                popUpTo(startDestId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    )
-                                }
-                                composable(Routes.CITIES) {
-                                    CitiesManagementScreen(onBack = { navController.popBackStack() })
-                                }
-                                composable(Routes.AI_HISTORY) {
-                                    AiHistoryScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToChat = { id ->
-                                            navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
-                                        }
-                                    )
-                                }
-                                composable(Routes.AI_HISTORY_DETAIL) { backStackEntry ->
-                                    val itemId = backStackEntry.arguments?.getString("itemId") ?: ""
-                                    AiHistoryDetailScreen(
-                                        itemId = itemId,
-                                        onBack = { navController.popBackStack() }
-                                    )
-                                }
-                                composable(Routes.EDIT_PROFILE) {
-                                    EditProfileScreen(onBack = { navController.popBackStack() })
-                                }
-                                composable(Routes.SETTINGS) {
-                                    SettingsScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
-                                    )
-                                }
-                                composable(Routes.SMART_ALERTS) {
-                                    SmartAlertsScreen(onBack = { navController.popBackStack() })
-                                }
-                                composable(Routes.PERSONALIZATION) {
-                                    PersonalizationScreen(
-                                        profileViewModel = profileViewModel,
-                                        onComplete = {
-                                            navController.navigate(Routes.WEATHER_ROOT) {
-                                                popUpTo(Routes.PERSONALIZATION) { inclusive = true }
-                                            }
-                                        },
-                                        onBack = { navController.popBackStack() }
-                                    )
-                                }
-                                composable(Routes.NOTIFICATION_CENTER) {
-                                    NotificationCenterScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToDetail = { screen, params ->
+                                if (shouldShowBottomBar) {
+                                    WeatherBottomBar(
+                                        currentRoute = currentRoute,
+                                        onNavigate = { route ->
                                             try {
-                                                navController.navigate(screen) {
+                                                val startDestId = navController.graph.findStartDestination().id
+                                                val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT
+
+                                                navController.navigate(route) {
+                                                    popUpTo(startDestId) {
+                                                        saveState = true
+                                                    }
                                                     launchSingleTop = true
+                                                    restoreState = !shouldResetState
                                                 }
                                             } catch (e: Exception) {
-                                                android.util.Log.e("Nav", "Failed to navigate to $screen", e)
-                                                navController.navigate(Routes.WEATHER_ROOT) {
-                                                    launchSingleTop = true
-                                                }
+                                                android.util.Log.e("Nav", "Navigation failed to $route", e)
                                             }
                                         }
                                     )
                                 }
-                                composable(
-                                    Routes.LEGAL_WEBVIEW,
-                                    arguments = listOf(
-                                        navArgument("title") { type = NavType.StringType },
-                                        navArgument("url") { type = NavType.StringType }
-                                    )
-                                ) { backStackEntry ->
-                                    val title = backStackEntry.arguments?.getString("title") ?: "Yasal Metin"
-                                    val url = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("url") ?: "", "UTF-8")
-                                    LegalWebViewScreen(
-                                        title = title,
-                                        url = url,
-                                        onBack = { navController.popBackStack() }
-                                    )
+                            }
+                        ) { innerPadding ->
+                            Box(modifier = Modifier
+                                .fillMaxSize()
+                                .background(backgroundGradient)
+                                .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("sub_ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
+                            ) {
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = Routes.WEATHER_ROOT
+                                ) {
+                                    composable(
+                                        Routes.WEATHER_ROOT,
+                                        deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
+                                    ) {
+                                        HomeScreen(onNavigateToAi = { rec, data ->
+                                            pendingRecommendation = rec
+                                            activeWeatherData = data
+                                            navController.navigate(Routes.AI_ROOT)
+                                        }, onNavigateToNotifications = {
+                                            navController.navigate(Routes.NOTIFICATION_CENTER)
+                                        })
+                                    }
+                                    composable(
+                                        "${Routes.CALENDAR_ROOT}?focusId={focusId}&city={city}&date={date}",
+                                        arguments = listOf(
+                                            navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                            navArgument("city") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                            navArgument("date") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                        ),
+                                        deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/calendar?focusId={focusId}&city={city}&date={date}" })
+                                    ) { backStackEntry ->
+                                        val focusId = backStackEntry.arguments?.getString("focusId")
+                                        val city = backStackEntry.arguments?.getString("city")
+                                        val date = backStackEntry.arguments?.getString("date")
+                                        TravelPlannerScreen(
+                                            onBack = { navController.popBackStack() },
+                                            focusId = focusId,
+                                            initialCity = city,
+                                            initialStartDate = date
+                                        )
+                                    }
+                                    composable(
+                                        Routes.AI_ROOT,
+                                        arguments = listOf(
+                                            navArgument("conversationId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                        )
+                                    ) { backStackEntry ->
+                                        val conversationId = backStackEntry.arguments?.getString("conversationId")
+                                        AiChatScreen(
+                                            initialRecommendation = pendingRecommendation,
+                                            conversationId = conversationId,
+                                            onBack = {
+                                                pendingRecommendation = null
+                                                navController.popBackStack()
+                                            },
+                                            onNavigateToTravelCreate = { city, date ->
+                                                navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")
+                                            }
+                                        )
+                                    }
+                                    composable(Routes.PROFILE_ROOT) {
+                                        ProfileScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                                            onNavigateToCities = { navController.navigate(Routes.CITIES) },
+                                            onNavigateToAiHistory = { navController.navigate(Routes.AI_HISTORY) },
+                                            onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
+                                            onNavigateToPersonalization = { navController.navigate(Routes.PERSONALIZATION) },
+                                            onNavigateToTravels = {
+                                                val startDestId = navController.graph.findStartDestination().id
+                                                navController.navigate(Routes.CALENDAR_ROOT) {
+                                                    popUpTo(startDestId) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        )
+                                    }
+                                    composable(Routes.CITIES) {
+                                        CitiesManagementScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Routes.AI_HISTORY) {
+                                        AiHistoryScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToChat = { id ->
+                                                navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
+                                            }
+                                        )
+                                    }
+                                    composable(Routes.AI_HISTORY_DETAIL) { backStackEntry ->
+                                        val itemId = backStackEntry.arguments?.getString("itemId") ?: ""
+                                        AiHistoryDetailScreen(
+                                            itemId = itemId,
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(Routes.EDIT_PROFILE) {
+                                        EditProfileScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Routes.SETTINGS) {
+                                        SettingsScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
+                                            onNavigateToCities = { navController.navigate(Routes.CITIES) },
+                                            onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
+                                            onNavigateToLegal = { route -> navController.navigate(route) }
+                                        )
+                                    }
+                                    composable(Routes.SMART_ALERTS) {
+                                        SmartAlertsScreen(onBack = { navController.popBackStack() })
+                                    }
+                                    composable(Routes.PERSONALIZATION) {
+                                        PersonalizationScreen(
+                                            profileViewModel = profileViewModel,
+                                            onComplete = {
+                                                navController.navigate(Routes.WEATHER_ROOT) {
+                                                    popUpTo(Routes.PERSONALIZATION) { inclusive = true }
+                                                }
+                                            },
+                                            onBack = { navController.popBackStack() }
+                                        )
+                                    }
+                                    composable(Routes.NOTIFICATION_CENTER) {
+                                        NotificationCenterScreen(
+                                            onBack = { navController.popBackStack() },
+                                            onNavigateToDetail = { screen, params ->
+                                                try {
+                                                    navController.navigate(screen) {
+                                                        launchSingleTop = true
+                                                    }
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("Nav", "Failed to navigate to $screen", e)
+                                                    navController.navigate(Routes.WEATHER_ROOT) {
+                                                        launchSingleTop = true
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    // Legal screens also available in Main graph but without bottom bar (handled by Scaffold logic if needed, but here they are NOT in Main graph but root)
+                                    composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
+                                    composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
+                                    composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
                                 }
                             }
                         }
                     }
-
                 }
             }
         }

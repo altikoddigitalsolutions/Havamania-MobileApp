@@ -1,43 +1,63 @@
 # implementation_plan.artifact.md
 
-This document outlines the root cause and proposed fix for the HAVAMANIA ASİSTAN (AI Assistant) response issue.
+This plan details the migration of legal pages to a unified WebView implementation and the global branding fix for Havamania.
 
 ## Root Cause Analysis
 
-### 1. HTTP 422 Unprocessable Entity
-The current implementation in `AiChatViewModel` uses a 24-character hex string as the `botId`: `"6724b94f6f1c48010ba457c1"`. However, the Altikod API endpoint `api/widget/{bot_id}/chat` expects a valid integer for the `{bot_id}` path parameter. Sending the hex string results in a validation error (422) on the server.
+### 1. Legal Pages (404 & Navigation)
+- **Cause**: Legal pages currently point to specific URLs that might be 404. Also, the user wants a unified temp URL (`https://www.havamania.com/`).
+- **Cause (Bottom Bar)**: Although I split Auth/Main graphs, the legal screens were recently changed to local Compose screens. The user wants to revert to WebView but keep them isolated from the Main navigation's bottom bar.
 
-### 2. Correct Bot ID
-Through a diagnostic scan of the Altikod service endpoints, I discovered that the correct integer ID for "Havamania Asistan" on the `api/widget/` path is **`6`**.
-
-### 3. Error Logic
-The ViewModel's `try-catch` block converts all network/HTTP errors into a generic `AssistantRequestState.ERROR`, hiding the specific 422 error code and preventing a successful response.
+### 2. Branding (Havamania vs Havamania)
+- **Issue**: The brand name "HAVAMANIA" and "ASISTAN" should use correct Turkish characters: "HAVAMANİA" and "ASİSTAN" in UI contexts.
 
 ---
 
 ## Proposed Changes
 
-### [AI Assistant]
+### [Legal Content]
+
+#### [MODIFY] [LegalUrls.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/LegalUrls.kt)
+- Add `LEGAL_TEMP_URL = "https://www.havamania.com/"`.
+- Update `KVKK`, `PRIVACY_POLICY`, and `TERMS_OF_USE` constants to use `LEGAL_TEMP_URL`.
+
+#### [MODIFY] [LegalScreens.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/LegalScreens.kt)
+- Replace local Compose implementations of `KVKKScreen`, `PrivacyPolicyScreen`, and `TermsOfUseScreen` with calls to `LegalWebViewScreen`.
+- Ensure each screen still has its specific title: "KVKK AYDINLATMA METNİ", "GİZLİLİK POLİTİKASI", "KULLANIM KOŞULLARI".
+
+#### [MODIFY] [LegalWebViewScreen.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/LegalWebViewScreen.kt)
+- Enhance error handling to show: "Sayfa şu anda açılamıyor. İnternet bağlantınızı kontrol edip tekrar deneyin." with a "TEKRAR DENE" button.
+- Add a loading indicator.
+- Disable JavaScript if not strictly required (per user request).
+- Handle SSL errors.
+
+### [Branding Fixes]
+
+#### [MODIFY] [strings.xml](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/res/values/strings.xml)
+- Update `app_name` (if needed in large caps contexts, but usually "Havamania" is fine).
+- Update all capitalized strings: "HAVAMANIA" -> "HAVAMANİA", "ASISTAN" -> "ASİSTAN".
 
 #### [MODIFY] [AiChatScreen.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AiChatScreen.kt)
-- Update `botId` from `"6724b94f6f1c48010ba457c1"` to `"6"`.
-- Refactor the catch block in `sendMessage` to provide more granular logging in debug builds.
-- Implement a more robust `AssistantResult` mapping (Success, ConfigurationError, HttpError, etc.).
+- Update default top bar title: "HAVAMANİA ASİSTAN".
+- Update welcome messages and other UI strings.
 
-#### [MODIFY] [AltikodChatService.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AltikodChatService.kt)
-- Ensure the `botId` parameter is correctly typed (though String is technically fine for Retrofit, using a clean ID value is key).
+#### [MODIFY] [Other UI Files]
+- Search and replace "HAVAMANIA" -> "HAVAMANİA" and "ASISTAN" -> "ASİSTAN" in all `Composable` titles and labels.
 
 ---
 
 ## Verification Plan
 
-### Automated Tests
-- Create a unit test `AiAssistantLogicTest.kt` to verify that `sendMessage` correctly handles success and various HTTP error codes.
-
 ### Manual Verification
-1. Open "Havamania Asistan" screen.
-2. Send the message: "Hava durumuna göre seyahat planlamama yardımcı olur musun?".
-3. Verify that the assistant responds with a text message.
-4. Verify that the error card is not shown upon success.
-5. Verify that "TEKRAR DENE" button is not visible.
-6. Verify in Logcat that `ASSISTANT_HTTP_RESULT` shows `httpCode=200` and `successful=true`.
+1.  **Legal Pages**:
+    *   Open KVKK/Privacy/Terms from Login/Register. Verify they load `https://www.havamania.com/`.
+    *   Verify NO Bottom Bar is visible.
+    *   Verify Back button returns to the correct Auth screen.
+    *   Disable internet. Verify the "Sayfa şu anda açılamıyor..." error message and "TEKRAR DENE" button appear.
+2.  **Branding**:
+    *   Check Assistant screen title. Verify "HAVAMANİA ASİSTAN".
+    *   Check all other large-caps headers.
+    *   Verify no code/package/variable names were broken.
+
+### Automated Tests
+- `BrandingTest.kt`: Verify that key UI constants/strings contain "İ" instead of "I" in specific keywords.

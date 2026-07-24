@@ -45,7 +45,7 @@ fun SettingsScreen(
     onBack: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToCities: () -> Unit = {},
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> },
+    onNavigateToLegal: (String) -> Unit = { _ -> },
     onNavigateToSmartAlerts: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel(),
@@ -160,15 +160,15 @@ fun SettingsScreen(
             SettingsGroupLabel("VERİ VE GİZLİLİK")
             SettingsCard {
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
-                    onNavigateToLegal("KVKK AYDINLATMA METNİ", LegalUrls.KVKK)
+                    onNavigateToLegal(Routes.KVKK)
                 }
                 SettingsDivider()
                 SettingsNavRow("Gizlilik Politikası", null, Icons.Rounded.PrivacyTip) {
-                    onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY)
+                    onNavigateToLegal(Routes.PRIVACY_POLICY)
                 }
                 SettingsDivider()
                 SettingsNavRow("Kullanım Koşulları", null, Icons.Rounded.Description) {
-                    onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE)
+                    onNavigateToLegal(Routes.TERMS_OF_USE)
                 }
                 SettingsDivider()
                 SettingsClickRow("Önbelleği Temizle", "Hava verilerini yenile", Icons.Rounded.Cached) {

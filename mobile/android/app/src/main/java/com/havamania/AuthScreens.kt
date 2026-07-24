@@ -89,7 +89,7 @@ fun AuthHeader(
 fun AuthWelcomeScreen(
     onNavigateToLogin: () -> Unit,
     onNavigateToRegister: () -> Unit,
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
+    onNavigateToLegal: (String) -> Unit = { _ -> }
 ) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
@@ -137,11 +137,11 @@ fun AuthWelcomeScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegalLink("KVKK") { onNavigateToLegal("KVKK AYDINLATMA METNİ", LegalUrls.KVKK) }
+                LegalLink("KVKK") { onNavigateToLegal(Routes.KVKK) }
                 LegalDivider()
-                LegalLink("Gizlilik Politikası") { onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY) }
+                LegalLink("Gizlilik Politikası") { onNavigateToLegal(Routes.PRIVACY_POLICY) }
                 LegalDivider()
-                LegalLink("Kullanım Koşulları") { onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE) }
+                LegalLink("Kullanım Koşulları") { onNavigateToLegal(Routes.TERMS_OF_USE) }
             }
 
             Spacer(modifier = Modifier.height(themeStyles.spacingMedium))
@@ -257,7 +257,7 @@ fun RegisterScreen(
     viewModel: AuthViewModel,
     onBack: () -> Unit,
     onNavigateToLogin: () -> Unit,
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
+    onNavigateToLegal: (String) -> Unit = { _ -> }
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
@@ -367,7 +367,7 @@ fun RegisterScreen(
                                 color = themeColors.accent,
                                 modifier = Modifier.clickable(
                                     onClickLabel = stringResource(R.string.privacy_policy_title),
-                                    onClick = { onNavigateToLegal(context.getString(R.string.privacy_policy_title), LegalUrls.PRIVACY_POLICY) }
+                                    onClick = { onNavigateToLegal(Routes.PRIVACY_POLICY) }
                                 )
                             )
                         }

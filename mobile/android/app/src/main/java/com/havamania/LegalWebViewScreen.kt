@@ -18,9 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.havamania.ui.theme.HavamaniaScreen
-import com.havamania.ui.theme.HavamaniaTopBar
-import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.*
 
 @Composable
 fun LegalWebViewScreen(
@@ -33,6 +31,7 @@ fun LegalWebViewScreen(
     val isOnline by networkMonitor.isOnline.collectAsStateWithLifecycle(initialValue = true)
 
     var hasError by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     HavamaniaScreen(
@@ -55,47 +54,80 @@ fun LegalWebViewScreen(
                     )
                     Spacer(Modifier.height(24.dp))
                     Text(
-                        text = if (!isOnline) "İnternet Bağlantısı Yok" else "Bir Hata Oluştu",
+                        text = "Sayfa şu anda açılamıyor",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
                         color = HavamaniaTheme.colors.textPrimary
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Lütfen bağlantınızı kontrol edin ve tekrar deneyin.",
+                        text = "İnternet bağlantınızı kontrol edip tekrar deneyin.",
                         textAlign = TextAlign.Center,
                         color = HavamaniaTheme.colors.textSecondary
                     )
                     Spacer(Modifier.height(32.dp))
-                    Button(
+                    HavamaniaPrimaryButton(
+                        text = "TEKRAR DENE",
                         onClick = {
                             hasError = false
+                            isLoading = true
                             webViewRef?.reload()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = HavamaniaTheme.colors.accent)
-                    ) {
-                        Icon(Icons.Rounded.Refresh, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("TEKRAR DENE", fontWeight = FontWeight.Bold)
-                    }
+                        icon = Icons.Rounded.Refresh
+                    )
                 }
             } else {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
                         WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
+                            // User request: Disable JS if not needed.
+                            // Static legal pages usually don't need it.
+                            settings.javaScriptEnabled = false
                             settings.domStorageEnabled = true
                             webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                    super.onPageStarted(view, url, favicon)
+                                    isLoading = true
+                                }
+
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    isLoading = false
+                                }
+
                                 override fun onReceivedError(
                                     view: WebView?,
                                     request: WebResourceRequest?,
                                     error: WebResourceError?
                                 ) {
                                     super.onReceivedError(view, request, error)
-                                    // Sadece ana sayfa hatalarını yakala
                                     if (request?.isForMainFrame == true) {
                                         hasError = true
+                                        isLoading = false
                                     }
+                                }
+
+                                override fun onReceivedHttpError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    errorResponse: android.webkit.WebResourceResponse?
+                                ) {
+                                    super.onReceivedHttpError(view, request, errorResponse)
+                                    if (request?.isForMainFrame == true) {
+                                        hasError = true
+                                        isLoading = false
+                                    }
+                                }
+
+                                override fun onReceivedSslError(
+                                    view: WebView?,
+                                    handler: android.webkit.SslErrorHandler?,
+                                    error: android.net.http.SslError?
+                                ) {
+                                    // Basic safety, can be enhanced
+                                    hasError = true
+                                    isLoading = false
+                                    handler?.cancel()
                                 }
                             }
                             loadUrl(url)
@@ -106,6 +138,12 @@ fun LegalWebViewScreen(
                         webViewRef = it
                     }
                 )
+
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = HavamaniaTheme.colors.accent)
+                    }
+                }
             }
         }
     }

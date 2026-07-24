@@ -1,29 +1,35 @@
-# HAVAMANIA ASİSTAN Response Issue Fix Walkthrough
+# Walkthrough - Legal Pages & Global Branding Fix
 
-This update resolves the issue where the AI Assistant failed to generate responses due to an incorrect Bot ID type.
+This update addresses the temporary redirection of legal pages to a unified URL and a global correction of the brand name and assistant terminology.
 
-## 1. Root Cause Identified: HTTP 422 Unprocessable Entity
-The Altikod API endpoint `api/widget/{bot_id}/chat` expects an **integer** for the `bot_id` parameter. The app was previously sending a 24-character hex string (`"6724b94f6f1c48010ba457c1"`), which caused a validation failure on the server.
+## 1. Legal Pages Redirection
+All legal pages (KVKK, Privacy Policy, Terms of Use) are now redirected to `https://www.havamania.com/` as a temporary measure.
 
-> [!IMPORTANT]
-> Through diagnostic scanning, the correct integer ID for "Havamania Asistan" was found to be **`6`**.
+### key Improvements:
+- **Centralized URL**: Managed via `LegalUrls.LEGAL_TEMP_URL` for easy future updates.
+- **Enhanced WebView**:
+    - **Loading States**: Added a `CircularProgressIndicator` during page load.
+    - **Error Handling**: Custom error screen appears if the internet is disconnected or an HTTP error occurs.
+    - **Retry Logic**: "TEKRAR DENE" button allows users to attempt reloading the page.
+    - **Privacy**: JavaScript is disabled by default for these static legal pages.
 
-## 2. Refactored Architecture
-I introduced an `AiAssistantRepository` to decouple API logic from the ViewModel and implement a robust result handling pattern.
+## 2. Global Branding Fix
+Corrected the Turkish character usage in brand names and UI headers.
 
-### key Components:
-- **`AssistantResult`**: A sealed interface that explicitly handles `Success`, `HttpError`, `NetworkError`, `Timeout`, etc.
-- **`AiAssistantRepository`**: Centralizes API calls with granular logging and configuration validation.
-
-## 3. Improved State Management
-The `AiChatViewModel` now uses a strict state machine to prevent race conditions and ensure that error states are clearly separated from successful responses.
+### Terminology Updates:
+- **HAVAMANIA** $\rightarrow$ **HAVAMANİA**
+- **ASISTAN** $\rightarrow$ **ASİSTAN**
 
 > [!TIP]
-> Debug builds now output detailed logs in Logcat with a unique `requestId` for each attempt, making it easier to track the request lifecycle.
+> These changes were applied to all user-facing strings (Titles, Buttons, Messages) while preserving code-level identifiers like package names and variable names.
+
+## 3. Navigation Integrity
+- Legal screens remain in the **Auth Flow** for unauthenticated users, ensuring **NO Bottom Navigation Bar** is visible.
+- Navigation back stack correctly returns the user to the previous Auth screen (Login/Register).
 
 ---
 
-### Verification Results
-- **API Test**: A verification script confirmed that `bot_id=6` returns a valid `200 OK` response with content.
-- **Unit Test**: `AiAssistantLogicTest` verifies the repository configuration and result model integrity.
-- **Manual Check**: Verified that the error card disappears upon receiving a successful response.
+### Verification Summary
+- [x] **URL Check**: Verified KVKK, Privacy Policy, and Terms of Use point to the new URL.
+- [x] **Connectivity Test**: Verified that disabling internet triggers the custom "Sayfa şu anda açılamıyor" screen.
+- [x] **Branding Audit**: Verified "HAVAMANİA ASİSTAN" and other headers are correctly spelled across all screens.

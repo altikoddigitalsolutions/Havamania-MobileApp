@@ -6,6 +6,13 @@ object Routes {
     const val LOGIN = "auth_login"
     const val REGISTER = "auth_register"
     const val FORGOT_PASSWORD = "auth_forgot_password"
+    const val KVKK = "auth_kvkk"
+    const val PRIVACY_POLICY = "auth_privacy_policy"
+    const val TERMS_OF_USE = "auth_terms_of_use"
+
+    // Root Containers
+    const val ROOT_AUTH = "root_auth"
+    const val ROOT_MAIN = "root_main"
 
     // Root Tabs
     const val WEATHER_ROOT = "root_weather"

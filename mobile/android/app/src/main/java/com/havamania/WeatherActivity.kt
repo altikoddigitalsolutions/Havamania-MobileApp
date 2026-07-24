@@ -212,14 +212,7 @@ class WeatherActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        },
+                                        onNavigateToLegal = { route -> navController.navigate(route) },
                                         onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
                                     )
                                 }
