@@ -34,11 +34,8 @@ import androidx.navigation.NavType
 
 class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = installSplashScreen()
+        installSplashScreen()
         var isReady by mutableStateOf(false)
-
-        // Keep the splash screen on-screen until the condition is met
-        splashScreen.setKeepOnScreenCondition { !isReady }
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

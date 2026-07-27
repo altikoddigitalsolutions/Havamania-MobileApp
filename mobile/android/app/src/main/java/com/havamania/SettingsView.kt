@@ -184,7 +184,12 @@ fun SettingsScreen(
                     openLegal(LegalUrls.TERMS_OF_USE)
                 }
                 SettingsDivider()
-                SettingsClickRow("Önbelleği Temizle", "Hava verilerini yenile", Icons.Rounded.Cached) {
+                SettingsClickRow(
+                    title = "Önbelleği Temizle",
+                    value = "Hava verilerini yenile",
+                    icon = Icons.Rounded.Cached,
+                    isVertical = true
+                ) {
                     travelViewModel.clearAllPlans()
                     comingSoonTitle = "Hava durumu önbelleği temizlendi."
                     showComingSoonDialog = true
@@ -200,7 +205,13 @@ fun SettingsScreen(
                     showLogoutDialog = true
                 }
                 SettingsDivider()
-                SettingsClickRow("Hesabımı Sil", "Tüm veriler kalıcı olarak silinir", Icons.Rounded.DeleteForever, contentColor = themeColors.error) {
+                SettingsClickRow(
+                    title = "Hesabımı Sil",
+                    value = "Tüm veriler kalıcı olarak silinir",
+                    icon = Icons.Rounded.DeleteForever,
+                    contentColor = themeColors.error,
+                    isVertical = true
+                ) {
                     showDeleteDialog = true
                 }
             }
@@ -336,7 +347,14 @@ private fun SettingsNavRow(title: String, subtitle: String?, icon: ImageVector, 
 }
 
 @Composable
-private fun SettingsClickRow(title: String, value: String?, icon: ImageVector, contentColor: Color = HavamaniaTheme.colors.textPrimary, onClick: () -> Unit) {
+private fun SettingsClickRow(
+    title: String,
+    value: String?,
+    icon: ImageVector,
+    contentColor: Color = HavamaniaTheme.colors.textPrimary,
+    isVertical: Boolean = false,
+    onClick: () -> Unit
+) {
     val themeColors = HavamaniaTheme.colors
     Row(
         modifier = Modifier
@@ -347,12 +365,52 @@ private fun SettingsClickRow(title: String, value: String?, icon: ImageVector, c
     ) {
         Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(16.dp))
-        Text(title, style = MaterialTheme.typography.bodyLarge, color = contentColor, modifier = Modifier.weight(1f))
-        if (value != null) {
-            Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.accent)
+
+        if (isVertical) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        letterSpacing = 0.sp
+                    ),
+                    color = contentColor,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                if (value != null) {
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
+                        color = themeColors.textSecondary.copy(alpha = 0.7f),
+                        maxLines = 2
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
+                modifier = Modifier.weight(1f)
+            )
+            if (value != null) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = themeColors.accent
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted, modifier = Modifier.size(16.dp))
+
+        Spacer(modifier = Modifier.width(12.dp))
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = themeColors.textMuted,
+            modifier = Modifier.size(16.dp)
+        )
     }
 }
 
