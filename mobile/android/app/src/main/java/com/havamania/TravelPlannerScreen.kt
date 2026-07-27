@@ -799,7 +799,9 @@ fun TravelPlanCard(
                 HavamaniaPrimaryButton(
                     text = if (isPast || isArchived) "RAPORU GÖR" else if (isExpanded) "GİZLE" else "AYRINTILARI GÖSTER",
                     onClick = { if (isPast || isArchived) onShowDetail() else isExpanded = !isExpanded },
-                    modifier = Modifier.height(34.dp).width(if (isPast || isArchived) 120.dp else 160.dp)
+                    modifier = Modifier.widthIn(min = 120.dp, max = 220.dp),
+                    height = 38.dp,
+                    fillMaxWidth = false
                 )
             }
         }

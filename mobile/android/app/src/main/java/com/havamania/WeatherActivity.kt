@@ -64,10 +64,7 @@ class WeatherActivity : ComponentActivity() {
                                 Routes.EDIT_PROFILE,
                                 Routes.CITIES,
                                 Routes.NOTIFICATION_CENTER,
-                                Routes.AI_HISTORY,
-                                Routes.KVKK,
-                                Routes.PRIVACY_POLICY,
-                                Routes.TERMS_OF_USE
+                                Routes.AI_HISTORY
                             )
                             val isDetailRoute = currentRoute.startsWith("sub_ai_history_detail")
                             val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !isDetailRoute
@@ -94,16 +91,7 @@ class WeatherActivity : ComponentActivity() {
                             }
                         }
                     ) { innerPadding ->
-                        val hideBottomBarRoutes = listOf(
-                            Routes.SETTINGS,
-                            Routes.EDIT_PROFILE,
-                            Routes.CITIES,
-                            Routes.NOTIFICATION_CENTER,
-                            Routes.AI_HISTORY,
-                            Routes.KVKK,
-                            Routes.PRIVACY_POLICY,
-                            Routes.TERMS_OF_USE
-                        )
+                        val hideBottomBarRoutes = listOf(Routes.SETTINGS, Routes.EDIT_PROFILE, Routes.CITIES, Routes.NOTIFICATION_CENTER, Routes.AI_HISTORY)
                         val isDetailRoute = currentRoute.startsWith("sub_ai_history_detail")
                         val isBottomBarHidden = currentRoute in hideBottomBarRoutes || isDetailRoute
 
@@ -230,8 +218,7 @@ class WeatherActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
-                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
+                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
                                     )
                                 }
                                 composable(Routes.NOTIFICATION_CENTER) {
@@ -240,9 +227,6 @@ class WeatherActivity : ComponentActivity() {
                                         onNavigateToDetail = { screen: String, _: Map<String, String>? -> navController.navigate(screen) }
                                     )
                                 }
-                                composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
-                                composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
-                                composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
                             }
                         }
                     }

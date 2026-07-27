@@ -234,7 +234,9 @@ fun HavamaniaPrimaryButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    height: Dp = 56.dp,
+    fillMaxWidth: Boolean = true
 ) {
     val colors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
@@ -268,8 +270,8 @@ fun HavamaniaPrimaryButton(
         enabled = enabled && !isLoading,
         modifier = modifier
             .scale(scale)
-            .height(56.dp)
-            .fillMaxWidth()
+            .height(height)
+            .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier)
             .drawBehind {
                 if (enabled && !isLoading) {
                     drawRoundRect(
@@ -300,20 +302,22 @@ fun HavamaniaPrimaryButton(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = themeStyles.spacingMedium)
+                    modifier = Modifier.padding(horizontal = 8.dp) // Reduced horizontal padding for better fit
                 ) {
                     if (icon != null) {
-                        Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(themeStyles.spacingSmall))
+                        Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
                     }
                     Text(
                         text = text.uppercase(),
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Black,
-                            fontSize = 14.sp,
-                            letterSpacing = 1.sp,
+                            fontSize = 13.sp, // Slightly smaller font
+                            letterSpacing = 0.5.sp, // Tighter letter spacing
                             color = colors.onAccent
-                        )
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip // Prevent ellipsis
                     )
                 }
             }

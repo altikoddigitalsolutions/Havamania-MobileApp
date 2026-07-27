@@ -100,7 +100,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                     if (isReady && appState == "main") {
                         val currentUser = authViewModel.currentUser
                         if (currentUser == null) {
-                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.KVKK, Routes.PRIVACY_POLICY, Routes.TERMS_OF_USE)) {
+                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
                                 navController.navigate(Routes.AUTH_WELCOME) {
                                     popUpTo(0) { inclusive = true }
                                 }
@@ -136,10 +136,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
                 var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
-                // Splash Screen Logic (Issue #1)
+                // Splash Screen Logic
                 if (appState == "splash") {
                     TravelInspiredSplashScreen(onNavigateToHome = {
-                        // Animation finished, but only proceed if data is ready AND min time passed
                         if (isReady && splashMinimumTimedOut) {
                             appState = "main"
                         }
@@ -150,9 +149,6 @@ class WeatherPremiumActivity : ComponentActivity() {
                         Routes.LOGIN,
                         Routes.REGISTER,
                         Routes.FORGOT_PASSWORD,
-                        Routes.KVKK,
-                        Routes.PRIVACY_POLICY,
-                        Routes.TERMS_OF_USE,
                         Routes.SETTINGS,
                         Routes.EDIT_PROFILE,
                         Routes.CITIES,
@@ -200,8 +196,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                 composable(Routes.AUTH_WELCOME) {
                                     AuthWelcomeScreen(
                                         onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
-                                        onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
-                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
+                                        onNavigateToRegister = { navController.navigate(Routes.REGISTER) }
                                     )
                                 }
                                 composable(Routes.LOGIN) {
@@ -224,8 +219,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                             navController.navigate(Routes.LOGIN) {
                                                 popUpTo(Routes.AUTH_WELCOME)
                                             }
-                                        },
-                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
+                                        }
                                     )
                                 }
                                 composable(Routes.FORGOT_PASSWORD) {
@@ -234,9 +228,6 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
-                                composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
-                                composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
-                                composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
 
                                 // --- APP ROUTES ---
                                 composable(
@@ -335,8 +326,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
-                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
+                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
                                     )
                                 }
                                 composable(Routes.SMART_ALERTS) {
@@ -368,21 +358,6 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
-                                    )
-                                }
-                                composable(
-                                    Routes.LEGAL_WEBVIEW,
-                                    arguments = listOf(
-                                        navArgument("title") { type = NavType.StringType },
-                                        navArgument("url") { type = NavType.StringType }
-                                    )
-                                ) { backStackEntry ->
-                                    val title = backStackEntry.arguments?.getString("title") ?: "Yasal Metin"
-                                    val url = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("url") ?: "", "UTF-8")
-                                    LegalWebViewScreen(
-                                        title = title,
-                                        url = url,
-                                        onBack = { navController.popBackStack() }
                                     )
                                 }
                             }

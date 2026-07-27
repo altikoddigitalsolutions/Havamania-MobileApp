@@ -569,7 +569,7 @@ fun AiChatScreen(
                     )
             ) {
                 HavamaniaTopBar(
-                    title = config?.name ?: "HAVAMANİA ASİSTAN",
+                    title = "HAVAMANİA ASİSTAN",
                     onBack = {
                         if (messages.isNotEmpty()) {
                             showExitConfirm = true
@@ -1342,7 +1342,7 @@ fun ChatBubble(
                     HavamaniaPrimaryButton(
                         text = action.label,
                         onClick = { onActionClick(action) },
-                        modifier = Modifier.height(48.dp),
+                        height = 48.dp,
                         icon = Icons.Rounded.Route
                     )
                 }

@@ -1,5 +1,6 @@
 package com.havamania
 
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -27,17 +28,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import com.havamania.*
 import com.havamania.ui.theme.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,7 +48,6 @@ fun SettingsScreen(
     onBack: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToCities: () -> Unit = {},
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> },
     onNavigateToSmartAlerts: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel(),
@@ -55,6 +57,17 @@ fun SettingsScreen(
     profileViewModel: ProfileViewModel = viewModel()
 ) {
     val scrollState = rememberScrollState()
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+
+    val openLegal = { url: String ->
+        try {
+            uriHandler.openUri(url)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Tarayıcı açılamadı: $url", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val currentTheme by themeViewModel.currentTheme.collectAsState()
     val tempUnit by themeViewModel.tempUnit.collectAsState()
     val language by themeViewModel.language.collectAsState()
@@ -160,15 +173,15 @@ fun SettingsScreen(
             SettingsGroupLabel("VERİ VE GİZLİLİK")
             SettingsCard {
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
-                    onNavigateToLegal("KVKK AYDINLATMA METNİ", Routes.KVKK)
+                    openLegal(LegalUrls.KVKK)
                 }
                 SettingsDivider()
                 SettingsNavRow("Gizlilik Politikası", null, Icons.Rounded.PrivacyTip) {
-                    onNavigateToLegal("GİZLİLİK POLİTİKASI", Routes.PRIVACY_POLICY)
+                    openLegal(LegalUrls.PRIVACY_POLICY)
                 }
                 SettingsDivider()
                 SettingsNavRow("Kullanım Koşulları", null, Icons.Rounded.Description) {
-                    onNavigateToLegal("KULLANIM KOŞULLARI", Routes.TERMS_OF_USE)
+                    openLegal(LegalUrls.TERMS_OF_USE)
                 }
                 SettingsDivider()
                 SettingsClickRow("Önbelleği Temizle", "Hava verilerini yenile", Icons.Rounded.Cached) {

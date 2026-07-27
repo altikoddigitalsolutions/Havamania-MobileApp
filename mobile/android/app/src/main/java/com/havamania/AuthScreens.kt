@@ -1,8 +1,10 @@
 package com.havamania
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,7 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
@@ -31,7 +35,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
-import androidx.compose.ui.res.stringResource
 
 @Composable
 fun AuthHeader(
@@ -88,12 +91,21 @@ fun AuthHeader(
 @Composable
 fun AuthWelcomeScreen(
     onNavigateToLogin: () -> Unit,
-    onNavigateToRegister: () -> Unit,
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
+    onNavigateToRegister: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val configuration = LocalConfiguration.current
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+
+    val openLegal = { url: String ->
+        try {
+            uriHandler.openUri(url)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Tarayıcı açılamadı: $url", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     HavamaniaScreen {
         Column(
@@ -137,11 +149,11 @@ fun AuthWelcomeScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegalLink("KVKK") { onNavigateToLegal("KVKK AYDINLATMA METNİ", Routes.KVKK) }
+                LegalLink("KVKK") { openLegal(LegalUrls.KVKK) }
                 LegalDivider()
-                LegalLink("Gizlilik Politikası") { onNavigateToLegal("GİZLİLİK POLİTİKASI", Routes.PRIVACY_POLICY) }
+                LegalLink("Gizlilik Politikası") { openLegal(LegalUrls.PRIVACY_POLICY) }
                 LegalDivider()
-                LegalLink("Kullanım Koşulları") { onNavigateToLegal("KULLANIM KOŞULLARI", Routes.TERMS_OF_USE) }
+                LegalLink("Kullanım Koşulları") { openLegal(LegalUrls.TERMS_OF_USE) }
             }
 
             Spacer(modifier = Modifier.height(themeStyles.spacingMedium))
@@ -256,10 +268,19 @@ fun LoginScreen(
 fun RegisterScreen(
     viewModel: AuthViewModel,
     onBack: () -> Unit,
-    onNavigateToLogin: () -> Unit,
-    onNavigateToLegal: (String, String) -> Unit = { _, _ -> }
+    onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+
+    val openLegal = { url: String ->
+        try {
+            uriHandler.openUri(url)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Tarayıcı açılamadı: $url", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -367,7 +388,7 @@ fun RegisterScreen(
                                 color = themeColors.accent,
                                 modifier = Modifier.clickable(
                                     onClickLabel = stringResource(R.string.privacy_policy_title),
-                                    onClick = { onNavigateToLegal(context.getString(R.string.privacy_policy_title), Routes.PRIVACY_POLICY) }
+                                    onClick = { openLegal(LegalUrls.PRIVACY_POLICY) }
                                 )
                             )
                         }

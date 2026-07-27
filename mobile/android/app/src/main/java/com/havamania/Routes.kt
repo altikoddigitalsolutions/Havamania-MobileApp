@@ -6,9 +6,6 @@ object Routes {
     const val LOGIN = "auth_login"
     const val REGISTER = "auth_register"
     const val FORGOT_PASSWORD = "auth_forgot_password"
-    const val KVKK = "auth_kvkk"
-    const val PRIVACY_POLICY = "auth_privacy_policy"
-    const val TERMS_OF_USE = "auth_terms_of_use"
 
     // Root Tabs
     const val WEATHER_ROOT = "root_weather"
@@ -25,5 +22,4 @@ object Routes {
     const val PERSONALIZATION = "sub_personalization"
     const val NOTIFICATION_CENTER = "sub_notification_center"
     const val SMART_ALERTS = "sub_smart_alerts"
-    const val LEGAL_WEBVIEW = "sub_legal_webview/{title}/{url}"
 }
