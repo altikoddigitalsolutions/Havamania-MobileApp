@@ -1,7 +1,8 @@
-# Task: Fix HAVAMANIA ASİSTAN Response Issue
+# Task: Fix Navigation Crash and Unify NavHost
 
-- [x] Update `botId` in `AiChatViewModel` to `6`
-- [x] Implement granular error logging and state management in `AiChatViewModel.sendMessage`
-- [x] Define `AssistantResult` sealed interface for repository-like result handling
-- [ ] Create `AiAssistantLogicTest.kt` to verify error handling and state transitions `[/]`
-- [x] Perform manual verification in Logcat (Verified via python script on same endpoint)
+- [ ] Refactor `WeatherPremiumActivity.kt` to use a single `NavHost` `[/]`
+- [ ] Update `AuthScreens.kt` navigation callbacks `[ ]`
+- [ ] Update `SettingsView.kt` navigation callbacks `[ ]`
+- [ ] Verify Splash -> Welcome transition `[ ]`
+- [ ] Verify Legal screen visibility and BottomBar exclusion `[ ]`
+- [ ] Verify Login -> Home transition and BottomBar inclusion `[ ]`

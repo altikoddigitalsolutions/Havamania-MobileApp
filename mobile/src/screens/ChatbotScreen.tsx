@@ -158,7 +158,7 @@ export function ChatbotScreen(): React.JSX.Element {
           <Icon name="chevron-back" size={28} color={C.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, {color: C.text}]}>Havamania AI</Text>
+          <Text style={[styles.headerTitle, {color: C.text}]}>Havamania ASİSTAN</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, {backgroundColor: '#10B981'}]} />
             <Text style={[styles.statusText, {color: '#10B981'}]}>AKTİF</Text>

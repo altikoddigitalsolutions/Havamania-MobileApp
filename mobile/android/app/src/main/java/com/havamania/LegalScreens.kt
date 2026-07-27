@@ -12,6 +12,25 @@ import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
 
 @Composable
+fun KVKKScreen(onBack: () -> Unit) {
+    LegalScreenTemplate(title = "KVKK AYDINLATMA METNİ", onBack = onBack) {
+        LegalText("Son Güncelleme: Ocak 2024\n\nHavamania olarak, kişisel verilerinizin güvenliği hususuna azami hassasiyet göstermekteyiz. Bu kapsamda, ürün ve hizmetlerimizden faydalanan kişilerin her türlü kişisel verilerinin 6698 sayılı Kişisel Verilerin Korunması Kanunu (“KVKK”)’na uygun olarak işlenerek, muhafaza edilmesine büyük önem vermekteyiz.")
+
+        LegalSection("1. Veri Sorumlusu")
+        LegalText("KVKK uyarınca, Havamania uygulama yönetimi 'Veri Sorumlusu' sıfatıyla, kişisel verilerinizi aşağıda açıklanan amaçlar kapsamında ve mevzuatın çizdiği sınırlar çerçevesinde işleyebilecektir.")
+
+        LegalSection("2. Kişisel Verilerin İşlenme Amacı")
+        LegalText("Toplanan kişisel verileriniz, Havamania tarafından sunulan ürün ve hizmetlerden sizleri faydalandırmak için gerekli çalışmaların iş birimlerimiz tarafından yapılması; kişiselleştirilmiş hava durumu tahminleri ve seyahat önerileri sunulması amacıyla işlenmektedir.")
+
+        LegalSection("3. İşlenen Kişisel Veriler")
+        LegalText("• Konum Bilgisi (En yakın meteoroloji istasyonundan veri çekmek için)\n• Kullanıcı Tercihleri (Asistan tonu, ilgi alanları vb.)\n• Cihaz Tanımlayıcı Bilgiler (Push bildirimleri için)")
+
+        LegalSection("4. Veri Sahibi Hakları")
+        LegalText("KVKK’nın 11. maddesi uyarınca veri sahipleri; kendisiyle ilgili kişisel veri işlenip işlenmediğini öğrenme, işlenmişse bilgi talep etme, verilerin amacına uygun kullanılıp kullanılmadığını öğrenme ve düzeltilmesini veya silinmesini isteme haklarına sahiptir.")
+    }
+}
+
+@Composable
 fun PrivacyPolicyScreen(onBack: () -> Unit) {
     LegalScreenTemplate(title = "GİZLİLİK POLİTİKASI", onBack = onBack) {
         LegalText("Son Güncelleme: Ocak 2024\n\nHavamania olarak kişisel verilerinizin güvenliği önceliğimizdir. Bu metin, 6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) ve GDPR uyumluluğu kapsamında hazırlanmıştır.")

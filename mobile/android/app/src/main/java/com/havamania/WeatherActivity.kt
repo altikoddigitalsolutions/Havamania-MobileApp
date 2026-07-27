@@ -59,7 +59,16 @@ class WeatherActivity : ComponentActivity() {
                     Scaffold(
                         containerColor = themeColors.background,
                         bottomBar = {
-                            val hideBottomBarRoutes = listOf(Routes.SETTINGS, Routes.EDIT_PROFILE, Routes.CITIES, Routes.NOTIFICATION_CENTER, Routes.AI_HISTORY)
+                            val hideBottomBarRoutes = listOf(
+                                Routes.SETTINGS,
+                                Routes.EDIT_PROFILE,
+                                Routes.CITIES,
+                                Routes.NOTIFICATION_CENTER,
+                                Routes.AI_HISTORY,
+                                Routes.KVKK,
+                                Routes.PRIVACY_POLICY,
+                                Routes.TERMS_OF_USE
+                            )
                             val isDetailRoute = currentRoute.startsWith("sub_ai_history_detail")
                             val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !isDetailRoute
 
@@ -85,7 +94,16 @@ class WeatherActivity : ComponentActivity() {
                             }
                         }
                     ) { innerPadding ->
-                        val hideBottomBarRoutes = listOf(Routes.SETTINGS, Routes.EDIT_PROFILE, Routes.CITIES, Routes.NOTIFICATION_CENTER, Routes.AI_HISTORY)
+                        val hideBottomBarRoutes = listOf(
+                            Routes.SETTINGS,
+                            Routes.EDIT_PROFILE,
+                            Routes.CITIES,
+                            Routes.NOTIFICATION_CENTER,
+                            Routes.AI_HISTORY,
+                            Routes.KVKK,
+                            Routes.PRIVACY_POLICY,
+                            Routes.TERMS_OF_USE
+                        )
                         val isDetailRoute = currentRoute.startsWith("sub_ai_history_detail")
                         val isBottomBarHidden = currentRoute in hideBottomBarRoutes || isDetailRoute
 
@@ -101,7 +119,7 @@ class WeatherActivity : ComponentActivity() {
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
                                 ) {
                                     HomeScreen(
-                                        onNavigateToAi = { rec, data ->
+                                        onNavigateToAi = { rec: HavamaniaRecommendation, data: WeatherData? ->
                                             pendingRecommendation = rec
                                             activeWeatherData = data
                                             val startDestId = navController.graph.findStartDestination().id
@@ -153,7 +171,7 @@ class WeatherActivity : ComponentActivity() {
                                             pendingRecommendation = null
                                             navController.popBackStack()
                                         },
-                                        onNavigateToTravelCreate = { city, start ->
+                                        onNavigateToTravelCreate = { city: String, start: String? ->
                                             navController.navigate(Routes.CALENDAR_ROOT + "?city=$city&start=$start") {
                                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                                 launchSingleTop = true
@@ -192,7 +210,7 @@ class WeatherActivity : ComponentActivity() {
                                 composable(Routes.AI_HISTORY) {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
-                                        onNavigateToChat = { id ->
+                                        onNavigateToChat = { id: String ->
                                             navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
                                         }
                                     )
@@ -212,23 +230,19 @@ class WeatherActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        },
-                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
+                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
+                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.NOTIFICATION_CENTER) {
                                     NotificationCenterScreen(
                                         onBack = { navController.popBackStack() },
-                                        onNavigateToDetail = { screen, _ -> navController.navigate(screen) }
+                                        onNavigateToDetail = { screen: String, _: Map<String, String>? -> navController.navigate(screen) }
                                     )
                                 }
+                                composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
                             }
                         }
                     }

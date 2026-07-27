@@ -100,12 +100,13 @@ class WeatherPremiumActivity : ComponentActivity() {
                     if (isReady && appState == "main") {
                         val currentUser = authViewModel.currentUser
                         if (currentUser == null) {
-                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
+                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.KVKK, Routes.PRIVACY_POLICY, Routes.TERMS_OF_USE)) {
                                 navController.navigate(Routes.AUTH_WELCOME) {
                                     popUpTo(0) { inclusive = true }
                                 }
                             }
                         } else {
+                            // If in Auth root, move to Main root
                             if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
                                 if (profileState is ProfileState.Success) {
                                     val profile = (profileState as ProfileState.Success).profile
@@ -144,22 +145,25 @@ class WeatherPremiumActivity : ComponentActivity() {
                         }
                     })
                 } else {
+                    val hideBottomBarRoutes = listOf(
+                        Routes.AUTH_WELCOME,
+                        Routes.LOGIN,
+                        Routes.REGISTER,
+                        Routes.FORGOT_PASSWORD,
+                        Routes.KVKK,
+                        Routes.PRIVACY_POLICY,
+                        Routes.TERMS_OF_USE,
+                        Routes.SETTINGS,
+                        Routes.EDIT_PROFILE,
+                        Routes.CITIES,
+                        Routes.AI_HISTORY,
+                        Routes.NOTIFICATION_CENTER
+                    )
+                    val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
+
                     Scaffold(
                         containerColor = themeColors.background,
                         bottomBar = {
-                            val hideBottomBarRoutes = listOf(
-                                Routes.SETTINGS,
-                                Routes.EDIT_PROFILE,
-                                Routes.CITIES,
-                                Routes.AI_HISTORY,
-                                Routes.NOTIFICATION_CENTER,
-                                Routes.AUTH_WELCOME,
-                                Routes.LOGIN,
-                                Routes.REGISTER,
-                                Routes.FORGOT_PASSWORD
-                            )
-                            val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
-
                             if (shouldShowBottomBar) {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
@@ -186,7 +190,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                         Box(modifier = Modifier
                             .fillMaxSize()
                             .background(backgroundGradient)
-                            .padding(bottom = if (currentRoute !in listOf(Routes.SETTINGS, Routes.CITIES, Routes.EDIT_PROFILE, Routes.NOTIFICATION_CENTER) && !currentRoute.startsWith("sub_ai_history_detail")) innerPadding.calculateBottomPadding() else 0.dp)
+                            .padding(bottom = if (shouldShowBottomBar) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
                             NavHost(
                                 navController = navController,
@@ -197,14 +201,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     AuthWelcomeScreen(
                                         onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
                                         onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
+                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.LOGIN) {
@@ -228,14 +225,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 popUpTo(Routes.AUTH_WELCOME)
                                             }
                                         },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
+                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.FORGOT_PASSWORD) {
@@ -244,13 +234,16 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
+                                composable(Routes.KVKK) { KVKKScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.PRIVACY_POLICY) { PrivacyPolicyScreen(onBack = { navController.popBackStack() }) }
+                                composable(Routes.TERMS_OF_USE) { TermsOfUseScreen(onBack = { navController.popBackStack() }) }
 
                                 // --- APP ROUTES ---
                                 composable(
                                     Routes.WEATHER_ROOT,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
                                 ) {
-                                    HomeScreen(onNavigateToAi = { rec, data ->
+                                    HomeScreen(onNavigateToAi = { rec: HavamaniaRecommendation, data: WeatherData? ->
                                         pendingRecommendation = rec
                                         activeWeatherData = data
                                         navController.navigate(Routes.AI_ROOT)
@@ -291,7 +284,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                             pendingRecommendation = null
                                             navController.popBackStack()
                                         },
-                                        onNavigateToTravelCreate = { city, date ->
+                                        onNavigateToTravelCreate = { city: String, date: String? ->
                                             navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")
                                         }
                                     )
@@ -343,14 +336,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },
                                         onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) },
-                                        onNavigateToLegal = { title, url ->
-                                            val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-                                            navController.navigate(
-                                                Routes.LEGAL_WEBVIEW
-                                                    .replace("{title}", title)
-                                                    .replace("{url}", encodedUrl)
-                                            )
-                                        }
+                                        onNavigateToLegal = { _: String, route: String -> navController.navigate(route) }
                                     )
                                 }
                                 composable(Routes.SMART_ALERTS) {
@@ -402,7 +388,6 @@ class WeatherPremiumActivity : ComponentActivity() {
                             }
                         }
                     }
-
                 }
             }
         }

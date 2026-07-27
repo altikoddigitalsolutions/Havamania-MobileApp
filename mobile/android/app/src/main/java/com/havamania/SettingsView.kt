@@ -160,15 +160,15 @@ fun SettingsScreen(
             SettingsGroupLabel("VERİ VE GİZLİLİK")
             SettingsCard {
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
-                    onNavigateToLegal("KVKK AYDINLATMA METNİ", LegalUrls.KVKK)
+                    onNavigateToLegal("KVKK AYDINLATMA METNİ", Routes.KVKK)
                 }
                 SettingsDivider()
                 SettingsNavRow("Gizlilik Politikası", null, Icons.Rounded.PrivacyTip) {
-                    onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY)
+                    onNavigateToLegal("GİZLİLİK POLİTİKASI", Routes.PRIVACY_POLICY)
                 }
                 SettingsDivider()
                 SettingsNavRow("Kullanım Koşulları", null, Icons.Rounded.Description) {
-                    onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE)
+                    onNavigateToLegal("KULLANIM KOŞULLARI", Routes.TERMS_OF_USE)
                 }
                 SettingsDivider()
                 SettingsClickRow("Önbelleği Temizle", "Hava verilerini yenile", Icons.Rounded.Cached) {

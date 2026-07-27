@@ -137,11 +137,11 @@ fun AuthWelcomeScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LegalLink("KVKK") { onNavigateToLegal("KVKK AYDINLATMA METNİ", LegalUrls.KVKK) }
+                LegalLink("KVKK") { onNavigateToLegal("KVKK AYDINLATMA METNİ", Routes.KVKK) }
                 LegalDivider()
-                LegalLink("Gizlilik Politikası") { onNavigateToLegal("GİZLİLİK POLİTİKASI", LegalUrls.PRIVACY_POLICY) }
+                LegalLink("Gizlilik Politikası") { onNavigateToLegal("GİZLİLİK POLİTİKASI", Routes.PRIVACY_POLICY) }
                 LegalDivider()
-                LegalLink("Kullanım Koşulları") { onNavigateToLegal("KULLANIM KOŞULLARI", LegalUrls.TERMS_OF_USE) }
+                LegalLink("Kullanım Koşulları") { onNavigateToLegal("KULLANIM KOŞULLARI", Routes.TERMS_OF_USE) }
             }
 
             Spacer(modifier = Modifier.height(themeStyles.spacingMedium))
@@ -367,7 +367,7 @@ fun RegisterScreen(
                                 color = themeColors.accent,
                                 modifier = Modifier.clickable(
                                     onClickLabel = stringResource(R.string.privacy_policy_title),
-                                    onClick = { onNavigateToLegal(context.getString(R.string.privacy_policy_title), LegalUrls.PRIVACY_POLICY) }
+                                    onClick = { onNavigateToLegal(context.getString(R.string.privacy_policy_title), Routes.PRIVACY_POLICY) }
                                 )
                             )
                         }
