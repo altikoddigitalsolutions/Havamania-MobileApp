@@ -19,13 +19,22 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import java.util.UUID
 
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.ktx.toObject
+import kotlinx.coroutines.tasks.await
+
 class TravelViewModel(application: Application) : AndroidViewModel(application) {
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
     private val repository = WeatherRepository.getInstance(application)
     private val apiService = NetworkModule.apiService
     private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+
+    private var firestoreListener: ListenerRegistration? = null
 
     private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
@@ -73,12 +82,56 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 _plans.value = emptyList()
                 _isLoading.value = true
 
-                // Restart data flow if needed, but since getAllTravelPlansFlow
-                // is likely collected in a child coroutine, I should manage it.
+                // Restart data flow
                 loadPlansForUid(newUid)
+                observeFirestoreTrips(newUid)
             }
         }
         seedInitialDataIfNeeded()
+    }
+
+    private fun observeFirestoreTrips(uid: String) {
+        firestoreListener?.remove()
+        if (uid == "legacy") return
+
+        Log.d(TAG, "Starting Firestore listener for $uid")
+        firestoreListener = db.collection("users").document(uid).collection("trips")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.w(TAG, "Firestore listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val entities = snapshot.documents.mapNotNull { doc ->
+                                try {
+                                    doc.toObject(TravelPlanEntity::class.java)
+                                } catch (me: Exception) {
+                                    Log.e(TAG, "Data mapping error for doc ${doc.id}", me)
+                                    null
+                                }
+                            }
+                            Log.d(TAG, "Firestore snapshot received: ${entities.size} items")
+
+                            // Sync with Room
+                            entities.forEach { dao.insertTravelPlan(it) }
+
+                            // Delete items locally that were deleted in Firestore
+                            val localEntities = dao.getAllTravelPlans(uid)
+                            val remoteIds = entities.map { it.id }.toSet()
+                            localEntities.forEach { local ->
+                                if (!remoteIds.contains(local.id) && !local.isDemo) {
+                                    dao.deleteTravelPlan(local.id)
+                                }
+                            }
+                        } catch (ex: Exception) {
+                            Log.e(TAG, "Sync process failed", ex)
+                        }
+                    }
+                }
+            }
     }
 
     private var plansJob: kotlinx.coroutines.Job? = null
@@ -231,7 +284,15 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                                    (plan.analyses.isEmpty() && updatedPlan.analyses.isNotEmpty())
 
                 if (updatedPlan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY && isNewAnalysis) {
-                    dao.insertTravelPlan(updatedPlan.toEntity())
+                    val entity = updatedPlan.toEntity()
+                    dao.insertTravelPlan(entity)
+                    if (currentUid != "legacy") {
+                        try {
+                            db.collection("users").document(currentUid).collection("trips").document(updatedPlan.id).set(entity).await()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Analysis Firestore sync failed", e)
+                        }
+                    }
                     // Atomik update
                     _plans.value = _plans.value.map {
                         if (it.id == plan.id) updatedPlan else it
@@ -422,23 +483,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    private fun estimateRainRisk(condition: String?): Int {
-        if (condition == null) return 10 // "Düşük"
-
-        val c = condition.lowercase(Locale("tr"))
-        return when {
-            c.contains("güneşli") || c.contains("açık") -> 5
-            c.contains("parçalı bulutlu") -> 15
-            c.contains("bulutlu") -> 30
-            c.contains("sisli") || c.contains("puslu") -> 20
-            c.contains("yağmurlu") -> 70
-            c.contains("sağanak") -> 85
-            c.contains("fırtınalı") || c.contains("gök gürültülü") -> 90
-            c.contains("karlı") -> 75
-            else -> 10 // "Düşük"
-        }
-    }
-
     private fun calculateTravelScore(snapshot: ForecastSnapshot, type: TripType): Int {
         var score = 85 + (Math.random() * 10).toInt() // Base score between 85-95
         val precip = snapshot.precipitationProbability ?: 0
@@ -484,37 +528,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         return score.coerceIn(40, 100)
     }
 
-    private fun generateComparisonSummary(old: TravelWeatherAnalysis, newScore: Int, newSnapshot: ForecastSnapshot): String {
-        val sb = StringBuilder()
-        val scoreDiff = newScore - old.travelScore
-        if (scoreDiff != 0) {
-            val direction = if (scoreDiff > 0) "iyileşti" else "düştü"
-            val formatted = WeatherUtils.formatRainProbability(kotlin.math.abs(scoreDiff))
-            sb.append("Seyahat skoru önceki analize göre $formatted $direction. ")
-        }
-
-        val oldTemp = old.averageTemperature
-        val newTemp = ((newSnapshot.minTemp ?: 0.0) + (newSnapshot.maxTemp ?: 0.0)) / 2.0
-        val tempDiff = (newTemp - oldTemp).toInt()
-
-        if (tempDiff != 0) {
-            val sign = if (tempDiff > 0) "+" else ""
-            sb.append("Ortalama sıcaklık $sign$tempDiff° değişti. ")
-        }
-
-        val oldRain = old.rainRiskPercent ?: 0
-        val newRain = newSnapshot.precipitationProbability ?: 0
-        val rainDiff = newRain - oldRain
-
-        if (kotlin.math.abs(rainDiff) > 10) {
-            val direction = if (rainDiff > 0) "arttı" else "azaldı"
-            val formatted = WeatherUtils.formatRainProbability(kotlin.math.abs(rainDiff))
-            sb.append("Yağış riski $formatted $direction.")
-        }
-
-        return sb.toString().trim()
-    }
-
     fun savePlan(plan: TravelPlan) {
         val cityNameTrimmed = plan.city.trim()
         if (cityNameTrimmed.isEmpty()) return
@@ -543,24 +556,48 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 plan.copy(city = cityNameTrimmed, updatedAt = System.currentTimeMillis())
             }
 
-            dao.insertTravelPlan(finalPlan.toEntity())
+            val entity = finalPlan.toEntity()
 
-            val domainPlans = dao.getAllTravelPlans(currentUid).map { it.toDomain() }.sortedBy { it.startDate }
+            // 1. Write to Room (Optimistic UI handled by loadPlansForUid flow)
+            dao.insertTravelPlan(entity)
 
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                _plans.value = domainPlans
-                if (isUpcoming && daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS) {
-                    analyzeTravelWeather(finalPlan)
+            // 2. Write to Firestore if logged in
+            if (currentUid != "legacy") {
+                try {
+                    db.collection("users").document(currentUid).collection("trips")
+                        .document(entity.id).set(entity).await()
+                    Log.d(TAG, "Firestore save successful for ${entity.id}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Firestore save failed", e)
+                    // Notify user but keep local data
+                    _uiEvent.emit("Seyahat yerel olarak kaydedildi ancak bulut senkronizasyonu şu anda yapılamıyor.")
                 }
+            }
+
+            if (isUpcoming && daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS) {
+                analyzeTravelWeather(finalPlan)
             }
         }
     }
 
     fun deletePlan(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             Log.i(TAG, "Deleting TripId=$id")
+
+            // 1. Delete from Room
             dao.deleteTravelPlan(id)
-            loadPlans()
+
+            // 2. Delete from Firestore if logged in
+            if (currentUid != "legacy") {
+                try {
+                    db.collection("users").document(currentUid).collection("trips")
+                        .document(id).delete().await()
+                    Log.d(TAG, "Firestore delete successful for $id")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Firestore delete failed", e)
+                    _uiEvent.emit("Şu anda seyahat buluttan silinemedi.")
+                }
+            }
         }
     }
 
@@ -585,29 +622,56 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun archiveTrip(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val plan = _plans.value.find { it.id == id } ?: return@launch
             val updated = plan.copy(isArchived = true, archivedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
-            dao.insertTravelPlan(updated.toEntity())
-            loadPlans()
+            val entity = updated.toEntity()
+
+            dao.insertTravelPlan(entity)
+            if (currentUid != "legacy") {
+                try {
+                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Archive Firestore sync failed", e)
+                    _uiEvent.emit("Şu anda seyahat arşivlenemedi.")
+                }
+            }
         }
     }
 
     fun unarchiveTrip(id: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val plan = _plans.value.find { it.id == id } ?: return@launch
             val updated = plan.copy(isArchived = false, archivedAt = null, updatedAt = System.currentTimeMillis())
-            dao.insertTravelPlan(updated.toEntity())
-            loadPlans()
+            val entity = updated.toEntity()
+
+            dao.insertTravelPlan(entity)
+            if (currentUid != "legacy") {
+                try {
+                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unarchive Firestore sync failed", e)
+                    _uiEvent.emit("Şu anda seyahat aktifleştirilemedi.")
+                }
+            }
         }
     }
 
     fun updateTripNoteAndRating(id: String, note: String, rating: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val plan = _plans.value.find { it.id == id } ?: return@launch
-            val updated = plan.copy(userNote = note, userRating = rating)
-            dao.insertTravelPlan(updated.toEntity())
-            loadPlans()
+            val updated = plan.copy(userNote = note, userRating = rating, updatedAt = System.currentTimeMillis())
+            val entity = updated.toEntity()
+
+            dao.insertTravelPlan(entity)
+            if (currentUid != "legacy") {
+                try {
+                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Note/Rating Firestore sync failed", e)
+                    _uiEvent.emit("Not kaydedilemedi ancak yerel olarak saklandı.")
+                }
+            }
         }
     }
 
@@ -617,7 +681,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             val legacyPlans = dao.getAllTravelPlans("legacy")
             if (legacyPlans.isNotEmpty()) {
                 legacyPlans.forEach { entity ->
-                    dao.insertTravelPlan(entity.copy(id = UUID.randomUUID().toString(), userId = currentUid))
+                    val newEntity = entity.copy(id = UUID.randomUUID().toString(), userId = currentUid)
+                    dao.insertTravelPlan(newEntity)
+                    try {
+                        db.collection("users").document(currentUid).collection("trips").document(newEntity.id).set(newEntity).await()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Migration sync failed for trip ${newEntity.id}", e)
+                    }
                 }
             }
             ThemeManager.saveMigrationChoiceMade(getApplication(), currentUid, true)
@@ -632,9 +702,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /**
-     * Merkezi Seyahat Durum Hesaplayıcısı (Business Rule 2)
-     */
     fun getTripStatus(plan: TravelPlan): com.havamania.TripStatus {
         val today = LocalDate.now()
         return when {
@@ -666,7 +733,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         comfortScore = comfortScore,
         userNote = userNote,
         userRating = userRating,
-        isAnalyzing = false, // Reset flag on load
+        isAnalyzing = false,
         weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
         isArchived = isArchived,
         analyses = analyses,

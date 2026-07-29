@@ -1,6 +1,7 @@
 package com.havamania
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,8 +56,9 @@ class WeatherPremiumActivity : ComponentActivity() {
 
                 // Profile Sync Logic
                 LaunchedEffect(profileState) {
-                    if (profileState is ProfileState.Success) {
-                        themeViewModel.syncWithFirebase((profileState as ProfileState.Success).profile)
+                    val state = profileState
+                    if (state is ProfileState.Success) {
+                        themeViewModel.syncWithFirebase(state.profile)
                     }
                 }
 
@@ -87,35 +89,40 @@ class WeatherPremiumActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(profileState) {
-                    if (profileState is ProfileState.Success || profileState is ProfileState.Error) {
+                    val state = profileState
+                    if (state is ProfileState.Success || state is ProfileState.Error) {
                         isReady = true // Veri hazır veya hata olsa bile artık içeri al
                     }
                 }
 
                 // Auth Redirection Logic
-                LaunchedEffect(appState, authState, isReady) {
+                LaunchedEffect(appState, authState, isReady, profileState) {
                     if (isReady && appState == "main") {
                         val currentUser = authViewModel.currentUser
+                        val state = profileState
+
                         if (currentUser == null) {
                             if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
-                                navController.navigate(Routes.AUTH_WELCOME) {
-                                    popUpTo(0) { inclusive = true }
+                                try {
+                                    navController.navigate(Routes.AUTH_WELCOME) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("Nav", "Initial redirection failed", e)
                                 }
                             }
-                        } else {
+                        } else if (state is ProfileState.Success) {
                             // If in Auth root, move to Main root
                             if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
-                                if (profileState is ProfileState.Success) {
-                                    val profile = (profileState as ProfileState.Success).profile
-                                    if (!profile.onboardingCompleted) {
-                                        navController.navigate(Routes.PERSONALIZATION) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
-                                    } else {
-                                        navController.navigate(Routes.WEATHER_ROOT) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
+                                val profile = state.profile
+                                val target = if (!profile.onboardingCompleted) Routes.PERSONALIZATION else Routes.WEATHER_ROOT
+
+                                try {
+                                    navController.navigate(target) {
+                                        popUpTo(0) { inclusive = true }
                                     }
+                                } catch (e: Exception) {
+                                    Log.e("Nav", "Main redirection failed", e)
                                 }
                             }
                         }
@@ -173,7 +180,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 restoreState = !shouldResetState
                                             }
                                         } catch (e: Exception) {
-                                            android.util.Log.e("Nav", "Navigation failed to $route", e)
+                                            Log.e("Nav", "Navigation failed to $route", e)
                                         }
                                     }
                                 )
@@ -349,7 +356,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                     launchSingleTop = true
                                                 }
                                             } catch (e: Exception) {
-                                                android.util.Log.e("Nav", "Failed to navigate to $screen", e)
+                                                Log.e("Nav", "Failed to navigate to $screen", e)
                                                 navController.navigate(Routes.WEATHER_ROOT) {
                                                     launchSingleTop = true
                                                 }

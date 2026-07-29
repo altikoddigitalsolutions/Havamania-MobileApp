@@ -1,5 +1,10 @@
 package com.havamania
 
+import androidx.annotation.Keep
+import com.google.firebase.firestore.IgnoreExtraProperties
+
+@Keep
+@IgnoreExtraProperties
 data class UserProfile(
     val uid: String = "",
     val name: String = "",
@@ -16,12 +21,16 @@ data class UserProfile(
     val isPremium: Boolean = false,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
+    val registeredCities: List<GeocodingResultDto> = emptyList(),
     val personalizationProfile: FirestorePersonalizationProfile? = null
 )
 
+@Keep
+@IgnoreExtraProperties
 data class FirestorePersonalizationProfile(
     val selectedInterests: List<String> = emptyList(),
     val travelStyles: List<String> = emptyList(),
     val weatherPreferences: WeatherPreferences? = null,
     val lastUpdated: Long = 0
 )
+

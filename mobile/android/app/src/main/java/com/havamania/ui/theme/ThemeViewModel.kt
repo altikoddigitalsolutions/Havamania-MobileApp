@@ -1,18 +1,29 @@
 package com.havamania.ui.theme
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.havamania.UserProfile
 import com.havamania.WeatherRepository
+import com.havamania.GeocodingResultDto
+import com.havamania.SaveResult
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.tasks.await
+
 class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
     private val repository = WeatherRepository.getInstance(application)
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+
+    private var userDocListener: ListenerRegistration? = null
 
     private val _currentTheme = MutableStateFlow(AppTheme.DARK)
     val currentTheme: StateFlow<AppTheme> = _currentTheme.asStateFlow()
@@ -59,11 +70,11 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPremium = MutableStateFlow(false)
     val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
 
-    private val _registeredCities = MutableStateFlow<List<com.havamania.GeocodingResultDto>>(emptyList())
-    val registeredCities: StateFlow<List<com.havamania.GeocodingResultDto>> = _registeredCities.asStateFlow()
+    private val _registeredCities = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
+    val registeredCities: StateFlow<List<GeocodingResultDto>> = _registeredCities.asStateFlow()
 
-    private val _defaultCity = MutableStateFlow<com.havamania.GeocodingResultDto?>(null)
-    val defaultCity: StateFlow<com.havamania.GeocodingResultDto?> = _defaultCity.asStateFlow()
+    private val _defaultCity = MutableStateFlow<GeocodingResultDto?>(null)
+    val defaultCity: StateFlow<GeocodingResultDto?> = _defaultCity.asStateFlow()
 
     private val _tiltEffectEnabled = MutableStateFlow(true)
     val tiltEffectEnabled: StateFlow<Boolean> = _tiltEffectEnabled.asStateFlow()
@@ -80,15 +91,74 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
     val locationMode: StateFlow<LocationMode> = _locationMode.asStateFlow()
 
+    private val _uiEvent = MutableSharedFlow<String>()
+    val uiEvent = _uiEvent.asSharedFlow()
+
     init {
         loadSettings()
 
-        // Watch for auth changes to reload user data
+        // Watch for auth changes to reload user data and start listener
         viewModelScope.launch {
-            auth.addAuthStateListener {
+            auth.addAuthStateListener { firebaseAuth ->
+                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+                Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
                 loadSettings()
+                observeFirestoreUserDoc(newUid)
             }
         }
+    }
+
+    private fun observeFirestoreUserDoc(uid: String) {
+        userDocListener?.remove()
+        if (uid == "legacy") return
+
+        Log.d("ThemeVM", "Starting User doc listener for $uid")
+        userDocListener = db.collection("users").document(uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.w("ThemeVM", "User doc listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            // Sync registeredCities
+                            val remoteCitiesRaw = snapshot.get("registeredCities") as? List<Map<String, Any>>
+                            val remoteCities = remoteCitiesRaw?.map { map ->
+                                GeocodingResultDto(
+                                    id = (map["id"] as? Number)?.toLong() ?: 0L,
+                                    name = map["name"] as? String ?: "",
+                                    latitude = (map["latitude"] as? Number)?.toDouble() ?: 0.0,
+                                    longitude = (map["longitude"] as? Number)?.toDouble() ?: 0.0,
+                                    country = map["country"] as? String ?: "",
+                                    countryCode = map["country_code"] as? String ?: map["countryCode"] as? String,
+                                    admin1 = map["admin1"] as? String,
+                                    admin2 = map["admin2"] as? String,
+                                    admin3 = map["admin3"] as? String
+                                )
+                            }
+
+                            if (remoteCities != null && remoteCities != _registeredCities.value) {
+                                ThemeManager.saveRegisteredCities(getApplication(), uid, remoteCities)
+                                _registeredCities.value = remoteCities
+                            }
+
+                            // Sync defaultCity
+                            val remoteDefaultCityName = snapshot.getString("defaultCity")
+                            if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
+                                val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
+                                if (cityToSet != null) {
+                                    ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
+                                    _defaultCity.value = cityToSet
+                                }
+                            }
+                        } catch (ex: Exception) {
+                            Log.e("ThemeVM", "Error syncing user doc from Firestore", ex)
+                        }
+                    }
+                }
+            }
     }
 
     fun loadSettings() {
@@ -120,6 +190,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
     fun setTheme(theme: AppTheme) {
         val uid = currentUid
         viewModelScope.launch {
@@ -196,38 +267,71 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addCity(city: com.havamania.GeocodingResultDto) {
+    fun addCity(city: GeocodingResultDto) {
         viewModelScope.launch {
-            val uid = currentUid
-            val current = _registeredCities.value.toMutableList()
-            if (current.none { it.id == city.id || (it.name == city.name && it.admin1 == city.admin1) }) {
-                current.add(city)
-                ThemeManager.saveRegisteredCities(getApplication(), uid, current)
-                _registeredCities.value = current
-            }
-        }
-    }
+            try {
+                val uid = currentUid
+                val current = _registeredCities.value.toMutableList()
+                if (current.none { it.id == city.id || (it.name == city.name && it.admin1 == city.admin1) }) {
+                    current.add(city)
+                    ThemeManager.saveRegisteredCities(getApplication(), uid, current)
+                    _registeredCities.value = current
 
-    fun removeCity(city: com.havamania.GeocodingResultDto) {
-        viewModelScope.launch {
-            val uid = currentUid
-            val current = _registeredCities.value.toMutableList()
-            if (current.size > 1 && current.any { it.id == city.id }) {
-                current.removeAll { it.id == city.id }
-                ThemeManager.saveRegisteredCities(getApplication(), uid, current)
-                _registeredCities.value = current
-
-                if (_defaultCity.value?.id == city.id) {
-                    setDefaultCity(current.first())
+                    if (uid != "legacy") {
+                        db.collection("users").document(uid)
+                            .set(mapOf("registeredCities" to current), SetOptions.merge())
+                            .await()
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("ThemeVM", "Failed to add city", e)
+                _uiEvent.emit("Şehir şu anda kaydedilemedi.")
             }
         }
     }
 
-    fun setDefaultCity(city: com.havamania.GeocodingResultDto) {
+    fun removeCity(city: GeocodingResultDto) {
         viewModelScope.launch {
-            ThemeManager.saveDefaultCity(getApplication(), currentUid, city)
-            _defaultCity.value = city
+            try {
+                val uid = currentUid
+                val current = _registeredCities.value.toMutableList()
+                if (current.size > 1 && current.any { it.id == city.id }) {
+                    current.removeAll { it.id == city.id }
+                    ThemeManager.saveRegisteredCities(getApplication(), uid, current)
+                    _registeredCities.value = current
+
+                    if (_defaultCity.value?.id == city.id) {
+                        setDefaultCity(current.first())
+                    }
+
+                    if (uid != "legacy") {
+                        db.collection("users").document(uid)
+                            .set(mapOf("registeredCities" to current), SetOptions.merge())
+                            .await()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ThemeVM", "Failed to remove city", e)
+                _uiEvent.emit("Şehir şu anda silinemedi.")
+            }
+        }
+    }
+
+    fun setDefaultCity(city: GeocodingResultDto) {
+        viewModelScope.launch {
+            try {
+                val uid = currentUid
+                ThemeManager.saveDefaultCity(getApplication(), uid, city)
+                _defaultCity.value = city
+
+                if (uid != "legacy") {
+                    db.collection("users").document(uid)
+                        .set(mapOf("defaultCity" to city.name), SetOptions.merge())
+                        .await()
+                }
+            } catch (e: Exception) {
+                Log.e("ThemeVM", "Failed to sync default city", e)
+            }
         }
     }
 
@@ -298,7 +402,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun syncWithFirebase(profile: com.havamania.UserProfile) {
         viewModelScope.launch {
             val uid = currentUid
-            android.util.Log.i("PHOTO", "[PHOTO] Step 11 OK: syncWithFirebase started for $uid. PhotoURL in doc: ${profile.photoURL}")
+            Log.i("PHOTO", "[PHOTO] Step 11 OK: syncWithFirebase started for $uid. PhotoURL in doc: ${profile.photoURL}")
 
             try {
                 if (profile.name.isNotBlank()) {
@@ -310,7 +414,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     _userBio.value = profile.bio
                 }
 
-                android.util.Log.i("PHOTO", "[PHOTO] Step 11.1: Saving PhotoURL to DataStore and StateFlow: ${profile.photoURL}")
+                Log.i("PHOTO", "[PHOTO] Step 11.1: Saving PhotoURL to DataStore and StateFlow: ${profile.photoURL}")
                 ThemeManager.saveUserImageUriByUid(getApplication(), uid, profile.photoURL)
                 _userImageUri.value = profile.photoURL
 
@@ -326,9 +430,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     _userInterests.value = it.selectedInterests.toSet()
                 }
 
-                android.util.Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
+                Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
             } catch (e: Exception) {
-                android.util.Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
+                Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
             }
         }
     }
@@ -343,5 +447,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         _defaultCity.value = null
         _registeredCities.value = emptyList()
         repository.clearCurrentWeather()
+
+        userDocListener?.remove()
+        userDocListener = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        userDocListener?.remove()
     }
 }

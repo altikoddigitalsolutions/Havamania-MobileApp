@@ -1,67 +1,60 @@
-# Implementation Plan - UI & Functional Fixes
+# Implementation Plan - Final Crash Fix and Cloud Sync
 
-This plan details the changes for the legal links, assistant title, and travel planner button responsiveness.
+This plan eliminates the crashes in the Profile and Calendar tabs by hardening the navigation logic, data models, and Firestore synchronization.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> The legal links will now open the system browser directly to `https://www.havamania.com/` instead of navigating within the app.
-> The "Ayrıntıları Göster" button will be made responsive to prevent text overflow on small screens.
+> - All Firestore data models will be annotated with `@Keep` and `@IgnoreExtraProperties` to prevent R8/ProGuard stripping.
+> - Navigation redirection logic in `WeatherPremiumActivity.kt` will be simplified to prevent the "NavGraph destination" crash.
+> - Real-time listeners will be made more robust against malformed or missing cloud data.
 
 ## Proposed Changes
 
-### [Auth & Legal]
-Update legal links to open in the system browser.
+### [Models & Serialization]
+Ensure models are 100% compatible with Firestore and safe from obfuscation.
 
-#### [MODIFY] [LegalUrls.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/LegalUrls.kt)
-- Update all constants to `https://www.havamania.com/`.
+#### [MODIFY] [GeocodingDto.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/GeocodingDto.kt)
+- Fix duplicate `@IgnoreExtraProperties`.
+- Ensure all fields have default values.
 
-#### [MODIFY] [AuthScreens.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AuthScreens.kt)
-- Remove `onNavigateToLegal` from `AuthWelcomeScreen` and `RegisterScreen` if possible, or just change the implementation.
-- Use `LocalUriHandler.current.openUri()` to open the URL.
-- Add error handling with a `Toast` message if the browser cannot be opened.
+#### [MODIFY] [TravelModels.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/TravelModels.kt)
+- Consolidate imports and ensure `@Keep` is present on all DTOs.
 
-#### [MODIFY] [SettingsView.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/SettingsView.kt)
-- Update the legal links here as well to open the system browser for consistency.
-
----
-
-### [Assistant]
-Fix the title text characters.
-
-#### [MODIFY] [AiChatScreen.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AiChatScreen.kt)
-- Hardcode the title to `"HAVAMANİA ASİSTAN"` to ensure correct Turkish characters are displayed regardless of remote config.
+#### [MODIFY] [WeatherCache.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/WeatherCache.kt)
+- Ensure `TravelPlanEntity` is fully compatible with Firestore auto-mapping.
 
 ---
 
-### [Travel Planner]
-Fix button responsiveness.
+### [Navigation & Bootstrap]
+Fix the startup race condition and redirection crash.
 
-#### [MODIFY] [HavamaniaCommonComponents.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/ui/theme/HavamaniaCommonComponents.kt)
-- Refactor `HavamaniaPrimaryButton` to be more flexible:
-    - Allow overriding default `height` and `fillMaxWidth` via parameters.
-    - Set `maxLines = 1` and use a slightly smaller default font size or adaptive scaling if feasible without breaking the design.
+#### [MODIFY] [WeatherPremiumActivity.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/WeatherPremiumActivity.kt)
+- Refactor the `Redirection Logic` to check the `currentRoute` properly and avoid re-navigating to the same screen.
+- Wrap `navController.navigate` in `try-catch` as a last line of defense.
 
-#### [MODIFY] [TravelPlannerScreen.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/TravelPlannerScreen.kt)
-- Remove the fixed `width(160.dp)` from the "AYRINTILARI GÖSTER" button.
-- Use `widthIn(min = 120.dp)` to allow it to grow responsively on small screens.
+---
+
+### [ViewModels & Sync]
+Robustify the cloud sync flow.
+
+#### [MODIFY] [ThemeViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/ui/theme/ThemeViewModel.kt)
+- Improve `observeFirestoreUserDoc` to safely handle type casting and missing fields.
+- Ensure `registeredCities` and `defaultCity` are synced from Firestore to local storage upon login.
+
+#### [MODIFY] [TravelViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/TravelViewModel.kt)
+- Ensure the `onSnapshot` listener for trips is robust and doesn't crash on empty collections.
 
 ---
 
 ## Verification Plan
 
 ### Manual Verification
-1.  **Legal Links**:
-    *   Click "KVKK", "Gizlilik Politikası", and "Kullanım Koşulları" on the Login/Register screens.
-    *   Verify they open in the external system browser.
-    *   Verify no internal app screen is opened.
-2.  **Assistant Title**:
-    *   Open the Assistant screen.
-    *   Verify the title is "HAVAMANİA ASİSTAN".
-3.  **Travel Planner Button**:
-    *   Navigate to the Travel Planner.
-    *   Verify the "AYRINTILARI GÖSTER" button text does not overflow.
-    *   Test on a small screen emulator if possible, or verify the layout logic.
+1.  **Startup Stability**: Open and close the app 10 times.
+2.  **Tab Switch Test**: Rapidly switch between Weather, Calendar, and Profile tabs.
+3.  **Fresh Login Sync**: Clear app data, log in with an existing account, and verify all cities and trips are restored from Firestore.
+4.  **Real-time Update**: Modify a trip on Device A and see it update on Device B.
 
-### Automated Tests
-- None required for these UI tweaks.
+### Automated Checks
+- `analyze_file` for all modified files.
+- Build APK: `./gradlew assembleDebug` to verify ProGuard rules.

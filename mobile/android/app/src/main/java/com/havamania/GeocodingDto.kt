@@ -1,5 +1,8 @@
 package com.havamania
 
+import androidx.annotation.Keep
+import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -8,15 +11,19 @@ data class GeocodingResponse(
     val results: List<GeocodingResultDto>? = null
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class GeocodingResultDto(
-    val id: Int,
-    val name: String,
-    val latitude: Double,
-    val longitude: Double,
-    val country: String,
+    val id: Long = 0,
+    val name: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val country: String = "",
     @SerialName("country_code")
-    val countryCode: String? = null,
+    @get:PropertyName("country_code")
+    @set:PropertyName("country_code")
+    var countryCode: String? = null,
     val admin1: String? = null,
     val admin2: String? = null,
     val admin3: String? = null

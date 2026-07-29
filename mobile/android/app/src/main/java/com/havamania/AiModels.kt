@@ -1,9 +1,13 @@
 package com.havamania
 
 import kotlinx.serialization.Serializable
+import androidx.annotation.Keep
+import com.google.firebase.firestore.IgnoreExtraProperties
 import java.util.UUID
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class AltikodChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
@@ -20,7 +24,9 @@ enum class AssistantActionType {
     NONE
 }
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class AssistantAction(
     val type: AssistantActionType,
     val label: String,
@@ -29,7 +35,9 @@ data class AssistantAction(
     val tripName: String? = null
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class AltikodBotConfig(
     val name: String? = null,
     val welcome_message: String? = null,
@@ -37,14 +45,18 @@ data class AltikodBotConfig(
     val example_questions: List<String>? = null
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class AltikodChatRequest(
     val question: String,
     val session_id: String,
     val attachment_url: String? = null
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class AltikodChatResponse(
     val answer: String,
     val session_id: String

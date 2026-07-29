@@ -74,7 +74,7 @@ class DefaultLocationTracker(
                     val districtName = address.locality ?: address.subLocality ?: address.subAdminArea
 
                     GeocodingResultDto(
-                        id = (location.latitude * 1000 + location.longitude * 1000).toInt(),
+                        id = (location.latitude * 1000 + location.longitude * 1000).toLong(),
                         name = districtName ?: cityName,
                         latitude = location.latitude,
                         longitude = location.longitude,

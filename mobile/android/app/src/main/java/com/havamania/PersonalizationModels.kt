@@ -1,8 +1,12 @@
 package com.havamania
 
+import androidx.annotation.Keep
+import com.google.firebase.firestore.IgnoreExtraProperties
 import kotlinx.serialization.Serializable
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class PersonalizationProfile(
     val uid: String = "",
     val selectedInterests: List<String> = emptyList(),
@@ -12,7 +16,9 @@ data class PersonalizationProfile(
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class WeatherPreferences(
     val likesHeat: Boolean = false,
     val likesCool: Boolean = false,
@@ -21,6 +27,7 @@ data class WeatherPreferences(
     val uvSensitive: Boolean = false,
     val humiditySensitive: Boolean = false
 )
+
 
 object PersonalizationDefaults {
     val ALL_INTERESTS = listOf(

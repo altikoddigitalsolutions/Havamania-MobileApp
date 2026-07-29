@@ -1,8 +1,11 @@
 package com.havamania
 
+import androidx.annotation.Keep
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -71,6 +74,8 @@ class ChatTypeConverters {
  * Hava durumu verilerini veritabanında saklamak için Entity
  */
 @Entity(tableName = "weather_cache")
+@IgnoreExtraProperties
+@Keep
 data class WeatherCacheEntity(
     @PrimaryKey val cityName: String,
     val jsonData: String, // WeatherData nesnesi JSON olarak saklanacak
@@ -81,15 +86,17 @@ data class WeatherCacheEntity(
  * Seyahat Planlarını saklamak için Entity
  */
 @Entity(tableName = "travel_plans")
+@IgnoreExtraProperties
+@Keep
 data class TravelPlanEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val id: String = "",
     val userId: String = "legacy",
-    val city: String,
-    val latitude: Double,
-    val longitude: Double,
-    val tripType: String,
-    val startDate: Long,
-    val endDate: Long,
+    val city: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val tripType: String = "",
+    val startDate: Long = 0L,
+    val endDate: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val archivedAt: Long? = null,
@@ -103,24 +110,30 @@ data class TravelPlanEntity(
     val comfortScore: Int? = null,
     val userNote: String? = null,
     val userRating: Int? = 0,
-    val lastWeatherAnalysisText: String? = null, // Can be removed later if redundant
-    val lastWeatherAnalysisDate: Long? = null, // Can be removed later if redundant
+    val lastWeatherAnalysisText: String? = null,
+    val lastWeatherAnalysisDate: Long? = null,
     val lastForecastSnapshot: ForecastSnapshot? = null,
     val previousForecastSnapshot: ForecastSnapshot? = null,
     val nextAnalysisEligibleDate: Long? = null,
     val weatherAnalysisStatus: String = "WAITING_FOR_WINDOW",
     @ColumnInfo(defaultValue = "0")
-    val isArchived: Boolean = false,
+    @get:PropertyName("isArchived")
+    @set:PropertyName("isArchived")
+    var isArchived: Boolean = false,
     val analyses: List<TravelWeatherAnalysis> = emptyList(),
     val lastDailyNotificationDate: String? = null,
     @ColumnInfo(defaultValue = "0")
-    val isDemo: Boolean = false
+    @get:PropertyName("isDemo")
+    @set:PropertyName("isDemo")
+    var isDemo: Boolean = false
 )
 
 /**
  * AI Analiz Geçmişini saklamak için Entity
  */
 @Entity(tableName = "ai_history")
+@IgnoreExtraProperties
+@Keep
 data class AiHistoryEntity(
     @PrimaryKey val id: String, // Acts as conversationId
     val userId: String = "legacy",

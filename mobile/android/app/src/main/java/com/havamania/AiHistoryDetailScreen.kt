@@ -23,7 +23,7 @@ fun AiHistoryDetailScreen(
     viewModel: AiHistoryViewModel = viewModel()
 ) {
     val historyItems by viewModel.historyItems.collectAsState()
-    val item = remember(historyItems, itemId) { historyItems.find { it.id == itemId } }
+    val item = remember(historyItems, itemId) { historyItems.firstOrNull { it.id == itemId } }
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val scrollState = rememberScrollState()
@@ -76,8 +76,7 @@ fun AiHistoryDetailScreen(
 
                 Spacer(modifier = Modifier.height(80.dp))
             }
-        }
-else {
+        } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text("Kayıt bulunamadı", color = themeColors.textPrimary)
             }

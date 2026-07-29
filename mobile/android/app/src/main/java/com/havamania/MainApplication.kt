@@ -39,16 +39,24 @@ class MainApplication : Application(), ReactApplication {
     super.onCreate()
     android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
 
-    // Move heavy init to background thread to speed up UI thread
-    MainScope().launch {
-        com.facebook.soloader.SoLoader.init(this@MainApplication, false)
+    // 1. Firebase must be first
+    try {
+        com.google.firebase.FirebaseApp.initializeApp(this)
+    } catch (e: Exception) {
+        android.util.Log.e("HavamaniaApp", "Firebase init failed", e)
+    }
 
+    // 2. Native libs
+    com.facebook.soloader.SoLoader.init(this, false)
+
+    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+        load()
+    }
+
+    // Schedule background tasks in scope
+    MainScope().launch {
         // Schedule daily travel weather analysis
         TravelNotificationWorker.schedule(this@MainApplication)
-
-        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-            load()
-        }
     }
   }
 }

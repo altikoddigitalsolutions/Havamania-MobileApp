@@ -1,8 +1,10 @@
 package com.havamania
 
+import androidx.annotation.Keep
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.google.firebase.firestore.IgnoreExtraProperties
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.util.*
@@ -49,7 +51,9 @@ enum class TravelWeatherAnalysisStatus {
     WEATHER_FAILED
 }
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class ForecastSnapshot(
     val precipitationProbability: Int? = null,
     val minTemp: Double? = null,
@@ -64,7 +68,9 @@ data class ForecastSnapshot(
     val generatedAt: Long = System.currentTimeMillis()
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class TravelNotificationData(
     val travelId: String,
     val destination: String,
@@ -81,7 +87,9 @@ data class TravelNotificationData(
     val recommendedItems: List<String> = emptyList()
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class TravelHistorySummary(
     val averageTemp: Int?,
     val minTemp: Int?,
@@ -97,18 +105,20 @@ data class TravelHistorySummary(
     val durationDays: Int
 )
 
+@Keep
 @Serializable
+@IgnoreExtraProperties
 data class TravelWeatherAnalysis(
     val id: String = UUID.randomUUID().toString(),
-    val tripId: String,
+    val tripId: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val travelScore: Int,
+    val travelScore: Int = 0,
     val rainRiskPercent: Int? = null,
     val windRiskPercent: Int? = null,
     val uvRiskPercent: Int? = null,
-    val averageTemperature: Double,
-    val summary: String,
-    val recommendation: String,
+    val averageTemperature: Double = 0.0,
+    val summary: String = "",
+    val recommendation: String = "",
     val comparisonText: String? = null,
     val previousAnalysisId: String? = null
 )
