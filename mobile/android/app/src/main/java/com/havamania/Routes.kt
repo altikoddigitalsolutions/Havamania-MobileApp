@@ -22,4 +22,8 @@ object Routes {
     const val PERSONALIZATION = "sub_personalization"
     const val NOTIFICATION_CENTER = "sub_notification_center"
     const val SMART_ALERTS = "sub_smart_alerts"
+
+    // Akıllı Güzergâh Hava Durumu — tripId argümanı ile
+    const val ROUTE_WEATHER = "sub_route_weather/{tripId}"
+    fun routeWeather(tripId: String) = "sub_route_weather/$tripId"
 }
