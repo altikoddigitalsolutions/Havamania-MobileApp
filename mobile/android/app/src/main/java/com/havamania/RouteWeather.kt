@@ -29,7 +29,10 @@ enum class RouteRisk {
 data class WaypointWeather(
     val weatherCode: Int,
     val temperatureC: Double,
+    val apparentTempC: Double?,
     val precipProbability: Int?,
+    val windSpeedKmh: Double?,
+    val humidity: Int?,
     val risk: RouteRisk,
     /** Riski açıklayan kısa metin (OK ise null). */
     val riskReason: String?
@@ -74,14 +77,17 @@ class RouteWeatherProvider(
     suspend fun weatherAt(point: GeoPoint, etaEpochMillis: Long?): WaypointWeather? =
         withContext(Dispatchers.IO) {
             try {
-                val resp = api.getFullWeather(lat = point.latitude, lon = point.longitude)
+                val resp = api.getRouteHourly(lat = point.latitude, lon = point.longitude)
                 val hourly = resp.hourly ?: return@withContext null
                 val idx = hourly.indexNearest(etaEpochMillis, resp.timezone) ?: return@withContext null
                 val code = hourly.weatherCode.getOrNull(idx) ?: return@withContext null
                 val temp = hourly.temperature.getOrNull(idx) ?: return@withContext null
+                val feels = hourly.apparentTemperature?.getOrNull(idx)
                 val prob = hourly.precipitationProbability?.getOrNull(idx)
+                val wind = hourly.windSpeed?.getOrNull(idx)
+                val hum = hourly.humidity?.getOrNull(idx)
                 val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
-                WaypointWeather(code, temp, prob, risk, reason)
+                WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
             } catch (e: Exception) {
                 null
             }

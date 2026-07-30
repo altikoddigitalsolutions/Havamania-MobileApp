@@ -80,5 +80,13 @@ data class HourlyDto(
     @SerialName("weather_code")
     val weatherCode: List<Int>,
     @SerialName("precipitation_probability")
-    val precipitationProbability: List<Int>? = null
+    val precipitationProbability: List<Int>? = null,
+    // Aşağıdakiler yalnızca güzergâh noktası isteğinde (getRouteHourly) doldurulur;
+    // mevcut getFullWeather çağrılarında null kalır (geriye dönük uyumlu).
+    @SerialName("apparent_temperature")
+    val apparentTemperature: List<Double>? = null,
+    @SerialName("wind_speed_10m")
+    val windSpeed: List<Double>? = null,
+    @SerialName("relative_humidity_2m")
+    val humidity: List<Int>? = null
 )
