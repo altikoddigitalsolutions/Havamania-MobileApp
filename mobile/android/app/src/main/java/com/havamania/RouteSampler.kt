@@ -20,7 +20,9 @@ data class RouteWaypoint(
     /** Tahmini geçiş anı (epoch ms); ETA atanana kadar null. */
     val etaEpochMillis: Long? = null,
     /** Reverse geocode ile bulunan yer adı; bulunana kadar null. */
-    val placeName: String? = null
+    val placeName: String? = null,
+    /** Bu noktanın çözümlenmiş hava + risk verisi; analiz edilene kadar null. */
+    val weather: WaypointWeather? = null
 )
 
 object GeoMath {

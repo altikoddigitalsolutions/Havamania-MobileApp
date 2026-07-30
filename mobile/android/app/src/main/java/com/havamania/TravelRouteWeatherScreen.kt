@@ -39,7 +39,35 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.app.Application
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.LocationServices
+import com.havamania.ui.theme.HavamaniaColors
+import com.havamania.ui.theme.HavamaniaTheme
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.ZoneId
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -85,7 +113,12 @@ private const val WAYPOINTS_LAYER_ID = "waypoints-layer"
 private val ROUTE_COLOR = Color.parseColor("#2962FF")
 private val START_COLOR = Color.parseColor("#2E7D32")    // yeşil
 private val END_COLOR = Color.parseColor("#C62828")      // kırmızı
-private val WAYPOINT_COLOR = Color.parseColor("#1E88E5") // mavi (ara noktalar)
+private val WAYPOINT_COLOR = Color.parseColor("#1E88E5") // mavi (analiz edilmemiş ara nokta)
+
+// Risk renkleri (analiz sonrası marker rengi)
+private val RISK_OK_COLOR = Color.parseColor("#10B981")      // yeşil — uygun
+private val RISK_CAUTION_COLOR = Color.parseColor("#F59E0B") // amber — dikkat
+private val RISK_DANGER_COLOR = Color.parseColor("#EF4444")  // kırmızı — tehlikeli
 
 @Composable
 fun TravelRouteWeatherScreen(
@@ -114,6 +147,14 @@ fun TravelRouteWeatherScreen(
     var waypoints by remember { mutableStateOf<List<RouteWaypoint>>(emptyList()) }
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
+
+    // --- Hava analizi durumu ---
+    val scope = rememberCoroutineScope()
+    val weatherProvider = remember { RouteWeatherProvider() }
+    var analyzing by remember { mutableStateOf(false) }
+    var analyzed by remember { mutableStateOf(false) }
+    var startWeather by remember { mutableStateOf<WaypointWeather?>(null) }
+    var endWeather by remember { mutableStateOf<WaypointWeather?>(null) }
 
     // --- Runtime konum izni ---
     fun hasLocationPermission(): Boolean =
@@ -202,6 +243,35 @@ fun TravelRouteWeatherScreen(
         }
     }
 
+    // "Analiz Et" aksiyonu: başlangıç, ara noktalar ve varış için tahmini geçiş anına göre
+    // hava durumunu paralel çeker, risk atar, markerları yeniden boyar.
+    fun analyzeWeather() {
+        val route = (routeState as? RouteResult.Success)?.route ?: return
+        if (analyzing) return
+        scope.launch {
+            analyzing = true
+            val departureMillis = trip?.startDate
+                ?.atTime(8, 0)
+                ?.atZone(ZoneId.systemDefault())
+                ?.toInstant()?.toEpochMilli()
+                ?: System.currentTimeMillis()
+            val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
+            val snapshot = waypoints
+            coroutineScope {
+                val startDeferred = async { route.origin?.let { weatherProvider.weatherAt(it, departureMillis) } }
+                val endDeferred = async { route.destination?.let { weatherProvider.weatherAt(it, arrivalMillis) } }
+                val wpDeferred = snapshot.map { wp ->
+                    async { wp.copy(weather = weatherProvider.weatherAt(wp.location, wp.etaEpochMillis)) }
+                }
+                startWeather = startDeferred.await()
+                endWeather = endDeferred.await()
+                waypoints = wpDeferred.awaitAll()
+            }
+            analyzed = true
+            analyzing = false
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { mapView.also { mv ->
@@ -250,20 +320,205 @@ fun TravelRouteWeatherScreen(
                 text = state.message,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
-            is RouteResult.Success -> StatusBadge(
-                text = buildString {
-                    append(formatDistance(state.route.distanceMeters))
-                    append("  •  ")
-                    append(formatDuration(state.route.durationSeconds))
-                    if (waypoints.isNotEmpty()) {
-                        append("  •  ")
-                        append("${waypoints.size} ara nokta")
-                    }
-                },
+            is RouteResult.Success -> RouteWeatherPanel(
+                route = state.route,
+                waypoints = waypoints,
+                startWeather = startWeather,
+                endWeather = endWeather,
+                destinationName = trip?.city,
+                analyzing = analyzing,
+                analyzed = analyzed,
+                onAnalyze = ::analyzeWeather,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
+}
+
+/** Rota özeti + hava analizi aksiyonu / sonucu (tasarım sistemine uygun alt panel). */
+@Composable
+private fun RouteWeatherPanel(
+    route: RoutePath,
+    waypoints: List<RouteWaypoint>,
+    startWeather: WaypointWeather?,
+    endWeather: WaypointWeather?,
+    destinationName: String?,
+    analyzing: Boolean,
+    analyzed: Boolean,
+    onAnalyze: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val c = HavamaniaTheme.colors
+    Surface(
+        color = c.surfaceGlass,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        border = BorderStroke(1.dp, c.border),
+        shadowElevation = 12.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            // Rota özeti — mesafe • süre
+            Text(
+                text = "${formatDistance(route.distanceMeters)}  •  ${formatDuration(route.durationSeconds)}",
+                color = c.textPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(6.dp))
+
+            if (!analyzed) {
+                Text(
+                    text = "Güzergâh üzerindeki ${waypoints.size} nokta için tahmini geçiş saatine göre hava durumunu ve sürüş riskini görün.",
+                    color = c.textSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onAnalyze,
+                    enabled = !analyzing,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = c.accent,
+                        contentColor = c.onAccent,
+                        disabledContainerColor = c.accent.copy(alpha = 0.6f),
+                        disabledContentColor = c.onAccent
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    if (analyzing) {
+                        CircularProgressIndicator(
+                            color = c.onAccent,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text("Analiz ediliyor…", fontWeight = FontWeight.Bold)
+                    } else {
+                        Icon(Icons.Rounded.Cloud, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Güzergâh Hava Durumunu Analiz Et", fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                val summary = routeRiskSummary(waypoints, startWeather, endWeather)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(riskColor(summary.worst, c))
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = summary.text,
+                        color = c.textPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        WeatherChip(label = "Kalkış", weather = startWeather, c = c)
+                    }
+                    items(waypoints) { wp ->
+                        WeatherChip(
+                            label = wp.placeName ?: formatEta(wp.etaEpochMillis),
+                            weather = wp.weather,
+                            c = c
+                        )
+                    }
+                    item {
+                        WeatherChip(
+                            label = destinationName ?: "Varış",
+                            weather = endWeather,
+                            c = c,
+                            highlight = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Tek bir güzergâh noktasının hava kartı (emoji + sıcaklık + risk halkası). */
+@Composable
+private fun WeatherChip(
+    label: String,
+    weather: WaypointWeather?,
+    c: HavamaniaColors,
+    highlight: Boolean = false
+) {
+    val ringColor = if (weather != null) riskColor(weather.risk, c) else c.textMuted
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(86.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (highlight) c.accent.copy(alpha = 0.12f) else c.surface.copy(alpha = 0.55f))
+            .border(1.5.dp, ringColor.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+            .padding(vertical = 10.dp, horizontal = 6.dp)
+    ) {
+        Text(
+            text = label,
+            color = c.textSecondary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (weather != null) WeatherUtils.getWeatherEmoji(weather.weatherCode) else "—",
+            fontSize = 22.sp
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = if (weather != null) "${weather.temperatureC.toInt()}°" else "—",
+            color = c.textPrimary,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+private data class RiskSummary(val worst: RouteRisk, val text: String)
+
+/** Tüm nokta risklerini tek bir özet cümlesine indirger. */
+private fun routeRiskSummary(
+    waypoints: List<RouteWaypoint>,
+    start: WaypointWeather?,
+    end: WaypointWeather?
+): RiskSummary {
+    val all = listOfNotNull(start, end) + waypoints.mapNotNull { it.weather }
+    if (all.isEmpty()) return RiskSummary(RouteRisk.OK, "Hava verisi alınamadı, bağlantıyı kontrol edin.")
+    val danger = all.count { it.risk == RouteRisk.DANGER }
+    val caution = all.count { it.risk == RouteRisk.CAUTION }
+    return when {
+        danger > 0 -> RiskSummary(RouteRisk.DANGER, "$danger noktada tehlikeli koşul (kar/buzlanma/fırtına). Dikkatli sürün.")
+        caution > 0 -> RiskSummary(RouteRisk.CAUTION, "$caution noktada dikkat gereken hava (yağmur/sis).")
+        else -> RiskSummary(RouteRisk.OK, "Güzergâh boyunca hava sürüş için uygun.")
+    }
+}
+
+private fun riskColor(risk: RouteRisk, c: HavamaniaColors): ComposeColor = when (risk) {
+    RouteRisk.OK -> c.success
+    RouteRisk.CAUTION -> c.warning
+    RouteRisk.DANGER -> c.error
+}
+
+private fun formatEta(millis: Long?): String {
+    if (millis == null) return "—"
+    val dt = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
+    return String.format("%02d:%02d", dt.hour, dt.minute)
 }
 
 /** Rota geometrisini, ara noktaları ve başlangıç/varış markerlarını stile ekler (idempotent). */
@@ -290,11 +545,12 @@ private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath, waypoint
         )
     }
 
-    // --- Ara noktalar (mavi) ---
+    // --- Ara noktalar (risk rengi; analiz edilmemişse mavi) ---
     if (waypoints.isNotEmpty()) {
         val waypointFc = FeatureCollection.fromFeatures(
             waypoints.map { wp ->
                 Feature.fromGeometry(Point.fromLngLat(wp.location.longitude, wp.location.latitude))
+                    .apply { addStringProperty("risk", wp.weather?.risk?.name ?: "NONE") }
             }
         )
         val waypointSource = style.getSourceAs<GeoJsonSource>(WAYPOINTS_SOURCE_ID)
@@ -307,7 +563,15 @@ private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath, waypoint
                     PropertyFactory.circleRadius(6f),
                     PropertyFactory.circleStrokeWidth(2f),
                     PropertyFactory.circleStrokeColor(Color.WHITE),
-                    PropertyFactory.circleColor(WAYPOINT_COLOR)
+                    PropertyFactory.circleColor(
+                        Expression.match(
+                            Expression.get("risk"),
+                            Expression.literal("OK"), Expression.color(RISK_OK_COLOR),
+                            Expression.literal("CAUTION"), Expression.color(RISK_CAUTION_COLOR),
+                            Expression.literal("DANGER"), Expression.color(RISK_DANGER_COLOR),
+                            Expression.color(WAYPOINT_COLOR) // NONE / analiz edilmedi
+                        )
+                    )
                 )
             )
         }
