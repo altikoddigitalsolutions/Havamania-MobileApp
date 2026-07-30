@@ -69,10 +69,13 @@ private const val ROUTE_SOURCE_ID = "route-source"
 private const val ROUTE_LAYER_ID = "route-layer"
 private const val ENDPOINTS_SOURCE_ID = "endpoints-source"
 private const val ENDPOINTS_LAYER_ID = "endpoints-layer"
+private const val WAYPOINTS_SOURCE_ID = "waypoints-source"
+private const val WAYPOINTS_LAYER_ID = "waypoints-layer"
 
 private val ROUTE_COLOR = Color.parseColor("#2962FF")
-private val START_COLOR = Color.parseColor("#2E7D32") // yeşil
-private val END_COLOR = Color.parseColor("#C62828")   // kırmızı
+private val START_COLOR = Color.parseColor("#2E7D32")    // yeşil
+private val END_COLOR = Color.parseColor("#C62828")      // kırmızı
+private val WAYPOINT_COLOR = Color.parseColor("#1E88E5") // mavi (ara noktalar)
 
 @Composable
 fun TravelRouteWeatherScreen(
@@ -81,12 +84,15 @@ fun TravelRouteWeatherScreen(
 ) {
     val mapView = rememberMapViewWithLifecycle()
     val provider = remember { OsrmRouteProvider() }
+    val context = LocalContext.current
+    val geocoder = remember { ReverseGeocoder(context) }
 
     // TODO(Aşama 4): tripId ile gerçek başlangıç/varış koordinatlarını yükle.
     val origin = remember { GeoPoint(39.6484, 27.8826) }      // Balıkesir
     val destination = remember { GeoPoint(39.9334, 32.8597) } // Ankara
 
     var routeState by remember { mutableStateOf<RouteResult?>(null) }
+    var waypoints by remember { mutableStateOf<List<RouteWaypoint>>(emptyList()) }
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
 
@@ -95,13 +101,30 @@ fun TravelRouteWeatherScreen(
         routeState = provider.getRoute(origin, destination)
     }
 
+    // Rota gelince örnekle + ETA ata; ardından yer adlarını arka planda doldur.
+    LaunchedEffect(routeState) {
+        val state = routeState
+        if (state is RouteResult.Success) {
+            val sampled = EtaCalculator.assignEtas(
+                state.route,
+                RouteSampler.sample(state.route),
+                System.currentTimeMillis()
+            )
+            waypoints = sampled
+            // Reverse geocode — markerlar zaten çizildi; isimler geldikçe güncellenir.
+            waypoints = sampled.map { wp -> wp.copy(placeName = geocoder.placeName(wp.location)) }
+        } else {
+            waypoints = emptyList()
+        }
+    }
+
     // Harita + stil + rota hazır olduğunda çiz.
-    LaunchedEffect(mapRef, styleRef, routeState) {
+    LaunchedEffect(mapRef, styleRef, routeState, waypoints) {
         val map = mapRef
         val style = styleRef
         val state = routeState
         if (map != null && style != null && style.isFullyLoaded && state is RouteResult.Success) {
-            drawRoute(map, style, state.route)
+            drawRoute(map, style, state.route, waypoints)
         }
     }
 
@@ -154,15 +177,23 @@ fun TravelRouteWeatherScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
             is RouteResult.Success -> StatusBadge(
-                text = "${formatDistance(state.route.distanceMeters)}  •  ${formatDuration(state.route.durationSeconds)}",
+                text = buildString {
+                    append(formatDistance(state.route.distanceMeters))
+                    append("  •  ")
+                    append(formatDuration(state.route.durationSeconds))
+                    if (waypoints.isNotEmpty()) {
+                        append("  •  ")
+                        append("${waypoints.size} ara nokta")
+                    }
+                },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
 }
 
-/** Rota geometrisini ve başlangıç/varış markerlarını stile ekler (idempotent). */
-private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath) {
+/** Rota geometrisini, ara noktaları ve başlangıç/varış markerlarını stile ekler (idempotent). */
+private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath, waypoints: List<RouteWaypoint>) {
     val start = route.origin ?: return
     val end = route.destination ?: return
 
@@ -183,6 +214,29 @@ private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath) {
                 PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
             )
         )
+    }
+
+    // --- Ara noktalar (mavi) ---
+    if (waypoints.isNotEmpty()) {
+        val waypointFc = FeatureCollection.fromFeatures(
+            waypoints.map { wp ->
+                Feature.fromGeometry(Point.fromLngLat(wp.location.longitude, wp.location.latitude))
+            }
+        )
+        val waypointSource = style.getSourceAs<GeoJsonSource>(WAYPOINTS_SOURCE_ID)
+        if (waypointSource != null) {
+            waypointSource.setGeoJson(waypointFc)
+        } else {
+            style.addSource(GeoJsonSource(WAYPOINTS_SOURCE_ID, waypointFc))
+            style.addLayer(
+                CircleLayer(WAYPOINTS_LAYER_ID, WAYPOINTS_SOURCE_ID).withProperties(
+                    PropertyFactory.circleRadius(6f),
+                    PropertyFactory.circleStrokeWidth(2f),
+                    PropertyFactory.circleStrokeColor(Color.WHITE),
+                    PropertyFactory.circleColor(WAYPOINT_COLOR)
+                )
+            )
+        }
     }
 
     // --- Başlangıç / varış markerları (renk data-driven) ---
