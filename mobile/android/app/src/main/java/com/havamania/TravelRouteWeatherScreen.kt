@@ -46,6 +46,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -115,11 +116,14 @@ private const val ENDPOINTS_SOURCE_ID = "endpoints-source"
 private const val ENDPOINTS_LAYER_ID = "endpoints-layer"
 private const val WAYPOINTS_SOURCE_ID = "waypoints-source"
 private const val WAYPOINTS_LAYER_ID = "waypoints-layer"
+private const val SELECTED_SOURCE_ID = "selected-source"
+private const val SELECTED_LAYER_ID = "selected-layer"
 
 private val ROUTE_COLOR = Color.parseColor("#2962FF")
 private val START_COLOR = Color.parseColor("#2E7D32")    // yeşil
 private val END_COLOR = Color.parseColor("#C62828")      // kırmızı
 private val WAYPOINT_COLOR = Color.parseColor("#1E88E5") // mavi (analiz edilmemiş ara nokta)
+private val SELECTED_RING_COLOR = Color.parseColor("#00C2FF") // seçili nokta halkası
 
 // Risk renkleri (analiz sonrası marker rengi)
 private val RISK_OK_COLOR = Color.parseColor("#10B981")      // yeşil — uygun
@@ -133,7 +137,8 @@ private const val TARGET_WAYPOINTS = 6
 private data class RoutePointSelection(
     val title: String,
     val time: String?,
-    val weather: WaypointWeather?
+    val weather: WaypointWeather?,
+    val location: GeoPoint?
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,6 +185,15 @@ fun TravelRouteWeatherScreen(
     val startWeatherLatest by rememberUpdatedState(startWeather)
     val endWeatherLatest by rememberUpdatedState(endWeather)
     val destNameLatest by rememberUpdatedState(trip?.city)
+
+    // Kalkış anı — seyahatin başlangıç günü 08:00 (yoksa şimdi).
+    val departureMillis = remember(trip) {
+        trip?.startDate
+            ?.atTime(8, 0)
+            ?.atZone(ZoneId.systemDefault())
+            ?.toInstant()?.toEpochMilli()
+            ?: System.currentTimeMillis()
+    }
 
     // --- Runtime konum izni ---
     fun hasLocationPermission(): Boolean =
@@ -240,11 +254,6 @@ fun TravelRouteWeatherScreen(
     LaunchedEffect(routeState) {
         val state = routeState
         if (state is RouteResult.Success) {
-            val departureMillis = trip?.startDate
-                ?.atTime(8, 0)
-                ?.atZone(ZoneId.systemDefault())
-                ?.toInstant()?.toEpochMilli()
-                ?: System.currentTimeMillis()
             // Nokta sayısını rota uzunluğuna göre hedefle (~6 anlamlı nokta),
             // çok kısa/uzun rotalarda mantıklı aralıkta kal.
             val interval = (state.route.distanceMeters / (TARGET_WAYPOINTS + 1))
@@ -276,6 +285,12 @@ fun TravelRouteWeatherScreen(
         }
     }
 
+    // Seçili noktayı haritada vurgulama halkasıyla işaretle (seçim değişince güncellenir).
+    LaunchedEffect(selected, styleRef, routeState, waypoints) {
+        val style = styleRef ?: return@LaunchedEffect
+        if (style.isFullyLoaded) drawSelectedHighlight(style, selected?.location)
+    }
+
     // Haritadaki marker'a dokununca o noktanın detay sheet'ini aç.
     LaunchedEffect(mapRef) {
         val map = mapRef ?: return@LaunchedEffect
@@ -285,22 +300,25 @@ fun TravelRouteWeatherScreen(
             val rect = RectF(screen.x - tol, screen.y - tol, screen.x + tol, screen.y + tol)
             val f = map.queryRenderedFeatures(rect, WAYPOINTS_LAYER_ID, ENDPOINTS_LAYER_ID).firstOrNull()
                 ?: return@addOnMapClickListener false
+            val geom = f.geometry()
+            val loc = (geom as? Point)?.let { GeoPoint(it.latitude(), it.longitude()) }
             when {
                 f.hasProperty("wp_index") -> {
                     waypointsLatest.getOrNull(f.getNumberProperty("wp_index").toInt())?.let { wp ->
                         selected = RoutePointSelection(
                             wp.placeName ?: "Ara nokta",
                             formatEta(wp.etaEpochMillis),
-                            wp.weather
+                            wp.weather,
+                            wp.location
                         )
                     }
                     true
                 }
                 f.hasProperty("point_type") -> {
                     selected = if (f.getStringProperty("point_type") == "start") {
-                        RoutePointSelection("Kalkış", null, startWeatherLatest)
+                        RoutePointSelection("Kalkış", null, startWeatherLatest, loc)
                     } else {
-                        RoutePointSelection(destNameLatest ?: "Varış", null, endWeatherLatest)
+                        RoutePointSelection(destNameLatest ?: "Varış", null, endWeatherLatest, loc)
                     }
                     true
                 }
@@ -316,11 +334,6 @@ fun TravelRouteWeatherScreen(
         if (analyzing) return
         scope.launch {
             analyzing = true
-            val departureMillis = trip?.startDate
-                ?.atTime(8, 0)
-                ?.atZone(ZoneId.systemDefault())
-                ?.toInstant()?.toEpochMilli()
-                ?: System.currentTimeMillis()
             val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
             val snapshot = waypoints
             coroutineScope {
@@ -392,6 +405,7 @@ fun TravelRouteWeatherScreen(
                 startWeather = startWeather,
                 endWeather = endWeather,
                 destinationName = trip?.city,
+                departureMillis = departureMillis,
                 analyzing = analyzing,
                 analyzed = analyzed,
                 onAnalyze = ::analyzeWeather,
@@ -420,6 +434,7 @@ private fun RouteWeatherPanel(
     startWeather: WaypointWeather?,
     endWeather: WaypointWeather?,
     destinationName: String?,
+    departureMillis: Long,
     analyzing: Boolean,
     analyzed: Boolean,
     onAnalyze: () -> Unit,
@@ -501,12 +516,37 @@ private fun RouteWeatherPanel(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+
+                // En riskli ara nokta (varsa) — nerede/ne zaman/neden.
+                val worst = waypoints
+                    .filter { it.weather != null && it.weather.risk != RouteRisk.OK }
+                    .maxByOrNull { it.weather!!.risk.ordinal }
+                worst?.weather?.let { ww ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "En dikkatli: ${worst.placeName ?: "ara nokta"} (~${formatEta(worst.etaEpochMillis)}) — ${ww.riskReason ?: ""}",
+                        color = c.textSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                // Risk zaman şeridi
+                Spacer(Modifier.height(12.dp))
+                RouteRiskTimeline(
+                    startRisk = startWeather?.risk,
+                    waypointRisks = waypoints.map { it.weather?.risk },
+                    endRisk = endWeather?.risk,
+                    startTime = formatEta(departureMillis),
+                    endTime = formatEta(departureMillis + (route.durationSeconds * 1000).toLong()),
+                    c = c
+                )
+
                 Spacer(Modifier.height(14.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {
                         WeatherChip(
                             title = "Kalkış", time = null, weather = startWeather, c = c,
-                            onClick = { onSelect(RoutePointSelection("Kalkış", null, startWeather)) }
+                            onClick = { onSelect(RoutePointSelection("Kalkış", null, startWeather, route.origin)) }
                         )
                     }
                     items(waypoints) { wp ->
@@ -517,7 +557,7 @@ private fun RouteWeatherPanel(
                             time = time,
                             weather = wp.weather,
                             c = c,
-                            onClick = { onSelect(RoutePointSelection(title, time, wp.weather)) }
+                            onClick = { onSelect(RoutePointSelection(title, time, wp.weather, wp.location)) }
                         )
                     }
                     item {
@@ -528,7 +568,7 @@ private fun RouteWeatherPanel(
                             weather = endWeather,
                             c = c,
                             highlight = true,
-                            onClick = { onSelect(RoutePointSelection(title, null, endWeather)) }
+                            onClick = { onSelect(RoutePointSelection(title, null, endWeather, route.destination)) }
                         )
                     }
                 }
@@ -618,6 +658,45 @@ private fun riskColor(risk: RouteRisk, c: HavamaniaColors): ComposeColor = when 
     RouteRisk.OK -> c.success
     RouteRisk.CAUTION -> c.warning
     RouteRisk.DANGER -> c.error
+}
+
+/** Rota boyunca (kalkış → ara noktalar → varış) risk renklerini gösteren yatay şerit. */
+@Composable
+private fun RouteRiskTimeline(
+    startRisk: RouteRisk?,
+    waypointRisks: List<RouteRisk?>,
+    endRisk: RouteRisk?,
+    startTime: String,
+    endTime: String,
+    c: HavamaniaColors
+) {
+    val risks = listOf(startRisk) + waypointRisks + listOf(endRisk)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            risks.forEach { r ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(if (r != null) riskColor(r, c) else c.textMuted.copy(alpha = 0.4f))
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(startTime, color = c.textMuted, style = MaterialTheme.typography.labelSmall)
+            Text(endTime, color = c.textMuted, style = MaterialTheme.typography.labelSmall)
+        }
+    }
 }
 
 private fun formatEta(millis: Long?): String {
@@ -829,6 +908,31 @@ private fun drawRoute(map: MapLibreMap, style: Style, route: RoutePath, waypoint
     route.points.forEach { boundsBuilder.include(LatLng(it.latitude, it.longitude)) }
     runCatching {
         map.easeCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120), 800)
+    }
+}
+
+/** Seçili noktayı, marker'ın etrafına çizilen bir vurgu halkasıyla işaretler (null → temizler). */
+private fun drawSelectedHighlight(style: Style, point: GeoPoint?) {
+    val fc = if (point != null) {
+        FeatureCollection.fromFeatures(
+            listOf(Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude)))
+        )
+    } else {
+        FeatureCollection.fromFeatures(emptyList<Feature>())
+    }
+    val src = style.getSourceAs<GeoJsonSource>(SELECTED_SOURCE_ID)
+    if (src != null) {
+        src.setGeoJson(fc)
+    } else {
+        style.addSource(GeoJsonSource(SELECTED_SOURCE_ID, fc))
+        style.addLayer(
+            CircleLayer(SELECTED_LAYER_ID, SELECTED_SOURCE_ID).withProperties(
+                PropertyFactory.circleRadius(13f),
+                PropertyFactory.circleColor(Color.argb(0, 0, 0, 0)), // şeffaf dolgu → marker görünür
+                PropertyFactory.circleStrokeWidth(3f),
+                PropertyFactory.circleStrokeColor(SELECTED_RING_COLOR)
+            )
+        )
     }
 }
 

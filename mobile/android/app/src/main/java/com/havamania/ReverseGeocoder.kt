@@ -7,22 +7,49 @@ import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.net.URL
 import java.util.Locale
 import kotlin.coroutines.resume
 
 /**
  * Koordinatı okunabilir yer adına çeviren sarmalayıcı (Aşama 3).
  *
- * Android [Geocoder] kullanır (ek izin gerektirmez). API 33+ asenkron callback API'sini,
- * daha eski sürümlerde deprecated senkron API'yi kullanır. Herhangi bir hata / sonuç
- * yoksa null döner (çağıran taraf koordinatla devam edebilsin).
+ * Önce Android [Geocoder] denenir (ek izin gerektirmez). Emülatörde / geocoder backend'i
+ * olmayan cihazlarda bu null döndüğü için, key gerektirmeyen ağ tabanlı reverse-geocode
+ * (BigDataCloud) yedeği devreye girer. İkisi de başarısızsa null döner.
  */
 class ReverseGeocoder(private val context: Context) {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Serializable
+    private data class BdcReverse(
+        val city: String? = null,
+        val locality: String? = null,
+        val principalSubdivision: String? = null
+    )
+
     suspend fun placeName(point: GeoPoint): String? {
-        if (!Geocoder.isPresent()) return null
-        val addresses = fetchAddresses(point) ?: return null
-        return addresses.firstOrNull()?.let { it.toReadableName() }
+        val local = if (Geocoder.isPresent()) fetchAddresses(point)?.firstOrNull()?.toReadableName() else null
+        if (!local.isNullOrBlank()) return local
+        return networkPlaceName(point)
+    }
+
+    /** Ağ tabanlı yedek reverse-geocode (BigDataCloud, ücretsiz, key gerektirmez). */
+    private suspend fun networkPlaceName(point: GeoPoint): String? = withContext(Dispatchers.IO) {
+        try {
+            val url = "https://api.bigdatacloud.net/data/reverse-geocode-client" +
+                "?latitude=${point.latitude}&longitude=${point.longitude}&localityLanguage=tr"
+            val text = URL(url).readText()
+            val r = json.decodeFromString(BdcReverse.serializer(), text)
+            r.city?.takeIf { it.isNotBlank() }
+                ?: r.locality?.takeIf { it.isNotBlank() }
+                ?: r.principalSubdivision?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private suspend fun fetchAddresses(point: GeoPoint): List<Address>? =
