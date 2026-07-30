@@ -61,6 +61,7 @@ fun TravelPlannerScreen(
     initialStartDate: String? = null,
     focusId: String? = null,
     highlight: String? = null,
+    onViewRoute: (String) -> Unit = {},
     onBack: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
@@ -268,6 +269,7 @@ fun TravelPlannerScreen(
                             onUnarchive = { viewModel.unarchiveTrip(plan.id) },
                             onShowDetail = { planForSummary = plan },
                             onReanalyze = { viewModel.analyzeTravelWeather(plan) },
+                            onViewRoute = onViewRoute,
                             viewModel = viewModel
                         )
                     }
@@ -567,6 +569,7 @@ fun TravelPlanCard(
     onUnarchive: () -> Unit,
     onShowDetail: () -> Unit,
     onReanalyze: () -> Unit,
+    onViewRoute: (String) -> Unit = {},
     viewModel: TravelViewModel
 ) {
     val themeColors = HavamaniaTheme.colors
@@ -777,6 +780,22 @@ fun TravelPlanCard(
                 if (!isArchived && !isPast && !isLocked && isExpanded) {
                     val isOnline: Boolean by viewModel.isOnline.collectAsStateWithLifecycle(initialValue = true)
                     val isOffline = !isOnline
+
+                    TextButton(
+                        onClick = { onViewRoute(plan.id) },
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = themeColors.accent)
+                    ) {
+                        Icon(Icons.Rounded.Map, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "GÜZERGÂH",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
 
                     TextButton(
                         onClick = onReanalyze,

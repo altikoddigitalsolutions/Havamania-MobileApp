@@ -31,6 +31,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import android.app.Application
+import com.google.android.gms.location.LocationServices
+import java.time.ZoneId
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -87,28 +92,55 @@ fun TravelRouteWeatherScreen(
     val context = LocalContext.current
     val geocoder = remember { ReverseGeocoder(context) }
 
-    // TODO(Aşama 4): tripId ile gerçek başlangıç/varış koordinatlarını yükle.
-    val origin = remember { GeoPoint(39.6484, 27.8826) }      // Balıkesir
-    val destination = remember { GeoPoint(39.9334, 32.8597) } // Ankara
+    // Seyahati tripId ile yükle — varış koordinatı ve kalkış tarihi buradan gelir.
+    val travelViewModel: TravelViewModel = viewModel()
+    val plans by travelViewModel.plans.collectAsStateWithLifecycle()
+    val trip = remember(plans, tripId) { plans.find { it.id == tripId } }
+
+    // Başlangıç = kullanıcının mevcut konumu (seyahat kaydında ayrı origin yok).
+    val locationTracker = remember {
+        DefaultLocationTracker(
+            LocationServices.getFusedLocationProviderClient(context),
+            context.applicationContext as Application
+        )
+    }
 
     var routeState by remember { mutableStateOf<RouteResult?>(null) }
     var waypoints by remember { mutableStateOf<List<RouteWaypoint>>(emptyList()) }
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
 
-    // Rotayı bir kez hesapla.
-    LaunchedEffect(origin, destination) {
-        routeState = provider.getRoute(origin, destination)
+    // Trip yüklenince: mevcut konumu al, varışa rota hesapla.
+    LaunchedEffect(trip) {
+        val t = trip ?: return@LaunchedEffect // planlar henüz yükleniyor
+        if (t.latitude == 0.0 && t.longitude == 0.0) {
+            routeState = RouteResult.Error("Bu seyahatin konum bilgisi yok.")
+            return@LaunchedEffect
+        }
+        val loc = locationTracker.getCurrentLocation()
+        if (loc == null) {
+            routeState = RouteResult.Error("Başlangıç konumu alınamadı. Konum izni ve GPS gerekli.")
+            return@LaunchedEffect
+        }
+        routeState = provider.getRoute(
+            origin = GeoPoint(loc.latitude, loc.longitude),
+            destination = GeoPoint(t.latitude, t.longitude)
+        )
     }
 
     // Rota gelince örnekle + ETA ata; ardından yer adlarını arka planda doldur.
     LaunchedEffect(routeState) {
         val state = routeState
         if (state is RouteResult.Success) {
+            val departureMillis = trip?.startDate
+                ?.atTime(8, 0)
+                ?.atZone(ZoneId.systemDefault())
+                ?.toInstant()?.toEpochMilli()
+                ?: System.currentTimeMillis()
             val sampled = EtaCalculator.assignEtas(
                 state.route,
                 RouteSampler.sample(state.route),
-                System.currentTimeMillis()
+                departureMillis
             )
             waypoints = sampled
             // Reverse geocode — markerlar zaten çizildi; isimler geldikçe güncellenir.
@@ -173,7 +205,7 @@ fun TravelRouteWeatherScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
             is RouteResult.Error -> StatusBadge(
-                text = "Rota alınamadı. İnternet bağlantısını kontrol edin.",
+                text = state.message,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
             is RouteResult.Success -> StatusBadge(

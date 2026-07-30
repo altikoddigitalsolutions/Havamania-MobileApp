@@ -262,7 +262,8 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         focusId = focusId,
                                         initialCity = city,
-                                        initialStartDate = date
+                                        initialStartDate = date,
+                                        onViewRoute = { tripId -> navController.navigate(Routes.routeWeather(tripId)) }
                                     )
                                 }
                                 composable(
