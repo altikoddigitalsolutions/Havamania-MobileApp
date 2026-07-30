@@ -107,10 +107,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             ThemeManager.saveOnboardingCompleted(context, profile.uid, profile.onboardingCompleted)
             ThemeManager.saveUserImageUriByUid(context, profile.uid, profile.photoURL)
 
-            if (profile.registeredCities.isNotEmpty()) {
-                ThemeManager.saveRegisteredCities(context, profile.uid, profile.registeredCities)
-            }
-
             profile.personalizationProfile?.let {
                 ThemeManager.saveUserInterests(context, profile.uid, it.selectedInterests.toSet())
             }

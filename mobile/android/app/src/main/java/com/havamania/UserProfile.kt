@@ -21,7 +21,6 @@ data class UserProfile(
     val isPremium: Boolean = false,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
-    val registeredCities: List<GeocodingResultDto> = emptyList(),
     val personalizationProfile: FirestorePersonalizationProfile? = null
 )
 

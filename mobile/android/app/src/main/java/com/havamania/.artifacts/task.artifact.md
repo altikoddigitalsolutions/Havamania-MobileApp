@@ -1,12 +1,13 @@
-# Task: Final Crash Fix and Robust Synchronization
+# Task: City and Travel Sync Fix
 
-- [x] Harden Data Models for Firestore Compatibility
-    - [x] Clean up `GeocodingDto.kt` (imports and default values)
-    - [x] Update `TravelModels.kt` with `@Keep` and correct imports
-    - [x] Update `WeatherCache.kt` with `@Keep` and `@IgnoreExtraProperties`
-- [x] Fix Navigation Redirection Crash in `WeatherPremiumActivity.kt`
-- [x] Robustify Firestore Listeners in ViewModels
-    - [x] Improve city parsing in `ThemeViewModel.kt`
-    - [x] Safe collection handling in `TravelViewModel.kt`
-- [x] Create walkthrough artifact
-- [x] Verify Build and Stability
+- [ ] Verify `GeocodingResultDto` compatibility `[/]`
+- [ ] Refactor `ThemeViewModel.kt` for City Sync `[ ]`
+    - [ ] Change city storage to sub-collection `users/{uid}/cities`
+    - [ ] Implement real-time `onSnapshot` listener for cities
+    - [ ] Sync Firestore data to local `DataStore`
+    - [ ] Harden `addCity` and `removeCity` with error handling
+- [ ] Refactor `TravelViewModel.kt` for robust Travel Sync `[ ]`
+    - [ ] Standardize Firestore path to `users/{uid}/trips`
+    - [ ] Improve real-time sync reliability
+    - [ ] Harden CRUD operations with error handling
+- [ ] Verify multi-device sync and state reset `[ ]`

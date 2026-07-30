@@ -23,6 +23,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = WeatherRepository.getInstance(application)
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
+    private var citiesListener: ListenerRegistration? = null
     private var userDocListener: ListenerRegistration? = null
 
     private val _currentTheme = MutableStateFlow(AppTheme.DARK)
@@ -104,8 +105,41 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                 Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
                 loadSettings()
                 observeFirestoreUserDoc(newUid)
+                observeFirestoreCities(newUid)
             }
         }
+    }
+
+    private fun observeFirestoreCities(uid: String) {
+        citiesListener?.remove()
+        if (uid == "legacy") return
+
+        Log.d("ThemeVM", "Starting Cities listener for $uid")
+        citiesListener = db.collection("users").document(uid).collection("cities")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.w("ThemeVM", "Cities listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null) {
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val remoteCities = snapshot.documents.mapNotNull {
+                                it.toObject(com.havamania.GeocodingResultDto::class.java)
+                            }
+                            Log.d("ThemeVM", "Firestore cities received: ${remoteCities.size}")
+
+                            if (remoteCities != _registeredCities.value) {
+                                ThemeManager.saveRegisteredCities(getApplication(), uid, remoteCities)
+                                _registeredCities.value = remoteCities
+                            }
+                        } catch (ex: Exception) {
+                            Log.e("ThemeVM", "Error parsing cities snapshot", ex)
+                        }
+                    }
+                }
+            }
     }
 
     private fun observeFirestoreUserDoc(uid: String) {
@@ -121,40 +155,15 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 if (snapshot != null && snapshot.exists()) {
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            // Sync registeredCities
-                            val remoteCitiesRaw = snapshot.get("registeredCities") as? List<Map<String, Any>>
-                            val remoteCities = remoteCitiesRaw?.map { map ->
-                                GeocodingResultDto(
-                                    id = (map["id"] as? Number)?.toLong() ?: 0L,
-                                    name = map["name"] as? String ?: "",
-                                    latitude = (map["latitude"] as? Number)?.toDouble() ?: 0.0,
-                                    longitude = (map["longitude"] as? Number)?.toDouble() ?: 0.0,
-                                    country = map["country"] as? String ?: "",
-                                    countryCode = map["country_code"] as? String ?: map["countryCode"] as? String,
-                                    admin1 = map["admin1"] as? String,
-                                    admin2 = map["admin2"] as? String,
-                                    admin3 = map["admin3"] as? String
-                                )
+                    viewModelScope.launch {
+                        // Sync defaultCity
+                        val remoteDefaultCityName = snapshot.getString("defaultCity")
+                        if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
+                            val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
+                            if (cityToSet != null) {
+                                ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
+                                _defaultCity.value = cityToSet
                             }
-
-                            if (remoteCities != null && remoteCities != _registeredCities.value) {
-                                ThemeManager.saveRegisteredCities(getApplication(), uid, remoteCities)
-                                _registeredCities.value = remoteCities
-                            }
-
-                            // Sync defaultCity
-                            val remoteDefaultCityName = snapshot.getString("defaultCity")
-                            if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
-                                val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
-                                if (cityToSet != null) {
-                                    ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
-                                    _defaultCity.value = cityToSet
-                                }
-                            }
-                        } catch (ex: Exception) {
-                            Log.e("ThemeVM", "Error syncing user doc from Firestore", ex)
                         }
                     }
                 }
@@ -278,8 +287,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     _registeredCities.value = current
 
                     if (uid != "legacy") {
-                        db.collection("users").document(uid)
-                            .set(mapOf("registeredCities" to current), SetOptions.merge())
+                        db.collection("users").document(uid).collection("cities")
+                            .document(city.id.toString()).set(city)
                             .await()
                     }
                 }
@@ -305,8 +314,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     }
 
                     if (uid != "legacy") {
-                        db.collection("users").document(uid)
-                            .set(mapOf("registeredCities" to current), SetOptions.merge())
+                        db.collection("users").document(uid).collection("cities")
+                            .document(city.id.toString()).delete()
                             .await()
                     }
                 }

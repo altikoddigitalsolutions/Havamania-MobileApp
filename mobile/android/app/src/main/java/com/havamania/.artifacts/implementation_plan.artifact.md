@@ -1,60 +1,75 @@
-# Implementation Plan - Final Crash Fix and Cloud Sync
+# Implementation Plan - City and Travel Sync Fix
 
-This plan eliminates the crashes in the Profile and Calendar tabs by hardening the navigation logic, data models, and Firestore synchronization.
+This plan establishes Firestore as the primary source of truth for registered cities and travel plans, ensuring real-time synchronization across all devices logged into the same account.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - All Firestore data models will be annotated with `@Keep` and `@IgnoreExtraProperties` to prevent R8/ProGuard stripping.
-> - Navigation redirection logic in `WeatherPremiumActivity.kt` will be simplified to prevent the "NavGraph destination" crash.
-> - Real-time listeners will be made more robust against malformed or missing cloud data.
+> - Registered cities will be moved from an array in the user document to a sub-collection: `users/{uid}/cities/{cityId}`. This aligns with the structure of travel plans and improves scalability.
+> - `DataStore` (for cities) and `Room DB` (for trips) will now act strictly as local caches.
+> - Real-time listeners will be established globally within ViewModels to ensure changes on Device A reflect on Device B within seconds.
 
 ## Proposed Changes
 
-### [Models & Serialization]
-Ensure models are 100% compatible with Firestore and safe from obfuscation.
+### [Data Mapping]
+Ensure all models are compatible with Firestore sub-collection operations.
 
 #### [MODIFY] [GeocodingDto.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/GeocodingDto.kt)
-- Fix duplicate `@IgnoreExtraProperties`.
-- Ensure all fields have default values.
-
-#### [MODIFY] [TravelModels.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/TravelModels.kt)
-- Consolidate imports and ensure `@Keep` is present on all DTOs.
-
-#### [MODIFY] [WeatherCache.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/WeatherCache.kt)
-- Ensure `TravelPlanEntity` is fully compatible with Firestore auto-mapping.
+- Ensure `GeocodingResultDto` remains compatible with Firestore's `toObject`. (Verify default values).
 
 ---
 
-### [Navigation & Bootstrap]
-Fix the startup race condition and redirection crash.
-
-#### [MODIFY] [WeatherPremiumActivity.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/WeatherPremiumActivity.kt)
-- Refactor the `Redirection Logic` to check the `currentRoute` properly and avoid re-navigating to the same screen.
-- Wrap `navController.navigate` in `try-catch` as a last line of defense.
-
----
-
-### [ViewModels & Sync]
-Robustify the cloud sync flow.
+### [City Management]
+Refactor city storage and synchronization.
 
 #### [MODIFY] [ThemeViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/ui/theme/ThemeViewModel.kt)
-- Improve `observeFirestoreUserDoc` to safely handle type casting and missing fields.
-- Ensure `registeredCities` and `defaultCity` are synced from Firestore to local storage upon login.
+- **Data Source Change**: Stop writing cities to the `users/{uid}` document array.
+- **New Path**: Use `users/{uid}/cities/{cityId}` for all city CRUD operations.
+- **Real-time Sync**: Replace `observeFirestoreUserDoc` with `observeFirestoreCities`.
+    - Use `addSnapshotListener` on the `cities` sub-collection.
+    - Sync incoming data to local `DataStore` and update the `_registeredCities` StateFlow.
+- **Safe Operations**: Wrap `addCity` and `removeCity` in `try-catch` with `await()`.
+
+---
+
+### [Travel Management]
+Harden travel plan synchronization.
 
 #### [MODIFY] [TravelViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/TravelViewModel.kt)
-- Ensure the `onSnapshot` listener for trips is robust and doesn't crash on empty collections.
+- **Consistent Paths**: Verify and enforce the `users/{uid}/trips/{tripId}` path.
+- **Real-time Sync**: Enhance `observeFirestoreTrips`.
+    - Ensure it clears local `Room` state and reloads when UID changes.
+    - Handle `onSnapshot` events to keep `Room` in sync with Firestore.
+- **Safe Operations**: Ensure `savePlan`, `deletePlan`, `archiveTrip`, etc., all use `await()` and robust `try-catch`.
+
+---
+
+### [Auth & State Reset]
+Ensure clean transitions between accounts.
+
+#### [MODIFY] [AuthViewModel.kt](file:///C:/Havamania-MobileApp/mobile/android/app/src/main/java/com/havamania/AuthViewModel.kt)
+- Ensure `signOut` triggers state clearing in other ViewModels (handled by `AuthStateListener` in those ViewModels).
 
 ---
 
 ## Verification Plan
 
-### Manual Verification
-1.  **Startup Stability**: Open and close the app 10 times.
-2.  **Tab Switch Test**: Rapidly switch between Weather, Calendar, and Profile tabs.
-3.  **Fresh Login Sync**: Clear app data, log in with an existing account, and verify all cities and trips are restored from Firestore.
-4.  **Real-time Update**: Modify a trip on Device A and see it update on Device B.
+### Manual Verification (Two Devices)
+1. **Login**: Log in with the same account on Phone A and Phone B.
+2. **City Sync**:
+    - Add "Şanlıurfa" on Phone A.
+    - Verify it appears on Phone B within ~2 seconds.
+    - Delete a city on Phone B. Verify it disappears from Phone A.
+3. **Travel Sync**:
+    - Create a trip to "Şanlıurfa" on Phone A.
+    - Verify it appears on Phone B.
+    - Update the trip note on Phone A. Verify Phone B shows the updated note.
+4. **Offline Resilience**:
+    - Turn off internet on Phone A.
+    - Add a city.
+    - Turn on internet.
+    - Verify Phone B eventually receives the new city.
 
-### Automated Checks
-- `analyze_file` for all modified files.
-- Build APK: `./gradlew assembleDebug` to verify ProGuard rules.
+### Technical Check
+- Check `adb logcat` for "Firestore snapshot received" logs on both devices.
+- Verify Firestore document structure in the Firebase Console matches the new paths.
