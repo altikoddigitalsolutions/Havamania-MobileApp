@@ -1,6 +1,11 @@
 package com.havamania
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -110,16 +115,53 @@ fun TravelRouteWeatherScreen(
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
 
-    // Trip yüklenince: mevcut konumu al, varışa rota hesapla.
-    LaunchedEffect(trip) {
+    // --- Runtime konum izni ---
+    fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    var permissionGranted by remember { mutableStateOf(hasLocationPermission()) }
+    var permissionAsked by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        permissionGranted = result.values.any { it }
+        permissionAsked = true
+    }
+
+    // İzin yoksa ekran açılınca bir kez iste (izin diyaloğu sistem tarafından gösterilir).
+    LaunchedEffect(Unit) {
+        if (!permissionGranted) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    // Trip + izin hazır olunca: mevcut konumu al, varışa rota hesapla.
+    LaunchedEffect(trip, permissionGranted, permissionAsked) {
         val t = trip ?: return@LaunchedEffect // planlar henüz yükleniyor
         if (t.latitude == 0.0 && t.longitude == 0.0) {
             routeState = RouteResult.Error("Bu seyahatin konum bilgisi yok.")
             return@LaunchedEffect
         }
+        if (!permissionGranted) {
+            // İzin isteği hâlâ açık olabilir; yalnızca reddedildiyse mesaj göster.
+            if (permissionAsked) {
+                routeState = RouteResult.Error("Konum izni verilmedi. Başlangıç noktası için konum izni gerekli.")
+            }
+            return@LaunchedEffect
+        }
+        routeState = null // "hesaplanıyor…" durumuna dön
         val loc = locationTracker.getCurrentLocation()
         if (loc == null) {
-            routeState = RouteResult.Error("Başlangıç konumu alınamadı. Konum izni ve GPS gerekli.")
+            routeState = RouteResult.Error("Konum alınamadı. Cihazın konum (GPS) servisinin açık olduğundan emin olun.")
             return@LaunchedEffect
         }
         routeState = provider.getRoute(
