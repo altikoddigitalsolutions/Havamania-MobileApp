@@ -159,7 +159,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                         Routes.AI_HISTORY,
                         Routes.NOTIFICATION_CENTER
                     )
-                    val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail")
+                    val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail") && !currentRoute.startsWith("sub_route_weather")
 
                     Scaffold(
                         containerColor = themeColors.background,
@@ -362,6 +362,18 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
+                                    )
+                                }
+                                // --- AKILLI GÜZERGÂH HAVA DURUMU ---
+                                composable(
+                                    Routes.ROUTE_WEATHER,
+                                    arguments = listOf(navArgument("tripId") { type = NavType.StringType }),
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/route/{tripId}" })
+                                ) { backStackEntry ->
+                                    val tripId = backStackEntry.arguments?.getString("tripId") ?: ""
+                                    TravelRouteWeatherScreen(
+                                        tripId = tripId,
+                                        onBack = { navController.popBackStack() }
                                     )
                                 }
                             }
