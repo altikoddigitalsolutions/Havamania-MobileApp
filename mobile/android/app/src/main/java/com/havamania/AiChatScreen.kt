@@ -402,7 +402,13 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             else -> "Genel analiz ver."
         }
 
+        // NOT: Bot backend'i satır başı GİRİNTİLİ payload'u geçersiz sayıp
+        // "Lütfen geçerli bir soru sorunuz." döndürüyor. buildWeatherContext/tone
+        // trimIndent() + interpolation yüzünden statik satırlarda girinti kalabiliyor;
+        // gönderimden önce her satırı trim'leyerek bunu kesin olarak temizliyoruz.
         val fullQuestion = "$weatherContext\n$personalContext\n$intentInstruction\n\nKullanıcı: $trimmedText"
+            .lines().joinToString("\n") { it.trim() }
+            .trim()
 
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
