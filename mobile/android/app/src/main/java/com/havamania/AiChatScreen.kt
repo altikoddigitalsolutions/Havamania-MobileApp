@@ -99,7 +99,14 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     val weatherUiState: StateFlow<WeatherUiState> = _weatherUiState.asStateFlow()
 
     private val _activeTravels = MutableStateFlow<List<TravelPlan>>(emptyList())
+
+    // Konuşmanın odağındaki şehir. Kullanıcı bir şehir adı geçirdiğinde güncellenir ve
+    // takip mesajlarında mevcut konum yerine bu şehir bağlam olarak verilir.
     private var contextCity: String? = null
+
+    // Ağır bağlamın (konum + seyahat + kurallar) gönderildiği konuşma. Bot bağlamı
+    // session_id ile taşıdığı için bu blok yalnızca konuşmanın ilk mesajında gider.
+    private var heavyContextSentFor: String? = null
 
     var userAboutMe: String = ""
     var userInterests: Set<String> = emptySet()
@@ -120,6 +127,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 _weatherData.value = null
                 _weatherUiState.value = WeatherUiState.Loading
                 currentConversationId = java.util.UUID.randomUUID().toString()
+                contextCity = null
+                heavyContextSentFor = null
 
                 // Restart observers for new UID
                 loadActiveTravels(newUid)
@@ -270,10 +279,68 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             .trim()
     }
 
-    private fun buildWeatherContext(userQuestion: String): String {
+    /**
+     * Odak şehrin elimizdeki verisini döndürür: şehir mevcut konumsa canlı hava verisi,
+     * takvimdeki bir seyahat planıysa o planın son tahmin anlık görüntüsü. Veri yoksa null.
+     */
+    private fun cityDataBlock(city: String): String? {
+        val normalized = AiIntentParser.normalizeTurkish(city)
+        val currentWeatherData = _weatherData.value
+
+        if (currentWeatherData != null &&
+            AiIntentParser.normalizeTurkish(currentWeatherData.cityName) == normalized
+        ) {
+            return "$city HAVA DURUMU: ${currentWeatherData.condition}, " +
+                "${currentWeatherData.temperature} (Hissedilen: ${currentWeatherData.feelsLike}), " +
+                "Yağış İhtimali: ${WeatherUtils.formatRainProbability(currentWeatherData.precipitationProbability)}, " +
+                "Rüzgar: ${currentWeatherData.windSpeed ?: "Bilinmiyor"} km/sa"
+        }
+
+        val snapshot = _activeTravels.value
+            .find { AiIntentParser.normalizeTurkish(it.city) == normalized }
+            ?.lastForecastSnapshot
+            ?: return null
+
+        return "$city HAVA DURUMU (seyahat planı analizi): ${snapshot.conditionSummary}, " +
+            "Sıcaklık: ${snapshot.maxTemp?.toInt()}°C, Yağış Riski: %${snapshot.precipitationProbability ?: 0}"
+    }
+
+    /**
+     * Takip mesajları için minimal bağlam. Ağır blok (konum + seyahat + kurallar) yalnızca
+     * ilk mesajda gider; burada sadece konuşmanın odağındaki şehri hatırlatırız ki bot
+     * her soruda mevcut konuma geri sıçramasın.
+     */
+    private fun buildFollowUpContext(focusCity: String?): String {
+        val currentCity = _weatherData.value?.cityName
+
+        return buildString {
+            appendLine("[DEVAM EDEN SOHBET]")
+            appendLine("Bu mesaj süregelen bir konuşmanın devamıdır. Önceki mesajlardaki bağlamı ve konuyu koru.")
+
+            if (focusCity != null) {
+                appendLine("KONUŞMANIN ODAĞINDAKİ ŞEHİR: $focusCity")
+                appendLine(
+                    "Kullanıcı açıkça başka bir şehir belirtmedikçe cevabını $focusCity için ver."
+                )
+                if (currentCity != null &&
+                    AiIntentParser.normalizeTurkish(currentCity) != AiIntentParser.normalizeTurkish(focusCity)
+                ) {
+                    appendLine("Kullanıcının mevcut konumu $currentCity, ancak bu sorunun konusu $focusCity.")
+                }
+                cityDataBlock(focusCity)?.let { appendLine(it) }
+            } else if (currentCity != null) {
+                appendLine("KONUŞMANIN ODAĞINDAKİ ŞEHİR: $currentCity (kullanıcının mevcut konumu)")
+                cityDataBlock(currentCity)?.let { appendLine(it) }
+            }
+
+            append("Kurallar ilk mesajdaki gibi geçerli: veri uydurma yok, markdown yok, düz metin ve emoji.")
+        }
+    }
+
+    private fun buildWeatherContext(userQuestion: String, focusCity: String? = null): String {
         val activeTravels = _activeTravels.value
         val currentWeatherData = _weatherData.value
-        val questionCity = AiIntentParser.detectCity(userQuestion)
+        val questionCity = focusCity ?: AiIntentParser.detectCity(userQuestion)
         val intent = AiIntentParser.detectIntent(userQuestion)
 
         // 1. Current Location Info
@@ -300,12 +367,13 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val targetCity = questionCity ?: if (intent == AiIntent.TRAVEL && activeTravels.isNotEmpty()) activeTravels.first().city else null
 
         val detailedCityData = if (targetCity != null) {
-             val travelPlan = activeTravels.find { AiIntentParser.normalizeTurkish(it.city) == AiIntentParser.normalizeTurkish(targetCity) }
-             val snapshot = travelPlan?.lastForecastSnapshot
-             if (snapshot != null) {
-                 "\nSORULAN ŞEHİR ANALİZİ ($targetCity):\n" +
-                 "Beklenen Hava: ${snapshot.conditionSummary}, Sıcaklık: ${snapshot.maxTemp?.toInt()}°C, Yağış Riski: %${snapshot.precipitationProbability ?: 0}"
-             } else ""
+             val focusLine = "\nKONUŞMANIN ODAĞINDAKİ ŞEHİR: $targetCity\n" +
+                 "Kullanıcı açıkça başka bir şehir belirtmedikçe cevabını $targetCity için ver."
+             // Odak şehir mevcut konumla aynıysa veriyi tekrar yazma, yukarıda zaten var.
+             val data = if (AiIntentParser.normalizeTurkish(targetCity) == AiIntentParser.normalizeTurkish(currentCity)) {
+                 null
+             } else cityDataBlock(targetCity)
+             if (data != null) "$focusLine\nSORULAN ŞEHİR ANALİZİ ($targetCity): $data" else focusLine
         } else ""
 
         return """
@@ -390,8 +458,22 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             _messages.update { it + AltikodChatMessage(text = trimmedText, isUser = true) }
         }
 
-        val weatherContext = buildWeatherContext(trimmedText)
-        val personalContext = if (userInterests.isNotEmpty() || userAboutMe.isNotBlank()) {
+        // Konuşmanın odağını güncelle: soruda bir şehir geçiyorsa odak o şehir olur,
+        // geçmiyorsa son odak şehri korunur (yoksa mevcut konum bağlamı kullanılır).
+        AiIntentParser.detectCity(trimmedText)?.let { contextCity = it }
+        val focusCity = contextCity
+
+        // Ağır bağlam (konum + seyahat + kurallar) yalnızca konuşmanın ilk mesajında gider;
+        // sonraki mesajlarda bot kendi session hafızasını taşır, biz sadece odağı hatırlatırız.
+        val isFirstTurn = heavyContextSentFor != currentConversationId
+
+        val weatherContext = if (isFirstTurn) {
+            buildWeatherContext(trimmedText, focusCity)
+        } else {
+            buildFollowUpContext(focusCity)
+        }
+
+        val personalContext = if (isFirstTurn && (userInterests.isNotEmpty() || userAboutMe.isNotBlank())) {
             "KULLANICI PROFİLİ:\nİlgi Alanları: ${userInterests.joinToString()}\nBilgi: $userAboutMe\n"
         } else ""
 
@@ -399,25 +481,40 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val intentInstruction = when(intent) {
             AiIntent.CLOTHING -> "Giyim önerisine odaklan."
             AiIntent.ACTIVITY -> "Aktivite uygunluğuna odaklan."
-            else -> "Genel analiz ver."
+            else -> if (isFirstTurn) "Genel analiz ver." else ""
         }
+
+        // Ton bir persona talimatı; bot uzun sohbetlerde üsluptan kaymasın diye
+        // ağır bağlamın aksine her mesajda gönderiliyor (kısa bir blok).
+        val toneInstruction = buildToneInstruction(assistantTone)
 
         // NOT: Bot backend'i satır başı GİRİNTİLİ payload'u geçersiz sayıp
         // "Lütfen geçerli bir soru sorunuz." döndürüyor. buildWeatherContext/tone
         // trimIndent() + interpolation yüzünden statik satırlarda girinti kalabiliyor;
         // gönderimden önce her satırı trim'leyerek bunu kesin olarak temizliyoruz.
-        val fullQuestion = "$weatherContext\n$personalContext\n$intentInstruction\n\nKullanıcı: $trimmedText"
+        val fullQuestion = listOf(toneInstruction, weatherContext, personalContext, intentInstruction)
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+            .let { "$it\n\nKullanıcı: $trimmedText" }
             .lines().joinToString("\n") { it.trim() }
             .trim()
+
+        val conversationIdForRequest = currentConversationId
+        android.util.Log.d(
+            "ASSISTANT_DEBUG",
+            "CONTEXT_MODE | firstTurn=$isFirstTurn | focusCity=${focusCity ?: "-"} | tone=$assistantTone | promptLength=${fullQuestion.length}"
+        )
 
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
             try {
-                val result = assistantRepository.getAssistantResponse(fullQuestion, currentConversationId)
+                val result = assistantRepository.getAssistantResponse(fullQuestion, conversationIdForRequest)
 
                 if (lastRequestId == requestId) {
                     when (result) {
                         is AssistantResult.Success -> {
+                            // Ağır bağlam karşı tarafa ulaştı; bu konuşmada bir daha gönderme.
+                            heavyContextSentFor = conversationIdForRequest
                             val answer = cleanMarkdown(result.content)
                             val assistantMsg = AltikodChatMessage(text = answer, isUser = false)
                             _messages.update { it + assistantMsg }
@@ -471,12 +568,17 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     fun resetChat() {
         _messages.value = emptyList()
         currentConversationId = UUID.randomUUID().toString()
+        contextCity = null
+        heavyContextSentFor = null
         _isLoading.value = false
         _isSending.value = false
     }
 
     fun loadConversation(id: String) {
         currentConversationId = id
+        // Geçmişten açılan sohbette odak şehri bilinmiyor; ilk mesajda ağır bağlam yeniden gitsin.
+        contextCity = null
+        heavyContextSentFor = null
         viewModelScope.launch {
             val item = dao.getAiHistoryItem(id)
             if (item != null) {

@@ -52,17 +52,32 @@ object AiIntentParser {
             .trim()
     }
 
+    // Günlük konuşmada resmi ad yerine kullanılan takma adlar (anahtarlar normalize edilmiş hâlde).
+    private val cityAliases = mapOf(
+        "urfa" to "Şanlıurfa",
+        "antep" to "Gaziantep",
+        "maras" to "Kahramanmaraş",
+        "afyon" to "Afyonkarahisar",
+        "icel" to "Mersin"
+    )
+
     fun detectCity(text: String): String? {
         val normalizedInput = normalizeTurkish(text)
 
-        return cities
-            .filter { city ->
-                val normalizedCity = normalizeTurkish(city)
-                // Use word boundaries to ensure we match the whole city name
-                val regex = Regex("\\b${Regex.escape(normalizedCity)}\\b", RegexOption.IGNORE_CASE)
-                regex.containsMatchIn(normalizedInput)
-            }
+        // Use word boundaries to ensure we match the whole city name
+        fun matches(needle: String) =
+            Regex("\\b${Regex.escape(needle)}\\b", RegexOption.IGNORE_CASE)
+                .containsMatchIn(normalizedInput)
+
+        val direct = cities
+            .filter { matches(normalizeTurkish(it)) }
             .maxByOrNull { it.length }
+        if (direct != null) return direct
+
+        return cityAliases.entries
+            .filter { matches(it.key) }
+            .maxByOrNull { it.key.length }
+            ?.value
     }
 
     fun detectDate(text: String): LocalDate? {

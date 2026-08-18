@@ -15,6 +15,16 @@ class AiIntentParserTest {
     }
 
     @Test
+    fun `detectCity should resolve common nicknames to the official city name`() {
+        assertEquals("Şanlıurfa", AiIntentParser.detectCity("Urfa'da hava nasıl?"))
+        assertEquals("Gaziantep", AiIntentParser.detectCity("Antep hava durumu"))
+        assertEquals("Kahramanmaraş", AiIntentParser.detectCity("Maraş yolculuğu nasıl olur?"))
+        // Resmi ad geçtiğinde takma ad devreye girmemeli
+        assertEquals("Gaziantep", AiIntentParser.detectCity("Gaziantep hava durumu"))
+        assertEquals("Şanlıurfa", AiIntentParser.detectCity("Şanlıurfa hava durumu"))
+    }
+
+    @Test
     fun `detectCity should return null for similar substrings that are not cities`() {
         assertNull(AiIntentParser.detectCity("Hava nasıl olmuş?"))
         assertNull(AiIntentParser.detectCity("Konuşmuş olabiliriz"))
