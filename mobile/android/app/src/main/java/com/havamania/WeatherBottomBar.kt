@@ -84,7 +84,7 @@ fun WeatherBottomBar(
                     val isSelected = when (item.route) {
                         Routes.WEATHER_ROOT -> currentRoute == Routes.WEATHER_ROOT
                         Routes.CALENDAR_ROOT -> currentRoute?.startsWith(Routes.CALENDAR_ROOT) == true
-                        Routes.AI_ROOT -> currentRoute == Routes.AI_ROOT || currentRoute?.startsWith(Routes.AI_HISTORY) == true
+                        Routes.AI_ROOT -> currentRoute?.startsWith(Routes.AI_ROOT) == true || currentRoute?.startsWith(Routes.AI_HISTORY) == true
                         Routes.PROFILE_ROOT -> {
                             currentRoute == Routes.PROFILE_ROOT ||
                             currentRoute == Routes.EDIT_PROFILE ||

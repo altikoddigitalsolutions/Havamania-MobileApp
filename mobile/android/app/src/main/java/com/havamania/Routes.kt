@@ -10,7 +10,7 @@ object Routes {
     // Root Tabs
     const val WEATHER_ROOT = "root_weather"
     const val CALENDAR_ROOT = "root_calendar"
-    const val AI_ROOT = "root_ai?conversationId={conversationId}"
+    const val AI_ROOT = "root_ai"
     const val PROFILE_ROOT = "root_profile"
 
     // Sub Screens

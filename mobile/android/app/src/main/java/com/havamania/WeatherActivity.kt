@@ -77,7 +77,7 @@ class WeatherActivity : ComponentActivity() {
 
                                     val startDestId = navController.graph.findStartDestination().id
                                     // Hava ve Profil daima root'a dönmeli.
-                                    val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT
+                                    val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT || route == Routes.AI_ROOT
 
                                     navController.navigate(route) {
                                         popUpTo(startDestId) {
@@ -150,11 +150,17 @@ class WeatherActivity : ComponentActivity() {
 
                                 // 3. AI TAB
                                 composable(
-                                    Routes.AI_ROOT,
+                                    Routes.AI_ROOT + "?conversationId={conversationId}",
+                                    arguments = listOf(
+                                        navArgument("conversationId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                                    ),
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/AIChat" })
-                                ) {
+                                ) { backStackEntry ->
+                                    val conversationId = backStackEntry.arguments?.getString("conversationId")
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
+                                        conversationId = conversationId,
+                                        onRecommendationHandled = { pendingRecommendation = null },
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
@@ -199,7 +205,7 @@ class WeatherActivity : ComponentActivity() {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToChat = { id: String ->
-                                            navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
+                                            navController.navigate(Routes.AI_ROOT + "?conversationId=$id")
                                         }
                                     )
                                 }

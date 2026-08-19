@@ -170,7 +170,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     onNavigate = { route ->
                                         try {
                                             val startDestId = navController.graph.findStartDestination().id
-                                            val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT
+                                            val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT || route == Routes.AI_ROOT
 
                                             navController.navigate(route) {
                                                 popUpTo(startDestId) {
@@ -267,7 +267,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     )
                                 }
                                 composable(
-                                    Routes.AI_ROOT,
+                                    Routes.AI_ROOT + "?conversationId={conversationId}",
                                     arguments = listOf(
                                         navArgument("conversationId") { type = NavType.StringType; nullable = true; defaultValue = null }
                                     )
@@ -276,6 +276,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     AiChatScreen(
                                         initialRecommendation = pendingRecommendation,
                                         conversationId = conversationId,
+                                        onRecommendationHandled = { pendingRecommendation = null },
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
@@ -312,7 +313,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToChat = { id ->
-                                            navController.navigate(Routes.AI_ROOT.replace("{conversationId}", id))
+                                            navController.navigate(Routes.AI_ROOT + "?conversationId=$id")
                                         }
                                     )
                                 }

@@ -596,6 +596,7 @@ fun AiChatScreen(
     initialRecommendation: HavamaniaRecommendation? = null,
     conversationId: String? = null,
     onBack: () -> Unit,
+    onRecommendationHandled: () -> Unit = {},
     onNavigateToTravelCreate: (String, String?) -> Unit = { _, _ -> },
     viewModel: AiChatViewModel = viewModel(),
     historyViewModel: AiHistoryViewModel = viewModel(),
@@ -638,14 +639,18 @@ fun AiChatScreen(
         }
     }
 
-    LaunchedEffect(conversationId) {
-        if (conversationId != null) {
-            viewModel.loadConversation(conversationId)
-        }
-    }
-
     // Track if initial recommendation has been processed to prevent duplicates (Issue #2 & #6)
     var initialProcessed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(conversationId) {
+        if (conversationId != null && conversationId != "{conversationId}") {
+            viewModel.loadConversation(conversationId)
+        } else {
+            // Tab tıklandığında veya yeni sohbet istendiğinde state'i sıfırla
+            viewModel.resetChat()
+            initialProcessed = false
+        }
+    }
 
     // İlk girdi (initialRecommendation) varsa gönder
     LaunchedEffect(initialRecommendation, currentWeatherData) {
@@ -653,6 +658,7 @@ fun AiChatScreen(
             initialProcessed = true
             val context = buildPersonalizedContext(aboutMe, userInterests)
             viewModel.sendMessage(initialRecommendation.message, systemContext = context)
+            onRecommendationHandled()
         }
     }
 
