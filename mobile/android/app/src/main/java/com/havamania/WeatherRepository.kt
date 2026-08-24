@@ -60,6 +60,27 @@ class WeatherRepository(
     }
 
     /**
+     * Tek seferlik hava durumu anlık görüntüsü — asistanın sorulan şehir için veri çekmesi içindir.
+     *
+     * [getWeatherData] bilinçli olarak kullanılmıyor: o akış cache'i ve [currentWeatherState]'i
+     * günceller, yani sohbette başka bir şehir sorulduğunda ana ekranın konumunu ezerdi.
+     */
+    suspend fun fetchWeatherSnapshot(
+        lat: Double,
+        lon: Double,
+        cityName: String,
+        districtName: String? = null
+    ): WeatherData? {
+        return try {
+            val response = apiService.getFullWeather(lat = lat, lon = lon)
+            WeatherMapper.mapToDomain(response, cityName, districtName)
+        } catch (e: Exception) {
+            android.util.Log.e("WeatherRepo", "fetchWeatherSnapshot failed for $cityName", e)
+            null
+        }
+    }
+
+    /**
      * Önce cache verisini döner, sonra API'den güncel veriyi çeker.
      * Stale-while-revalidate stratejisi (Business Rule 6)
      */

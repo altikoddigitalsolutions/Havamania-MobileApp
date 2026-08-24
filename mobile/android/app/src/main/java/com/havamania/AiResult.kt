@@ -8,6 +8,13 @@ sealed interface AssistantResult {
     data object Timeout : AssistantResult
     data object ParseError : AssistantResult
     data object EmptyResponse : AssistantResult
+
+    /**
+     * Bot "Lütfen geçerli bir soru sorunuz." döndürdü: sunucu gönderdiğimiz metni
+     * temizleyip geriye anlamlı bir soru kalmadığına karar verdi (ör. satır başı
+     * girintili payload'u markdown kod bloğu sayıp siliyor). Cevap değil, hatadır.
+     */
+    data object QuestionRejected : AssistantResult
     data class UnknownError(val type: String) : AssistantResult
 }
 

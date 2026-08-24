@@ -22,6 +22,17 @@ class AiAssistantRepository(
         }
     }
 
+    /**
+     * Bot, gönderilen metni temizledikten sonra geriye anlamlı bir soru kalmadıysa
+     * (boş/yalnızca boşluk gönderim ya da satır başı girintili — markdown kod bloğu
+     * sayılan — payload) cevap yerine bu sabit uyarıyı döndürüyor. Canlı bot üzerinde
+     * doğrulandı; baloncukta "cevap" gibi göstermek yerine hata olarak ele alıyoruz.
+     */
+    private fun isRejectionNotice(content: String): Boolean {
+        val normalized = content.lowercase(java.util.Locale("tr")).trim().trimEnd('.', '!', ' ')
+        return normalized == "lütfen geçerli bir soru sorunuz"
+    }
+
     suspend fun getAssistantResponse(
         question: String,
         sessionId: String
@@ -44,6 +55,15 @@ class AiAssistantRepository(
             if (content.isBlank()) {
                 Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | stage=EMPTY_RESPONSE")
                 return@withContext AssistantResult.EmptyResponse
+            }
+
+            if (isRejectionNotice(content)) {
+                Log.e(
+                    "ASSISTANT_DEBUG",
+                    "ASSISTANT_REQUEST_FAILED | requestId=$requestId | stage=QUESTION_REJECTED | " +
+                        "questionLength=${question.length} | tail=${question.takeLast(80).replace("\n", "\\n")}"
+                )
+                return@withContext AssistantResult.QuestionRejected
             }
 
             Log.d("ASSISTANT_DEBUG", "ASSISTANT_HTTP_RESULT | requestId=$requestId | httpCode=200 | successful=true | contentPresent=true")
