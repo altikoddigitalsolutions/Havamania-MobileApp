@@ -92,8 +92,13 @@ data class TravelPlanEntity(
     @PrimaryKey val id: String = "",
     val userId: String = "legacy",
     val city: String = "",
+    val district: String? = null,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
+    val originCity: String? = null,
+    val originDistrict: String? = null,
+    val originLatitude: Double? = null,
+    val originLongitude: Double? = null,
     val tripType: String = "",
     val startDate: Long = 0L,
     val endDate: Long = 0L,
@@ -201,7 +206,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 13, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 14, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -217,6 +222,17 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        /** İlçe bazlı konum seçimi + opsiyonel kalkış noktası alanları (v14). */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN district TEXT")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN originCity TEXT")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN originDistrict TEXT")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN originLatitude REAL")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN originLongitude REAL")
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 try {
@@ -225,7 +241,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                         WeatherDatabase::class.java,
                         "weather_database"
                     )
-                    .addMigrations(MIGRATION_10_11)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14)
                     .fallbackToDestructiveMigration()
                     .build()
                     INSTANCE = instance

@@ -53,6 +53,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
+    private val _originSuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
+    val originSuggestions: StateFlow<List<GeocodingResultDto>> = _originSuggestions.asStateFlow()
+
     private val _uiEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>()
     val uiEvent = _uiEvent.asSharedFlow()
 
@@ -541,6 +544,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             val existing = dao.getAllTravelPlans(currentUid)
             val isDuplicate = existing.any {
                 it.city.equals(cityNameTrimmed, ignoreCase = true) &&
+                // Aynı ilin farklı ilçeleri ayrı plan sayılır.
+                (it.district ?: "").equals(plan.district ?: "", ignoreCase = true) &&
                 it.startDate == plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() &&
                 it.endDate == plan.endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
             }
@@ -611,13 +616,32 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private var citySearchJob: kotlinx.coroutines.Job? = null
+    private var originSearchJob: kotlinx.coroutines.Job? = null
+
+    /** Varış yeri araması — il, ilçe ve semt sonuçlarını (Open-Meteo geocoding) döner. */
     fun searchCity(query: String) {
-        if (query.length < 2) {
+        citySearchJob?.cancel()
+        if (query.trim().length < 2) {
             _citySuggestions.value = emptyList()
             return
         }
-        viewModelScope.launch {
-            _citySuggestions.value = repository.searchCity(query)
+        citySearchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300) // her tuşta istek atmamak için
+            _citySuggestions.value = repository.searchCity(query.trim())
+        }
+    }
+
+    /** Kalkış noktası araması — varış aramasından bağımsız sonuç listesi. */
+    fun searchOrigin(query: String) {
+        originSearchJob?.cancel()
+        if (query.trim().length < 2) {
+            _originSuggestions.value = emptyList()
+            return
+        }
+        originSearchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300)
+            _originSuggestions.value = repository.searchCity(query.trim())
         }
     }
 
@@ -715,8 +739,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         id = id,
         userId = userId,
         city = city,
+        district = district,
         latitude = latitude,
         longitude = longitude,
+        originCity = originCity,
+        originDistrict = originDistrict,
+        originLatitude = originLatitude,
+        originLongitude = originLongitude,
         tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
         startDate = Instant.ofEpochMilli(startDate).atZone(ZoneId.systemDefault()).toLocalDate(),
         endDate = Instant.ofEpochMilli(endDate).atZone(ZoneId.systemDefault()).toLocalDate(),
@@ -747,8 +776,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         id = id,
         userId = userId,
         city = city,
+        district = district,
         latitude = latitude,
         longitude = longitude,
+        originCity = originCity,
+        originDistrict = originDistrict,
+        originLatitude = originLatitude,
+        originLongitude = originLongitude,
         tripType = tripType.name,
         startDate = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
         endDate = endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),

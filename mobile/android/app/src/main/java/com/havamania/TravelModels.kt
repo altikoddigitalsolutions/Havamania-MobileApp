@@ -127,8 +127,17 @@ data class TravelPlan(
     val id: String = UUID.randomUUID().toString(),
     val userId: String = "legacy",
     val city: String,
+    /** Seçilen yer bir ilçe/semt ise adı; il merkezi seçildiyse null. */
+    val district: String? = null,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
+
+    // Opsiyonel kalkış noktası. Boşsa güzergâh cihazın mevcut konumundan başlar.
+    val originCity: String? = null,
+    val originDistrict: String? = null,
+    val originLatitude: Double? = null,
+    val originLongitude: Double? = null,
+
     val tripType: TripType = TripType.OTHER,
     val startDate: LocalDate,
     val endDate: LocalDate,
@@ -163,4 +172,22 @@ data class TravelPlan(
 
     // Notifications tracking
     val lastDailyNotificationDate: String? = null // YYYY-MM-DD
-)
+) {
+    /** Kartlarda ve bot bağlamında gösterilecek ad: ilçe seçildiyse "İlçe, İl". */
+    val displayName: String
+        get() = district?.takeIf { it.isNotBlank() && it != city }?.let { "$it, $city" } ?: city
+
+    /** Kalkış noktası seçildiyse okunabilir adı. */
+    val originDisplayName: String?
+        get() = originCity?.let { city ->
+            originDistrict?.takeIf { it.isNotBlank() && it != city }?.let { "$it, $city" } ?: city
+        }
+
+    /** Kullanıcı kalkış noktası seçtiyse koordinatı; seçmediyse null (mevcut konum kullanılır). */
+    val originPoint: Pair<Double, Double>?
+        get() {
+            val lat = originLatitude ?: return null
+            val lon = originLongitude ?: return null
+            return if (lat == 0.0 && lon == 0.0) null else lat to lon
+        }
+}

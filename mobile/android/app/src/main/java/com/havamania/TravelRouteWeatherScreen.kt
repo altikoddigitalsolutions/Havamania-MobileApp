@@ -213,8 +213,9 @@ fun TravelRouteWeatherScreen(
     }
 
     // İzin yoksa ekran açılınca bir kez iste (izin diyaloğu sistem tarafından gösterilir).
-    LaunchedEffect(Unit) {
-        if (!permissionGranted) {
+    // Kalkış noktası planda seçiliyse konum iznine hiç gerek yok.
+    LaunchedEffect(trip) {
+        if (!permissionGranted && trip?.originPoint == null) {
             permissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -231,21 +232,35 @@ fun TravelRouteWeatherScreen(
             routeState = RouteResult.Error("Bu seyahatin konum bilgisi yok.")
             return@LaunchedEffect
         }
-        if (!permissionGranted) {
-            // İzin isteği hâlâ açık olabilir; yalnızca reddedildiyse mesaj göster.
-            if (permissionAsked) {
-                routeState = RouteResult.Error("Konum izni verilmedi. Başlangıç noktası için konum izni gerekli.")
+        // Planda kalkış noktası seçildiyse onu kullan; seçilmediyse cihazın konumuna düş.
+        val plannedOrigin = t.originPoint
+        val origin = if (plannedOrigin != null) {
+            routeState = null // "hesaplanıyor…" durumuna dön
+            GeoPoint(plannedOrigin.first, plannedOrigin.second)
+        } else {
+            if (!permissionGranted) {
+                // İzin isteği hâlâ açık olabilir; yalnızca reddedildiyse mesaj göster.
+                if (permissionAsked) {
+                    routeState = RouteResult.Error(
+                        "Konum izni verilmedi. Seyahati düzenleyip bir kalkış noktası seçebilir " +
+                            "ya da konum izni verebilirsin."
+                    )
+                }
+                return@LaunchedEffect
             }
-            return@LaunchedEffect
+            routeState = null
+            val loc = locationTracker.getCurrentLocation()
+            if (loc == null) {
+                routeState = RouteResult.Error(
+                    "Konum alınamadı. GPS'i açabilir ya da seyahati düzenleyip kalkış noktası seçebilirsin."
+                )
+                return@LaunchedEffect
+            }
+            GeoPoint(loc.latitude, loc.longitude)
         }
-        routeState = null // "hesaplanıyor…" durumuna dön
-        val loc = locationTracker.getCurrentLocation()
-        if (loc == null) {
-            routeState = RouteResult.Error("Konum alınamadı. Cihazın konum (GPS) servisinin açık olduğundan emin olun.")
-            return@LaunchedEffect
-        }
+
         routeState = provider.getRoute(
-            origin = GeoPoint(loc.latitude, loc.longitude),
+            origin = origin,
             destination = GeoPoint(t.latitude, t.longitude)
         )
     }
@@ -404,7 +419,8 @@ fun TravelRouteWeatherScreen(
                 waypoints = waypoints,
                 startWeather = startWeather,
                 endWeather = endWeather,
-                destinationName = trip?.city,
+                destinationName = trip?.displayName,
+                originName = trip?.originDisplayName,
                 departureMillis = departureMillis,
                 analyzing = analyzing,
                 analyzed = analyzed,
@@ -434,6 +450,7 @@ private fun RouteWeatherPanel(
     startWeather: WaypointWeather?,
     endWeather: WaypointWeather?,
     destinationName: String?,
+    originName: String?,
     departureMillis: Long,
     analyzing: Boolean,
     analyzed: Boolean,
@@ -546,7 +563,7 @@ private fun RouteWeatherPanel(
                     item {
                         WeatherChip(
                             title = "Kalkış", time = null, weather = startWeather, c = c,
-                            onClick = { onSelect(RoutePointSelection("Kalkış", null, startWeather, route.origin)) }
+                            onClick = { onSelect(RoutePointSelection(originName ?: "Kalkış", null, startWeather, route.origin)) }
                         )
                     }
                     items(waypoints) { wp ->

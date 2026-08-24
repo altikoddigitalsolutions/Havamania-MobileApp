@@ -383,7 +383,7 @@ fun PastTravelDetailDialog(
                             color = themeColors.accent
                         )
                         Text(
-                            plan.city,
+                            plan.displayName,
                             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
                             color = themeColors.textPrimary
                         )
@@ -638,7 +638,7 @@ fun TravelPlanCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = plan.city,
+                        text = plan.displayName,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 0.2.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1396,41 +1396,25 @@ fun AddTravelPlanDialog(
     val themeColors = HavamaniaTheme.colors
     val context = LocalContext.current
 
-    val turkishCities = listOf(
-        "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Amasya", "Ankara", "Antalya", "Artvin",
-        "Aydın", "Balıkesir", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale",
-        "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Edirne", "Elazığ", "Erzincan", "Erzurum",
-        "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Isparta", "Mersin",
-        "İstanbul", "İzmir", "Kars", "Kastamonu", "Kayseri", "Kırklareli", "Kırşehir", "Kocaeli",
-        "Konya", "Kütahya", "Malatya", "Manisa", "Kahramanmaraş", "Mardin", "Muğla", "Muş",
-        "Nevşehir", "Niğde", "Ordu", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas",
-        "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Şanlıurfa", "Uşak", "Van", "Yozgat", "Zonguldak",
-        "Aksaray", "Bayburt", "Karaman", "Kırıkkale", "Batman", "Şırnak", "Bartın", "Ardahan",
-        "Iğdır", "Yalova", "Karabük", "Kilis", "Osmaniye", "Düzce"
-    ).sorted()
+    // Varış ve kalkış için canlı yer araması (il + ilçe + semt). Statik il listesi
+    // yerine geocoding kullanılıyor; seçilen yerin koordinatı doğrudan plana yazılır.
+    val destinationSuggestions by viewModel.citySuggestions.collectAsState()
+    val originSuggestions by viewModel.originSuggestions.collectAsState()
 
-    var citySearch by remember { mutableStateOf(editPlan?.city ?: "") }
-    var selectedCity by remember { mutableStateOf(editPlan?.city) }
-    var isCityMenuExpanded by remember { mutableStateOf(false) }
+    var destinationQuery by remember { mutableStateOf(editPlan?.displayName ?: "") }
+    var destinationPick by remember { mutableStateOf<GeocodingResultDto?>(null) }
+    // Düzenlemede mevcut seçim geçerli sayılır; kullanıcı yazmaya başlayınca kilit açılır.
+    var destinationLocked by remember { mutableStateOf(editPlan != null) }
 
-    var tripType by remember { mutableStateOf(editPlan?.tripType ?: TripType.VACATION) }
-    var startDate by remember { mutableStateOf(editPlan?.startDate ?: LocalDate.now()) }
-    var endDate by remember { mutableStateOf(editPlan?.endDate ?: LocalDate.now().plusDays(3)) }
+    var originQuery by remember { mutableStateOf(editPlan?.originDisplayName ?: "") }
+    var originPick by remember { mutableStateOf<GeocodingResultDto?>(null) }
+    var originLocked by remember { mutableStateOf(editPlan?.originCity != null) }
 
-    val filteredCities = remember(citySearch) {
-        if (citySearch.isBlank()) emptyList()
-        else {
-            val normalizedSearch = citySearch.lowercase(Locale("tr"))
-                .replace('ı', 'i').replace('i', 'i').replace('ş', 's')
-                .replace('ğ', 'g').replace('ü', 'u').replace('ö', 'o').replace('ç', 'c')
-
-            turkishCities.filter {
-                val normalizedCity = it.lowercase(Locale("tr"))
-                    .replace('ı', 'i').replace('i', 'i').replace('ş', 's')
-                    .replace('ğ', 'g').replace('ü', 'u').replace('ö', 'o').replace('ç', 'c')
-                normalizedCity.contains(normalizedSearch)
-            }
-        }
+    LaunchedEffect(destinationQuery, destinationLocked) {
+        if (!destinationLocked) viewModel.searchCity(destinationQuery)
+    }
+    LaunchedEffect(originQuery, originLocked) {
+        if (!originLocked) viewModel.searchOrigin(originQuery)
     }
 
     val displayFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr"))
@@ -1448,65 +1432,60 @@ fun AddTravelPlanDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Şehir ve tarih seç; hava durumuna göre kişisel seyahat önerilerini hazırlayalım.",
+                    text = "Varış yerini (ilçe/semt de olabilir) ve tarihleri seç; istersen kalkış noktası da belirle.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = themeColors.textMuted
                 )
                 Spacer(Modifier.height(24.dp))
 
-                Box {
-                    OutlinedTextField(
-                        value = citySearch,
-                        onValueChange = {
-                            citySearch = it
-                            selectedCity = null
-                            isCityMenuExpanded = true
-                        },
-                        label = { Text("Şehir ara veya seç") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (citySearch.isNotEmpty()) {
-                                IconButton(onClick = { citySearch = ""; selectedCity = null }) {
-                                    Icon(Icons.Rounded.Close, null)
-                                }
-                            }
-                        }
-                    )
-
-                    if (isCityMenuExpanded && filteredCities.isNotEmpty() && selectedCity == null) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 64.dp)
-                                .heightIn(max = 200.dp)
-                                .zIndex(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            color = themeColors.surface,
-                            shadowElevation = 8.dp,
-                            border = BorderStroke(1.dp, themeColors.divider.copy(alpha = 0.2f))
-                        ) {
-                            LazyColumn {
-                                items(filteredCities) { cityName ->
-                                    Text(
-                                        text = cityName,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                selectedCity = cityName
-                                                citySearch = cityName
-                                                isCityMenuExpanded = false
-                                            }
-                                            .padding(16.dp),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = themeColors.textPrimary
-                                    )
-                                }
-                            }
-                        }
+                PlaceSearchField(
+                    label = "Varış yeri (il, ilçe veya semt)",
+                    query = destinationQuery,
+                    suggestions = destinationSuggestions,
+                    showSuggestions = !destinationLocked,
+                    themeColors = themeColors,
+                    onQueryChange = {
+                        destinationQuery = it
+                        destinationLocked = false
+                        destinationPick = null
+                    },
+                    onPick = {
+                        destinationPick = it
+                        destinationQuery = it.displayName
+                        destinationLocked = true
+                    },
+                    onClear = {
+                        destinationQuery = ""
+                        destinationPick = null
+                        destinationLocked = false
                     }
-                }
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                PlaceSearchField(
+                    label = "Kalkış noktası (opsiyonel)",
+                    query = originQuery,
+                    suggestions = originSuggestions,
+                    showSuggestions = !originLocked,
+                    themeColors = themeColors,
+                    supportingText = "Boş bırakırsan güzergâh mevcut konumundan başlar.",
+                    onQueryChange = {
+                        originQuery = it
+                        originLocked = false
+                        originPick = null
+                    },
+                    onPick = {
+                        originPick = it
+                        originQuery = it.displayName
+                        originLocked = true
+                    },
+                    onClear = {
+                        originQuery = ""
+                        originPick = null
+                        originLocked = false
+                    }
+                )
 
                 Spacer(Modifier.height(16.dp))
 
@@ -1558,7 +1537,10 @@ fun AddTravelPlanDialog(
 
                 Spacer(Modifier.height(24.dp))
 
-                val isFormValid = selectedCity != null && startDate != null && endDate != null && !startDate.isAfter(endDate)
+                // Yeni planda bir yer seçilmiş olmalı; düzenlemede mevcut seçim korunabilir.
+                val hasDestination = destinationPick != null ||
+                    (editPlan != null && destinationLocked && destinationQuery.isNotBlank())
+                val isFormValid = hasDestination && !startDate.isAfter(endDate)
                 val isProcessingState by viewModel.isLoading.collectAsState()
                 val isProcessing = isProcessingState
 
@@ -1569,19 +1551,113 @@ fun AddTravelPlanDialog(
                         enabled = isFormValid && !isProcessing,
                         isLoading = isProcessing,
                         onClick = {
-                            val finalCity = selectedCity ?: citySearch.trim()
+                            val pick = destinationPick
+                            val finalCity = pick?.getSafeCity() ?: editPlan?.city ?: destinationQuery.trim()
+                            // Kalkış alanı boşaltıldıysa kayıtlı nokta da temizlenir.
+                            val originCleared = originQuery.isBlank()
+                            val origin = originPick
+
                             val plan = (editPlan ?: TravelPlan(
                                 city = finalCity,
+                                startDate = startDate,
+                                endDate = endDate
+                            )).copy(
+                                city = finalCity,
+                                district = pick?.getSafeDistrict() ?: editPlan?.district,
+                                latitude = pick?.latitude ?: editPlan?.latitude ?: 0.0,
+                                longitude = pick?.longitude ?: editPlan?.longitude ?: 0.0,
+                                originCity = if (originCleared) null else origin?.getSafeCity() ?: editPlan?.originCity,
+                                originDistrict = if (originCleared) null else origin?.getSafeDistrict() ?: editPlan?.originDistrict,
+                                originLatitude = if (originCleared) null else origin?.latitude ?: editPlan?.originLatitude,
+                                originLongitude = if (originCleared) null else origin?.longitude ?: editPlan?.originLongitude,
                                 tripType = tripType,
                                 startDate = startDate,
-                                endDate = endDate,
-                                latitude = 0.0,
-                                longitude = 0.0
-                            )).copy(city = finalCity, tripType = tripType, startDate = startDate, endDate = endDate)
+                                endDate = endDate
+                            )
                             onSave(plan)
                         },
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * İl/ilçe/semt araması yapan ortak alan. Sonuçlar Open-Meteo geocoding'den gelir;
+ * seçilen kaydın koordinatı çağırana verilir, böylece plan isimle değil konumla saklanır.
+ */
+@Composable
+private fun PlaceSearchField(
+    label: String,
+    query: String,
+    suggestions: List<GeocodingResultDto>,
+    showSuggestions: Boolean,
+    themeColors: HavamaniaColors,
+    onQueryChange: (String) -> Unit,
+    onPick: (GeocodingResultDto) -> Unit,
+    onClear: () -> Unit,
+    supportingText: String? = null
+) {
+    Box {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            label = { Text(label) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+            supportingText = supportingText?.let {
+                {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = themeColors.textMuted
+                    )
+                }
+            },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = onClear) { Icon(Icons.Rounded.Close, null) }
+                }
+            }
+        )
+
+        if (showSuggestions && suggestions.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 64.dp)
+                    .heightIn(max = 220.dp)
+                    .zIndex(1f),
+                shape = RoundedCornerShape(12.dp),
+                color = themeColors.surface,
+                shadowElevation = 8.dp,
+                border = BorderStroke(1.dp, themeColors.divider.copy(alpha = 0.2f))
+            ) {
+                LazyColumn {
+                    items(suggestions, key = { it.id }) { place ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(place) }
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = place.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = themeColors.textPrimary
+                            )
+                            Text(
+                                text = listOfNotNull(place.admin2, place.country)
+                                    .distinct()
+                                    .joinToString(" • "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = themeColors.textMuted
+                            )
+                        }
+                    }
                 }
             }
         }
