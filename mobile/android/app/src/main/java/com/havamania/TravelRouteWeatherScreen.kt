@@ -74,6 +74,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import org.maplibre.android.MapLibre
@@ -186,13 +187,46 @@ fun TravelRouteWeatherScreen(
     val endWeatherLatest by rememberUpdatedState(endWeather)
     val destNameLatest by rememberUpdatedState(trip?.city)
 
-    // Kalkış anı — seyahatin başlangıç günü 08:00 (yoksa şimdi).
+    // Kalkış anı — seyahatin başlangıç günü ve seçilen saat (yoksa varsayılan 09:00).
     val departureMillis = remember(trip) {
-        trip?.startDate
-            ?.atTime(8, 0)
-            ?.atZone(ZoneId.systemDefault())
-            ?.toInstant()?.toEpochMilli()
-            ?: System.currentTimeMillis()
+        val date = trip?.startDate ?: LocalDate.now()
+        val timeStr = trip?.departureTime ?: "09:00"
+        try {
+            val parts = timeStr.split(":")
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: 9
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            date.atTime(h, m)
+                .atZone(ZoneId.systemDefault())
+                .toInstant().toEpochMilli()
+        } catch (e: Exception) {
+            date.atTime(9, 0)
+                .atZone(ZoneId.systemDefault())
+                .toInstant().toEpochMilli()
+        }
+    }
+
+    // "Analiz Et" aksiyonu: başlangıç, ara noktalar ve varış için tahmini geçiş anına göre
+    // hava durumunu paralel çeker, risk atar, markerları yeniden boyar.
+    fun analyzeWeather(explicitWaypoints: List<RouteWaypoint>? = null) {
+        val route = (routeState as? RouteResult.Success)?.route ?: return
+        if (analyzing) return
+        scope.launch {
+            analyzing = true
+            val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
+            val wpSnapshot = explicitWaypoints ?: waypoints
+            coroutineScope {
+                val startDeferred = async { route.origin?.let { weatherProvider.weatherAt(it, departureMillis) } }
+                val endDeferred = async { route.destination?.let { weatherProvider.weatherAt(it, arrivalMillis) } }
+                val wpDeferred = wpSnapshot.map { wp ->
+                    async { wp.copy(weather = weatherProvider.weatherAt(wp.location, wp.etaEpochMillis)) }
+                }
+                startWeather = startDeferred.await()
+                endWeather = endDeferred.await()
+                waypoints = wpDeferred.awaitAll()
+            }
+            analyzed = true
+            analyzing = false
+        }
     }
 
     // --- Runtime konum izni ---
@@ -265,8 +299,8 @@ fun TravelRouteWeatherScreen(
         )
     }
 
-    // Rota gelince örnekle + ETA ata; ardından yer adlarını arka planda doldur.
-    LaunchedEffect(routeState) {
+    // Rota gelince (veya yola çıkış saati değişince) örnekle + ETA ata.
+    LaunchedEffect(routeState, departureMillis) {
         val state = routeState
         if (state is RouteResult.Success) {
             // Nokta sayısını rota uzunluğuna göre hedefle (~6 anlamlı nokta),
@@ -279,6 +313,12 @@ fun TravelRouteWeatherScreen(
                 departureMillis
             )
             waypoints = sampled
+
+            // Eğer daha önce analiz yapıldıysa, saat veya rota değiştiği için otomatik yenile.
+            if (analyzed) {
+                analyzeWeather(sampled)
+            }
+
             // Reverse geocode — markerlar zaten çizildi; isimler geldikçe güncellenir.
             val named = sampled.map { wp -> wp.copy(placeName = geocoder.placeName(wp.location)) }
             // Ardışık aynı-isimli noktaları tekilleştir (aynı ilçede birden çok nokta olmasın).
@@ -342,29 +382,6 @@ fun TravelRouteWeatherScreen(
         }
     }
 
-    // "Analiz Et" aksiyonu: başlangıç, ara noktalar ve varış için tahmini geçiş anına göre
-    // hava durumunu paralel çeker, risk atar, markerları yeniden boyar.
-    fun analyzeWeather() {
-        val route = (routeState as? RouteResult.Success)?.route ?: return
-        if (analyzing) return
-        scope.launch {
-            analyzing = true
-            val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
-            val snapshot = waypoints
-            coroutineScope {
-                val startDeferred = async { route.origin?.let { weatherProvider.weatherAt(it, departureMillis) } }
-                val endDeferred = async { route.destination?.let { weatherProvider.weatherAt(it, arrivalMillis) } }
-                val wpDeferred = snapshot.map { wp ->
-                    async { wp.copy(weather = weatherProvider.weatherAt(wp.location, wp.etaEpochMillis)) }
-                }
-                startWeather = startDeferred.await()
-                endWeather = endDeferred.await()
-                waypoints = wpDeferred.awaitAll()
-            }
-            analyzed = true
-            analyzing = false
-        }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -561,9 +578,10 @@ private fun RouteWeatherPanel(
                 Spacer(Modifier.height(14.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {
+                        val startTime = formatEta(departureMillis)
                         WeatherChip(
-                            title = "Kalkış", time = null, weather = startWeather, c = c,
-                            onClick = { onSelect(RoutePointSelection(originName ?: "Kalkış", null, startWeather, route.origin)) }
+                            title = "Kalkış", time = startTime, weather = startWeather, c = c,
+                            onClick = { onSelect(RoutePointSelection(originName ?: "Kalkış", startTime, startWeather, route.origin)) }
                         )
                     }
                     items(waypoints) { wp ->
@@ -579,13 +597,14 @@ private fun RouteWeatherPanel(
                     }
                     item {
                         val title = destinationName ?: "Varış"
+                        val arrivalTime = formatEta(departureMillis + (route.durationSeconds * 1000).toLong())
                         WeatherChip(
                             title = title,
-                            time = null,
+                            time = arrivalTime,
                             weather = endWeather,
                             c = c,
                             highlight = true,
-                            onClick = { onSelect(RoutePointSelection(title, null, endWeather, route.destination)) }
+                            onClick = { onSelect(RoutePointSelection(title, arrivalTime, endWeather, route.destination)) }
                         )
                     }
                 }

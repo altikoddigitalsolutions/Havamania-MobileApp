@@ -769,7 +769,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         lastDailyNotificationDate = lastDailyNotificationDate,
         isDemo = isDemo,
         lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot
+        previousForecastSnapshot = previousForecastSnapshot,
+        departureTime = departureTime
     )
 
     private fun TravelPlan.toEntity() = TravelPlanEntity(
@@ -807,6 +808,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         isArchived = isArchived,
         analyses = analyses,
         lastDailyNotificationDate = lastDailyNotificationDate,
-        isDemo = isDemo
+        isDemo = isDemo,
+        departureTime = departureTime
     )
 }

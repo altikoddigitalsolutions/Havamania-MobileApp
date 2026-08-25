@@ -645,7 +645,7 @@ fun TravelPlanCard(
                         color = themeColors.textPrimary
                     )
                     Text(
-                        text = dateRange.uppercase(),
+                        text = (if (plan.departureTime != null) "YOLA ÇIKIŞ: ${plan.departureTime} • " else "") + dateRange.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp, fontSize = 10.sp),
                         color = themeColors.accent.copy(alpha = 0.8f)
                     )
@@ -1410,6 +1410,16 @@ fun AddTravelPlanDialog(
     var originPick by remember { mutableStateOf<GeocodingResultDto?>(null) }
     var originLocked by remember { mutableStateOf(editPlan?.originCity != null) }
 
+    var tripType by remember { mutableStateOf(editPlan?.tripType ?: TripType.VACATION) }
+    var startDate by remember { mutableStateOf(editPlan?.startDate ?: LocalDate.now()) }
+    var endDate by remember { mutableStateOf(editPlan?.endDate ?: LocalDate.now().plusDays(3)) }
+    var departureTime by remember {
+        mutableStateOf(editPlan?.departureTime ?: run {
+            val now = java.time.LocalTime.now().plusHours(1)
+            String.format("%02d:00", now.hour)
+        })
+    }
+
     LaunchedEffect(destinationQuery, destinationLocked) {
         if (!destinationLocked) viewModel.searchCity(destinationQuery)
     }
@@ -1535,6 +1545,39 @@ fun AddTravelPlanDialog(
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+
+                Text("Yola Çıkış Saati", style = MaterialTheme.typography.labelLarge, color = themeColors.textPrimary)
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    onClick = {
+                        val h = departureTime.substringBefore(":").toIntOrNull() ?: 9
+                        val m = departureTime.substringAfter(":").toIntOrNull() ?: 0
+                        android.app.TimePickerDialog(context, { _, hour, minute ->
+                            departureTime = String.format("%02d:%02d", hour, minute)
+                        }, h, m, true).show()
+                    },
+                    color = themeColors.surface.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, themeColors.divider.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Schedule, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = departureTime,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            color = themeColors.textPrimary
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Rounded.Edit, null, tint = themeColors.textMuted, modifier = Modifier.size(16.dp))
+                    }
+                }
+
                 Spacer(Modifier.height(24.dp))
 
                 // Yeni planda bir yer seçilmiş olmalı; düzenlemede mevcut seçim korunabilir.
@@ -1572,7 +1615,8 @@ fun AddTravelPlanDialog(
                                 originLongitude = if (originCleared) null else origin?.longitude ?: editPlan?.originLongitude,
                                 tripType = tripType,
                                 startDate = startDate,
-                                endDate = endDate
+                                endDate = endDate,
+                                departureTime = departureTime
                             )
                             onSave(plan)
                         },

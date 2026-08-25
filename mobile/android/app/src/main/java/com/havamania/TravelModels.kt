@@ -171,7 +171,10 @@ data class TravelPlan(
     val previousForecastSnapshot: ForecastSnapshot? = null,
 
     // Notifications tracking
-    val lastDailyNotificationDate: String? = null // YYYY-MM-DD
+    val lastDailyNotificationDate: String? = null, // YYYY-MM-DD
+
+    /** Yola çıkış saati (HH:mm formatında). */
+    val departureTime: String? = null
 ) {
     /** Kartlarda ve bot bağlamında gösterilecek ad: ilçe seçildiyse "İlçe, İl". */
     val displayName: String
