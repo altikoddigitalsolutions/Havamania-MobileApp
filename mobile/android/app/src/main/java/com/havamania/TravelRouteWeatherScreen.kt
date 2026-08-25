@@ -56,6 +56,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,10 +74,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -205,15 +209,15 @@ fun TravelRouteWeatherScreen(
         }
     }
 
-    // "Analiz Et" aksiyonu: başlangıç, ara noktalar ve varış için tahmini geçiş anına göre
-    // hava durumunu paralel çeker, risk atar, markerları yeniden boyar.
+    // --- Hava analizi ---
+    // Başlangıç, ara noktalar ve varış için tahmini geçiş anına göre hava durumunu çeker.
     fun analyzeWeather(explicitWaypoints: List<RouteWaypoint>? = null) {
         val route = (routeState as? RouteResult.Success)?.route ?: return
         if (analyzing) return
         scope.launch {
             analyzing = true
             val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
-            val wpSnapshot = explicitWaypoints ?: waypoints
+            val wpSnapshot = explicitWaypoints ?: waypoints // Mevcut noktaları dondur
             coroutineScope {
                 val startDeferred = async { route.origin?.let { weatherProvider.weatherAt(it, departureMillis) } }
                 val endDeferred = async { route.destination?.let { weatherProvider.weatherAt(it, arrivalMillis) } }
@@ -314,8 +318,13 @@ fun TravelRouteWeatherScreen(
             )
             waypoints = sampled
 
-            // Eğer daha önce analiz yapıldıysa, saat veya rota değiştiği için otomatik yenile.
-            if (analyzed) {
+            val departureDateTime = trip?.departureDateTime ?: LocalDateTime.now()
+            val now = LocalDateTime.now()
+            val hoursUntilTrip = java.time.Duration.between(now, departureDateTime).toHours()
+            val isWeatherReady = hoursUntilTrip <= 48
+
+            // Eğer 48 saat içindeyse ve daha önce analiz yapıldıysa, saat veya rota değiştiği için otomatik yenile.
+            if (isWeatherReady && analyzed) {
                 analyzeWeather(sampled)
             }
 
@@ -439,6 +448,8 @@ fun TravelRouteWeatherScreen(
                 destinationName = trip?.displayName,
                 originName = trip?.originDisplayName,
                 departureMillis = departureMillis,
+                hoursUntilTrip = java.time.Duration.between(LocalDateTime.now(), trip?.departureDateTime ?: LocalDateTime.now()).toHours(),
+                departureDateTime = trip?.departureDateTime ?: LocalDateTime.now(),
                 analyzing = analyzing,
                 analyzed = analyzed,
                 onAnalyze = ::analyzeWeather,
@@ -469,6 +480,8 @@ private fun RouteWeatherPanel(
     destinationName: String?,
     originName: String?,
     departureMillis: Long,
+    hoursUntilTrip: Long,
+    departureDateTime: LocalDateTime,
     analyzing: Boolean,
     analyzed: Boolean,
     onAnalyze: () -> Unit,
@@ -476,6 +489,8 @@ private fun RouteWeatherPanel(
     modifier: Modifier = Modifier
 ) {
     val c = HavamaniaTheme.colors
+    val isWeatherReady = hoursUntilTrip <= 48
+
     Surface(
         color = c.surfaceGlass,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -498,7 +513,10 @@ private fun RouteWeatherPanel(
             )
             Spacer(Modifier.height(6.dp))
 
-            if (!analyzed) {
+            if (!isWeatherReady) {
+                // Rota Havası 2 günden fazla varsa bilgilendirme kartı gösterilir.
+                RouteWeatherNotReadyCard(departureDateTime, c)
+            } else if (!analyzed) {
                 Text(
                     text = "Güzergâh üzerindeki ${waypoints.size} nokta için tahmini geçiş saatine göre hava durumunu ve sürüş riskini görün.",
                     color = c.textSecondary,
@@ -739,6 +757,49 @@ private fun formatEta(millis: Long?): String {
     if (millis == null) return "—"
     val dt = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault())
     return String.format("%02d:%02d", dt.hour, dt.minute)
+}
+
+@Composable
+private fun RouteWeatherNotReadyCard(departureDateTime: LocalDateTime, c: HavamaniaColors) {
+    val readyDate = departureDateTime.minusHours(48)
+    val formatter = DateTimeFormatter.ofPattern("d MMMM", Locale("tr"))
+
+    Surface(
+        color = c.accent.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, c.accent.copy(alpha = 0.15f)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Schedule, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Güzergâh hava tahmini henüz hazır değil",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = c.textPrimary
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Güzergâh üzerindeki hava koşullarını daha güvenilir sonuçlar sunabilmek için seyahatine 2 gün kala hazırlayacağız.",
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = c.textSecondary
+            )
+            Spacer(Modifier.height(12.dp))
+            Surface(
+                color = c.accent.copy(alpha = 0.1f),
+                shape = CircleShape
+            ) {
+                Text(
+                    text = "Detaylı güzergâh tahmini: ${readyDate.format(formatter)}'de hazır",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = c.accent,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
 }
 
 /** Seçili nokta için detay içeriği (ModalBottomSheet içinde gösterilir). */

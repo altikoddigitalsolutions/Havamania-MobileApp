@@ -7,11 +7,16 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.havamania.R
 import com.havamania.ui.theme.ThemeManager
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -98,8 +103,14 @@ class TravelNotificationWorker(
                 notificationDao.insert(notificationItem)
                 showSystemNotification(notificationItem)
 
+                // KURAL: Eğer güzergâh hava tahmini henüz hazır değilse (2 günden fazla varsa),
+                // kullanıcıya bir hatırlatma bildirimi gönder ve günlük özeti schedule et.
+                val routeNotificationSent = checkAndSendRouteWeatherNotifications(updatedPlan, application)
+
                 // KURAL: Bugün bildirim gönderildi olarak işaretle
-                weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
+                if (updatedPlan != plan || routeNotificationSent) {
+                    weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
+                }
             }
         }
 
@@ -184,6 +195,125 @@ class TravelNotificationWorker(
         }
 
         return title to message
+    }
+
+    private suspend fun checkAndSendRouteWeatherNotifications(plan: TravelPlan, context: Context): Boolean {
+        val departureDateTime = plan.departureDateTime
+        val now = LocalDateTime.now()
+        val hoursUntil = java.time.Duration.between(now, departureDateTime).toHours()
+
+        // 1. PENCERE KONTROLÜ: 48 saatten fazla varsa bildirim gönderme.
+        if (hoursUntil > 48 || hoursUntil < 0) return false
+
+        val notificationDao = NotificationDatabase.getDatabase(context).notificationDao()
+        val weatherDao = WeatherDatabase.getDatabase(context).weatherDao()
+
+        // 2. İLK "HAZIR" BİLDİRİMİ (48h içinde bir kez)
+        val readyKey = "route_ready_${plan.id}"
+        val readySent = notificationDao.existsWithKey(plan.userId, readyKey)
+        if (!readySent) {
+            val item = NotificationItem(
+                userId = plan.userId,
+                title = "Güzergâh hava tahminin hazır 🌤️",
+                message = "${plan.city} seyahatine 2 günden az kaldı. Yol boyunca beklenen hava koşullarını şimdi inceleyebilirsin.",
+                category = NotificationCategory.TRAVEL,
+                createdAt = System.currentTimeMillis(),
+                deepLinkTarget = "havamania://app/route/${plan.id}",
+                deduplicationKey = readyKey,
+                actionLabel = "Güzergâhı Gör"
+            )
+            notificationDao.insert(item)
+            showSystemNotification(item)
+            return true
+        }
+
+        // 3. GÜNLÜK ÖZET BİLDİRİMİ (Günde en fazla 1 kez)
+        val todayStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val dailyKey = "route_daily_${plan.id}_$todayStr"
+        val dailySent = notificationDao.existsWithKey(plan.userId, dailyKey)
+        if (dailySent) return false
+
+        // Güzergâh analizini yap
+        val summary = performRouteWeatherAnalysis(plan, context) ?: return false
+
+        val oldSummary = plan.routeWeatherSummary
+        val hasChange = oldSummary != null && oldSummary != summary
+
+        val title = if (hasChange) "Güzergâhında hava değişikliği var" else "Güzergâhında hava güncellendi"
+        val message = if (hasChange) {
+            // Basit karşılaştırma logic'i (snapshot tutulmadığı için metinsel)
+            "Rotalarındaki hava tahminlerinde bazı değişimler saptadık. Güncel durumu incelemeni öneririz."
+        } else {
+            summary
+        }
+
+        val notificationItem = NotificationItem(
+            userId = plan.userId,
+            title = title,
+            message = message,
+            category = NotificationCategory.TRAVEL,
+            createdAt = System.currentTimeMillis(),
+            deepLinkTarget = "havamania://app/route/${plan.id}",
+            deduplicationKey = dailyKey,
+            actionLabel = "Tahmini Aç"
+        )
+
+        notificationDao.insert(notificationItem)
+        showSystemNotification(notificationItem)
+
+        // Planı yeni özetle güncelle (tekrar gönderimi engellemek için değil, değişim takibi için)
+        weatherDao.insertTravelPlan(plan.copy(
+            routeWeatherSummary = summary,
+            lastRouteAnalysisAt = System.currentTimeMillis()
+        ).toEntity())
+
+        return true
+    }
+
+    /** Rota üzerindeki hava durumunu arka planda analiz eder. */
+    private suspend fun performRouteWeatherAnalysis(plan: TravelPlan, context: Context): String? = coroutineScope {
+        try {
+            val origin = plan.originPoint?.let { GeoPoint(it.first, it.second) } ?: return@coroutineScope null
+            val dest = GeoPoint(plan.latitude, plan.longitude)
+
+            val routeProvider = OsrmRouteProvider()
+            val routeResult = routeProvider.getRoute(origin, dest)
+            if (routeResult !is RouteResult.Success) return@coroutineScope null
+
+            val route = routeResult.route
+            val departureDateTime = plan.departureDateTime
+            val departureMillis = departureDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+            val waypoints = EtaCalculator.assignEtas(
+                route,
+                RouteSampler.sample(route),
+                departureMillis
+            )
+
+            val weatherProvider = RouteWeatherProvider()
+            val arrivalMillis = departureMillis + (route.durationSeconds * 1000).toLong()
+
+            val startWeather = async { weatherProvider.weatherAt(origin, departureMillis) }
+            val endWeather = async { weatherProvider.weatherAt(dest, arrivalMillis) }
+            val wpWeathers = waypoints.map { wp ->
+                async { weatherProvider.weatherAt(wp.location, wp.etaEpochMillis) }
+            }
+
+            val all = listOfNotNull(startWeather.await(), endWeather.await()) + wpWeathers.awaitAll().filterNotNull()
+            if (all.isEmpty()) return@coroutineScope null
+
+            val dangerCount = all.count { it.risk == RouteRisk.DANGER }
+            val cautionCount = all.count { it.risk == RouteRisk.CAUTION }
+
+            return@coroutineScope when {
+                dangerCount > 0 -> "Dikkat! Güzergâhında $dangerCount noktada riskli hava koşulları (kar/fırtına) bekleniyor."
+                cautionCount > 0 -> "${plan.city} yolculuğunda bazı bölgelerde yağış veya sis görülebilir. Tedbirli olun."
+                else -> "Güzergâh hava tahmininde önemli bir değişiklik yok. Yol boyunca koşullar uygun görünüyor."
+            }
+        } catch (e: Exception) {
+            Log.e("RouteWorker", "Route analysis failed", e)
+            null
+        }
     }
 
     private fun showSystemNotification(item: NotificationItem) {

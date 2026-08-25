@@ -174,8 +174,22 @@ data class TravelPlan(
     val lastDailyNotificationDate: String? = null, // YYYY-MM-DD
 
     /** Yola çıkış saati (HH:mm formatında). */
-    val departureTime: String? = null
+    val departureTime: String? = null,
+
+    /** Güzergâh hava özeti (günlük bildirim için). */
+    val routeWeatherSummary: String? = null,
+    /** Son rota analizi tarihimiz (ms). */
+    val lastRouteAnalysisAt: Long? = null
 ) {
+    /** Yola çıkış tarih ve saatini LocalDateTime olarak döner. */
+    val departureDateTime: java.time.LocalDateTime
+        get() {
+            val parts = departureTime?.split(":")
+            val h = parts?.getOrNull(0)?.toIntOrNull() ?: 9
+            val m = parts?.getOrNull(1)?.toIntOrNull() ?: 0
+            return startDate.atTime(h, m)
+        }
+
     /** Kartlarda ve bot bağlamında gösterilecek ad: ilçe seçildiyse "İlçe, İl". */
     val displayName: String
         get() = district?.takeIf { it.isNotBlank() && it != city }?.let { "$it, $city" } ?: city

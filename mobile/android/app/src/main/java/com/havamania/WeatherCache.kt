@@ -131,7 +131,9 @@ data class TravelPlanEntity(
     @get:PropertyName("isDemo")
     @set:PropertyName("isDemo")
     var isDemo: Boolean = false,
-    val departureTime: String? = null
+    val departureTime: String? = null,
+    val routeWeatherSummary: String? = null,
+    val lastRouteAnalysisAt: Long? = null
 )
 
 /**
@@ -207,7 +209,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 15, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 16, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -241,6 +243,14 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        /** Güzergâh hava özeti ve analiz tarihi (v16). */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN routeWeatherSummary TEXT")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN lastRouteAnalysisAt INTEGER")
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 try {
@@ -249,7 +259,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                         WeatherDatabase::class.java,
                         "weather_database"
                     )
-                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                     .fallbackToDestructiveMigration()
                     .build()
                     INSTANCE = instance
