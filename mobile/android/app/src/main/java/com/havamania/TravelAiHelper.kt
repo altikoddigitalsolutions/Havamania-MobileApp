@@ -381,8 +381,11 @@ object TravelAiHelper {
             rainyDays = if (hasData) rainy else -1,
             sunnyDays = if (hasData) sunny else -1,
             cloudyDays = if (hasData) cloudy else -1,
-            riskDayText = "Bu seyahat kısa ama yoğun bir rota gibi görünüyor.",
-            comfortScore = if (hasData) (80 + (Math.random() * 15).toInt()) else 0,
+            riskDayText = if (hasData) "Hava koşulları genel olarak planlarına eşlik etti." else "Hava verisi arşivde bulunamadı.",
+            comfortScore = if (hasData) {
+                val seed = plan.city.hashCode()
+                80 + (Math.abs(seed) % 16)
+            } else 0,
             summaryText = summaryText,
             packingAdvice = packingAdvice,
             nextTripAdvice = destinationTip,

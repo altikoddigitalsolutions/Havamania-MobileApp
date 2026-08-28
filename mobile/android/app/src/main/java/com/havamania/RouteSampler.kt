@@ -47,11 +47,23 @@ object RouteSampler {
     /**
      * Rota geometrisi boyunca yaklaşık [intervalMeters] aralıkla ara noktalar üretir.
      * Başlangıç ve varış hariç tutulur (onlar yeşil/kırmızı marker olarak ayrıca çizilir).
-     * Segment içinde doğrusal enterpolasyon yapılır (kısa segmentlerde hata ihmal edilebilir).
+     * Segments içinde doğrusal enterpolasyon yapılır.
      */
-    fun sample(route: RoutePath, intervalMeters: Double = DEFAULT_INTERVAL_METERS): List<RouteWaypoint> {
+    fun sample(route: RoutePath): List<RouteWaypoint> {
         val pts = route.points
-        if (pts.size < 2 || intervalMeters <= 0.0) return emptyList()
+        val durationHrs = route.durationSeconds / 3600.0
+
+        val targetCount = when {
+            durationHrs <= 2.0 -> 1 // 1 middle point + start + end = 3
+            durationHrs <= 4.0 -> 2 // 4 points total
+            durationHrs <= 7.0 -> 3 // 5 points total
+            durationHrs <= 10.0 -> 4 // 6 points total
+            else -> 6 // 8 points total
+        }
+
+        if (pts.size < 2 || targetCount <= 0) return emptyList()
+
+        val intervalMeters = route.distanceMeters / (targetCount + 1)
 
         val result = mutableListOf<RouteWaypoint>()
         var cumulative = 0.0
@@ -87,8 +99,9 @@ object EtaCalculator {
     fun assignEtas(
         route: RoutePath,
         waypoints: List<RouteWaypoint>,
-        departureEpochMillis: Long
+        departureEpochMillis: Long?
     ): List<RouteWaypoint> {
+        if (departureEpochMillis == null) return waypoints
         val total = route.distanceMeters
         if (total <= 0.0) return waypoints
         return waypoints.map { wp ->

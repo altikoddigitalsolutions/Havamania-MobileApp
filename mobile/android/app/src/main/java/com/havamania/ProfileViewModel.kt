@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import android.util.Log
 import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,58 +43,77 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _avatarVersion = MutableStateFlow(System.currentTimeMillis())
     val avatarVersion: StateFlow<Long> = _avatarVersion
 
+    private val userProfileRepository = UserProfileRepository.getInstance()
+
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val user = firebaseAuth.currentUser
+        if (user == null) {
+            _profileState.value = ProfileState.Idle
+        } else {
+            observeProfile(user.uid)
+        }
+    }
+
     init {
+        auth.addAuthStateListener(authListener)
+    }
+
+    fun refresh() {
+        val uid = auth.currentUser?.uid ?: return
+        observeProfile(uid)
+    }
+
+    private fun observeProfile(uid: String) {
+        userProfileRepository.startObserving(uid)
+
         viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val user = firebaseAuth.currentUser
-                if (user == null) {
-                    _profileState.value = ProfileState.Idle
+            userProfileRepository.profile.collect { profile ->
+                if (profile != null) {
+                    _profileState.value = ProfileState.Success(profile)
+                    syncDataStoreFromProfile(profile)
                 } else {
-                    fetchProfile()
+                    _profileState.value = ProfileState.Loading
+                    // Handled if we need to create it
+                    val user = auth.currentUser
+                    if (user != null) {
+                        // Check once if it actually doesn't exist to avoid redundant checks
+                        db.collection("users").document(user.uid).get().await().also {
+                            if (!it.exists()) createNewProfile(user.uid)
+                        }
+                    }
                 }
             }
         }
     }
 
-    fun fetchProfile() {
-        val uid = auth.currentUser?.uid ?: return
+    private fun createNewProfile(uid: String) {
         val authName = auth.currentUser?.displayName ?: ""
-
+        val newProfile = UserProfile(
+            uid = uid,
+            email = auth.currentUser?.email ?: "",
+            name = authName,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
         viewModelScope.launch {
-            android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 7: fetchProfile started for $uid")
-            _profileState.value = ProfileState.Loading
             try {
-                val doc = db.collection("users").document(uid).get().await()
-                if (doc.exists()) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 7.1: Raw Firestore Data = ${doc.data}")
-                    val profile = doc.toObject(UserProfile::class.java)
-                    if (profile != null) {
-                        android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 8 OK: Firestore imageUrl = ${profile.photoURL}")
-                        android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 8.1: profile.photoURL = ${profile.photoURL}")
-                        _profileState.value = ProfileState.Success(profile)
-                        syncDataStoreFromProfile(profile)
-                    } else {
-                        android.util.Log.e("PHOTO_DEBUG", "[PHOTO] Step 8 FAILED: doc.toObject returned null")
-                        _profileState.value = ProfileState.Error("Profil verisi hatalı.")
-                    }
-                } else {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 7.1: Firestore document NOT found. Creating new for $uid")
-                    val newProfile = UserProfile(
-                        uid = uid,
-                        email = auth.currentUser?.email ?: "",
-                        name = authName,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    db.collection("users").document(uid).set(newProfile).await()
-                    _profileState.value = ProfileState.Success(newProfile)
-                    syncDataStoreFromProfile(newProfile)
-                }
+                db.collection("users").document(uid).set(newProfile).await()
             } catch (e: Exception) {
-                android.util.Log.e("PHOTO_DEBUG", "[PHOTO] Step 7/8 FAILED: ${e.message}", e)
-                _profileState.value = ProfileState.Error("Profil yüklenemedi. Bağlantınızı kontrol edin.")
+                Log.e("ProfileVM", "Failed to create new profile", e)
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        // We don't stopObserving in repository here because other ViewModels might still need it.
+        // It's a singleton.
+    }
+
+    fun fetchProfile() {
+        val uid = auth.currentUser?.uid ?: return
+        observeProfile(uid)
     }
 
     private fun syncDataStoreFromProfile(profile: UserProfile) {
@@ -139,9 +159,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     displayName = finalName
                 })?.await()
 
-                fetchProfile()
+                // Explicit local sync
+                val context = getApplication<Application>()
+                ThemeManager.saveUserName(context, uid, finalName)
+                ThemeManager.saveUserBio(context, uid, finalBio)
+
             } catch (e: Exception) {
                 android.util.Log.e("ProfileVM", "Update profile failed", e)
+                _profileState.value = ProfileState.Error("Profil güncellenemedi. Lütfen tekrar deneyin.")
             }
         }
     }
@@ -150,26 +175,27 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         val uid = auth.currentUser?.uid ?: return
         viewModelScope.launch {
             try {
-                val updates = mapOf(
-                    "personalizationProfile" to mapOf(
-                        "selectedInterests" to interests,
-                        "travelStyles" to travelStyles,
-                        "weatherPreferences" to weatherPrefs,
-                        "lastUpdated" to System.currentTimeMillis()
-                    ),
-                    "updatedAt" to System.currentTimeMillis(),
-                    "profileCompleted" to true,
-                    "onboardingCompleted" to true
+                val personalization = PersonalizationProfile(
+                    uid = uid,
+                    selectedInterests = interests,
+                    travelStyles = travelStyles,
+                    weatherPreferences = weatherPrefs
                 )
+
+                val updates = mapOf(
+                    "personalizationProfile" to personalization,
+                    "onboardingCompleted" to true,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+
                 db.collection("users").document(uid).update(updates).await()
 
                 val context = getApplication<Application>()
                 ThemeManager.saveUserInterests(context, uid, interests.toSet())
                 ThemeManager.saveOnboardingCompleted(context, uid, true)
-
-                fetchProfile()
             } catch (e: Exception) {
                 android.util.Log.e("ProfileVM", "Update personalization failed", e)
+                _profileState.value = ProfileState.Error("Tercihler güncellenemedi.")
             }
         }
     }
@@ -179,9 +205,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             try {
                 db.collection("users").document(uid).update("aboutMe", aboutMe, "updatedAt", System.currentTimeMillis()).await()
-                fetchProfile()
             } catch (e: Exception) {
                 android.util.Log.e("ProfileVM", "Update aboutMe failed", e)
+                _profileState.value = ProfileState.Error("Bilgiler güncellenemedi.")
             }
         }
     }
@@ -198,9 +224,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "personalizationProfile.selectedInterests", newList,
                     "updatedAt", System.currentTimeMillis()
                 ).await()
-                fetchProfile()
             } catch (e: Exception) {
                 android.util.Log.e("ProfileVM", "Toggle interest failed", e)
+                _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi.")
             }
         }
     }
@@ -262,7 +288,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 // CRITICAL SYNC: Update local DataStore immediately to prevent UI flicker
                 ThemeManager.saveUserImageUriByUid(context, uid, downloadUrl)
 
-                fetchProfile()
                 android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
             } catch (e: Exception) {
                 android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
@@ -293,7 +318,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ThemeManager.saveUserImageUriByUid(context, uid, null)
 
                 _avatarVersion.value = System.currentTimeMillis()
-                fetchProfile()
             } catch (e: Exception) {
                 _profileState.value = ProfileState.Error("İşlem başarısız.")
             } finally {
@@ -302,12 +326,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun processImage(uri: Uri): Bitmap? {
+    private suspend fun processImage(uri: Uri): Bitmap? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val context = getApplication<Application>()
         var inputStream: InputStream? = null
-        return try {
+        try {
             inputStream = context.contentResolver.openInputStream(uri)
-            if (inputStream == null) return null
+            if (inputStream == null) return@withContext null
 
             val exif = try {
                 ExifInterface(inputStream)
@@ -331,7 +355,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
             inputStream = context.contentResolver.openInputStream(uri)
             val decodeOptions = BitmapFactory.Options().apply { inSampleSize = scale }
-            val bitmap = BitmapFactory.decodeStream(inputStream, null, decodeOptions) ?: return null
+            val bitmap = BitmapFactory.decodeStream(inputStream, null, decodeOptions) ?: return@withContext null
 
             val matrix = Matrix()
             when (orientation) {

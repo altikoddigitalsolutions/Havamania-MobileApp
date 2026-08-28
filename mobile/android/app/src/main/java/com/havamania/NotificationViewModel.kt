@@ -32,19 +32,24 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     private var collectJob: kotlinx.coroutines.Job? = null
 
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+        _uiState.value = NotificationUiState(isLoading = true)
+        didSeedInThisSession = false
+        startCollectingNotifications(newUid)
+    }
+
     init {
         val database = NotificationDatabase.getDatabase(application)
         repository = NotificationRepository(database.notificationDao())
+        auth.addAuthStateListener(authListener)
+    }
 
-        viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-                Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
-                _uiState.value = NotificationUiState(isLoading = true)
-                didSeedInThisSession = false
-                startCollectingNotifications(newUid)
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        collectJob?.cancel()
     }
 
     private fun startCollectingNotifications(uid: String) {

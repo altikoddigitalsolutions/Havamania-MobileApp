@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Havamania Design System - Core Tokens
@@ -85,23 +86,64 @@ data class HavamaniaColors(
     val shadow: Color = Color.Black.copy(alpha = 0.2f),
     val buttonGradient: List<Color>? = null,
     val cardGradient: List<Color>? = null,
-    val isDark: Boolean
+    val isDark: Boolean,
+
+    // Weather Specific Semantic Colors
+    val weatherClear: Color,
+    val weatherCloudy: Color,
+    val weatherRain: Color,
+    val weatherSnow: Color,
+    val weatherStorm: Color,
+    val weatherFog: Color,
+
+    // Component Specific
+    val cardBackground: Color,
+    val cardBorder: Color,
+    val buttonPrimary: Color,
+    val buttonSecondary: Color,
+    val info: Color
+)
+
+@Immutable
+data class HavamaniaTypography(
+    val display: androidx.compose.ui.text.TextStyle,
+    val heroTemperature: androidx.compose.ui.text.TextStyle,
+    val screenTitle: androidx.compose.ui.text.TextStyle,
+    val sectionTitle: androidx.compose.ui.text.TextStyle,
+    val cardTitle: androidx.compose.ui.text.TextStyle,
+    val bodyLarge: androidx.compose.ui.text.TextStyle,
+    val bodyMedium: androidx.compose.ui.text.TextStyle,
+    val bodySmall: androidx.compose.ui.text.TextStyle,
+    val caption: androidx.compose.ui.text.TextStyle,
+    val button: androidx.compose.ui.text.TextStyle,
+    val label: androidx.compose.ui.text.TextStyle
+)
+
+@Immutable
+data class HavamaniaElevation(
+    val none: Dp = 0.dp,
+    val low: Dp = 2.dp,
+    val medium: Dp = 8.dp,
+    val high: Dp = 16.dp,
+    val card: Dp = 4.dp
 )
 
 @Immutable
 data class HavamaniaStyles(
     val glassBlur: Dp = 16.dp,
-    val cardCornerRadius: Dp = 24.dp, // Modern standard
+    val cardCornerRadius: Dp = 24.dp,
     val cardBorderWidth: Dp = 1.dp,
     val elevation: Dp = 8.dp,
 
-    // Standardized Spacing (M3)
+    // Standardized Spacing Scale
     val spacingNone: Dp = 0.dp,
-    val spacingExtraSmall: Dp = 4.dp,
-    val spacingSmall: Dp = 8.dp,
-    val spacingMedium: Dp = 16.dp,
-    val spacingLarge: Dp = 24.dp,
-    val spacingExtraLarge: Dp = 32.dp,
+    val spacingXXS: Dp = 2.dp,
+    val spacingXS: Dp = 4.dp,
+    val spacingSM: Dp = 8.dp,
+    val spacingMD: Dp = 16.dp,
+    val spacingLG: Dp = 24.dp,
+    val spacingXL: Dp = 32.dp,
+    val spacingXXL: Dp = 48.dp,
     val pagePadding: Dp = 20.dp,
 
     // Standardized Radius
@@ -119,6 +161,12 @@ val LocalHavamaniaColors = staticCompositionLocalOf<HavamaniaColors> {
     error("No HavamaniaColors provided")
 }
 
+val LocalHavamaniaTypography = staticCompositionLocalOf<HavamaniaTypography> {
+    error("No HavamaniaTypography provided")
+}
+
+val LocalHavamaniaElevation = staticCompositionLocalOf { HavamaniaElevation() }
+
 val LocalHavamaniaStyles = staticCompositionLocalOf { HavamaniaStyles() }
 
 /**
@@ -129,6 +177,16 @@ object HavamaniaTheme {
         @androidx.compose.runtime.Composable
         @androidx.compose.runtime.ReadOnlyComposable
         get() = LocalHavamaniaColors.current
+
+    val typography: HavamaniaTypography
+        @androidx.compose.runtime.Composable
+        @androidx.compose.runtime.ReadOnlyComposable
+        get() = LocalHavamaniaTypography.current
+
+    val elevation: HavamaniaElevation
+        @androidx.compose.runtime.Composable
+        @androidx.compose.runtime.ReadOnlyComposable
+        get() = LocalHavamaniaElevation.current
 
     val styles: HavamaniaStyles
         @androidx.compose.runtime.Composable
@@ -161,28 +219,50 @@ object ThemeFactory {
                 warning = Color(0xFFF59E0B),
                 shadow = Color.Black.copy(alpha = 0.4f),
                 buttonGradient = listOf(Color(0xFF00C2FF), Color(0xFF0077FF)),
-                isDark = true
+                isDark = true,
+                weatherClear = Color(0xFFFBBF24),
+                weatherCloudy = Color(0xFF94A3B8),
+                weatherRain = Color(0xFF60A5FA),
+                weatherSnow = Color(0xFFBAE6FD),
+                weatherStorm = Color(0xFF818CF8),
+                weatherFog = Color(0xFFA5B4FC),
+                cardBackground = Color(0xFF1E293B).copy(alpha = 0.6f),
+                cardBorder = Color.White.copy(alpha = 0.08f),
+                buttonPrimary = Color(0xFF00C2FF),
+                buttonSecondary = Color(0xFF1E293B),
+                info = Color(0xFF38BDF8)
             )
             AppTheme.LIGHT -> HavamaniaColors(
-                gradientPrimary = listOf(Color(0xFFE0F2FE), Color(0xFFF8FAFC)),
+                gradientPrimary = listOf(Color(0xFFF0F9FF), Color(0xFFF8FAFC)),
                 gradientSecondary = listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0)),
-                accent = Color(0xFF0284C7),
+                accent = Color(0xFF0077FF),
                 onAccent = Color.White,
                 background = Color(0xFFF8FAFC),
                 surface = Color.White,
-                surfaceGlass = Color.White.copy(alpha = 0.85f),
+                surfaceGlass = Color.White.copy(alpha = 0.9f),
                 textPrimary = Color(0xFF0F172A),
                 textSecondary = Color(0xFF475569),
                 textMuted = Color(0xFF94A3B8),
                 border = Color(0xFFE2E8F0),
                 divider = Color(0xFFF1F5F9),
-                glow = Color(0xFF38BDF8).copy(alpha = 0.1f),
+                glow = Color(0xFF0077FF).copy(alpha = 0.1f),
                 error = Color(0xFFDC2626),
                 success = Color(0xFF059669),
                 warning = Color(0xFFD97706),
                 shadow = Color(0xFF0F172A).copy(alpha = 0.05f),
-                buttonGradient = listOf(Color(0xFF0EA5E9), Color(0xFF0284C7)),
-                isDark = false
+                buttonGradient = listOf(Color(0xFF38BDF8), Color(0xFF0077FF)),
+                isDark = false,
+                weatherClear = Color(0xFFD97706),
+                weatherCloudy = Color(0xFF64748B),
+                weatherRain = Color(0xFF2563EB),
+                weatherSnow = Color(0xFF38BDF8),
+                weatherStorm = Color(0xFF4338CA),
+                weatherFog = Color(0xFF6366F1),
+                cardBackground = Color.White,
+                cardBorder = Color(0xFFE2E8F0).copy(alpha = 0.5f),
+                buttonPrimary = Color(0xFF0077FF),
+                buttonSecondary = Color(0xFFF1F5F9),
+                info = Color(0xFF0077FF)
             )
             AppTheme.SPRING -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7)),
@@ -203,7 +283,18 @@ object ThemeFactory {
                 warning = Color(0xFFF59E0B),
                 shadow = Color(0xFF14532D).copy(alpha = 0.05f),
                 buttonGradient = listOf(Color(0xFF4ADE80), Color(0xFF16A34A)),
-                isDark = false
+                isDark = false,
+                weatherClear = Color(0xFF16A34A),
+                weatherCloudy = Color(0xFF34D399),
+                weatherRain = Color(0xFF10B981),
+                weatherSnow = Color(0xFFA7F3D0),
+                weatherStorm = Color(0xFF065F46),
+                weatherFog = Color(0xFF6EE7B7),
+                cardBackground = Color.White.copy(alpha = 0.8f),
+                cardBorder = Color(0xFFBBF7D0).copy(alpha = 0.5f),
+                buttonPrimary = Color(0xFF16A34A),
+                buttonSecondary = Color(0xFFDCFCE7),
+                info = Color(0xFF16A34A)
             )
             AppTheme.SUMMER -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)),
@@ -224,7 +315,18 @@ object ThemeFactory {
                 warning = Color(0xFFEA580C),
                 shadow = Color(0xFF431407).copy(alpha = 0.05f),
                 buttonGradient = listOf(Color(0xFFF97316), Color(0xFFEA580C)),
-                isDark = false
+                isDark = false,
+                weatherClear = Color(0xFFF59E0B),
+                weatherCloudy = Color(0xFFB45309),
+                weatherRain = Color(0xFFEA580C),
+                weatherSnow = Color(0xFFFFEDD5),
+                weatherStorm = Color(0xFF7C2D12),
+                weatherFog = Color(0xFFFDBA74),
+                cardBackground = Color.White.copy(alpha = 0.8f),
+                cardBorder = Color(0xFFFFD8A8).copy(alpha = 0.5f),
+                buttonPrimary = Color(0xFFEA580C),
+                buttonSecondary = Color(0xFFFFEDD5),
+                info = Color(0xFFEA580C)
             )
             AppTheme.AUTUMN -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFF451A03), Color(0xFF78350F)),
@@ -245,7 +347,18 @@ object ThemeFactory {
                 warning = Color(0xFFF97316),
                 shadow = Color.Black.copy(alpha = 0.3f),
                 buttonGradient = listOf(Color(0xFFFB923C), Color(0xFFF97316)),
-                isDark = true
+                isDark = true,
+                weatherClear = Color(0xFFF97316),
+                weatherCloudy = Color(0xFFD97706),
+                weatherRain = Color(0xFFB45309),
+                weatherSnow = Color(0xFFFED7AA),
+                weatherStorm = Color(0xFF7C2D12),
+                weatherFog = Color(0xFF92400E),
+                cardBackground = Color(0xFF78350F).copy(alpha = 0.75f),
+                cardBorder = Color.White.copy(alpha = 0.08f),
+                buttonPrimary = Color(0xFFF97316),
+                buttonSecondary = Color(0xFF78350F),
+                info = Color(0xFFF97316)
             )
             AppTheme.WINTER -> HavamaniaColors(
                 gradientPrimary = listOf(Color(0xFF1E293B), Color(0xFF0F172A)),
@@ -266,9 +379,86 @@ object ThemeFactory {
                 warning = Color(0xFFF59E0B),
                 shadow = Color.Black.copy(alpha = 0.4f),
                 buttonGradient = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
-                isDark = true
+                isDark = true,
+                weatherClear = Color(0xFF60A5FA),
+                weatherCloudy = Color(0xFF94A3B8),
+                weatherRain = Color(0xFF2563EB),
+                weatherSnow = Color(0xFFE0F2FE),
+                weatherStorm = Color(0xFF1E3A8A),
+                weatherFog = Color(0xFFCBD5E1),
+                cardBackground = Color(0xFF1E293B).copy(alpha = 0.7f),
+                cardBorder = Color.White.copy(alpha = 0.08f),
+                buttonPrimary = Color(0xFF60A5FA),
+                buttonSecondary = Color(0xFF334155),
+                info = Color(0xFF60A5FA)
             )
             AppTheme.AUTO -> createColors(ThemeManager.getSeasonalTheme(java.time.LocalDate.now().monthValue))
         }
+    }
+
+    fun createTypography(colors: HavamaniaColors): HavamaniaTypography {
+        val baseTextStyle = androidx.compose.ui.text.TextStyle(
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+            color = colors.textPrimary
+        )
+
+        return HavamaniaTypography(
+            display = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.W200,
+                fontSize = 96.sp,
+                letterSpacing = (-4).sp
+            ),
+            heroTemperature = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Light,
+                fontSize = 100.sp,
+                letterSpacing = (-5).sp
+            ),
+            screenTitle = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                fontSize = 24.sp,
+                letterSpacing = (-0.5).sp
+            ),
+            sectionTitle = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                fontSize = 13.sp,
+                letterSpacing = 1.5.sp,
+                color = colors.accent.copy(alpha = 0.8f)
+            ),
+            cardTitle = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 18.sp
+            ),
+            bodyLarge = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.15.sp
+            ),
+            bodyMedium = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            ),
+            bodySmall = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                fontSize = 12.sp,
+                color = colors.textSecondary
+            ),
+            caption = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                fontSize = 10.sp,
+                color = colors.textMuted
+            ),
+            button = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                fontSize = 13.sp,
+                letterSpacing = 0.5.sp,
+                color = colors.onAccent
+            ),
+            label = baseTextStyle.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 11.sp
+            )
+        )
     }
 }

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.havamania.BuildConfig
 import com.havamania.UserProfile
 import com.havamania.WeatherRepository
 import com.havamania.GeocodingResultDto
@@ -21,6 +22,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     private val repository = WeatherRepository.getInstance(application)
+    private val userProfileRepository = com.havamania.UserProfileRepository.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
     private var citiesListener: ListenerRegistration? = null
@@ -95,19 +97,30 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiEvent = MutableSharedFlow<String>()
     val uiEvent = _uiEvent.asSharedFlow()
 
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val user = firebaseAuth.currentUser
+        val newUid = user?.uid ?: "legacy"
+        Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
+
+        if (user == null) {
+            clearLocalUserData()
+        }
+
+        loadSettings()
+        observeFirestoreUserDoc(newUid)
+        observeFirestoreCities(newUid)
+    }
+
     init {
         loadSettings()
+        auth.addAuthStateListener(authListener)
+    }
 
-        // Watch for auth changes to reload user data and start listener
-        viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-                Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
-                loadSettings()
-                observeFirestoreUserDoc(newUid)
-                observeFirestoreCities(newUid)
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        citiesListener?.remove()
+        userDocListener?.remove()
     }
 
     private fun observeFirestoreCities(uid: String) {
@@ -143,31 +156,25 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun observeFirestoreUserDoc(uid: String) {
-        userDocListener?.remove()
         if (uid == "legacy") return
 
-        Log.d("ThemeVM", "Starting User doc listener for $uid")
-        userDocListener = db.collection("users").document(uid)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.w("ThemeVM", "User doc listen failed.", e)
-                    return@addSnapshotListener
-                }
+        userProfileRepository.startObserving(uid)
 
-                if (snapshot != null && snapshot.exists()) {
-                    viewModelScope.launch {
-                        // Sync defaultCity
-                        val remoteDefaultCityName = snapshot.getString("defaultCity")
-                        if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
-                            val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
-                            if (cityToSet != null) {
-                                ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
-                                _defaultCity.value = cityToSet
-                            }
+        viewModelScope.launch {
+            userProfileRepository.profile.collect { profile ->
+                profile?.let { p ->
+                    // Sync defaultCity
+                    val remoteDefaultCityName = p.defaultCity
+                    if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
+                        val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
+                        if (cityToSet != null) {
+                            ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
+                            _defaultCity.value = cityToSet
                         }
                     }
                 }
             }
+        }
     }
 
     fun loadSettings() {
@@ -411,7 +418,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun syncWithFirebase(profile: com.havamania.UserProfile) {
         viewModelScope.launch {
             val uid = currentUid
-            Log.i("PHOTO", "[PHOTO] Step 11 OK: syncWithFirebase started for $uid. PhotoURL in doc: ${profile.photoURL}")
+            if (BuildConfig.DEBUG) Log.i("PHOTO", "[PHOTO] syncWithFirebase started for $uid")
 
             try {
                 if (profile.name.isNotBlank()) {
@@ -423,7 +430,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     _userBio.value = profile.bio
                 }
 
-                Log.i("PHOTO", "[PHOTO] Step 11.1: Saving PhotoURL to DataStore and StateFlow: ${profile.photoURL}")
                 ThemeManager.saveUserImageUriByUid(getApplication(), uid, profile.photoURL)
                 _userImageUri.value = profile.photoURL
 
@@ -459,10 +465,5 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
         userDocListener?.remove()
         userDocListener = null
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        userDocListener?.remove()
     }
 }

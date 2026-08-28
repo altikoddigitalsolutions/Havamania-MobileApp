@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.google.firebase.firestore.IgnoreExtraProperties
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 
 /**
@@ -181,12 +182,13 @@ data class TravelPlan(
     /** Son rota analizi tarihimiz (ms). */
     val lastRouteAnalysisAt: Long? = null
 ) {
-    /** Yola çıkış tarih ve saatini LocalDateTime olarak döner. */
-    val departureDateTime: java.time.LocalDateTime
+    /** Yola çıkış tarih ve saatini LocalDateTime olarak döner. Saat belirtilmemişse null döner. */
+    val departureDateTime: java.time.LocalDateTime?
         get() {
-            val parts = departureTime?.split(":")
-            val h = parts?.getOrNull(0)?.toIntOrNull() ?: 9
-            val m = parts?.getOrNull(1)?.toIntOrNull() ?: 0
+            val timeStr = departureTime ?: return null
+            val parts = timeStr.split(":")
+            val h = parts.getOrNull(0)?.toIntOrNull() ?: return null
+            val m = parts.getOrNull(1)?.toIntOrNull() ?: return null
             return startDate.atTime(h, m)
         }
 
@@ -207,4 +209,45 @@ data class TravelPlan(
             val lon = originLongitude ?: return null
             return if (lat == 0.0 && lon == 0.0) null else lat to lon
         }
+
+    fun toEntity() = TravelPlanEntity(
+        id = id,
+        userId = userId,
+        city = city,
+        district = district,
+        latitude = latitude,
+        longitude = longitude,
+        originCity = originCity,
+        originDistrict = originDistrict,
+        originLatitude = originLatitude,
+        originLongitude = originLongitude,
+        tripType = tripType.name,
+        startDate = startDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+        endDate = endDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        archivedAt = archivedAt,
+        lastAnalysisAt = lastAnalysisAt,
+        weatherSummary = weatherSummary,
+        packingAdvice = packingAdvice,
+        mustSee = mustSee,
+        foodAdvice = foodAdvice,
+        localAdvice = localAdvice,
+        aiSuggestion = aiSuggestion,
+        comfortScore = comfortScore,
+        userNote = userNote,
+        userRating = userRating,
+        lastWeatherAnalysisText = if (weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) "Bekleniyor" else "Hazır",
+        lastWeatherAnalysisDate = lastAnalysisAt,
+        weatherAnalysisStatus = weatherAnalysisStatus.name,
+        isArchived = isArchived,
+        analyses = analyses,
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo,
+        lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot,
+        departureTime = departureTime,
+        routeWeatherSummary = routeWeatherSummary,
+        lastRouteAnalysisAt = lastRouteAnalysisAt
+    )
 }

@@ -7,11 +7,15 @@ import {Platform} from 'react-native';
  * 2. Aşağıdaki IP adresini kendi adresinizle değiştirin.
  * 3. Tablet ve Bilgisayarın AYNI WI-FI ağına bağlı olduğundan emin olun.
  */
-const COMPUTER_IP = '192.168.1.50'; // <--- BURAYI KENDİ IP ADRESİNLE DEĞİŞTİR
+const COMPUTER_IP = '192.168.1.50'; // Local development IP
 
-export const BASE_URL = Platform.OS === 'android'
-  ? `http://${COMPUTER_IP}:8000`
-  : 'http://localhost:8000';
+// In a real production app, use react-native-config or similar for env vars.
+// For now, we use a simple check.
+const PROD_URL = 'https://api.havamania.app'; // <--- Placeholder for actual production URL
+
+export const BASE_URL = __DEV__
+  ? (Platform.OS === 'android' ? `http://${COMPUTER_IP}:8000` : 'http://localhost:8000')
+  : PROD_URL;
 
 const API_BASE_URL = `${BASE_URL}/v1`;
 

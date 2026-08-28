@@ -24,33 +24,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.havamania.ui.theme.HavamaniaTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
+fun TravelInspiredSplashScreen(
+    onNavigate: () -> Unit,
+    isReady: Boolean = true
+) {
     val context = LocalContext.current
 
     // Animasyon State'leri
     val contentAlpha = remember { Animatable(0f) }
-    val contentScale = remember { Animatable(1.0f) } // Ölçeği 1'den başlat (Sistem splash ile uyum)
     val progress = remember { Animatable(0f) }
 
     // Kaynak Kontrolleri
     val logoResId = context.resources.getIdentifier("havamania_logo_clean", "drawable", context.packageName)
     val bgResId = context.resources.getIdentifier("splash_travel_bg", "drawable", context.packageName)
-    val loadingIconResId = context.resources.getIdentifier("ic_suitcase_clean", "drawable", context.packageName)
 
     LaunchedEffect(Unit) {
         launch {
             // İçerik (yazılar vs) yavaşça gelsin
-            contentAlpha.animateTo(1f, tween(1000, easing = EaseOutCubic))
+            contentAlpha.animateTo(1f, tween(800, easing = EaseOutCubic))
         }
+        progress.animateTo(1f, tween(1500, easing = LinearOutSlowInEasing))
+    }
 
-        progress.animateTo(1f, tween(2000, easing = LinearOutSlowInEasing))
-
-        delay(200)
-        onNavigateToHome()
+    // Navigasyon Kontrolü: Hem minimum animasyon süresi hem de veri hazır olmalı
+    LaunchedEffect(isReady, progress.value) {
+        if (isReady && progress.value >= 1f) {
+            delay(200)
+            onNavigate()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -62,7 +68,7 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
             Image(
                 painter = painterResource(id = bgResId),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().alpha(contentAlpha.value),
+                modifier = Modifier.fillMaxSize().alpha(contentAlpha.value * 0.7f),
                 contentScale = ContentScale.Crop
             )
         }
@@ -73,47 +79,42 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0.0f to Color.Black.copy(alpha = 0.25f),
-                        0.4f to Color.Transparent,
-                        1.0f to Color.Black.copy(alpha = 0.65f)
+                        0.0f to Color.Black.copy(alpha = 0.3f),
+                        0.5f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.7f)
                     )
                 )
         )
 
         // --- 3. ANA MERKEZ BLOĞU ---
-        // Logo sistem splash ile tam aynı konumda (Tam Merkez)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // LOGO (Sistem splash ile aynı ölçek ve konum)
+            // LOGO
             if (logoResId != 0) {
                 Image(
                     painter = painterResource(id = logoResId),
                     contentDescription = "Havamania Logo",
-                    modifier = Modifier.size(160.dp), // Sistem splash ikon boyutuyla eşleştirme
+                    modifier = Modifier.size(160.dp),
                     contentScale = ContentScale.Fit
                 )
             }
 
-            // Metinler ve Slogan (Bunlar animasyonlu gelebilir)
             Column(
-                modifier = Modifier
-                    .alpha(contentAlpha.value)
-                    .scale(contentScale.value),
+                modifier = Modifier.alpha(contentAlpha.value),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // MARKA ADI
                 Text(
                     text = "Havamania",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        fontSize = 32.sp
+                    style = HavamaniaTheme.typography.screenTitle.copy(
+                        fontSize = 32.sp,
+                        letterSpacing = 1.sp
                     ),
                     color = Color.White,
                     textAlign = TextAlign.Center
@@ -124,9 +125,8 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
                 // SLOGAN
                 Text(
                     text = "Hava durumunu akıllıca takip et,\nseyahatlerini akıllıca planla.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        lineHeight = 22.sp,
-                        fontWeight = FontWeight.Normal
+                    style = HavamaniaTheme.typography.bodyMedium.copy(
+                        lineHeight = 22.sp
                     ),
                     color = Color.White.copy(alpha = 0.85f),
                     textAlign = TextAlign.Center,
@@ -135,52 +135,26 @@ fun TravelInspiredSplashScreen(onNavigateToHome: () -> Unit) {
             }
         }
 
-        // --- 4. ALT KISIM: ZARİF LOADING ALANI ---
-        Column(
+        // --- 4. ALT KISIM: PROGRESS ---
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 70.dp)
-                .alpha(contentAlpha.value),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(bottom = 80.dp)
+                .width(160.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(100.dp))
+                .background(Color.White.copy(alpha = 0.15f))
         ) {
-            if (loadingIconResId != 0) {
-                Image(
-                    painter = painterResource(id = loadingIconResId),
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    alpha = 0.7f
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "Yükleniyor...",
-                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                color = Color.White.copy(alpha = 0.5f)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // İnce ve Modern Progress Bar
             Box(
                 modifier = Modifier
-                    .width(140.dp)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(100.dp))
-                    .background(Color.White.copy(alpha = 0.15f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progress.value)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF3B82F6), Color(0xFF60A5FA))
-                            )
+                    .fillMaxWidth(progress.value)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF00C2FF), Color(0xFF0077FF))
                         )
-                )
-            }
+                    )
+            )
         }
     }
 }

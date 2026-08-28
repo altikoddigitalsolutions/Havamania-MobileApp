@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,30 +30,33 @@ fun EditProfileScreen(
     onBack: () -> Unit,
     profileViewModel: ProfileViewModel = viewModel()
 ) {
-    val profileState by profileViewModel.profileState.collectAsState()
     val themeColors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
 
     var name by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var createdAt by remember { mutableLongStateOf(0L) }
-    var uid by remember { mutableStateOf("") }
 
-    LaunchedEffect(profileState) {
-        if (profileState is ProfileState.Success) {
-            val profile = (profileState as ProfileState.Success).profile
-            name = profile.name
-            bio = profile.bio
-            email = profile.email
-            createdAt = profile.createdAt
-            uid = profile.uid
+    val userProfileRepository = remember { UserProfileRepository.getInstance() }
+    val profile by userProfileRepository.profile.collectAsState()
+
+    LaunchedEffect(profile) {
+        profile?.let {
+            name = it.name
+            bio = it.bio
+            email = it.email
+            createdAt = it.createdAt
         }
     }
+
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
 
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFİLİ DÜZENLE",
+                title = "PROFILI DÜZENLE",
                 onBack = onBack
             )
         }
@@ -64,90 +66,81 @@ fun EditProfileScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = themeStyles.pagePadding)
+                .then(
+                    if (windowSize.isTablet || windowSize.isLargeTablet)
+                        Modifier.widthIn(max = responsive.maxContentWidth).align(Alignment.TopCenter)
+                    else Modifier.fillMaxWidth()
+                )
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingMD))
 
-            // 1. HESAP BİLGİLERİ KARTI
+            // 1. HESAP BİLGİLERİ
             SectionLabel("HESAP BİLGİLERİ")
-            HavamaniaGlassCard(alpha = 0.5f) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
+            HavamaniaGlassCard(alpha = 0.4f) {
+                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMD)) {
+                    HavamaniaTextField(
                         value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Ad Soyad", color = themeColors.textMuted) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        leadingIcon = { Icon(Icons.Rounded.Person, null, tint = themeColors.accent) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
-                            focusedBorderColor = themeColors.accent,
-                            focusedTextColor = themeColors.textPrimary,
-                            unfocusedTextColor = themeColors.textPrimary,
-                            cursorColor = themeColors.accent
-                        )
+                        onValueChange = { if (it.length <= 50) name = it },
+                        placeholder = "Ad Soyad",
+                        leadingIcon = Icons.Rounded.Person
                     )
 
-                    OutlinedTextField(
+                    ReadOnlyField(
                         value = email,
-                        onValueChange = { },
-                        readOnly = true,
-                        label = { Text("E-posta (Salt Okunur)", color = themeColors.textMuted) },
-                        modifier = Modifier.fillMaxWidth().alpha(0.7f),
-                        shape = RoundedCornerShape(16.dp),
-                        leadingIcon = { Icon(Icons.Rounded.Email, null, tint = themeColors.textMuted) },
-                        trailingIcon = { Icon(Icons.Rounded.Lock, null, tint = themeColors.textMuted, modifier = Modifier.size(16.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            unfocusedBorderColor = themeColors.border.copy(alpha = 0.1f),
-                            focusedBorderColor = themeColors.border.copy(alpha = 0.1f),
-                            focusedTextColor = themeColors.textSecondary,
-                            unfocusedTextColor = themeColors.textSecondary
-                        )
+                        label = "E-posta (Değiştirilemez)",
+                        icon = Icons.Rounded.Email
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            // 2. HAVA KİMLİĞİ (BIO) KARTI
+            // 2. HAVA KİMLİĞİ (BIO)
             SectionLabel("HAVA KİMLİĞİ")
-            HavamaniaGlassCard(alpha = 0.5f) {
+            HavamaniaGlassCard(alpha = 0.4f) {
                 OutlinedTextField(
                     value = bio,
-                    onValueChange = { bio = it },
-                    label = { Text("Motto / Bio", color = themeColors.textMuted) },
+                    onValueChange = { if (it.length <= 500) bio = it },
+                    placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp) },
                     modifier = Modifier.fillMaxWidth().height(120.dp),
                     shape = RoundedCornerShape(16.dp),
-                    placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
-                        unfocusedBorderColor = themeColors.border.copy(alpha = 0.2f),
+                        unfocusedBorderColor = themeColors.border.copy(alpha = 0.1f),
                         focusedBorderColor = themeColors.accent,
                         focusedTextColor = themeColors.textPrimary,
                         unfocusedTextColor = themeColors.textPrimary,
                         cursorColor = themeColors.accent
                     )
                 )
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "${bio.length}/500",
+                    style = HavamaniaTheme.typography.caption,
+                    color = themeColors.textMuted,
+                    modifier = Modifier.align(Alignment.End)
+                )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            // 3. SİSTEM BİLGİLERİ KARTI
+            // 3. SİSTEM BİLGİLERİ
             SectionLabel("SİSTEM BİLGİLERİ")
-            HavamaniaGlassCard(alpha = 0.4f) {
+            HavamaniaGlassCard(alpha = 0.3f) {
                 val dateFormat = remember { SimpleDateFormat("d MMMM yyyy", Locale("tr")) }
                 val dateStr = if (createdAt > 0) dateFormat.format(Date(createdAt)) else "---"
 
-                ProfileInfoRow(
-                    icon = Icons.Rounded.History,
-                    label = "Kayıt Tarihi",
-                    value = dateStr
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.History, null, tint = themeColors.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Kayıt Tarihi", style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
+                        Text(dateStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(40.dp))
@@ -157,22 +150,8 @@ fun EditProfileScreen(
                 onClick = {
                     profileViewModel.updateProfile(name, bio)
                     onBack()
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp)
+                }
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Debug UID
-            if (uid.isNotEmpty()) {
-                Text(
-                    text = "System ID: ${uid.takeLast(8).uppercase()}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = themeColors.textMuted.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-            }
 
             Spacer(modifier = Modifier.height(60.dp))
         }
@@ -180,32 +159,25 @@ fun EditProfileScreen(
 }
 
 @Composable
-private fun ProfileInfoRow(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    valueColor: Color = HavamaniaTheme.colors.textPrimary
-) {
-    val themeColors = HavamaniaTheme.colors
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+private fun ReadOnlyField(value: String, label: String, icon: ImageVector) {
+    val colors = HavamaniaTheme.colors
+    Surface(
+        color = colors.surface.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().alpha(0.7f)
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(themeColors.accent.copy(alpha = 0.05f)),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, tint = themeColors.accent.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = themeColors.textMuted)
-            Text(value, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = valueColor)
+            Icon(icon, null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(label, style = HavamaniaTheme.typography.caption, color = colors.textMuted)
+                Text(value, style = HavamaniaTheme.typography.bodyMedium, color = colors.textSecondary)
+            }
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Rounded.Lock, null, tint = colors.textMuted.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
         }
     }
 }

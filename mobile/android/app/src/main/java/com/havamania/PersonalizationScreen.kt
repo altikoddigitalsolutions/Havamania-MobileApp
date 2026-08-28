@@ -50,10 +50,13 @@ fun PersonalizationScreen(
         }
     }
 
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
+
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "KİŞİSELLEŞTİRME",
+                title = "KIŞISELLEŞTIRME",
                 onBack = onBack
             )
         }
@@ -63,24 +66,29 @@ fun PersonalizationScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(themeStyles.pagePadding),
+                .padding(themeStyles.pagePadding)
+                .then(
+                    if (windowSize.isTablet || windowSize.isLargeTablet)
+                        Modifier.widthIn(max = responsive.maxContentWidth).align(Alignment.TopCenter)
+                    else Modifier.fillMaxWidth()
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 "Havamania'yı Sana Özel Hale Getirelim",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                style = HavamaniaTheme.typography.screenTitle.copy(fontWeight = FontWeight.Black),
                 textAlign = TextAlign.Center,
                 color = themeColors.textPrimary
             )
             Text(
                 "Seçtiğin ilgi alanları ve tercihler, asistan önerilerini ve hava analizlerini sana özel hale getirir.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = HavamaniaTheme.typography.bodyMedium,
                 color = themeColors.textSecondary,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = themeStyles.spacingSmall)
+                modifier = Modifier.padding(top = themeStyles.spacingSM)
             )
 
-            Spacer(Modifier.height(themeStyles.spacingExtraLarge))
+            Spacer(Modifier.height(themeStyles.spacingXXL))
 
             // Accordion Sections
             for (category in InterestsData.categories) {
@@ -93,7 +101,7 @@ fun PersonalizationScreen(
                         selectedInterests = if (selectedInterests.contains(id)) selectedInterests - id else selectedInterests + id
                     }
                 )
-                Spacer(Modifier.height(themeStyles.spacingMedium))
+                Spacer(Modifier.height(themeStyles.spacingMD))
             }
 
             // Travel Styles Accordion
@@ -105,8 +113,8 @@ fun PersonalizationScreen(
             ) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(themeStyles.spacingSmall),
-                    verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSmall)
+                    horizontalArrangement = Arrangement.spacedBy(themeStyles.spacingSM),
+                    verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)
                 ) {
                     for (style in PersonalizationDefaults.TRAVEL_STYLES) {
                         HavamaniaChip(
@@ -121,7 +129,7 @@ fun PersonalizationScreen(
                 }
             }
 
-            Spacer(Modifier.height(themeStyles.spacingMedium))
+            Spacer(Modifier.height(themeStyles.spacingMD))
 
             // Weather Prefs Accordion
             PersonalizationAccordionItemSimple(
@@ -130,7 +138,7 @@ fun PersonalizationScreen(
                 isSelected = expandedCategoryId == "WEATHER_PREFS",
                 onToggle = { expandedCategoryId = if (expandedCategoryId == "WEATHER_PREFS") null else "WEATHER_PREFS" }
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSmall)) {
+                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)) {
                     PreferenceSwitch("Sıcağı Severim", weatherPrefs.likesHeat) { weatherPrefs = weatherPrefs.copy(likesHeat = it) }
                     PreferenceSwitch("Serin Havayı Severim", weatherPrefs.likesCool) { weatherPrefs = weatherPrefs.copy(likesCool = it) }
                     PreferenceSwitch("Yağmura Hassasım", weatherPrefs.rainSensitive) { weatherPrefs = weatherPrefs.copy(rainSensitive = it) }
@@ -139,7 +147,7 @@ fun PersonalizationScreen(
                 }
             }
 
-            Spacer(Modifier.height(themeStyles.spacingExtraLarge))
+            Spacer(Modifier.height(themeStyles.spacingXXL))
 
             HavamaniaPrimaryButton(
                 text = "TERCİHLERİ KAYDET",
@@ -155,7 +163,7 @@ fun PersonalizationScreen(
 
             TextButton(
                 onClick = onComplete,
-                modifier = Modifier.padding(top = themeStyles.spacingSmall).minimumInteractiveComponentSize()
+                modifier = Modifier.padding(top = themeStyles.spacingSM).minimumInteractiveComponentSize()
             ) {
                 Text("Şimdilik Atla", color = themeColors.textMuted, fontWeight = FontWeight.Bold)
             }
@@ -177,19 +185,18 @@ fun PersonalizationAccordionItem(
 
     HavamaniaGlassCard(
         onClick = onToggle,
-        alpha = if (isSelected) 0.6f else 0.3f,
-        cornerRadius = themeStyles.radiusMedium
+        alpha = if (isSelected) 0.6f else 0.3f
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(category.icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(themeStyles.spacingMedium))
+            Spacer(Modifier.width(themeStyles.spacingMD))
             Column(modifier = Modifier.weight(1f)) {
-                Text(category.title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                Text(category.title, style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
                 if (!isSelected) {
-                    Text(category.description, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(category.description, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Icon(
@@ -205,11 +212,11 @@ fun PersonalizationAccordionItem(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column {
-                Spacer(Modifier.height(themeStyles.spacingMedium))
+                Spacer(Modifier.height(themeStyles.spacingMD))
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(themeStyles.spacingSmall),
-                    verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSmall)
+                    horizontalArrangement = Arrangement.spacedBy(themeStyles.spacingSM),
+                    verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)
                 ) {
                     for (interest in category.interests) {
                         HavamaniaChip(
@@ -238,16 +245,15 @@ fun PersonalizationAccordionItemSimple(
 
     HavamaniaGlassCard(
         onClick = onToggle,
-        alpha = if (isSelected) 0.6f else 0.3f,
-        cornerRadius = themeStyles.radiusMedium
+        alpha = if (isSelected) 0.6f else 0.3f
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(themeStyles.spacingMedium))
-            Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(themeStyles.spacingMD))
+            Text(title, style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary, modifier = Modifier.weight(1f))
             Icon(
                 if (isSelected) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                 null,
@@ -261,7 +267,7 @@ fun PersonalizationAccordionItemSimple(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column {
-                Spacer(Modifier.height(themeStyles.spacingMedium))
+                Spacer(Modifier.height(themeStyles.spacingMD))
                 content()
             }
         }
@@ -273,12 +279,12 @@ private fun PreferenceSwitch(label: String, checked: Boolean, onCheckedChange: (
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = HavamaniaTheme.styles.spacingExtraSmall)
+            .padding(vertical = HavamaniaTheme.styles.spacingXXS)
             .minimumInteractiveComponentSize(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = HavamaniaTheme.colors.textPrimary)
+        Text(label, style = HavamaniaTheme.typography.bodyLarge, color = HavamaniaTheme.colors.textPrimary)
         HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

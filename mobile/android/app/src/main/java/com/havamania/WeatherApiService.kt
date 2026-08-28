@@ -26,6 +26,16 @@ interface WeatherApiService {
         @Query("forecast_days") days: Int = 14
     ): OpenMeteoResponse
 
+    /** Birden fazla nokta için toplu hava durumu verisi çekme (Güzergâh optimizasyonu). */
+    @GET("v1/forecast")
+    suspend fun getBatchRouteHourly(
+        @Query("latitude") lats: List<Double>,
+        @Query("longitude") lons: List<Double>,
+        @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m",
+        @Query("timezone") timezone: String = "auto",
+        @Query("forecast_days") days: Int = 14
+    ): List<OpenMeteoResponse>
+
     @GET
     suspend fun searchCity(
         @Url url: String = "https://geocoding-api.open-meteo.com/v1/search",

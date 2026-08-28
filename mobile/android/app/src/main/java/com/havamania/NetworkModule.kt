@@ -36,8 +36,14 @@ object NetworkModule {
 
                     // KURAL 4: Sadece 5xx hatalarında tekrar dene.
                     // 4xx hataları (401, 404 vb) retry edilmemeli.
-                    if (response!!.isSuccessful || response!!.code < 500) {
-                        return@addInterceptor response!!
+                    val resp = response
+                    if (resp == null) {
+                        tryCount++
+                        continue
+                    }
+
+                    if (resp.isSuccessful || resp.code < 500) {
+                        return@addInterceptor resp
                     }
                 } catch (e: Exception) {
                     error = e

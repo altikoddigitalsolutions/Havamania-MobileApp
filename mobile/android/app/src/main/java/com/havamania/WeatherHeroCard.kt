@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.AppTheme
+import com.havamania.ui.theme.HavamaniaTheme
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -315,6 +316,8 @@ fun WeatherHeroCard(
         WeatherHeroStyleManager.resolveWeatherHeroTheme(weatherCode, conditionLabel, time, latitude, longitude, sunrise, sunset)
     }
 
+    val liveEffectsEnabled by themeViewModel.liveEffectsEnabled.collectAsState()
+
     val context = LocalContext.current
     val isReducedMotion = remember {
         try { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f) == 0f } catch (e: Exception) { false }
@@ -334,6 +337,8 @@ fun WeatherHeroCard(
                 this.alpha = if (isReducedMotion) 1f else alpha
                 this.scaleX = if (isReducedMotion) 1f else scale
                 this.scaleY = if (isReducedMotion) 1f else scale
+                // Parallax Translation
+                translationY = parallaxOffset
             }
             .clip(RoundedCornerShape(32.dp))
             .border(1.2.dp, Color.White.copy(0.12f), RoundedCornerShape(32.dp))
@@ -341,7 +346,7 @@ fun WeatherHeroCard(
         LiveBackgroundLayer(spec = spec)
 
         Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(32.dp))) {
-            WeatherEffectLayer(spec = spec, isAnimationEnabled = !isReducedMotion)
+            WeatherEffectLayer(spec = spec, isAnimationEnabled = !isReducedMotion && liveEffectsEnabled)
         }
 
         Box(modifier = Modifier.fillMaxSize().background(
@@ -809,10 +814,10 @@ fun PremiumWeatherContent(
                 Spacer(Modifier.width(6.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text((districtName ?: cityName).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
+                        Text((districtName ?: cityName).uppercase(), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Şehir Seçiciyi Aç", tint = secondaryColor, modifier = Modifier.size(16.dp))
                     }
-                    Text("Konumu değiştir", style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
+                    Text("Konumu değiştir", style = HavamaniaTheme.typography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -826,20 +831,17 @@ fun PremiumWeatherContent(
         Spacer(Modifier.weight(0.3f)) // Balanced alignment
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(temperature, style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = 100.sp,
-                fontWeight = FontWeight.W100,
-                letterSpacing = (-5).sp,
+            Text(temperature, style = HavamaniaTheme.typography.heroTemperature.copy(
                 color = textColor,
                 shadow = Shadow(color = Color.Black.copy(alpha = if(isDark) 0.2f else 0.05f), offset = Offset(0f, 4f), blurRadius = 12f)
             ))
-            Text(conditionLabel, style = MaterialTheme.typography.titleLarge.copy(
+            Text(conditionLabel, style = HavamaniaTheme.typography.cardTitle.copy(
                 fontWeight = FontWeight.Black,
                 color = textColor,
                 letterSpacing = 0.5.sp,
                 lineHeight = 28.sp // Reduced effective spacing
             ))
-            Text("Hissedilen $feelsLike", style = MaterialTheme.typography.bodyMedium.copy(
+            Text("Hissedilen $feelsLike", style = HavamaniaTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Bold,
                 color = secondaryColor,
                 lineHeight = 20.sp // Reduced effective spacing

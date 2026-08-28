@@ -5,104 +5,163 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.havamania.ui.theme.HavamaniaTheme
 
-/**
- * Premium Shimmer Effect for Loading States
- */
-@Composable
-fun ShimmerBrush(): Brush {
+fun Modifier.shimmerEffect(): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+
     val shimmerColors = listOf(
         Color.White.copy(alpha = 0.05f),
         Color.White.copy(alpha = 0.12f),
         Color.White.copy(alpha = 0.05f),
     )
 
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "translate"
-    )
-
-    return Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset.Zero,
-        end = Offset(x = translateAnim.value, y = translateAnim.value)
+    background(
+        brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset.Zero,
+            end = Offset(x = translateAnim, y = translateAnim)
+        )
     )
 }
 
 @Composable
 fun HomeScreenLoading() {
-    val shimmerBrush = ShimmerBrush()
-
+    val styles = HavamaniaTheme.styles
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(styles.pagePadding)
             .statusBarsPadding()
-            .padding(horizontal = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Hero Card Skeleton
+        // Hero Skeleton
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(380.dp)
-                .clip(RoundedCornerShape(32.dp))
-                .background(shimmerBrush)
+                .height(340.dp)
+                .clip(RoundedCornerShape(styles.radiusExtraLarge))
+                .shimmerEffect()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(styles.spacingLG))
 
-        // Hourly Row Skeleton
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            repeat(5) {
+        // Insight Skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .clip(RoundedCornerShape(styles.radiusLarge))
+                .shimmerEffect()
+        )
+
+        Spacer(modifier = Modifier.height(styles.spacingLG))
+
+        // Hourly Header
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .height(20.dp)
+                .shimmerEffect()
+        )
+
+        Spacer(modifier = Modifier.height(styles.spacingMD))
+
+        // Hourly List Skeleton
+        Row(horizontalArrangement = Arrangement.spacedBy(styles.spacingMD)) {
+            repeat(4) {
                 Box(
                     modifier = Modifier
-                        .size(width = 65.dp, height = 110.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(shimmerBrush)
+                        .size(width = 88.dp, height = 160.dp)
+                        .clip(RoundedCornerShape(styles.radiusLarge))
+                        .shimmerEffect()
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(styles.spacingLG))
 
         // Recommendation Skeleton
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(100.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(shimmerBrush)
+                .height(140.dp)
+                .clip(RoundedCornerShape(styles.radiusLarge))
+                .shimmerEffect()
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(styles.spacingLG))
 
-        // Daily List Skeleton
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            repeat(3) {
+        // Daily Skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .clip(RoundedCornerShape(styles.radiusExtraLarge))
+                .shimmerEffect()
+        )
+    }
+}
+
+@Composable
+fun TravelListSkeleton() {
+    val styles = HavamaniaTheme.styles
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(styles.pagePadding)
+    ) {
+        // Hero Skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(styles.radiusLarge))
+                .shimmerEffect()
+        )
+
+        Spacer(modifier = Modifier.height(styles.spacingLG))
+
+        // Calendar Stripe Skeleton
+        Row(horizontalArrangement = Arrangement.spacedBy(styles.spacingMD)) {
+            repeat(6) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(shimmerBrush)
+                        .size(width = 50.dp, height = 80.dp)
+                        .clip(RoundedCornerShape(styles.radiusSmall))
+                        .shimmerEffect()
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(styles.spacingLG))
+
+        // List Skeletons
+        repeat(3) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(styles.radiusLarge))
+                    .shimmerEffect()
+            )
+            Spacer(modifier = Modifier.height(styles.spacingMD))
         }
     }
 }

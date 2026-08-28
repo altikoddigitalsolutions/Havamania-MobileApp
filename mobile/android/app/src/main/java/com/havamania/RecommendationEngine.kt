@@ -9,6 +9,7 @@ import java.util.Locale
 enum class RecommendationTripStatus {
     UPCOMING_LOCKED,
     UPCOMING_ACTIVE,
+    TODAY,
     ONGOING,
     PAST
 }
@@ -16,10 +17,11 @@ enum class RecommendationTripStatus {
 object RecommendationEngine {
 
     fun getTripStatus(today: LocalDate, startDate: LocalDate, endDate: LocalDate): RecommendationTripStatus {
-        return when {
-            today.isAfter(endDate) -> RecommendationTripStatus.PAST
-            !today.isBefore(startDate) && !today.isAfter(endDate) -> RecommendationTripStatus.ONGOING
-            else -> {
+        val status = TravelStatusResolver.getStatus(startDate, endDate, today)
+        return when (status) {
+            TravelStatus.PAST -> RecommendationTripStatus.PAST
+            TravelStatus.ONGOING -> if (today == startDate) RecommendationTripStatus.TODAY else RecommendationTripStatus.ONGOING
+            TravelStatus.UPCOMING -> {
                 val daysUntil = ChronoUnit.DAYS.between(today, startDate)
                 if (daysUntil > TRIP_ANALYSIS_WINDOW_DAYS) RecommendationTripStatus.UPCOMING_LOCKED else RecommendationTripStatus.UPCOMING_ACTIVE
             }
@@ -421,6 +423,27 @@ object RecommendationEngine {
             AssistantTone.SAMIMI -> "${plan.city} seyahatin yaklaşıyor canım! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. Şimdiden hazırlıklara başla derim! 😊"
             AssistantTone.RESMI -> "${plan.city} istikametine yapacağınız seyahat yaklaşmaktadır. Tahmin edilen hava durumu $maxT°C ve $cond olarak bildirilmiştir."
             else -> "${plan.city} seyahatin yaklaşıyor! Seni $maxT° sıcaklıkta $cond bir hava bekliyor. İyi yolculuklar!"
+        }
+    }
+
+    /**
+     * P3.2: Deterministic short summary for the insight area.
+     */
+    fun getShortWeatherSummary(weather: WeatherData): String {
+        val temp = weather.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+        val condition = weather.condition.lowercase()
+        val precip = weather.precipitationProbability ?: 0
+        val wind = weather.windSpeed ?: 0.0
+
+        return when {
+            precip > 70 -> "Kuvvetli yağış bekleniyor, şemsiyesiz çıkmayın."
+            precip > 30 -> "Günün ilerleyen saatlerinde yağış görülebilir."
+            temp > 32 -> "Hava oldukça sıcak, bol su tüketmeyi unutmayın."
+            temp < 5 -> "Soğuk bir gün, sıkı giyinmenizi öneririz."
+            wind > 40 -> "Sert rüzgârlara karşı tedbirli olun."
+            condition.contains("bulut") -> "Bugün hava yer yer bulutlu seyredecek."
+            condition.contains("açık") || condition.contains("güneş") -> "Güneşli ve açık bir gökyüzü sizi bekliyor."
+            else -> "Bugün hava $condition, sıcaklık $temp°."
         }
     }
 }

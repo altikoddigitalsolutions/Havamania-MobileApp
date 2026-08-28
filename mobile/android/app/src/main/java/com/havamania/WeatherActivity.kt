@@ -52,7 +52,7 @@ class WeatherActivity : ComponentActivity() {
                 var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
                 if (appState == "splash") {
-                    TravelInspiredSplashScreen(onNavigateToHome = {
+                    TravelInspiredSplashScreen(onNavigate = {
                         appState = "main"
                     })
                 } else {

@@ -85,61 +85,119 @@ data class WeatherCacheEntity(
 /**
  * Seyahat Planlarını saklamak için Entity
  */
-@Entity(tableName = "travel_plans")
+@Entity(
+    tableName = "travel_plans",
+    indices = [Index(value = ["userId"])]
+)
 @IgnoreExtraProperties
 @Keep
 data class TravelPlanEntity(
     @PrimaryKey val id: String = "",
-    val userId: String = "legacy",
-    val city: String = "",
-    val district: String? = null,
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    val originCity: String? = null,
-    val originDistrict: String? = null,
-    val originLatitude: Double? = null,
-    val originLongitude: Double? = null,
-    val tripType: String = "",
-    val startDate: Long = 0L,
-    val endDate: Long = 0L,
-    val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
-    val archivedAt: Long? = null,
-    val lastAnalysisAt: Long? = null,
-    val weatherSummary: String? = null,
-    val packingAdvice: String? = null,
-    val mustSee: String? = null,
-    val foodAdvice: String? = null,
-    val localAdvice: String? = null,
-    val aiSuggestion: String? = null,
-    val comfortScore: Int? = null,
-    val userNote: String? = null,
-    val userRating: Int? = 0,
-    val lastWeatherAnalysisText: String? = null,
-    val lastWeatherAnalysisDate: Long? = null,
-    val lastForecastSnapshot: ForecastSnapshot? = null,
-    val previousForecastSnapshot: ForecastSnapshot? = null,
-    val nextAnalysisEligibleDate: Long? = null,
-    val weatherAnalysisStatus: String = "WAITING_FOR_WINDOW",
+    var userId: String = "legacy",
+    var city: String = "",
+    var district: String? = null,
+    var latitude: Double = 0.0,
+    var longitude: Double = 0.0,
+    var originCity: String? = null,
+    var originDistrict: String? = null,
+    var originLatitude: Double? = null,
+    var originLongitude: Double? = null,
+    var tripType: String = "",
+    var startDate: Long = 0L,
+    var endDate: Long = 0L,
+    var createdAt: Long = System.currentTimeMillis(),
+    var updatedAt: Long = System.currentTimeMillis(),
+    var archivedAt: Long? = null,
+    var lastAnalysisAt: Long? = null,
+    var weatherSummary: String? = null,
+    var packingAdvice: String? = null,
+    var mustSee: String? = null,
+    var foodAdvice: String? = null,
+    var localAdvice: String? = null,
+    var aiSuggestion: String? = null,
+    var comfortScore: Int? = null,
+    var userNote: String? = null,
+    var userRating: Int? = 0,
+    var lastWeatherAnalysisText: String? = null,
+    var lastWeatherAnalysisDate: Long? = null,
+    var lastForecastSnapshot: ForecastSnapshot? = null,
+    var previousForecastSnapshot: ForecastSnapshot? = null,
+    var nextAnalysisEligibleDate: Long? = null,
+    @get:PropertyName("weatherAnalysisStatus")
+    @set:PropertyName("weatherAnalysisStatus")
+    var weatherAnalysisStatus: String = "WAITING_FOR_WINDOW",
     @ColumnInfo(defaultValue = "0")
     @get:PropertyName("isArchived")
     @set:PropertyName("isArchived")
     var isArchived: Boolean = false,
-    val analyses: List<TravelWeatherAnalysis> = emptyList(),
-    val lastDailyNotificationDate: String? = null,
+    @get:PropertyName("analyses")
+    @set:PropertyName("analyses")
+    var analyses: List<TravelWeatherAnalysis> = emptyList(),
+    @get:PropertyName("lastDailyNotificationDate")
+    @set:PropertyName("lastDailyNotificationDate")
+    var lastDailyNotificationDate: String? = null,
     @ColumnInfo(defaultValue = "0")
     @get:PropertyName("isDemo")
     @set:PropertyName("isDemo")
     var isDemo: Boolean = false,
-    val departureTime: String? = null,
-    val routeWeatherSummary: String? = null,
-    val lastRouteAnalysisAt: Long? = null
-)
+    @get:PropertyName("departureTime")
+    @set:PropertyName("departureTime")
+    var departureTime: String? = null,
+    @get:PropertyName("routeWeatherSummary")
+    @set:PropertyName("routeWeatherSummary")
+    var routeWeatherSummary: String? = null,
+    @get:PropertyName("lastRouteAnalysisAt")
+    @set:PropertyName("lastRouteAnalysisAt")
+    var lastRouteAnalysisAt: Long? = null
+) {
+    fun toDomain() = TravelPlan(
+        id = id,
+        userId = userId,
+        city = city,
+        district = district,
+        latitude = latitude,
+        longitude = longitude,
+        originCity = originCity,
+        originDistrict = originDistrict,
+        originLatitude = originLatitude,
+        originLongitude = originLongitude,
+        tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
+        startDate = java.time.Instant.ofEpochMilli(startDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+        endDate = java.time.Instant.ofEpochMilli(endDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        archivedAt = archivedAt,
+        lastAnalysisAt = lastAnalysisAt ?: lastWeatherAnalysisDate,
+        weatherSummary = weatherSummary,
+        packingAdvice = packingAdvice,
+        mustSee = mustSee,
+        foodAdvice = foodAdvice,
+        localAdvice = localAdvice,
+        aiSuggestion = aiSuggestion,
+        comfortScore = comfortScore,
+        userNote = userNote,
+        userRating = userRating,
+        isAnalyzing = false,
+        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
+        isArchived = isArchived,
+        analyses = analyses,
+        lastDailyNotificationDate = lastDailyNotificationDate,
+        isDemo = isDemo,
+        lastForecastSnapshot = lastForecastSnapshot,
+        previousForecastSnapshot = previousForecastSnapshot,
+        departureTime = departureTime,
+        routeWeatherSummary = routeWeatherSummary,
+        lastRouteAnalysisAt = lastRouteAnalysisAt
+    )
+}
 
 /**
  * AI Analiz Geçmişini saklamak için Entity
  */
-@Entity(tableName = "ai_history")
+@Entity(
+    tableName = "ai_history",
+    indices = [Index(value = ["userId"])]
+)
 @IgnoreExtraProperties
 @Keep
 data class AiHistoryEntity(
@@ -167,7 +225,9 @@ interface WeatherDao {
     @Query("DELETE FROM weather_cache WHERE cityName = :city")
     suspend fun deleteWeather(city: String)
 
-    // Travel Plans
+    @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
+    suspend fun getTravelPlanById(id: String): TravelPlanEntity?
+
     @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
     fun getAllTravelPlansFlow(uid: String): kotlinx.coroutines.flow.Flow<List<TravelPlanEntity>>
 
@@ -209,7 +269,7 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 16, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 17, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -251,6 +311,14 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        /** Kullanıcı bazlı sorgular için indeksleme (v17). */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_travel_plans_userId ON travel_plans(userId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_ai_history_userId ON ai_history(userId)")
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 try {
@@ -259,7 +327,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                         WeatherDatabase::class.java,
                         "weather_database"
                     )
-                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                     .fallbackToDestructiveMigration()
                     .build()
                     INSTANCE = instance

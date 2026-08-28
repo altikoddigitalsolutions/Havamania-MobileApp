@@ -1,22 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // User-scoped data isolation
     match /users/{userId} {
+      // Allow user to read/write their own profile document
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
+      // trips subcollection
       match /trips/{tripId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
+      // cities subcollection (used for city search/favorites)
       match /cities/{cityId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      match /archivedTrips/{tripId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      match /assistantMemory/{memoryId} {
+      // Recursive safety for any other user-scoped data
+      match /{allPaths=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }

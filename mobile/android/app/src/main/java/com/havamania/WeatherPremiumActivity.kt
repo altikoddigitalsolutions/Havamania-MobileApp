@@ -32,11 +32,28 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navDeepLink
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import org.maplibre.android.MapLibre
+import org.maplibre.android.WellKnownTileServer
 
 class WeatherPremiumActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+
+        // Initialize MapLibre before any MapView is created
+        Log.i("MapInit", "Initializing MapLibre getInstance")
+        try {
+            MapLibre.getInstance(this, null, WellKnownTileServer.MapLibre)
+            Log.i("MapInit", "MapLibre initialized successfully")
+        } catch (e: Exception) {
+            Log.e("MapInit", "MapLibre initialization FAILED", e)
+        }
         var isReady by mutableStateOf(false)
+        var splashMinimumTimedOut by mutableStateOf(false)
+
+        // Keep system splash on screen until basic data is ready OR min timeout
+        splashScreen.setKeepOnScreenCondition {
+            !isReady && !splashMinimumTimedOut
+        }
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -63,11 +80,10 @@ class WeatherPremiumActivity : ComponentActivity() {
                 }
 
                 var appState by remember { mutableStateOf("splash") }
-                var splashMinimumTimedOut by remember { mutableStateOf(false) }
 
                 // Splash Screen Minimum Duration Timer
                 LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(2500)
+                    kotlinx.coroutines.delay(1200) // Lowered for faster cold start, custom splash handles the rest
                     splashMinimumTimedOut = true
                 }
                 val themeColors = HavamaniaTheme.colors
@@ -142,11 +158,12 @@ class WeatherPremiumActivity : ComponentActivity() {
 
                 // Splash Screen Logic
                 if (appState == "splash") {
-                    TravelInspiredSplashScreen(onNavigateToHome = {
-                        if (isReady && splashMinimumTimedOut) {
+                    TravelInspiredSplashScreen(
+                        onNavigate = {
                             appState = "main"
-                        }
-                    })
+                        },
+                        isReady = isReady
+                    )
                 } else {
                     val hideBottomBarRoutes = listOf(
                         Routes.AUTH_WELCOME,
@@ -162,7 +179,7 @@ class WeatherPremiumActivity : ComponentActivity() {
                     val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail") && !currentRoute.startsWith("sub_route_weather")
 
                     Scaffold(
-                        containerColor = themeColors.background,
+                        containerColor = Color.Transparent, // Managed by HavamaniaScreen
                         bottomBar = {
                             if (shouldShowBottomBar) {
                                 WeatherBottomBar(
@@ -187,9 +204,11 @@ class WeatherPremiumActivity : ComponentActivity() {
                             }
                         }
                     ) { innerPadding ->
+                        // The background gradient is now handled globally in HavamaniaScreen
+                        // for each page to allow specific overrides if needed.
+                        // We use a root Box here for common layout values.
                         Box(modifier = Modifier
                             .fillMaxSize()
-                            .background(backgroundGradient)
                             .padding(bottom = if (shouldShowBottomBar) innerPadding.calculateBottomPadding() else 0.dp)
                         ) {
                             NavHost(
@@ -280,6 +299,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()
+                                        },
+                                        onNavigateToHistory = {
+                                            navController.navigate(Routes.AI_HISTORY)
                                         },
                                         onNavigateToTravelCreate = { city: String, date: String? ->
                                             navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")

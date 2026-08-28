@@ -93,39 +93,23 @@ export function PaywallScreen({navigation}: any): React.JSX.Element {
           </View>
 
           <View style={s.plansContainer}>
-            {PLANS.map(plan => (
-              <TouchableOpacity
-                key={plan.code}
-                style={[s.planCard, plan.popular && s.popularCard]}
-                onPress={() => purchaseMutation.mutate(plan.code)}
-                disabled={purchaseMutation.isPending}
-              >
-                {plan.popular && (
-                  <LinearGradient
-                    colors={['#F59E0B', '#D97706']}
-                    start={{x:0, y:0}} end={{x:1, y:0}}
-                    style={s.popularBadge}
+             <View style={[s.planCard, {borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.08)'}]}>
+                <View style={{alignItems: 'center', gap: 12}}>
+                  <Icon name="information-circle" size={32} color="#F59E0B" />
+                  <Text style={[s.planTitle, {textAlign: 'center'}]}>Havamania Premium Çok Yakında</Text>
+                  <Text style={[s.planSubtitle, {textAlign: 'center', maxWidth: '100%'}]}>
+                    Premium özellikler şu an geliştirme aşamasındadır. En kısa sürede tüm ayrıcalıklarıyla burada olacak.
+                  </Text>
+                  <TouchableOpacity
+                    style={[s.proTag, {marginTop: 10, width: '100%', alignItems: 'center', height: 44, justifyContent: 'center'}]}
+                    onPress={() => navigation.goBack()}
                   >
-                    <Text style={s.popularText}>EN POPÜLER</Text>
-                  </LinearGradient>
-                )}
-                <View style={s.planHeader}>
-                  <View>
-                    <Text style={s.planTitle}>{plan.title}</Text>
-                    <Text style={s.planSubtitle}>{plan.subtitle}</Text>
-                  </View>
-                  <Text style={s.planPrice}>{plan.price}</Text>
+                    <Text style={s.proTagText}>Geri Dön</Text>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            ))}
+             </View>
           </View>
 
-          <TouchableOpacity
-            style={s.restoreBtn}
-            onPress={() => restorePurchases().then(() => Alert.alert('Başarılı', 'Satın alımlarınız geri yüklendi.'))}
-          >
-            <Text style={s.restoreText}>Satın Alımları Geri Yükle</Text>
-          </TouchableOpacity>
 
           <View style={s.footer}>
             <Text style={s.footerText}>

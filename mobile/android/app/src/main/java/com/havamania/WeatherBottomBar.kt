@@ -103,51 +103,39 @@ fun WeatherBottomBar(
                         label = {
                             Text(
                                 text = item.title,
-                                style = MaterialTheme.typography.labelSmall.copy(
+                                style = HavamaniaTheme.typography.label.copy(
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    letterSpacing = 0.2.sp,
-                                    lineHeight = 16.sp
+                                    fontSize = 10.sp,
+                                    letterSpacing = 0.5.sp
                                 ),
-                                color = if (isSelected) themeColors.accent else themeColors.textSecondary.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                modifier = Modifier.padding(top = 2.dp)
+                                color = if (isSelected) themeColors.accent else themeColors.textMuted,
+                                maxLines = 1
                             )
                         },
                         icon = {
-                            val iconSize by animateDpAsState(targetValue = if (isSelected) 24.dp else 22.dp)
+                            val iconSize by animateDpAsState(targetValue = if (isSelected) 24.dp else 22.dp, label = "iconSize")
 
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .width(60.dp)
-                                    .height(30.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) themeColors.accent else Color.Transparent)
-                            ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 if (isSelected) {
+                                    // Subtle Glow behind icon
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .blur(6.dp)
-                                            .background(themeColors.accent.copy(alpha = 0.3f), CircleShape)
+                                            .size(40.dp)
+                                            .blur(10.dp)
+                                            .background(themeColors.accent.copy(alpha = 0.15f), CircleShape)
                                     )
                                 }
 
                                 Icon(
                                     imageVector = item.icon,
-                                    contentDescription = item.title,
+                                    contentDescription = null,
                                     modifier = Modifier.size(iconSize),
-                                    tint = if (isSelected) Color.White else themeColors.textSecondary.copy(alpha = 0.6f)
+                                    tint = if (isSelected) themeColors.accent else themeColors.textMuted.copy(alpha = 0.6f)
                                 )
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = Color.Transparent,
-                            selectedIconColor = Color.White,
-                            unselectedIconColor = themeColors.textSecondary.copy(alpha = 0.6f),
-                            selectedTextColor = themeColors.accent,
-                            unselectedTextColor = themeColors.textSecondary.copy(alpha = 0.7f)
+                            indicatorColor = Color.Transparent
                         )
                     )
                 }

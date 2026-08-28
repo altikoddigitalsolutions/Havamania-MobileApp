@@ -481,60 +481,60 @@ fun NotificationCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            text = notification.getSafeTitle(),
+                            style = HavamaniaTheme.typography.label.copy(
+                                fontWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black,
+                                fontSize = 13.sp,
+                                letterSpacing = 0.1.sp
+                            ),
+                            color = themeColors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(text = timeStr, style = HavamaniaTheme.typography.caption.copy(fontSize = 10.sp), color = themeColors.textMuted)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
-                        text = notification.getSafeTitle(),
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black,
-                            fontSize = 13.sp,
-                            letterSpacing = 0.1.sp
-                        ),
-                        color = themeColors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        text = notification.getSafeMessage(),
+                        style = HavamaniaTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
+                        color = if (notification.isRead) themeColors.textSecondary.copy(alpha = 0.7f) else themeColors.textSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Text(text = timeStr, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = themeColors.textMuted)
-                }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = notification.getSafeMessage(),
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 18.sp, fontSize = 13.sp),
-                    color = if (notification.isRead) themeColors.textSecondary.copy(alpha = 0.7f) else themeColors.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                if (eventTimeStr != null && eventTimeStr.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Schedule, null, tint = themeColors.accent.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = eventTimeStr,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                            color = themeColors.accent.copy(alpha = 0.7f)
-                        )
+                    if (eventTimeStr != null && eventTimeStr.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Schedule, null, tint = themeColors.accent.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = eventTimeStr,
+                                style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                                color = themeColors.accent.copy(alpha = 0.7f)
+                            )
+                        }
                     }
-                }
 
-                if (notification.actionLabel != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        onClick = { onNavigateToDetail("", null) },
-                        shape = CircleShape,
-                        color = themeColors.accent.copy(alpha = 0.1f),
-                        border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
-                    ) {
-                        Text(
-                            text = notification.actionLabel.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, fontSize = 10.sp),
-                            color = themeColors.accent,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                    if (notification.actionLabel != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            onClick = { onNavigateToDetail("", null) },
+                            shape = CircleShape,
+                            color = themeColors.accent.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
+                        ) {
+                            Text(
+                                text = notification.actionLabel.uppercase(),
+                                style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, fontSize = 10.sp),
+                                color = themeColors.accent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
-                }
             }
 
             if (isSelectionMode) {
@@ -603,7 +603,7 @@ fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
         Text(
             text = label,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
-            style = MaterialTheme.typography.labelLarge.copy(
+            style = HavamaniaTheme.typography.label.copy(
                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                 letterSpacing = 0.5.sp
             ),
@@ -629,7 +629,7 @@ fun EmptyNotificationState(onResetFilter: () -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "Bu kategoride filtreye uygun bildirim bulunamadı.",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )

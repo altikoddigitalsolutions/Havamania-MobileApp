@@ -33,6 +33,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    private val timeProvider: TimeProvider = DefaultTimeProvider
 
     private var firestoreListener: ListenerRegistration? = null
 
@@ -40,7 +41,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(
             scope = viewModelScope,
-            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = true
         )
 
@@ -56,48 +57,41 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val _originSuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val originSuggestions: StateFlow<List<GeocodingResultDto>> = _originSuggestions.asStateFlow()
 
-    private val _uiEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    private val _uiEvent = MutableSharedFlow<String>()
     val uiEvent = _uiEvent.asSharedFlow()
+
+    private val _today = MutableStateFlow(LocalDate.now())
+    val today: StateFlow<LocalDate> = _today.asStateFlow()
 
     private val TAG = "TravelAnalysisDebug"
     private val AUTO_TAG = "TravelAutoAnalysis"
     private val FLOW_TAG = "TripCreateFlow"
 
-    private val CITY_FALLBACKS = mapOf(
-        "istanbul" to Pair(41.0082, 28.9784),
-        "ankara" to Pair(39.9334, 32.8597),
-        "izmir" to Pair(38.4237, 27.1428),
-        "antalya" to Pair(36.8969, 30.7133),
-        "balikesir" to Pair(39.6484, 27.8826),
-        "trabzon" to Pair(41.0027, 39.7168),
-        "mardin" to Pair(37.3129, 40.7350),
-        "gaziantep" to Pair(37.0662, 37.3833),
-        "batman" to Pair(37.8812, 41.1322),
-        "bali" to Pair(-8.4095, 115.1889)
-    )
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed. New UID: $newUid")
+        _plans.value = emptyList()
+        _isLoading.value = true
+        loadPlansForUid(newUid)
+        observeFirestoreTrips(newUid)
+    }
 
     init {
-        viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-                Log.d(TAG, "Auth state changed. New UID: $newUid")
-                // Reset state immediately
-                _plans.value = emptyList()
-                _isLoading.value = true
-
-                // Restart data flow
-                loadPlansForUid(newUid)
-                observeFirestoreTrips(newUid)
-            }
-        }
+        auth.addAuthStateListener(authListener)
         seedInitialDataIfNeeded()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        firestoreListener?.remove()
+        analysisJobs.values.forEach { it.cancel() }
     }
 
     private fun observeFirestoreTrips(uid: String) {
         firestoreListener?.remove()
         if (uid == "legacy") return
 
-        Log.d(TAG, "Starting Firestore listener for $uid")
         firestoreListener = db.collection("users").document(uid).collection("trips")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
@@ -106,6 +100,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 if (snapshot != null) {
+                    val isFromCache = snapshot.metadata.isFromCache
                     viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             val entities = snapshot.documents.mapNotNull { doc ->
@@ -116,17 +111,19 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                                     null
                                 }
                             }
-                            Log.d(TAG, "Firestore snapshot received: ${entities.size} items")
 
-                            // Sync with Room
                             entities.forEach { dao.insertTravelPlan(it) }
 
-                            // Delete items locally that were deleted in Firestore
-                            val localEntities = dao.getAllTravelPlans(uid)
-                            val remoteIds = entities.map { it.id }.toSet()
-                            localEntities.forEach { local ->
-                                if (!remoteIds.contains(local.id) && !local.isDemo) {
-                                    dao.deleteTravelPlan(local.id)
+                            if (!isFromCache) {
+                                val localEntities = dao.getAllTravelPlans(uid)
+                                val remoteIds = entities.map { it.id }.toSet()
+                                localEntities.forEach { local ->
+                                    if (!remoteIds.contains(local.id) && !local.isDemo) {
+                                        val ageMs = System.currentTimeMillis() - local.createdAt
+                                        if (ageMs > 60000) {
+                                            dao.deleteTravelPlan(local.id)
+                                        }
+                                    }
                                 }
                             }
                         } catch (ex: Exception) {
@@ -151,22 +148,10 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun normalizeCityName(name: String): String {
-        return name.trim().lowercase(Locale("tr"))
-            .replace('ç', 'c')
-            .replace('ğ', 'g')
-            .replace('ı', 'i')
-            .replace("i\u0307", "i")
-            .replace('ö', 'o')
-            .replace('ş', 's')
-            .replace('ü', 'u')
-    }
 
     fun seedInitialDataIfNeeded(force: Boolean = false) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // Yeni kullanıcılar tamamen boş başlamalı.
             if (currentUid != "legacy" && !force) {
-                Log.d(TAG, "Logged in user: $currentUid starting with empty list.")
                 loadPlans()
                 return@launch
             }
@@ -175,13 +160,12 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             val hasSeeded = ThemeManager.getHasSeededTrips(getApplication(), currentUid).first()
             val entities = if (force) emptyList() else dao.getAllTravelPlans(currentUid)
 
-            // Sadece giriş yapmamış (legacy) kullanıcılar için ilk seferde örnek veri ekle
             if (entities.isEmpty() && (!hasSeeded || force)) {
                 if (force) dao.clearAllTravelPlans(currentUid)
 
                 if (currentUid == "legacy") {
-                    val today = LocalDate.now()
-                    val currentYear = today.year
+                    val todayVal = LocalDate.now()
+                    val currentYear = todayVal.year
 
                     val seedPlans = listOf(
                         TravelPlan(
@@ -227,15 +211,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun loadPlans() {
+        _today.value = timeProvider.today()
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _isLoading.value = true
             val entities = dao.getAllTravelPlans(currentUid)
-            Log.d(TAG, "Source: Room DB, Loaded ${entities.size} entities for $currentUid")
-
             val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
             _plans.value = domainPlans
             _isLoading.value = false
-
             checkAndTriggerAutoAnalysis(domainPlans)
         }
     }
@@ -243,19 +225,17 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val analysisJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
 
     private fun checkAndTriggerAutoAnalysis(plans: List<TravelPlan>) {
-        val today = LocalDate.now()
+        val todayVal = _today.value
         plans.forEach { plan ->
             if (plan.isArchived) return@forEach
 
-            val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
+            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
             val isWithinWindow = daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS
-            val isOver = today.isAfter(plan.endDate)
+            val isOver = todayVal.isAfter(plan.endDate)
 
             if (isOver) return@forEach
 
             val status = plan.weatherAnalysisStatus
-
-            // KURAL: 10 gün ve altındaysa otomatik analiz başlar
             val shouldAutoAnalyze = isWithinWindow && (
                 status == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW ||
                 status == TravelWeatherAnalysisStatus.WEATHER_FAILED ||
@@ -263,26 +243,21 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             )
 
             if (shouldAutoAnalyze && !analysisJobs.containsKey(plan.id)) {
-                Log.i(AUTO_TAG, "AutoAnalysisTriggered City=${plan.city} DaysUntil=$daysUntil")
                 analyzeTravelWeather(plan)
             }
         }
     }
 
     fun analyzeTravelWeather(plan: TravelPlan) {
-        if (analysisJobs.containsKey(plan.id)) return // Race condition engeli
+        if (analysisJobs.containsKey(plan.id)) return
 
         val job = viewModelScope.launch {
-            Log.d(TAG, "RE-ANALYZE TRIGGERED for ${plan.city}")
-
             _plans.value = _plans.value.map {
                 if (it.id == plan.id) it.copy(isAnalyzing = true) else it
             }
 
             try {
                 val updatedPlan = performAnalysis(plan)
-
-                // Root Cause Fix: Check if a NEW analysis was actually generated (Issue #3)
                 val isNewAnalysis = updatedPlan.analyses.size > plan.analyses.size ||
                                    (plan.analyses.isEmpty() && updatedPlan.analyses.isNotEmpty())
 
@@ -296,7 +271,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                             Log.e(TAG, "Analysis Firestore sync failed", e)
                         }
                     }
-                    // Atomik update
                     _plans.value = _plans.value.map {
                         if (it.id == plan.id) updatedPlan else it
                     }
@@ -305,9 +279,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                      _plans.value = _plans.value.map {
                         if (it.id == plan.id) updatedPlan else it
                     }
-                    // No snackbar for natural waiting state
                 } else {
-                    // Failure case: preserve old data in UI but show error
                     _plans.value = _plans.value.map {
                         if (it.id == plan.id) it.copy(isAnalyzing = false) else it
                     }
@@ -327,208 +299,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     suspend fun performAnalysis(plan: TravelPlan): TravelPlan {
-        val today = LocalDate.now()
-        val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
-        val isWithinWindow = daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS
-
-        val tone = ThemeManager.getAssistantTone(getApplication(), currentUid).first()
-
-        // 1. TAMAMLANMIŞ SEYAHAT KONTROLÜ
-        if (today.isAfter(plan.endDate)) {
-             val suggestion = TravelAiHelper.generateTravelAiSuggestion(
-                city = plan.city, tripType = plan.tripType, forecastSnapshot = null,
-                previousSnapshot = null, daysUntilTrip = daysUntil, isPastTrip = true,
-                endDate = plan.endDate, tone = tone
-            )
-            return plan.copy(
-                isAnalyzing = false,
-                weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY,
-                aiSuggestion = suggestion,
-                lastAnalysisAt = System.currentTimeMillis()
-            )
-        }
-
-        // 2. 10 GÜN KURALI (Business Rule 1)
-        if (!isWithinWindow) {
-            return plan.copy(
-                isAnalyzing = false,
-                weatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
-                aiSuggestion = null,
-                lastAnalysisAt = System.currentTimeMillis()
-            )
-        }
-
-        // 3. KOORDİNAT VE API ÇAĞRISI (Yalnızca gerekiyorsa)
-        var lat = plan.latitude
-        var lon = plan.longitude
-
-        if (lat == 0.0 && lon == 0.0) {
-            val normalized = normalizeCityName(plan.city)
-            val fallback = CITY_FALLBACKS[normalized]
-            if (fallback != null) {
-                lat = fallback.first
-                lon = fallback.second
-            } else {
-                val geoResults = try {
-                    kotlinx.coroutines.withTimeout(5000) { repository.searchCity(plan.city) }
-                } catch(e: Exception) { emptyList() }
-
-                if (geoResults.isNotEmpty()) {
-                    lat = geoResults[0].latitude
-                    lon = geoResults[0].longitude
-                }
-            }
-        }
-
-        if (lat == 0.0 && lon == 0.0) throw Exception("Koordinat bulunamadı")
-
-        // API Çağrısı (Timeout ile)
-        val response = try {
-            kotlinx.coroutines.withTimeout(15000) {
-                apiService.getFullWeather(lat = lat, lon = lon, days = 16)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Weather API fail", e)
-            null
-        }
-
-        if (response == null) {
-            // Offline/Hata durumunda mevcut veriyi koru
-            if (plan.lastForecastSnapshot != null) {
-                return plan.copy(isAnalyzing = false, weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_PARTIAL_READY)
-            }
-            throw Exception("API hatası")
-        }
-
-        // 4. ANALİZ ÜRETİMİ
-        val daily = response.daily
-        var snapshot: ForecastSnapshot? = null
-
-        if (daily != null) {
-            val tripDates = daily.time.map { LocalDate.parse(it) }
-            val overlapIndices = tripDates.indices.filter { i ->
-                val date = tripDates[i]
-                !date.isBefore(plan.startDate) && !date.isAfter(plan.endDate)
-            }
-
-            if (overlapIndices.isNotEmpty()) {
-                val maxCode = overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
-                val avgMin = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.average()
-                val avgMax = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.average()
-
-                snapshot = ForecastSnapshot(
-                    precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
-                    minTemp = avgMin,
-                    maxTemp = avgMax,
-                    windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
-                    uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
-                    conditionSummary = WeatherMapper.getWeatherCondition(maxCode),
-                    weatherCode = maxCode,
-                    travelScore = calculateTravelScore(ForecastSnapshot(minTemp = avgMin, maxTemp = avgMax), plan.tripType)
-                )
-            }
-        }
-
-        // Kişiselleştirme
-        val interests = ThemeManager.getUserInterests(getApplication(), currentUid).first()
-        val personalization = PersonalizationProfile(uid = currentUid, selectedInterests = interests.toList())
-
-        val aiResult = TravelAiHelper.generateTravelAiSuggestion(
-            plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot,
-            daysUntil, tone = tone, personalization = personalization
+        return TravelAnalysisEngine.performAnalysis(
+            context = getApplication(),
+            plan = plan,
+            currentUid = currentUid,
+            apiService = apiService,
+            repository = repository
         )
-
-        // Parse AI Result to separate fields for the model (Stability)
-        val sections = aiResult.split("[SEP]")
-        var weatherSum: String? = null
-        var pack: String? = null
-        var must: String? = null
-        var food: String? = null
-        var local: String? = null
-
-        sections.forEach { s ->
-            when {
-                s.contains("HAVA ÖZETİ|") -> weatherSum = s.split("|").last().trim()
-                s.contains("VALİZ TAVSİYESİ|") -> pack = s.split("|").last().trim()
-                s.contains("MUTLAKA GÖR|") -> must = s.split("|").last().trim()
-                s.contains("DENEMEDEN DÖNME|") -> food = s.split("|").last().trim()
-                s.contains("YEREL TAVSİYE|") -> local = s.split("|").last().trim()
-            }
-        }
-
-        return plan.copy(
-            isAnalyzing = false,
-            aiSuggestion = aiResult,
-            weatherSummary = weatherSum,
-            packingAdvice = pack,
-            mustSee = must,
-            foodAdvice = food,
-            localAdvice = local,
-            comfortScore = snapshot?.travelScore,
-            lastAnalysisAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
-            lastForecastSnapshot = snapshot,
-            previousForecastSnapshot = plan.lastForecastSnapshot,
-            weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY,
-            latitude = lat,
-            longitude = lon,
-            analyses = plan.analyses + TravelWeatherAnalysis(
-                tripId = plan.id,
-                travelScore = snapshot?.travelScore ?: 0,
-                rainRiskPercent = snapshot?.precipitationProbability,
-                averageTemperature = ((snapshot?.minTemp ?: 0.0) + (snapshot?.maxTemp ?: 0.0)) / 2.0,
-                summary = weatherSum ?: "Hava durumu verisi alındı.",
-                recommendation = aiResult,
-                comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null)
-                    TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot)
-                    else null
-            )
-        )
-    }
-
-    private fun calculateTravelScore(snapshot: ForecastSnapshot, type: TripType): Int {
-        var score = 85 + (Math.random() * 10).toInt() // Base score between 85-95
-        val precip = snapshot.precipitationProbability ?: 0
-        val wind = snapshot.windSpeed ?: 0.0
-        val temp = snapshot.maxTemp ?: 20.0
-
-        // Impact of precipitation
-        if (precip > 70) score -= 35
-        else if (precip > 40) score -= 20
-        else if (precip > 15) score -= 8
-
-        // Impact of wind
-        if (wind > 50) score -= 25
-        else if (wind > 30) score -= 12
-        else if (wind > 20) score -= 5
-
-        // Impact of temperature based on trip type
-        when(type) {
-            TripType.BEACH -> {
-                if (temp < 22) score -= 30
-                else if (temp < 26) score -= 15
-                else if (temp > 38) score -= 10
-            }
-            TripType.WINTER -> {
-                if (temp > 8) score -= 25
-                else if (temp < -10) score -= 15
-            }
-            TripType.CAMPING -> {
-                if (temp < 12) score -= 25
-                else if (temp > 35) score -= 15
-                if (precip > 30) score -= 20
-            }
-            TripType.SPORTS -> {
-                if (temp > 32) score -= 20
-                if (wind > 25) score -= 15
-            }
-            else -> {
-                if (temp < 5) score -= 20
-                else if (temp > 35) score -= 15
-            }
-        }
-
-        return score.coerceIn(40, 100)
     }
 
     fun savePlan(plan: TravelPlan) {
@@ -536,15 +313,13 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         if (cityNameTrimmed.isEmpty()) return
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val today = LocalDate.now()
-            val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
-            val isUpcoming = !plan.startDate.isBefore(today)
+            val todayVal = _today.value
+            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
+            val isUpcoming = !plan.startDate.isBefore(todayVal)
 
-            // DUPLICATE CHECK (Business Rule 6)
             val existing = dao.getAllTravelPlans(currentUid)
             val isDuplicate = existing.any {
                 it.city.equals(cityNameTrimmed, ignoreCase = true) &&
-                // Aynı ilin farklı ilçeleri ayrı plan sayılır.
                 (it.district ?: "").equals(plan.district ?: "", ignoreCase = true) &&
                 it.startDate == plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() &&
                 it.endDate == plan.endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -562,19 +337,14 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             val entity = finalPlan.toEntity()
-
-            // 1. Write to Room (Optimistic UI handled by loadPlansForUid flow)
             dao.insertTravelPlan(entity)
 
-            // 2. Write to Firestore if logged in
             if (currentUid != "legacy") {
                 try {
                     db.collection("users").document(currentUid).collection("trips")
                         .document(entity.id).set(entity).await()
-                    Log.d(TAG, "Firestore save successful for ${entity.id}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Firestore save failed", e)
-                    // Notify user but keep local data
                     _uiEvent.emit("Seyahat yerel olarak kaydedildi ancak bulut senkronizasyonu şu anda yapılamıyor.")
                 }
             }
@@ -587,17 +357,11 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deletePlan(id: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            Log.i(TAG, "Deleting TripId=$id")
-
-            // 1. Delete from Room
             dao.deleteTravelPlan(id)
-
-            // 2. Delete from Firestore if logged in
             if (currentUid != "legacy") {
                 try {
                     db.collection("users").document(currentUid).collection("trips")
                         .document(id).delete().await()
-                    Log.d(TAG, "Firestore delete successful for $id")
                 } catch (e: Exception) {
                     Log.e(TAG, "Firestore delete failed", e)
                     _uiEvent.emit("Şu anda seyahat buluttan silinemedi.")
@@ -610,7 +374,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val uid = currentUid
             dao.clearAllTravelPlans(uid)
-            dao.clearAllWeatherCache() // Seyahatlerle ilgili hava durumu önbelleğini de temizle
+            dao.clearAllWeatherCache()
             ThemeManager.saveHasSeededTrips(getApplication(), true, uid)
             _plans.value = emptyList()
         }
@@ -619,7 +383,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private var citySearchJob: kotlinx.coroutines.Job? = null
     private var originSearchJob: kotlinx.coroutines.Job? = null
 
-    /** Varış yeri araması — il, ilçe ve semt sonuçlarını (Open-Meteo geocoding) döner. */
     fun searchCity(query: String) {
         citySearchJob?.cancel()
         if (query.trim().length < 2) {
@@ -627,12 +390,11 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         citySearchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(300) // her tuşta istek atmamak için
+            kotlinx.coroutines.delay(300)
             _citySuggestions.value = repository.searchCity(query.trim())
         }
     }
 
-    /** Kalkış noktası araması — varış aramasından bağımsız sonuç listesi. */
     fun searchOrigin(query: String) {
         originSearchJob?.cancel()
         if (query.trim().length < 2) {
@@ -727,92 +489,12 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun getTripStatus(plan: TravelPlan): com.havamania.TripStatus {
-        val today = LocalDate.now()
-        return when {
-            today.isAfter(plan.endDate) -> com.havamania.TripStatus.COMPLETED
-            !today.isBefore(plan.startDate) && !today.isAfter(plan.endDate) -> com.havamania.TripStatus.ACTIVE
-            else -> com.havamania.TripStatus.UPCOMING
+        val todayValue = _today.value
+        val status = TravelStatusResolver.getStatus(plan.startDate, plan.endDate, todayValue)
+        return when (status) {
+            TravelStatus.PAST -> com.havamania.TripStatus.COMPLETED
+            TravelStatus.ONGOING -> com.havamania.TripStatus.ACTIVE
+            TravelStatus.UPCOMING -> com.havamania.TripStatus.UPCOMING
         }
     }
-
-    private fun TravelPlanEntity.toDomain() = TravelPlan(
-        id = id,
-        userId = userId,
-        city = city,
-        district = district,
-        latitude = latitude,
-        longitude = longitude,
-        originCity = originCity,
-        originDistrict = originDistrict,
-        originLatitude = originLatitude,
-        originLongitude = originLongitude,
-        tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
-        startDate = Instant.ofEpochMilli(startDate).atZone(ZoneId.systemDefault()).toLocalDate(),
-        endDate = Instant.ofEpochMilli(endDate).atZone(ZoneId.systemDefault()).toLocalDate(),
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        archivedAt = archivedAt,
-        lastAnalysisAt = lastAnalysisAt,
-        weatherSummary = weatherSummary,
-        packingAdvice = packingAdvice,
-        mustSee = mustSee,
-        foodAdvice = foodAdvice,
-        localAdvice = localAdvice,
-        aiSuggestion = aiSuggestion,
-        comfortScore = comfortScore,
-        userNote = userNote,
-        userRating = userRating,
-        isAnalyzing = false,
-        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
-        isArchived = isArchived,
-        analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate,
-        isDemo = isDemo,
-        lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot,
-        departureTime = departureTime,
-        routeWeatherSummary = routeWeatherSummary,
-        lastRouteAnalysisAt = lastRouteAnalysisAt
-    )
-
-    private fun TravelPlan.toEntity() = TravelPlanEntity(
-        id = id,
-        userId = userId,
-        city = city,
-        district = district,
-        latitude = latitude,
-        longitude = longitude,
-        originCity = originCity,
-        originDistrict = originDistrict,
-        originLatitude = originLatitude,
-        originLongitude = originLongitude,
-        tripType = tripType.name,
-        startDate = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        endDate = endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        archivedAt = archivedAt,
-        lastAnalysisAt = lastAnalysisAt,
-        weatherSummary = weatherSummary,
-        packingAdvice = packingAdvice,
-        mustSee = mustSee,
-        foodAdvice = foodAdvice,
-        localAdvice = localAdvice,
-        aiSuggestion = aiSuggestion,
-        comfortScore = comfortScore,
-        userNote = userNote,
-        userRating = userRating,
-        lastWeatherAnalysisText = if (weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) "Bekleniyor" else "Hazır",
-        lastWeatherAnalysisDate = lastAnalysisAt,
-        lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot,
-        weatherAnalysisStatus = weatherAnalysisStatus.name,
-        isArchived = isArchived,
-        analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate,
-        isDemo = isDemo,
-        departureTime = departureTime,
-        routeWeatherSummary = routeWeatherSummary,
-        lastRouteAnalysisAt = lastRouteAnalysisAt
-    )
 }

@@ -43,7 +43,7 @@ fun AiHistoryScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "AI GEÇMİŞİ",
+                title = "ASİSTAN GEÇMİŞİ",
                 onBack = onBack,
                 actions = {
                     if (historyItems.isNotEmpty()) {
@@ -143,8 +143,7 @@ fun AiHistoryCard(
                 Row(verticalAlignment = Alignment.Top) {
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Black,
+                        style = HavamaniaTheme.typography.cardTitle.copy(
                             fontSize = 15.sp,
                             lineHeight = 20.sp
                         ),
@@ -162,7 +161,7 @@ fun AiHistoryCard(
                             Text(
                                 item.cityName,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                                 color = themeColors.accent
                             )
                         }
@@ -171,7 +170,7 @@ fun AiHistoryCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = item.summary,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                    style = HavamaniaTheme.typography.bodySmall.copy(lineHeight = 16.sp),
                     color = themeColors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -179,8 +178,7 @@ fun AiHistoryCard(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = dateStr,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp,
+                    style = HavamaniaTheme.typography.caption.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     ),
@@ -202,39 +200,9 @@ fun AiHistoryCard(
 
 @Composable
 fun AiHistoryEmptyState() {
-    val themeColors = HavamaniaTheme.colors
-    Column(
-        modifier = Modifier.fillMaxSize().padding(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(themeColors.accent.copy(alpha = 0.05f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Rounded.HistoryEdu,
-                null,
-                tint = themeColors.accent.copy(alpha = 0.3f),
-                modifier = Modifier.size(50.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            "Henüz bir sohbet geçmişin yok.",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-            color = themeColors.textPrimary,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            "Havamania Dijital Asistanına hava, seyahat veya günlük planların hakkında soru sorabilirsin.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = themeColors.textSecondary,
-            textAlign = TextAlign.Center
-        )
-    }
+    HavamaniaEmptyState(
+        icon = Icons.Rounded.HistoryEdu,
+        title = "Henüz bir sohbet geçmişin yok.",
+        description = "Havamania Dijital Asistanına hava, seyahat veya günlük planların hakkında soru sorabilirsin."
+    )
 }

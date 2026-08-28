@@ -7,11 +7,13 @@ import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.UUID
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class AiAssistantRepository(
     private val api: AltikodChatService = AltikodChatFactory.create()
 ) {
-    private val botId = "6" // RCA FIX: Verified integer ID
+    private val botId = "6" // P3.8.5 RCA FIX: Verified INTEGER ID for this backend
 
     suspend fun getBotConfig(): AltikodBotConfig? = withContext(Dispatchers.IO) {
         try {
@@ -22,12 +24,6 @@ class AiAssistantRepository(
         }
     }
 
-    /**
-     * Bot, gönderilen metni temizledikten sonra geriye anlamlı bir soru kalmadıysa
-     * (boş/yalnızca boşluk gönderim ya da satır başı girintili — markdown kod bloğu
-     * sayılan — payload) cevap yerine bu sabit uyarıyı döndürüyor. Canlı bot üzerinde
-     * doğrulandı; baloncukta "cevap" gibi göstermek yerine hata olarak ele alıyoruz.
-     */
     private fun isRejectionNotice(content: String): Boolean {
         val normalized = content.lowercase(java.util.Locale("tr")).trim().trimEnd('.', '!', ' ')
         return normalized == "lütfen geçerli bir soru sorunuz"
@@ -39,16 +35,19 @@ class AiAssistantRepository(
     ): AssistantResult = withContext(Dispatchers.IO) {
         val requestId = UUID.randomUUID().toString()
 
-        // 1. Config Validation
         if (botId.isBlank() || botId == "YOUR_BOT_ID") {
             return@withContext AssistantResult.ConfigurationError
         }
 
         Log.d("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_START | requestId=$requestId | botId=$botId | messageLength=${question.length}")
+        Log.v("ASSISTANT_DEBUG", "PAYLOAD_TRACE | question=${question.take(100)}... | session=$sessionId")
 
         try {
             val request = AltikodChatRequest(question = question, session_id = sessionId)
+            Log.d("ASSISTANT_DEBUG", "REQUEST_BODY | json=${Json.encodeToString(request)}")
+
             val response = api.sendMessage(botId, request)
+            Log.d("ASSISTANT_DEBUG", "RESPONSE_BODY | answer=${response.answer.take(100)}... | session=${response.session_id}")
 
             val content = response.answer.trim()
 
@@ -58,20 +57,17 @@ class AiAssistantRepository(
             }
 
             if (isRejectionNotice(content)) {
-                Log.e(
-                    "ASSISTANT_DEBUG",
-                    "ASSISTANT_REQUEST_FAILED | requestId=$requestId | stage=QUESTION_REJECTED | " +
-                        "questionLength=${question.length} | tail=${question.takeLast(80).replace("\n", "\\n")}"
-                )
+                Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | stage=QUESTION_REJECTED")
                 return@withContext AssistantResult.QuestionRejected
             }
 
-            Log.d("ASSISTANT_DEBUG", "ASSISTANT_HTTP_RESULT | requestId=$requestId | httpCode=200 | successful=true | contentPresent=true")
+            Log.d("ASSISTANT_DEBUG", "ASSISTANT_HTTP_RESULT | requestId=$requestId | httpCode=200 | successful=true")
             AssistantResult.Success(content)
 
         } catch (e: HttpException) {
             val code = e.code()
-            Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | errorClass=HttpException | httpCode=$code | stage=HTTP")
+            val errorBody = e.response()?.errorBody()?.string()
+            Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | errorClass=HttpException | httpCode=$code | body=$errorBody")
             AssistantResult.HttpError(code)
         } catch (e: SocketTimeoutException) {
             Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | errorClass=SocketTimeoutException | stage=TIMEOUT")

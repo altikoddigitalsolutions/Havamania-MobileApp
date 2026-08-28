@@ -131,7 +131,7 @@ fun PremiumScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Price Card
+            // Price Card - COMING SOON MODE
             Surface(
                 color = themeColors.accent.copy(alpha = 0.08f),
                 shape = RoundedCornerShape(32.dp),
@@ -142,43 +142,31 @@ fun PremiumScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "Yıllık Premium",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                                color = themeColors.textPrimary
-                            )
-                            Text(
-                                "Tüm özellikler sınırsız",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = themeColors.textSecondary
-                            )
-                        }
+                    Icon(
+                        Icons.Rounded.Info,
+                        null,
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Çok Yakında",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                        color = themeColors.textPrimary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Havamania Premium özellikleri üzerinde çalışmaya devam ediyoruz. En kısa sürede hizmetinizde olacak.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = themeColors.textSecondary,
+                        textAlign = TextAlign.Center
+                    )
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "₺299,99",
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                color = themeColors.textPrimary
-                            )
-                            Text(
-                                "yıllık",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = themeColors.textSecondary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(Modifier.height(24.dp))
 
                     HavamaniaPrimaryButton(
-                        text = "PREMIUM'U AKTİF ET",
-                        onClick = onPurchaseSuccess,
+                        text = "TAKİPTE KALIN",
+                        onClick = onBack,
                         modifier = Modifier.fillMaxWidth().height(60.dp)
                     )
                 }

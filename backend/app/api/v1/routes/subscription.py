@@ -42,6 +42,13 @@ def validate_receipt(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SubscriptionStatusResponse:
+    # RCA FIX: Premium is currently disabled in production
+    if settings.app_env == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Premium feature is coming soon to production."
+        )
+
     adapter = IOSReceiptValidationAdapter() if payload.store == "ios" else AndroidReceiptValidationAdapter()
     result = adapter.validate(payload.receipt_data, payload.plan_code)
 
@@ -68,6 +75,13 @@ def validate_receipt(
 
 @router.post("/webhook/store", response_model=SubscriptionStatusResponse)
 def store_webhook(payload: StoreWebhookRequest, db: Session = Depends(get_db)) -> SubscriptionStatusResponse:
+    # RCA FIX: Webhook is currently disabled in production
+    if settings.app_env == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhooks are currently disabled."
+        )
+
     subscription = upsert_subscription(
         db=db,
         user_id=payload.user_id,

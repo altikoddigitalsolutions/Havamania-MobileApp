@@ -28,17 +28,29 @@ val AppTypography = Typography(
         fontSize = 96.sp,
         letterSpacing = (-4).sp
     ),
+    headlineLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Black,
+        fontSize = 32.sp,
+        letterSpacing = (-0.5).sp
+    ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 32.sp,
-        letterSpacing = (-1).sp
+        fontSize = 24.sp,
+        letterSpacing = (-0.5).sp
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
+        fontSize = 20.sp,
         letterSpacing = 0.sp
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        letterSpacing = 0.15.sp
     ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
@@ -47,12 +59,19 @@ val AppTypography = Typography(
         lineHeight = 24.sp,
         letterSpacing = 0.15.sp
     ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.25.sp
+    ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Black,
         fontSize = 13.sp,
         lineHeight = 18.sp,
-        letterSpacing = 1.5.sp
+        letterSpacing = 1.sp
     )
 )
 
@@ -127,7 +146,18 @@ fun HavamaniaTheme(
         error = animatedError,
         success = animatedSuccess,
         warning = animatedWarning,
-        isDark = targetColors.isDark
+        isDark = targetColors.isDark,
+        weatherClear = animateThemeColor(targetColors.weatherClear),
+        weatherCloudy = animateThemeColor(targetColors.weatherCloudy),
+        weatherRain = animateThemeColor(targetColors.weatherRain),
+        weatherSnow = animateThemeColor(targetColors.weatherSnow),
+        weatherStorm = animateThemeColor(targetColors.weatherStorm),
+        weatherFog = animateThemeColor(targetColors.weatherFog),
+        cardBackground = animateThemeColor(targetColors.cardBackground),
+        cardBorder = animateThemeColor(targetColors.cardBorder),
+        buttonPrimary = animateThemeColor(targetColors.buttonPrimary),
+        buttonSecondary = animateThemeColor(targetColors.buttonSecondary),
+        info = animateThemeColor(targetColors.info)
     )
 
     val view = LocalView.current
@@ -151,6 +181,8 @@ fun HavamaniaTheme(
 
     CompositionLocalProvider(
         LocalHavamaniaColors provides animatedColors,
+        LocalHavamaniaTypography provides ThemeFactory.createTypography(animatedColors),
+        LocalHavamaniaElevation provides HavamaniaElevation(),
         LocalHavamaniaStyles provides HavamaniaStyles()
     ) {
         ProvideResponsiveLayout {

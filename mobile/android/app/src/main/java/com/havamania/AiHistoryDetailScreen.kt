@@ -49,28 +49,33 @@ fun AiHistoryDetailScreen(
             ) {
                 Text(
                     text = dateStr,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Bold),
                     color = themeColors.accent
                 )
-                Spacer(modifier = Modifier.height(themeStyles.spacingSmall))
+                Spacer(modifier = Modifier.height(themeStyles.spacingSM))
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                    style = HavamaniaTheme.typography.screenTitle.copy(fontWeight = FontWeight.Black),
                     color = themeColors.textPrimary
                 )
                 if (item.cityName != null) {
                     Text(
                         text = item.cityName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = HavamaniaTheme.typography.cardTitle,
                         color = themeColors.textSecondary
                     )
                 }
 
-                Spacer(modifier = Modifier.height(themeStyles.spacingExtraLarge))
+                Spacer(modifier = Modifier.height(themeStyles.spacingXXL))
 
-                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMedium)) {
+                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMD)) {
                     item.messages.forEach { msg ->
-                        ChatBubble(msg, themeColors)
+                        ChatBubble(
+                            message = msg,
+                            c = themeColors,
+                            onRetry = { _ -> },
+                            onActionClick = { _ -> }
+                        )
                     }
                 }
 

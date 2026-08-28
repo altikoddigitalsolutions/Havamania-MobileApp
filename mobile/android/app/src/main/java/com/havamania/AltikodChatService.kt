@@ -23,7 +23,9 @@ object AltikodChatFactory {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun create(): AltikodChatService {
-        val logger = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
+        val logger = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        }
         val client = OkHttpClient.Builder()
             .addInterceptor(logger)
             .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +54,8 @@ fun AuthHeader(
             Image(
                 painter = painterResource(id = logoResId),
                 contentDescription = "Havamania Logo",
-                modifier = Modifier.size(140.dp)
+                modifier = Modifier.size(140.dp),
+                contentScale = ContentScale.Fit
             )
         }
 
@@ -61,8 +63,8 @@ fun AuthHeader(
 
         Text(
             text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.ExtraBold,
+            style = HavamaniaTheme.typography.screenTitle.copy(
+                fontSize = 32.sp,
                 letterSpacing = 1.sp
             ),
             color = themeColors.textPrimary
@@ -72,7 +74,7 @@ fun AuthHeader(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.auth_welcome_slogan),
-                style = MaterialTheme.typography.bodyMedium,
+                style = HavamaniaTheme.typography.bodyMedium,
                 color = themeColors.textSecondary.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp
@@ -81,7 +83,7 @@ fun AuthHeader(
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
                 color = themeColors.accent
             )
         }
@@ -128,7 +130,7 @@ fun AuthWelcomeScreen(
 
             Column(
                 modifier = Modifier.widthIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMedium)
+                verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMD)
             ) {
                 HavamaniaPrimaryButton(
                     text = stringResource(R.string.login_title),
@@ -141,7 +143,7 @@ fun AuthWelcomeScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingExtraLarge))
+            Spacer(modifier = Modifier.height(themeStyles.spacingXXL))
 
             // Legal Links
             Row(
@@ -156,7 +158,7 @@ fun AuthWelcomeScreen(
                 LegalLink("Kullanım Koşulları") { openLegal(LegalUrls.TERMS_OF_USE) }
             }
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingMedium))
+            Spacer(modifier = Modifier.height(themeStyles.spacingMD))
         }
     }
 }
@@ -376,12 +378,12 @@ fun RegisterScreen(
                         Column {
                             Text(
                                 text = stringResource(R.string.legal_consent_part1),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = HavamaniaTheme.typography.bodySmall,
                                 color = themeColors.textPrimary
                             )
                             Text(
                                 text = stringResource(R.string.legal_consent_part2),
-                                style = MaterialTheme.typography.bodySmall.copy(
+                                style = HavamaniaTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     textDecoration = TextDecoration.Underline
                                 ),
@@ -477,12 +479,12 @@ fun ForgotPasswordScreen(
                     if (!successSent) {
                         Text(
                             text = "Şifrenizi mi Unuttunuz?",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
                             color = themeColors.textPrimary
                         )
                         Text(
                             text = "E-posta adresinizi girin, size bir sıfırlama bağlantısı gönderelim.",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = HavamaniaTheme.typography.bodySmall,
                             color = themeColors.textSecondary.copy(alpha = 0.7f),
                             modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
                         )
@@ -520,14 +522,14 @@ fun ForgotPasswordScreen(
                             Spacer(modifier = Modifier.height(24.dp))
                             Text(
                                 text = stringResource(R.string.email_sent_title),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                                style = HavamaniaTheme.typography.screenTitle.copy(fontWeight = FontWeight.Black),
                                 color = themeColors.textPrimary,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = stringResource(R.string.email_sent_desc),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = HavamaniaTheme.typography.bodyMedium,
                                 color = themeColors.textSecondary,
                                 textAlign = TextAlign.Center
                             )
@@ -641,31 +643,6 @@ fun HavamaniaAuthPasswordField(
     )
 }
 
-@Composable
-fun HavamaniaSecondaryButton(
-    text: String,
-    onClick: () -> Unit
-) {
-    val colors = HavamaniaTheme.colors
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = colors.surfaceGlass.copy(alpha = 0.3f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.border.copy(alpha = 0.2f))
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    color = colors.textPrimary
-                )
-            )
-        }
-    }
-}
 
 @Composable
 fun LegalLink(text: String, onClick: () -> Unit = {}) {

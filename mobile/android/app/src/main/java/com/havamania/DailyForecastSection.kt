@@ -51,29 +51,32 @@ data class DailyForecastStyle(
 object DailyForecastStyleMapper {
     @Composable
     fun getStyle(code: Int): DailyForecastStyle {
-        val themeColors = HavamaniaTheme.colors
+        val colors = HavamaniaTheme.colors
         return when (code) {
             0, 1 -> DailyForecastStyle(
-                accentColor = Color(0xFFFBBF24), // Keep Amber for sun as it's semantic
-                barGradient = listOf(Color(0xFFFDE68A), Color(0xFFF59E0B)),
-                iconColor = Color(0xFFFBBF24)
+                accentColor = colors.weatherClear,
+                barGradient = listOf(colors.weatherClear.copy(alpha = 0.6f), colors.weatherClear),
+                iconColor = colors.weatherClear
             )
             51, 53, 55, 61, 63, 65, 80, 81, 82 -> DailyForecastStyle(
-                accentColor = themeColors.accent,
-                barGradient = listOf(themeColors.accent.copy(alpha = 0.7f), themeColors.accent),
-                iconColor = themeColors.accent
+                accentColor = colors.weatherRain,
+                barGradient = listOf(colors.weatherRain.copy(alpha = 0.6f), colors.weatherRain),
+                iconColor = colors.weatherRain
             )
             71, 73, 75, 77, 85, 86 -> DailyForecastStyle(
-                accentColor = if (themeColors.isDark) Color(0xFF93C5FD) else Color(0xFF3B82F6),
-                barGradient = if (themeColors.isDark)
-                    listOf(Color(0xFFBFDBFE), Color(0xFF3B82F6))
-                    else listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
-                iconColor = if (themeColors.isDark) Color(0xFFBFDBFE) else Color(0xFF3B82F6)
+                accentColor = colors.weatherSnow,
+                barGradient = listOf(colors.weatherSnow.copy(alpha = 0.6f), colors.weatherSnow),
+                iconColor = colors.weatherSnow
+            )
+            95, 96, 99 -> DailyForecastStyle(
+                accentColor = colors.weatherStorm,
+                barGradient = listOf(colors.weatherStorm.copy(alpha = 0.6f), colors.weatherStorm),
+                iconColor = colors.weatherStorm
             )
             else -> DailyForecastStyle(
-                accentColor = themeColors.textSecondary,
-                barGradient = listOf(themeColors.textSecondary.copy(alpha = 0.6f), themeColors.textSecondary),
-                iconColor = themeColors.textSecondary
+                accentColor = colors.textSecondary,
+                barGradient = listOf(colors.textSecondary.copy(alpha = 0.6f), colors.textSecondary),
+                iconColor = colors.textSecondary
             )
         }
     }

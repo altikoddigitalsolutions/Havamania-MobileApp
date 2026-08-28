@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
+import com.havamania.ui.theme.HavamaniaCard
 import com.havamania.ui.theme.WeatherDataColors
 import kotlin.math.roundToInt
 
@@ -148,31 +149,13 @@ fun WeatherDetailCard(
         }
     }
 
-    Card(
-        modifier = modifier
-            .height(130.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = themeColors.surface.copy(alpha = 0.65f)
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = themeColors.border.copy(alpha = 0.1f)
-        )
+    HavamaniaCard(
+        modifier = modifier.height(130.dp),
+        padding = 16.dp,
+        onClick = onClick
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
@@ -187,17 +170,14 @@ fun WeatherDetailCard(
                 )
                 Text(
                     text = data.title.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    ),
+                    style = HavamaniaTheme.typography.sectionTitle,
                     color = themeColors.textSecondary.copy(alpha = 0.5f)
                 )
             }
 
             Text(
                 text = data.value,
-                style = MaterialTheme.typography.titleLarge.copy(
+                style = HavamaniaTheme.typography.cardTitle.copy(
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 20.sp
                 ),
@@ -207,7 +187,7 @@ fun WeatherDetailCard(
 
             Text(
                 text = data.description,
-                style = MaterialTheme.typography.labelSmall,
+                style = HavamaniaTheme.typography.bodySmall,
                 color = themeColors.textSecondary.copy(alpha = 0.6f),
                 maxLines = 1
             )
@@ -223,14 +203,12 @@ fun WindDirectionCard(
 ) {
     val themeColors = HavamaniaTheme.colors
 
-    Card(
+    HavamaniaCard(
         modifier = modifier.fillMaxWidth().height(110.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = themeColors.surface.copy(alpha = 0.65f)),
-        border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+        padding = 16.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -255,18 +233,18 @@ fun WindDirectionCard(
                     Icon(Icons.Rounded.CompassCalibration, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
                     Text(
                         "RÜZGAR YÖNÜ",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                        style = HavamaniaTheme.typography.sectionTitle,
                         color = themeColors.textSecondary.copy(alpha = 0.5f)
                     )
                 }
                 Text(
                     text = if (degrees != null && label != null) "$degrees° $label" else "Veri yok",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.ExtraBold),
                     color = themeColors.textPrimary
                 )
                 Text(
                     text = "Anlık rüzgar yönü",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = HavamaniaTheme.typography.bodySmall,
                     color = themeColors.textSecondary.copy(alpha = 0.6f)
                 )
             }
@@ -283,18 +261,16 @@ fun SunTimesCard(
 ) {
     val themeColors = HavamaniaTheme.colors
 
-    Card(
+    HavamaniaCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = themeColors.surface.copy(alpha = 0.65f)),
-        border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+        padding = 16.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Rounded.WbSunny, null, tint = Color(0xFFFBBF24), modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.WbSunny, null, tint = themeColors.weatherClear, modifier = Modifier.size(16.dp))
                 Text(
                     "GÜNEŞ ZAMANLARI",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    style = HavamaniaTheme.typography.sectionTitle,
                     color = themeColors.textSecondary.copy(alpha = 0.5f)
                 )
             }
@@ -336,14 +312,11 @@ fun WeatherSuitabilityCard(
 
     if (text.isEmpty() || text == "Veri yok") return
 
-    Card(
+    HavamaniaCard(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = themeColors.surface.copy(alpha = 0.65f)),
-        border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+        padding = 16.dp
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -362,17 +335,17 @@ fun WeatherSuitabilityCard(
             Column {
                 Text(
                     text = "HAVAMANIA DURUM SKORU",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    style = HavamaniaTheme.typography.sectionTitle,
                     color = themeColors.textSecondary.copy(alpha = 0.5f)
                 )
                 Text(
                     text = text,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
                     color = themeColors.textPrimary
                 )
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = HavamaniaTheme.typography.bodySmall,
                     color = themeColors.textSecondary.copy(alpha = 0.6f)
                 )
             }

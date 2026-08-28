@@ -18,14 +18,19 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val _historyItems = MutableStateFlow<List<AiHistoryEntity>>(emptyList())
     val historyItems: StateFlow<List<AiHistoryEntity>> = _historyItems.asStateFlow()
 
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        _historyItems.value = emptyList()
+        loadHistoryForUid(newUid)
+    }
+
     init {
-        viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-                _historyItems.value = emptyList()
-                loadHistoryForUid(newUid)
-            }
-        }
+        auth.addAuthStateListener(authListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
     }
 
     fun loadHistoryForUid(uid: String) {

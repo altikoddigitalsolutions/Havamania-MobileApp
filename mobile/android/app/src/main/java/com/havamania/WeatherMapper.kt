@@ -229,7 +229,7 @@ object WeatherMapper {
     private fun mapDetails(current: CurrentWeatherDto?, daily: DailyDto?): List<WeatherDetailData> {
         val precipProb = daily?.precipProbMax?.firstOrNull() ?: 0
         val humidity = current?.humidity ?: 0
-        val uv = daily?.uvIndexMax?.firstOrNull() ?: 0.0
+        val uv = current?.uvIndex ?: daily?.uvIndexMax?.firstOrNull() ?: 0.0
         val visibility = current?.visibility ?: 10000.0
         val cloudCover = current?.cloudCover ?: 0
         val windGust = current?.windGusts ?: 0.0

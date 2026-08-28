@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
 import com.havamania.ui.theme.HavamaniaPrimaryButton
+import com.havamania.ui.theme.HavamaniaEmptyState
 
 /**
  * Genel Empty State Bileşeni
@@ -118,28 +119,35 @@ fun WeatherEmptyState(
  */
 @Composable
 fun NoCitiesEmptyState(onAddClick: () -> Unit) {
-    WeatherEmptyState(
+    HavamaniaEmptyState(
         icon = Icons.Rounded.LocationCity,
         title = "Henüz Şehir Yok",
         description = "Takip ettiğiniz bir şehir bulunmuyor. Hava durumunu görmek için ilk şehrinizi ekleyin.",
-        buttonText = "Şehir Ekle",
-        onButtonClick = onAddClick,
-        accentColor = Color(0xFF38BDF8) // Sky Blue
+        action = {
+            HavamaniaPrimaryButton(
+                text = "Şehir Ekle",
+                onClick = onAddClick,
+                modifier = Modifier.width(240.dp),
+                icon = Icons.Rounded.AddLocationAlt
+            )
+        }
     )
 }
 
-/**
- * AI Geçmişi boş durumu için özel görünüm
- */
 @Composable
 fun NoAiHistoryEmptyState(onAskClick: () -> Unit) {
-    WeatherEmptyState(
+    HavamaniaEmptyState(
         icon = Icons.Rounded.AutoAwesome,
         title = "Asistan Geçmişi Boş",
         description = "Hava durumu asistanıyla henüz bir sohbetiniz yok. AI ile hava durumu hakkında konuşmaya başlayın.",
-        buttonText = "Soru Sor",
-        onButtonClick = onAskClick,
-        accentColor = Color(0xFFA78BFA) // Violet/Purple
+        action = {
+            HavamaniaPrimaryButton(
+                text = "Soru Sor",
+                onClick = onAskClick,
+                modifier = Modifier.width(240.dp),
+                icon = Icons.Rounded.AutoAwesome
+            )
+        }
     )
 }
 

@@ -147,8 +147,8 @@ object ThemeManager {
 
     suspend fun saveTheme(context: Context, theme: AppTheme, uid: String) = context.dataStore.edit { it[themeKey(uid)] = theme.name }
     fun getTheme(context: Context, uid: String): Flow<AppTheme> = context.dataStore.data.map {
-        val themeName = it[themeKey(uid)] ?: AppTheme.DARK.name
-        try { AppTheme.valueOf(themeName) } catch (e: Exception) { AppTheme.DARK }
+        val themeName = it[themeKey(uid)] ?: AppTheme.AUTO.name
+        try { AppTheme.valueOf(themeName) } catch (e: Exception) { AppTheme.AUTO }
     }
 
     suspend fun saveTempUnit(context: Context, unit: TemperatureUnit, uid: String) = context.dataStore.edit { it[tempUnitKey(uid)] = unit.name }

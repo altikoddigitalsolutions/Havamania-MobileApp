@@ -22,10 +22,10 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(MetricsMiddleware)
 
-# Geliştirme ortamında CORS hatalarını önlemek için tüm originlere izin veriyoruz
+# CORS ayarları configuration üzerinden yönetilir
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # settings.cors_origins yerine "*" kullanıyoruz
+    allow_origins=settings.cors_origins if settings.cors_origins else ["*"] if settings.debug else [],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

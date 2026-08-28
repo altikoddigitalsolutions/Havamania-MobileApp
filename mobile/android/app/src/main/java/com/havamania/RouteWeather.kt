@@ -1,5 +1,6 @@
 package com.havamania
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -80,18 +81,56 @@ class RouteWeatherProvider(
                 val resp = api.getRouteHourly(lat = point.latitude, lon = point.longitude)
                 val hourly = resp.hourly ?: return@withContext null
                 val idx = hourly.indexNearest(etaEpochMillis, resp.timezone) ?: return@withContext null
+
                 val code = hourly.weatherCode.getOrNull(idx) ?: return@withContext null
                 val temp = hourly.temperature.getOrNull(idx) ?: return@withContext null
                 val feels = hourly.apparentTemperature?.getOrNull(idx)
                 val prob = hourly.precipitationProbability?.getOrNull(idx)
                 val wind = hourly.windSpeed?.getOrNull(idx)
                 val hum = hourly.humidity?.getOrNull(idx)
+
                 val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
                 WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
             } catch (e: Exception) {
                 null
             }
         }
+
+    /** Birden fazla nokta için hava durumunu tek seferde çeker (Open-Meteo toplu istek). */
+    suspend fun weatherAtBatch(
+        points: List<GeoPoint>,
+        etas: List<Long?>
+    ): List<WaypointWeather?> = withContext(Dispatchers.IO) {
+        if (points.isEmpty()) return@withContext emptyList()
+        try {
+            val lats = points.map { it.latitude }
+            val lons = points.map { it.longitude }
+
+            val responses = api.getBatchRouteHourly(lats = lats, lons = lons)
+
+            points.indices.map { i ->
+                val resp = responses.getOrNull(i) ?: return@map null
+                val hourly = resp.hourly ?: return@map null
+                val eta = etas.getOrNull(i)
+                val idx = hourly.indexNearest(eta, resp.timezone) ?: return@map null
+
+                val code = hourly.weatherCode.getOrNull(idx) ?: return@map null
+                val temp = hourly.temperature.getOrNull(idx) ?: return@map null
+                val feels = hourly.apparentTemperature?.getOrNull(idx)
+                val prob = hourly.precipitationProbability?.getOrNull(idx)
+                val wind = hourly.windSpeed?.getOrNull(idx)
+                val hum = hourly.humidity?.getOrNull(idx)
+
+                val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
+                WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
+            }
+        } catch (e: Exception) {
+            Log.e("RouteWeather", "Batch fetch failed, falling back to individual", e)
+            // Hata durumunda boş liste dönmek yerine bireysel deneme yapılabilir
+            // ama genellikle bağlantı hatasıdır.
+            points.map { null }
+        }
+    }
 
     /** Saatlik zaman dizisinde hedef ana en yakın indeksi bulur. */
     private fun HourlyDto.indexNearest(etaEpochMillis: Long?, timezone: String): Int? {

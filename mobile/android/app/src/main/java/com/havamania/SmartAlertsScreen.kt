@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -124,18 +125,20 @@ fun SmartAlertsScreen(
                 AlertDivider()
                 AlertToggleRow(
                     title = "Hava Kalitesi",
-                    desc = "Hava kalitesi indeksi (AQI) sağlıksız olduğunda bildir.",
+                    desc = "Hava kalitesi düşük olduğunda bildir. (Yakında)",
                     icon = Icons.Rounded.Masks,
-                    checked = config.airQualityEnabled,
-                    onCheckedChange = { viewModel.toggleAlert("aqi", it) }
+                    checked = false,
+                    enabled = false,
+                    onCheckedChange = { }
                 )
                 AlertDivider()
                 AlertToggleRow(
                     title = "Polen Seviyesi",
-                    desc = "Yüksek polen konsantrasyonu tespit edildiğinde uyar.",
+                    desc = "Yüksek polen tespiti yapıldığında uyar. (Yakında)",
                     icon = Icons.Rounded.Grass,
-                    checked = config.pollenEnabled,
-                    onCheckedChange = { viewModel.toggleAlert("pollen", it) }
+                    checked = false,
+                    enabled = false,
+                    onCheckedChange = { }
                 )
             }
 
@@ -150,6 +153,7 @@ fun AlertToggleRow(
     desc: String,
     icon: ImageVector,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
@@ -162,20 +166,33 @@ fun AlertToggleRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(themeColors.accent.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                .background(themeColors.accent.copy(alpha = if (enabled) 0.1f else 0.05f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) themeColors.accent else themeColors.textMuted,
+                modifier = Modifier.size(20.dp)
+            )
         }
 
         Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (enabled) themeColors.textPrimary else themeColors.textMuted
+            )
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = themeColors.textSecondary.copy(alpha = if (enabled) 1f else 0.6f)
+            )
         }
 
-        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
+        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

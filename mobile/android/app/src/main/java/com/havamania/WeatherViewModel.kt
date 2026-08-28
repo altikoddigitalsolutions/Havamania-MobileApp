@@ -10,12 +10,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.LocationMode
+import com.havamania.ui.theme.ThemeManager
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -93,20 +96,27 @@ class WeatherViewModel(
 
     private var fetchJob: kotlinx.coroutines.Job? = null
 
+    private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+
+        // Clear UI state to prevent showing old user's data
+        _uiState.value = WeatherUiState.Loading
+        _todayRecommendation.value = null
+        _smartAlerts.value = emptyList()
+
+        observeUserData(newUid)
+    }
+
     init {
-        viewModelScope.launch {
-            auth.addAuthStateListener { firebaseAuth ->
-                val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-                Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+        auth.addAuthStateListener(authListener)
+    }
 
-                // Clear UI state to prevent showing old user's data
-                _uiState.value = WeatherUiState.Loading
-                _todayRecommendation.value = null
-                _smartAlerts.value = emptyList()
-
-                observeUserData(newUid)
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        userDataJob?.cancel()
+        fetchJob?.cancel()
     }
 
     private var userDataJob: kotlinx.coroutines.Job? = null
@@ -129,47 +139,34 @@ class WeatherViewModel(
                     .collect { _unreadNotificationCount.value = it }
             }
 
-            // Location Mode observation
+            // City and Location Mode observation combined for better performance
             launch {
-                com.havamania.ui.theme.ThemeManager.getLocationMode(getApplication(), uid).collect { mode ->
+                ThemeManager.getLocationMode(getApplication(), uid).combine(
+                    ThemeManager.getDefaultCity(getApplication(), uid)
+                ) { mode, city ->
+                    mode to city
+                }.collect { (mode, city) ->
                     _locationMode.value = mode
-                    if (mode == LocationMode.AUTO) {
-                        // KURAL 2: OTOMATİK modda izin kontrolü ve güncel şehir alımı
-                        refreshWeatherWithCurrentLocation()
-                    } else {
-                        // KURAL 2: MANUEL modda GPS çağrısı yapılmaz, son varsayılan şehir kullanılır
-                        val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
-                        if (defaultCity != null) {
-                            fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
-                        }
-                    }
-                }
-            }
+                    Log.d("WeatherVM", "Data update: mode=$mode, city=${city?.name}")
 
-            // City observation
-            launch {
-                com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).collect { defaultCity ->
-                    Log.d("WeatherVM", "Default city observed for $uid: ${defaultCity?.name}")
-                    if (_locationMode.value == LocationMode.MANUAL) {
-                        if (defaultCity != null) {
-                            fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
-                        } else {
-                            if (uid != "legacy") {
-                                _uiState.value = WeatherUiState.NoCity
-                            } else {
-                                // Guest user starts with Balıkesir if no default set
-                                fetchWeather(39.6484, 27.8826, "Balıkesir")
-                            }
-                        }
+                    if (mode == LocationMode.AUTO) {
+                        refreshWeatherWithCurrentLocation()
+                    } else if (city != null) {
+                        fetchWeather(city.latitude, city.longitude, city.name, city.district)
+                    } else if (uid == "legacy") {
+                        // Guest user starts with Balıkesir if no default set
+                        fetchWeather(39.6484, 27.8826, "Balıkesir")
+                    } else {
+                        _uiState.value = WeatherUiState.NoCity
                     }
                 }
             }
 
             // Safety check: If nothing emitted NoCity or Success after a while, check again
             launch {
-                kotlinx.coroutines.delay(8000)
+                kotlinx.coroutines.delay(5000) // Reduced to 5s
                 if (_uiState.value is WeatherUiState.Loading) {
-                    val currentCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).first()
+                    val currentCity = ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
                     if (currentCity == null && uid != "legacy") {
                         _uiState.value = WeatherUiState.NoCity
                     }

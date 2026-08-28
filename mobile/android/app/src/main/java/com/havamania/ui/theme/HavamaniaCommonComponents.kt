@@ -1,17 +1,20 @@
 package com.havamania.ui.theme
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +23,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -42,7 +46,7 @@ fun HavamaniaDialog(
     text: String,
     confirmText: String,
     onConfirm: () -> Unit,
-    dismissText: String? = "Vazgeç",
+    dismissText: String? = null,
     confirmColor: Color = HavamaniaTheme.colors.accent,
     icon: ImageVector? = null,
     confirmEnabled: Boolean = true,
@@ -61,7 +65,7 @@ fun HavamaniaDialog(
         title = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.ExtraBold),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -71,36 +75,31 @@ fun HavamaniaDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (text.isNotBlank()) {
+                    Text(
+                        text = text,
+                        style = HavamaniaTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 if (content != null) {
+                    if (text.isNotBlank()) Spacer(Modifier.height(16.dp))
                     content()
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            HavamaniaPrimaryButton(
+                text = confirmText,
                 enabled = confirmEnabled,
-                onClick = {
-                    onConfirm()
-                },
-                modifier = Modifier
-                    .padding(horizontal = themeStyles.spacingSmall)
-                    .minimumInteractiveComponentSize() // Ensures 48dp
-            ) {
-                Text(
-                    text = confirmText.uppercase(),
-                    color = if (confirmEnabled) confirmColor else themeColors.textMuted,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                )
-            }
+                onClick = onConfirm,
+                height = 44.dp,
+                fillMaxWidth = false,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
         },
-        dismissButton = dismissText?.let {
+        dismissButton = if (dismissText != null) {
             {
                 TextButton(
                     enabled = dismissEnabled,
@@ -108,14 +107,14 @@ fun HavamaniaDialog(
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Text(
-                        text = it.uppercase(),
-                        color = if (dismissEnabled) themeColors.textMuted else Color.Transparent,
-                        fontWeight = FontWeight.Bold,
+                        text = dismissText.uppercase(),
+                        color = themeColors.textMuted,
+                        style = HavamaniaTheme.typography.label,
                         letterSpacing = 1.sp
                     )
                 }
             }
-        },
+        } else null,
         shape = RoundedCornerShape(themeStyles.radiusLarge)
     )
 }
@@ -129,7 +128,7 @@ fun HavamaniaScreen(
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
-    content: @Composable (PaddingValues) -> Unit
+    content: @Composable BoxScope.(PaddingValues) -> Unit
 ) {
     val colors = HavamaniaTheme.colors
 
@@ -143,8 +142,6 @@ fun HavamaniaScreen(
         Box(
             modifier = Modifier.havamaniaScreenBackground()
         ) {
-            // Atmosferik parlama (Sağ Üst)
-            // Tabletlerde kare kesilmeyi (clipping) önlemek için gradyan tabanlı çizim kullanıyoruz
             val accentColor = colors.accent.copy(alpha = 0.15f)
             Box(
                 modifier = Modifier
@@ -162,7 +159,7 @@ fun HavamaniaScreen(
                     }
             )
 
-            content(paddingValues)
+            this.content(paddingValues)
         }
     }
 }
@@ -195,6 +192,7 @@ fun HavamaniaGlassCard(
     Box(
         modifier = modifier
             .scale(scale)
+            .shadow(themeStyles.elevation, RoundedCornerShape(cornerRadius))
             .clip(RoundedCornerShape(cornerRadius))
             .background(colors.surfaceGlass.copy(alpha = alpha))
             .then(
@@ -216,8 +214,8 @@ fun HavamaniaGlassCard(
     ) {
         Column(
             modifier = Modifier.padding(
-                if (windowSize.isCompact) themeStyles.spacingMedium
-                else themeStyles.spacingLarge
+                if (windowSize.isCompact) themeStyles.spacingMD
+                else themeStyles.spacingLG
             ),
             content = content
         )
@@ -302,7 +300,7 @@ fun HavamaniaPrimaryButton(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp) // Reduced horizontal padding for better fit
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     if (icon != null) {
                         Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(18.dp))
@@ -312,12 +310,12 @@ fun HavamaniaPrimaryButton(
                         text = text.uppercase(),
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Black,
-                            fontSize = 13.sp, // Slightly smaller font
-                            letterSpacing = 0.5.sp, // Tighter letter spacing
+                            fontSize = 13.sp,
+                            letterSpacing = 0.5.sp,
                             color = colors.onAccent
                         ),
                         maxLines = 1,
-                        overflow = TextOverflow.Clip // Prevent ellipsis
+                        overflow = TextOverflow.Clip
                     )
                 }
             }
@@ -408,12 +406,14 @@ fun HavamaniaTextField(
 fun HavamaniaToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val colors = HavamaniaTheme.colors
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
+        enabled = enabled,
         modifier = modifier,
         colors = SwitchDefaults.colors(
             checkedThumbColor = colors.onAccent,
@@ -434,10 +434,9 @@ fun SectionLabel(
     modifier: Modifier = Modifier
 ) {
     Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = HavamaniaTheme.colors.accent.copy(alpha = 0.8f),
-        modifier = modifier.padding(bottom = 10.dp)
+        text = text.uppercase(),
+        style = HavamaniaTheme.typography.sectionTitle,
+        modifier = modifier.padding(bottom = 8.dp)
     )
 }
 
@@ -459,7 +458,7 @@ fun DetailSmallCard(
         colors = CardDefaults.cardColors(
             containerColor = themeColors.surfaceGlass.copy(alpha = 0.5f)
         ),
-        border = androidx.compose.foundation.BorderStroke(themeStyles.cardBorderWidth, themeColors.border)
+        border = BorderStroke(themeStyles.cardBorderWidth, themeColors.border)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(emoji, fontSize = 22.sp)
@@ -500,7 +499,7 @@ fun HavamaniaErrorCard(
             .padding(vertical = 8.dp),
         color = themeColors.error.copy(alpha = 0.1f),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, themeColors.error.copy(alpha = 0.2f))
+        border = BorderStroke(1.dp, themeColors.error.copy(alpha = 0.2f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -550,7 +549,6 @@ fun HavamaniaTopBar(
             .padding(horizontal = responsive.pagePadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left side: Back Button or Spacer
         Box(modifier = Modifier.widthIn(min = 48.dp)) {
             if (onBack != null) {
                 IconButton(
@@ -570,13 +568,12 @@ fun HavamaniaTopBar(
             }
         }
 
-        // Center side: Title with Weight
         Text(
             text = title.uppercase(),
-            style = MaterialTheme.typography.labelLarge.copy(
+            style = HavamaniaTheme.typography.label.copy(
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.Black,
-                fontSize = responsive.headerFontSize * 0.6f // Scale down for label style
+                fontSize = (responsive.headerFontSize.value * 0.6f).sp
             ),
             color = colors.textPrimary.copy(alpha = 0.9f),
             modifier = Modifier
@@ -587,13 +584,288 @@ fun HavamaniaTopBar(
             overflow = TextOverflow.Ellipsis
         )
 
-        // Right side: Actions
         Row(
             modifier = Modifier.widthIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
             actions()
+        }
+    }
+}
+
+/**
+ * Standardized Loading State
+ */
+@Composable
+fun HavamaniaLoading(
+    modifier: Modifier = Modifier,
+    text: String? = "Yükleniyor..."
+) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(
+            color = HavamaniaTheme.colors.accent,
+            strokeWidth = 3.dp,
+            modifier = Modifier.size(48.dp)
+        )
+        if (text != null) {
+            Spacer(Modifier.height(HavamaniaTheme.styles.spacingMD))
+            Text(
+                text = text,
+                style = HavamaniaTheme.typography.bodyMedium,
+                color = HavamaniaTheme.colors.textSecondary
+            )
+        }
+    }
+}
+
+/**
+ * Standardized Empty State
+ */
+@Composable
+fun HavamaniaEmptyState(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(HavamaniaTheme.styles.spacingXL),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            color = HavamaniaTheme.colors.accent.copy(alpha = 0.1f),
+            shape = CircleShape,
+            modifier = Modifier.size(100.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = HavamaniaTheme.colors.accent.copy(alpha = 0.5f),
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(HavamaniaTheme.styles.spacingLG))
+        Text(
+            text = title,
+            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(HavamaniaTheme.styles.spacingSM))
+        Text(
+            text = description,
+            style = HavamaniaTheme.typography.bodyMedium,
+            color = HavamaniaTheme.colors.textMuted,
+            textAlign = TextAlign.Center
+        )
+        if (action != null) {
+            Spacer(Modifier.height(HavamaniaTheme.styles.spacingLG))
+            action()
+        }
+    }
+}
+
+/**
+ * Standardized Error State
+ */
+@Composable
+fun HavamaniaErrorState(
+    title: String = "Bir Hata Oluştu",
+    description: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(HavamaniaTheme.styles.spacingXL),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.ErrorOutline,
+            contentDescription = null,
+            tint = HavamaniaTheme.colors.error.copy(alpha = 0.6f),
+            modifier = Modifier.size(64.dp)
+        )
+        Spacer(Modifier.height(HavamaniaTheme.styles.spacingLG))
+        Text(
+            text = title,
+            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(HavamaniaTheme.styles.spacingSM))
+        Text(
+            text = description,
+            style = HavamaniaTheme.typography.bodyMedium,
+            color = HavamaniaTheme.colors.textMuted,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(HavamaniaTheme.styles.spacingLG))
+        HavamaniaPrimaryButton(
+            text = "TEKRAR DENE",
+            onClick = onRetry,
+            modifier = Modifier.widthIn(min = 200.dp)
+        )
+    }
+}
+
+/**
+ * Premium Info Banner
+ */
+@Composable
+fun HavamaniaInfoBanner(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Rounded.Info,
+    backgroundColor: Color = HavamaniaTheme.colors.accent.copy(alpha = 0.08f),
+    contentColor: Color = HavamaniaTheme.colors.accent
+) {
+    Surface(
+        color = backgroundColor,
+        shape = RoundedCornerShape(HavamaniaTheme.styles.radiusMedium),
+        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.15f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(HavamaniaTheme.styles.spacingMD),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(HavamaniaTheme.styles.spacingSM))
+            Text(
+                text = text,
+                style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = HavamaniaTheme.colors.textPrimary
+            )
+        }
+    }
+}
+
+/**
+ * Standardized Card Component
+ */
+@Composable
+fun HavamaniaCard(
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(HavamaniaTheme.styles.cardCornerRadius),
+    backgroundColor: Color = HavamaniaTheme.colors.cardBackground,
+    borderColor: Color = HavamaniaTheme.colors.cardBorder,
+    elevation: Dp = HavamaniaTheme.styles.elevation,
+    padding: Dp = HavamaniaTheme.styles.spacingMD,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && onClick != null) 0.98f else 1f,
+        label = "cardScale"
+    )
+
+    Surface(
+        modifier = modifier
+            .scale(scale)
+            .shadow(elevation, shape)
+            .then(
+                if (onClick != null) Modifier.clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                ) else Modifier
+            ),
+        shape = shape,
+        color = backgroundColor,
+        border = BorderStroke(HavamaniaTheme.styles.cardBorderWidth, borderColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(padding),
+            content = content
+        )
+    }
+}
+
+/**
+ * Standardized Secondary Button
+ */
+@Composable
+fun HavamaniaSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    isLoading: Boolean = false,
+    height: Dp = 56.dp,
+    fillMaxWidth: Boolean = true
+) {
+    val colors = HavamaniaTheme.colors
+    val themeStyles = HavamaniaTheme.styles
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressedState = interactionSource.collectIsPressedAsState()
+    val isPressed = isPressedState.value
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && !isLoading) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
+        label = "buttonScale"
+    )
+
+    Surface(
+        onClick = if (!isLoading) onClick else ({}),
+        enabled = enabled && !isLoading,
+        modifier = modifier
+            .scale(scale)
+            .height(height)
+            .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier),
+        shape = RoundedCornerShape(themeStyles.radiusSmall),
+        color = colors.surface.copy(alpha = 0.1f),
+        border = BorderStroke(1.dp, colors.border.copy(alpha = 0.4f)),
+        interactionSource = interactionSource
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = colors.textPrimary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    if (icon != null) {
+                        Icon(icon, null, tint = colors.textPrimary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = text.uppercase(),
+                        style = HavamaniaTheme.typography.button.copy(color = colors.textPrimary),
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+            }
         }
     }
 }

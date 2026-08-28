@@ -80,6 +80,8 @@ fun SettingsScreen(
 
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
+    val responsive = LocalResponsiveValues.current
+    val windowSize = LocalWindowSize.current
 
     var showThemeSheet by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
@@ -105,28 +107,47 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(themeStyles.pagePadding)
+                .then(
+                    if (windowSize.isTablet || windowSize.isLargeTablet)
+                        Modifier.widthIn(max = responsive.maxContentWidth).align(Alignment.TopCenter)
+                    else Modifier.fillMaxWidth()
+                )
         ) {
-            // Profil Bölümü
-            SettingsGroupLabel("HESAP VE PROFİL")
+            // 1. Profil & Hesap
+            SettingsGroupLabel("HESAP")
             SettingsCard {
-                SettingsNavRow("Profili Düzenle", "Kişisel bilgiler ve biyografi", Icons.Rounded.Person) {
+                SettingsNavRow("Profili Düzenle", "Kişisel bilgiler ve biyografi", Icons.Rounded.AccountCircle) {
                     onNavigateToEditProfile()
                 }
                 SettingsDivider()
-                SettingsNavRow("Kayıtlı Şehirler", "Konum tercihlerinizi yönetin", Icons.Rounded.LocationCity) {
+                SettingsNavRow("Kayıtlı Şehirler", "Konum tercihlerinizi yönetin", Icons.Rounded.Map) {
                     onNavigateToCities()
                 }
             }
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            // Genel Ayarlar
-            SettingsGroupLabel("GENEL")
+            // 2. Kişiselleştirme
+            SettingsGroupLabel("KİŞİSELLEŞTİRME")
             SettingsCard {
                 SettingsClickRow("Görünüm", currentTheme.title, Icons.Rounded.Palette) {
                     showThemeSheet = true
                 }
                 SettingsDivider()
+                SettingsClickRow("Asistan Üslubu", assistantTone.title, Icons.Rounded.AutoAwesome) {
+                    showToneDialog = true
+                }
+                SettingsDivider()
+                SettingsNavRow("Akıllı Uyarılar", "İlgi alanlarına göre bildirimler", Icons.Rounded.NotificationsActive) {
+                    onNavigateToSmartAlerts()
+                }
+            }
+
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
+
+            // 3. Genel
+            SettingsGroupLabel("GENEL")
+            SettingsCard {
                 SettingsClickRow("Dil", if (language == "TR") "Türkçe" else "English", Icons.Rounded.Language) {
                     showLanguageDialog = true
                 }
@@ -134,43 +155,30 @@ fun SettingsScreen(
                 SettingsClickRow("Birimler", if (tempUnit == TemperatureUnit.CELSIUS) "°C" else "°F", Icons.Rounded.Thermostat) {
                     themeViewModel.setTempUnit(if (tempUnit == TemperatureUnit.CELSIUS) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS)
                 }
-            }
-
-            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
-
-            // Asistan Ayarları
-            SettingsGroupLabel("YAPAY ZEKA ASİSTAN")
-            SettingsCard {
-                SettingsClickRow("Asistan Üslubu", assistantTone.title, Icons.Rounded.AutoAwesome) {
-                    showToneDialog = true
-                }
                 SettingsDivider()
-                SettingsToggleRow("Bildirimler", "Günlük analiz ve uyarılar", Icons.Rounded.NotificationsActive, notificationsEnabled) {
+                SettingsToggleRow("Bildirimler", "Uygulama içi duyurular", Icons.Rounded.Notifications, notificationsEnabled) {
                     themeViewModel.setNotificationsEnabled(it)
                 }
-                SettingsDivider()
-                SettingsNavRow("Akıllı Uyarılar", "Kişiselleştirilmiş tercihler", Icons.Rounded.SettingsSuggest) {
-                    onNavigateToSmartAlerts()
-                }
             }
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            SettingsGroupLabel("PREMIUM")
+            // 4. Premium
+            SettingsGroupLabel("HAVAMANİA PREMIUM")
             PremiumSettingsCard(
                 isPremium = isPremium,
                 onClick = {
                     if (!isPremium) {
-                        comingSoonTitle = "Havamania Premium yakında tüm özellikleri ile açılacak."
+                        comingSoonTitle = "Havamania Premium yakında tüm özellikleri ile hizmetinizde olacak."
                         showComingSoonDialog = true
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            // Veri Yönetimi
-            SettingsGroupLabel("VERİ VE GİZLİLİK")
+            // 5. Destek & Yasal
+            SettingsGroupLabel("DESTEK VE YASAL")
             SettingsCard {
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
                     openLegal(LegalUrls.KVKK)
@@ -196,10 +204,10 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(themeStyles.spacingLarge))
+            Spacer(modifier = Modifier.height(themeStyles.spacingLG))
 
-            // Tehlikeli Alan
-            SettingsGroupLabel("DİĞER")
+            // 6. Hesap Yönetimi
+            SettingsGroupLabel("HESAP YÖNETİMİ")
             SettingsCard {
                 SettingsClickRow("Çıkış Yap", null, Icons.Rounded.Logout, contentColor = themeColors.textPrimary) {
                     showLogoutDialog = true
@@ -218,20 +226,46 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Versiyon Bilgisi
-            Text(
-                text = "Havamania v2.5.0\nPremium Early Access",
-                style = MaterialTheme.typography.labelSmall,
-                color = themeColors.textMuted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().alpha(0.5f)
-            )
+            val appVersion = BuildConfig.VERSION_NAME
+            val uid = authViewModel.currentUser?.uid ?: "legacy"
+            val context = LocalContext.current
+            val logoResId = context.resources.getIdentifier("havamania_logo_clean", "drawable", context.packageName)
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().alpha(0.5f)) {
+                if (logoResId != 0) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = logoResId),
+                        contentDescription = null,
+                        modifier = Modifier.size(60.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                Text(
+                    text = "Havamania v$appVersion",
+                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                    color = themeColors.textMuted
+                )
+                Text(
+                    text = "Teknoloji partneri: Altıkod Digital Solutions",
+                    style = HavamaniaTheme.typography.caption.copy(fontSize = 8.sp),
+                    color = themeColors.textMuted
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "System ID: ${uid.uppercase()}",
+                    style = HavamaniaTheme.typography.caption.copy(fontSize = 7.sp),
+                    color = themeColors.textMuted
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
-    // Dialogs...
     if (showThemeSheet) {
         ThemeSelectionDialog(
             currentTheme = currentTheme,
@@ -262,6 +296,7 @@ fun SettingsScreen(
             title = "Çıkış Yap?",
             text = "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
             confirmText = "Çıkış Yap",
+            dismissText = "İptal",
             onConfirm = {
                 authViewModel.signOut()
                 showLogoutDialog = false
@@ -307,7 +342,6 @@ private fun SettingsGroupLabel(text: String) {
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     HavamaniaGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        cornerRadius = HavamaniaTheme.styles.radiusMedium,
         alpha = 0.4f
     ) {
         Column {
@@ -469,12 +503,12 @@ private fun PremiumSettingsCard(isPremium: Boolean, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    if (isPremium) "Havamania Premium Üyesi" else "Premium'a Yükselt",
+                    if (isPremium) "Havamania Premium Üyesi" else "Havamania Premium",
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black),
                     color = themeColors.textPrimary
                 )
                 Text(
-                    if (isPremium) "Tüm özellikler açık." else "AI analizleri ve sınırsız seyahat.",
+                    if (isPremium) "Tüm özellikler açık." else "Çok yakında hizmetinizde.",
                     style = MaterialTheme.typography.bodySmall,
                     color = themeColors.textSecondary
                 )
@@ -493,7 +527,7 @@ fun ThemeSelectionDialog(currentTheme: AppTheme, onThemeSelected: (AppTheme) -> 
         onDismissRequest = onDismiss,
         title = "Görünüm Seç",
         text = "",
-        confirmText = "İPTAL",
+        confirmText = "Kapat",
         onConfirm = onDismiss,
         content = {
             Column {
@@ -519,7 +553,7 @@ fun LanguageSelectionDialog(currentLanguage: String, onLanguageSelected: (String
         onDismissRequest = onDismiss,
         title = "Dil Seç",
         text = "",
-        confirmText = "İPTAL",
+        confirmText = "Kapat",
         onConfirm = onDismiss,
         content = {
             Column {
@@ -545,7 +579,7 @@ fun ToneSelectionDialog(currentTone: AssistantTone, onToneSelected: (AssistantTo
         onDismissRequest = onDismiss,
         title = "Asistan Üslubu",
         text = "",
-        confirmText = "İPTAL",
+        confirmText = "Kapat",
         onConfirm = onDismiss,
         content = {
             Column(modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
