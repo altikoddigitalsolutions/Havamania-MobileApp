@@ -327,68 +327,61 @@ object TravelAiHelper {
 
     fun generateHistorySummary(plan: TravelPlan, tone: AssistantTone = AssistantTone.DENGELI): TravelHistorySummary {
         val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
-        val snapshot = plan.lastForecastSnapshot
 
-        // Hava verisi varsa işle, yoksa null/default dön
-        val hasData = snapshot != null
-        val minT = snapshot?.minTemp?.toInt() ?: 0
-        val maxT = snapshot?.maxTemp?.toInt() ?: 0
-        val avgT = if (hasData) (minT + maxT) / 2 else null
+        // Use the actual historical analyses list if available
+        val historicalData = plan.analyses
+        val hasData = historicalData.isNotEmpty()
 
-        val cond = snapshot?.conditionSummary?.lowercase() ?: "bilinmiyor"
-        val prob = snapshot?.precipitationProbability ?: 0
+        if (!hasData) {
+            return TravelHistorySummary(
+                averageTemp = null,
+                minTemp = null,
+                maxTemp = null,
+                rainyDays = -1,
+                sunnyDays = -1,
+                cloudyDays = -1,
+                riskDayText = "Hava verisi arşivde bulunamadı.",
+                comfortScore = 0,
+                summaryText = "Bu seyahat için kayıtlı hava analizi bulunmuyor.",
+                packingAdvice = "Geçmiş seyahat için öneri sunulmuyor.",
+                nextTripAdvice = "Gelecek planların için ana ekrandaki tahminleri takip edebilirsin.",
+                durationDays = duration
+            )
+        }
 
-        val rainy = if (!hasData) 0 else if (cond.contains("yağmur") || prob > 50) (duration * 0.4).toInt().coerceAtLeast(1) else (duration * 0.1).toInt()
-        val sunny = if (!hasData) 0 else if (cond.contains("güneş") || cond.contains("açık")) (duration * 0.6).toInt().coerceAtLeast(1) else (duration * 0.3).toInt()
+        val avgT = historicalData.map { it.averageTemperature }.average().toInt()
+        val avgScore = historicalData.map { it.travelScore }.average().toInt()
+
+        // Count rainy days based on recorded rainRiskPercent > 50
+        val rainy = historicalData.count { (it.rainRiskPercent ?: 0) > 50 }
+        val sunny = historicalData.count { (it.rainRiskPercent ?: 100) < 20 } // Rough estimate
         val cloudy = (duration - rainy - sunny).coerceAtLeast(0)
 
-        val summaryText = if (hasData) {
-            val weatherTone = when {
-                rainy > (duration / 2) -> if (tone == AssistantTone.SAMIMI) "Hava baya yağışlı geçmiş canım" else "Hava çoğunlukla yağışlı geçmiş"
-                sunny > (duration * 0.7) -> if (tone == AssistantTone.SAMIMI) "Pırıl pırıl bir güneş sana eşlik etmiş" else "Pırıl pırıl, güneşli bir gökyüzü eşlik etmiş"
-                avgT ?: 0 > 28 -> if (tone == AssistantTone.SAMIMI) "Sıcaklıklar baya tavan yapmış" else "Sıcak ve tam bir yaz havası hakimmiş"
-                else -> "Hava genel olarak dengeli görünmüş"
-            }
-            val comfortNote = if (rainy == 0) "Yağışsız harika bir dönem olmuş." else "Yağışa rağmen keyfin yerinde gibi görünüyor."
-
-            when(tone) {
-                AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. $weatherTone. $comfortNote"
-                AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. $weatherTone. Konfor endeksi stabil gözlemlenmiştir."
-                AssistantTone.KISA_NET -> "$duration günlük $plan.city turu bitti. $weatherTone."
-                AssistantTone.DETAYLI_UZMAN -> "Arşiv Analizi: $duration günlük $plan.city destinasyon verileri, $weatherTone durumunu teyit etmektedir. Termal konfor değerleri optimizasyon sınırları dahilinde kalmıştır."
-                else -> "${plan.city} seyahatin $duration gün sürdü. $weatherTone. $comfortNote"
-            }
-        } else {
-            "${plan.city} seyahatin tamamlandı."
+        val weatherTone = when {
+            rainy > (duration / 2) -> "Hava çoğunlukla yağışlı geçmiş"
+            sunny > (duration * 0.7) -> "Çoğunlukla güneşli bir gökyüzü eşlik etmiş"
+            avgT > 28 -> "Sıcak bir yaz havası hakimmiş"
+            else -> "Hava genel olarak dengeli seyretmiş"
         }
 
-        val packingAdvice = when {
-            avgT ?: 0 > 25 -> "Benzer hava koşullarında hafif kıyafet, rahat ayakkabı ve güneş koruması yeterli olur."
-            avgT ?: 0 < 12 -> "Kalın mont, termal içlik ve su geçirmeyen botlar bir sonraki sefer için hayat kurtarıcı olabilir."
-            else -> "Kat kat giyinmek (sweatshirt + hafif ceket) değişken hava koşulları için en iyi strateji."
-        }
-
-        val destinationTip = when {
-            plan.city.contains("Bali", true) -> "Bali gibi nemli bölgelerde sabah saatlerini açık hava planları için ayırmak daha rahat olabilir."
-            plan.city.contains("İstanbul", true) -> "İstanbul seyahatlerinde vapur saatlerini gün batımına denk getirmek her zaman iyi bir fikirdir."
-            else -> "${plan.city} seyahatinde yerel lezzet duraklarını keşfetmek için ara sokaklara dalmaktan çekinme."
+        val summaryText = when(tone) {
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. $weatherTone."
+            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. $weatherTone."
+            else -> "${plan.city} seyahatin $duration gün sürdü. $weatherTone."
         }
 
         return TravelHistorySummary(
             averageTemp = avgT,
-            minTemp = minT,
-            maxTemp = maxT,
-            rainyDays = if (hasData) rainy else -1,
-            sunnyDays = if (hasData) sunny else -1,
-            cloudyDays = if (hasData) cloudy else -1,
-            riskDayText = if (hasData) "Hava koşulları genel olarak planlarına eşlik etti." else "Hava verisi arşivde bulunamadı.",
-            comfortScore = if (hasData) {
-                val seed = plan.city.hashCode()
-                80 + (Math.abs(seed) % 16)
-            } else 0,
+            minTemp = historicalData.map { it.averageTemperature }.minOrNull()?.toInt() ?: avgT,
+            maxTemp = historicalData.map { it.averageTemperature }.maxOrNull()?.toInt() ?: avgT,
+            rainyDays = rainy,
+            sunnyDays = sunny,
+            cloudyDays = cloudy,
+            riskDayText = "Arşivlenen $rainy yağışlı gün kaydedildi.",
+            comfortScore = avgScore,
             summaryText = summaryText,
-            packingAdvice = packingAdvice,
-            nextTripAdvice = destinationTip,
+            packingAdvice = "Kaydedilen ortalama sıcaklık: $avgT°C",
+            nextTripAdvice = "Seyahat geçmişin, gelecek planların için bir rehber niteliğindedir.",
             durationDays = duration
         )
     }

@@ -196,63 +196,49 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun forecastBlock(data: WeatherData, label: String): String {
-        val daily = data.dailyForecast.take(3).joinToString("\n") {
-            "- ${it.date}: ${it.minTemp}°/${it.maxTemp}°"
+        val daily = data.dailyForecast.take(3).joinToString(", ") {
+            "${it.date}: ${it.minTemp}/${it.maxTemp}C"
         }
-        return "\n--- $label 3 Günlük Tahmin ---\n$daily\n"
+        return "Forecast for $label: $daily"
     }
 
     private fun cityDataBlock(cityName: String): String? {
         val info = TravelAiHelper.getCityDescription(cityName)
         return if (info.contains("Keşfedilmeyi bekleyen")) null
-               else "\n--- $cityName Hakkında ---\n$info\n"
+               else "About $cityName: $info"
     }
 
     private fun buildFollowUpContext(cityName: String?): String {
         val sb = StringBuilder()
         val trips = _activeTravels.value
         if (trips.isNotEmpty()) {
-            sb.append("\n[Kullanıcının Yaklaşan Seyahatleri]\n")
+            sb.append("User's upcoming trips:\n")
             trips.forEach { t ->
-                sb.append("- ${t.city} (${t.startDate} - ${t.endDate})")
-                t.weatherSummary?.let { sb.append(" | Hava: $it") }
+                sb.append("- ${t.city} (${t.startDate} to ${t.endDate})")
+                t.weatherSummary?.let { sb.append(". Summary: $it") }
                 sb.append("\n")
             }
         }
-
-        cityName?.let { city ->
-            val info = TravelAiHelper.getCityDescription(city)
-            if (!info.contains("Keşfedilmeyi bekleyen")) {
-                sb.append("\n[Destinasyon Bilgisi: $city]\n$info\n")
-            }
-        }
-
         return sb.toString()
     }
 
     private suspend fun buildWeatherContext(userPrompt: String, cityName: String?): String {
         val sb = StringBuilder()
-        sb.append("[Sistem Zamanı: ${java.time.LocalDateTime.now()}]\n")
+        sb.append("Current time: ${java.time.LocalDateTime.now()}\n")
 
         val targetCity = cityName ?: contextCity
         if (targetCity != null) {
             val data = resolveCityWeather(targetCity)
             if (data != null) {
-                sb.append("\n[Hava Durumu: ${data.cityName}]\n")
-                sb.append("Şu an: ${data.temperature}, ${data.condition}, Nem %${data.humidity}, Rüzgar ${data.windSpeed} km/s\n")
-
-                if (userPrompt.contains("tahmin", true) || userPrompt.contains("yarın", true) || userPrompt.contains("hafta", true)) {
+                sb.append("Weather in ${data.cityName}: ${data.temperature}C, ${data.condition}\n")
+                if (userPrompt.contains("tahmin", true) || userPrompt.contains("yarın", true)) {
                     sb.append(forecastBlock(data, targetCity))
                 }
                 contextCity = targetCity
             }
         } else {
             _weatherData.value?.let { data ->
-                sb.append("\n[Hava Durumu: ${data.cityName} (Mevcut Konum)]\n")
-                sb.append("Şu an: ${data.temperature}, ${data.condition}\n")
-                if (userPrompt.contains("tahmin", true)) {
-                    sb.append(forecastBlock(data, data.cityName))
-                }
+                sb.append("Weather at user's location (${data.cityName}): ${data.temperature}C, ${data.condition}\n")
             }
         }
 
@@ -272,6 +258,25 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false) {
         if (isSending.value || userPrompt.isBlank()) return
 
+        // Local greeting handler to ensure positive first impression
+        val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
+        val isGreetingOnly = greetings.any { userPrompt.lowercase().trim() == it }
+
+        if (isGreetingOnly) {
+            viewModelScope.launch {
+                val userMsg = AltikodChatMessage(text = userPrompt, isUser = true)
+                _messages.value = _messages.value + userMsg
+                kotlinx.coroutines.delay(500)
+                val botMsg = AltikodChatMessage(
+                    text = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?",
+                    isUser = false
+                )
+                _messages.value = _messages.value + botMsg
+                _requestState.value = AssistantRequestState.SUCCESS
+            }
+            return
+        }
+
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
             _isSending.value = true
@@ -286,17 +291,19 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 val followUpCtx = buildFollowUpContext(null)
                 val toneInst = buildToneInstruction(assistantTone)
 
+                // P3.8.8: Optimized context format to prevent backend rejection
                 val finalPrompt = buildString {
-                    append("SORU: ")
                     append(userPrompt)
-                    append("\n\n---")
-                    append("\n[BAĞLAM]")
-                    append("\nDil: $language")
-                    append("\nÜslup: $toneInst")
-                    if (weatherCtx.isNotBlank()) append("\n$weatherCtx")
-                    if (followUpCtx.isNotBlank()) append("\n$followUpCtx")
-                    if (!systemContext.isNullOrBlank()) append("\n$systemContext")
-                    append("\n---")
+
+                    val contextParts = mutableListOf<String>()
+                    if (weatherCtx.isNotBlank()) contextParts.add("Weather: " + weatherCtx.trim().replace("\n", ". "))
+                    if (followUpCtx.isNotBlank()) contextParts.add("Trips: " + followUpCtx.trim().replace("\n", ". "))
+
+                    if (contextParts.isNotEmpty()) {
+                        append("\n\n(Info: ")
+                        append(contextParts.joinToString(". "))
+                        append(")")
+                    }
                 }
 
                 val result = assistantRepository.getAssistantResponse(finalPrompt, currentConversationId)

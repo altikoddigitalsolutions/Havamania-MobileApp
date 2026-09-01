@@ -52,6 +52,7 @@ fun TravelRouteWeatherScreen(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
     val config = LocalConfiguration.current
+    val context = LocalContext.current
 
     val useTwoColumns = (windowSize.isTablet || windowSize.isLargeTablet) && config.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
@@ -96,7 +97,10 @@ fun TravelRouteWeatherScreen(
                 val builder = LatLngBounds.Builder()
                 points.forEach { builder.include(it) }
                 val bounds = builder.build()
-                map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100), 1500)
+
+                // Add a small delay to ensure MapView layout is finalized
+                kotlinx.coroutines.delay(500)
+                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 2000)
             } catch (e: Exception) {
                 Log.e("MapRoute", "Error fitting bounds", e)
             }
@@ -155,7 +159,16 @@ fun TravelRouteWeatherScreen(
                     errorMessage?.let { msg ->
                         RouteErrorState(
                             message = msg,
-                            onRetry = { viewModel.loadTrip(tripId ?: "") }
+                            onRetry = { viewModel.loadTrip(tripId ?: "") },
+                            onOpenSettings = {
+                                try {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Log.e("RouteScreen", "Failed to open location settings", e)
+                                }
+                            },
+                            onPickOrigin = onBack // Return to planner to pick origin
                         )
                         Spacer(Modifier.height(16.dp))
                     }
@@ -180,7 +193,16 @@ fun TravelRouteWeatherScreen(
                     RouteErrorState(
                         message = msg,
                         modifier = Modifier.padding(horizontal = responsive.pagePadding),
-                        onRetry = { viewModel.loadTrip(tripId ?: "") }
+                        onRetry = { viewModel.loadTrip(tripId ?: "") },
+                        onOpenSettings = {
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Log.e("RouteScreen", "Failed to open location settings", e)
+                            }
+                        },
+                        onPickOrigin = onBack
                     )
                     Spacer(Modifier.height(16.dp))
                 }
@@ -447,19 +469,53 @@ private fun RouteWeatherNotReadyCard(departure: LocalDateTime, c: HavamaniaColor
 }
 
 @Composable
-private fun RouteErrorState(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
+private fun RouteErrorState(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit,
+    onOpenSettings: (() -> Unit)? = null,
+    onPickOrigin: (() -> Unit)? = null
+) {
     Surface(
         color = HavamaniaTheme.colors.error.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, HavamaniaTheme.colors.error.copy(alpha = 0.2f)),
         modifier = modifier.fillMaxWidth().padding(vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Rounded.ErrorOutline, null, tint = HavamaniaTheme.colors.error)
-            Spacer(Modifier.height(8.dp))
-            Text(message, style = HavamaniaTheme.typography.bodyMedium, color = HavamaniaTheme.colors.textPrimary, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onRetry) {
-                Text("TEKRAR DENE", color = HavamaniaTheme.colors.error, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = if (message.contains("konum", true)) Icons.Rounded.LocationOff else Icons.Rounded.ErrorOutline,
+                contentDescription = null,
+                tint = HavamaniaTheme.colors.error,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = message,
+                style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = HavamaniaTheme.colors.textPrimary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+
+            if (message.contains("Kalkış", true) || message.contains("konum", true)) {
+                HavamaniaPrimaryButton(
+                    text = "KONUMU AÇ",
+                    onClick = { onOpenSettings?.invoke() },
+                    height = 44.dp
+                )
+                Spacer(Modifier.height(12.dp))
+                HavamaniaSecondaryButton(
+                    text = "KALKIŞ NOKTASI SEÇ",
+                    onClick = { onPickOrigin?.invoke() },
+                    height = 44.dp
+                )
+            } else {
+                HavamaniaPrimaryButton(
+                    text = "TEKRAR DENE",
+                    onClick = onRetry,
+                    height = 44.dp
+                )
             }
         }
     }

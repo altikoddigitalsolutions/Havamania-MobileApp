@@ -1,5 +1,6 @@
 package com.havamania
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,58 +40,56 @@ fun JourneyHero(
 
     HavamaniaCard(
         modifier = modifier.fillMaxWidth(),
-        backgroundColor = colors.surface.copy(alpha = 0.4f),
-        padding = 24.dp
+        backgroundColor = colors.surface,
+        borderColor = colors.border.copy(alpha = 0.1f),
+        padding = 20.dp
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1.3f)) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = origin ?: "Mevcut Konum",
-                        style = typography.cardTitle.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
+                        style = typography.cardTitle.copy(fontWeight = FontWeight.Bold),
                         color = if (origin == null) colors.accent else colors.textPrimary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        minLines = 2,
-                        overflow = TextOverflow.Visible
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Text("KALKIŞ", style = typography.caption, color = colors.accent)
+                    Text("BAŞLANGIÇ", style = typography.caption.copy(fontSize = 9.sp), color = colors.textMuted)
                 }
 
                 Icon(
-                    imageVector = Icons.Rounded.East,
+                    imageVector = Icons.Rounded.ArrowForward,
                     contentDescription = null,
-                    tint = colors.accent.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(horizontal = 8.dp).size(20.dp)
+                    tint = colors.accent.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(horizontal = 12.dp).size(18.dp)
                 )
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1.3f)) {
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     Text(
                         text = destination,
-                        style = typography.cardTitle.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
+                        style = typography.cardTitle.copy(fontWeight = FontWeight.Black),
                         color = colors.textPrimary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        minLines = 2,
-                        overflow = TextOverflow.Visible
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.End
                     )
-                    Text("VARIŞ", style = typography.caption, color = colors.accent)
+                    Text("VARALACAK YER", style = typography.caption.copy(fontSize = 9.sp), color = colors.textMuted, textAlign = TextAlign.End)
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+            Divider(color = colors.border.copy(alpha = 0.05f))
+            Spacer(Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                InfoBlock(Icons.Rounded.Event, date)
-                Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+                InfoBlock(Icons.Rounded.CalendarToday, date)
                 InfoBlock(Icons.Rounded.Schedule, departureTime ?: "Belirtilmedi")
             }
         }
@@ -119,10 +118,10 @@ fun RouteMetricRow(
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        MetricItem(Modifier.weight(1f), distance, "Mesafe", Icons.Rounded.Straighten)
-        MetricItem(Modifier.weight(1f), duration, "Sürüş", Icons.Rounded.Timer)
+        MetricItem(Modifier.weight(1f), distance, "Mesafe", Icons.Rounded.Navigation)
+        MetricItem(Modifier.weight(1f), duration, "Sürüş", Icons.Rounded.Schedule)
         MetricItem(Modifier.weight(1f), arrival ?: "--:--", "Varış", Icons.Rounded.Flag)
     }
 }
@@ -132,15 +131,15 @@ private fun MetricItem(modifier: Modifier, value: String, label: String, icon: I
     val colors = HavamaniaTheme.colors
     Surface(
         modifier = modifier,
-        color = colors.surface.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.border.copy(alpha = 0.1f))
+        color = colors.surface.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, colors.border.copy(alpha = 0.05f))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Icon(icon, null, tint = colors.accent.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
-            Spacer(Modifier.height(8.dp))
-            Text(value, style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black), color = colors.textPrimary)
-            Text(label.uppercase(), style = HavamaniaTheme.typography.caption.copy(fontSize = 8.sp), color = colors.textMuted)
+        Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(icon, null, tint = colors.accent, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(value, style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Black), color = colors.textPrimary)
+            Text(label.uppercase(), style = HavamaniaTheme.typography.caption.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold), color = colors.textMuted)
         }
     }
 }
@@ -161,16 +160,16 @@ fun TimelineWaypointItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clickable { onClick() }
-            .padding(horizontal = 24.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .clickable(enabled = weather != null) { onClick() }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.Top
     ) {
         // Left side: Time
         Text(
             text = time,
             style = typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-            color = colors.textSecondary,
-            modifier = Modifier.width(50.dp)
+            color = colors.accent,
+            modifier = Modifier.width(48.dp).padding(top = 16.dp)
         )
 
         // Middle: Dot and Line
@@ -210,16 +209,24 @@ fun TimelineWaypointItem(
         Spacer(Modifier.width(16.dp))
 
         // Right side: Info
-        HavamaniaCard(
-            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-            backgroundColor = colors.surface.copy(alpha = 0.3f),
-            padding = 12.dp
+        Surface(
+            modifier = Modifier.weight(1f).padding(vertical = 4.dp),
+            color = if (isFirst || isLast) colors.surface.copy(alpha = 0.5f) else Color.Transparent,
+            shape = RoundedCornerShape(16.dp),
+            border = if (isFirst || isLast) BorderStroke(1.dp, colors.border.copy(alpha = 0.1f)) else null
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
-                        style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                        style = typography.bodyLarge.copy(
+                            fontWeight = if (isFirst || isLast) FontWeight.Black else FontWeight.Bold,
+                            fontSize = 15.sp,
+                            letterSpacing = (-0.3).sp
+                        ),
                         color = colors.textPrimary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -227,28 +234,35 @@ fun TimelineWaypointItem(
                     if (weather != null) {
                         Text(
                             text = WeatherUtils.getWeatherDisplayName(weather.weatherCode, LocalDateTime.now(), null, null),
-                            style = typography.caption.copy(fontSize = 10.sp),
+                            style = typography.caption.copy(fontSize = 11.sp),
                             color = colors.textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (weather.risk != RouteRisk.OK && !weather.riskReason.isNullOrBlank()) {
+                            Text(
+                                text = "⚠️ ${weather.riskReason}",
+                                style = typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                color = colors.warning,
+                                maxLines = 1
+                            )
+                        }
                     } else {
-                        Text("Veri bekleniyor...", style = typography.caption.copy(fontSize = 10.sp), color = colors.textMuted)
+                        Text("Veri bekleniyor...", style = typography.caption.copy(fontSize = 11.sp), color = colors.textMuted)
                     }
                 }
 
                 if (weather != null) {
-                    Spacer(Modifier.width(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = "${weather.temperatureC.toInt()}°",
-                            style = typography.bodyLarge.copy(fontWeight = FontWeight.Black, fontSize = 16.sp),
+                            style = typography.cardTitle.copy(fontWeight = FontWeight.Black, fontSize = 20.sp),
                             color = colors.textPrimary
                         )
-                        Spacer(Modifier.width(4.dp))
                         Text(
                             text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
-                            fontSize = 20.sp
+                            fontSize = 24.sp
                         )
                     }
                 }
