@@ -255,11 +255,6 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                Text(
-                    text = "System ID: ${uid.uppercase()}",
-                    style = HavamaniaTheme.typography.caption.copy(fontSize = 7.sp),
-                    color = themeColors.textMuted
-                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))

@@ -24,7 +24,7 @@ object AltikodChatFactory {
 
     fun create(): AltikodChatService {
         val logger = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         val client = OkHttpClient.Builder()
             .addInterceptor(logger)

@@ -164,42 +164,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 if (force) dao.clearAllTravelPlans(currentUid)
 
                 if (currentUid == "legacy") {
-                    val todayVal = LocalDate.now()
-                    val currentYear = todayVal.year
-
-                    val seedPlans = listOf(
-                        TravelPlan(
-                            userId = "legacy",
-                            city = "Batman",
-                            latitude = 37.8812,
-                            longitude = 41.1322,
-                            tripType = TripType.EVENT,
-                            startDate = LocalDate.of(currentYear, 5, 15),
-                            endDate = LocalDate.of(currentYear, 5, 16),
-                            isDemo = true
-                        ),
-                        TravelPlan(
-                            userId = "legacy",
-                            city = "Bali",
-                            latitude = -8.4095,
-                            longitude = 115.1889,
-                            tripType = TripType.WEEKEND,
-                            startDate = LocalDate.of(currentYear, 5, 28),
-                            endDate = LocalDate.of(currentYear, 5, 30),
-                            isDemo = true
-                        ),
-                        TravelPlan(
-                            userId = "legacy",
-                            city = "Trabzon",
-                            latitude = 41.0027,
-                            longitude = 39.7168,
-                            tripType = TripType.SHOPPING,
-                            startDate = LocalDate.of(currentYear, 5, 18),
-                            endDate = LocalDate.of(currentYear, 5, 21),
-                            isDemo = true
-                        )
-                    )
-
+                    val seedPlans = emptyList<TravelPlan>()
                     seedPlans.forEach { plan ->
                         dao.insertTravelPlan(plan.toEntity())
                     }

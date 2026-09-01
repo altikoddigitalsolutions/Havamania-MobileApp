@@ -79,6 +79,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun calculateRoute(plan: TravelPlan) {
+        Log.d("RouteVM", "Calculating route. OriginCity=${plan.originCity}, OriginLat=${plan.originLatitude}, OriginLon=${plan.originLongitude}")
         viewModelScope.launch {
             var origin = plan.originPoint?.let { GeoPoint(it.first, it.second) }
 

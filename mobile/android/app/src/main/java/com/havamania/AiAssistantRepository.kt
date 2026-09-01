@@ -39,8 +39,10 @@ class AiAssistantRepository(
             return@withContext AssistantResult.ConfigurationError
         }
 
-        Log.d("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_START | requestId=$requestId | botId=$botId | messageLength=${question.length}")
-        Log.v("ASSISTANT_DEBUG", "PAYLOAD_TRACE | question=${question.take(100)}... | session=$sessionId")
+        if (BuildConfig.DEBUG) {
+            Log.d("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_START | requestId=$requestId | botId=$botId | messageLength=${question.length}")
+            Log.v("ASSISTANT_DEBUG", "PAYLOAD_TRACE | question=${question.take(100)}... | session=$sessionId")
+        }
 
         try {
             val request = AltikodChatRequest(question = question, session_id = sessionId)
@@ -71,7 +73,9 @@ class AiAssistantRepository(
                 return@withContext AssistantResult.QuestionRejected
             }
 
-            Log.d("ASSISTANT_DEBUG", "ASSISTANT_HTTP_RESULT | requestId=$requestId | httpCode=200 | successful=true")
+            if (BuildConfig.DEBUG) {
+                Log.d("ASSISTANT_DEBUG", "ASSISTANT_HTTP_RESULT | requestId=$requestId | httpCode=200 | successful=true")
+            }
             AssistantResult.Success(content)
 
         } catch (e: HttpException) {

@@ -107,11 +107,6 @@ export function WeatherDetailScreen({route, navigation}: Props): React.JSX.Eleme
         </View>
 
         <View style={{height: Spacing.xxl}} />
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
         <View style={{height: Spacing.xxl}} />
       </ScrollView>
     </SafeAreaView>

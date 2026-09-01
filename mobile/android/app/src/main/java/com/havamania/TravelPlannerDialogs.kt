@@ -335,7 +335,8 @@ private fun TimeSelectionField(time: String?, onTimeChange: (String) -> Unit, on
     val context = LocalContext.current
     Surface(
         onClick = {
-            val current = try { java.time.LocalTime.parse(time ?: "09:00") } catch(e: Exception) { java.time.LocalTime.of(9, 0) }
+            val now = java.time.LocalTime.now()
+            val current = try { java.time.LocalTime.parse(time ?: "") } catch(e: Exception) { now }
             val picker = android.app.TimePickerDialog(
                 context,
                 { _, h, m -> onTimeChange(String.format("%02d:%02d", h, m)) },
