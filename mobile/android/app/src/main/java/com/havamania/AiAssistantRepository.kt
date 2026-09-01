@@ -44,10 +44,20 @@ class AiAssistantRepository(
 
         try {
             val request = AltikodChatRequest(question = question, session_id = sessionId)
-            Log.d("ASSISTANT_DEBUG", "REQUEST_BODY | json=${Json.encodeToString(request)}")
+            val requestJson = Json.encodeToString(request)
+
+            if (BuildConfig.DEBUG) {
+                Log.d("ASSISTANT_DEBUG", "RAW_INPUT=[$question]")
+                Log.d("ASSISTANT_DEBUG", "FINAL_QUESTION=[$question]")
+                Log.d("ASSISTANT_DEBUG", "REQUEST_JSON=$requestJson")
+            }
 
             val response = api.sendMessage(botId, request)
-            Log.d("ASSISTANT_DEBUG", "RESPONSE_BODY | answer=${response.answer.take(100)}... | session=${response.session_id}")
+
+            if (BuildConfig.DEBUG) {
+                Log.d("ASSISTANT_DEBUG", "HTTP_STATUS=200")
+                Log.d("ASSISTANT_DEBUG", "RAW_RESPONSE=answer=[${response.answer.take(100)}...], session=${response.session_id}")
+            }
 
             val content = response.answer.trim()
 

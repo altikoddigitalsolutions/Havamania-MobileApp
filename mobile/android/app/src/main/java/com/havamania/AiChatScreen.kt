@@ -115,13 +115,11 @@ fun AiChatScreen(
         bottomBar = {
             ChatInput(
                 onSend = { prompt ->
-                    val context = buildPersonalizedContext(aboutMe, userInterests)
-                    viewModel.sendMessage(prompt, systemContext = context)
+                    viewModel.sendMessage(prompt)
                 },
                 isSending = isSending,
                 c = themeColors,
-                s = themeStyles,
-                contextInfo = if (activeTrip != null) "Yaklaşan seyahat bağlamı kullanılıyor" else null
+                s = themeStyles
             )
         }
     ) { padding ->
@@ -137,17 +135,20 @@ fun AiChatScreen(
         ) {
             if (messages.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    val welcomeMsg = config?.welcome_message ?: "Merhaba! Havamania Asistan'a hoş geldiniz. Size nasıl yardımcı olabilirim?"
-                    val personalizedGreeting = if (!profile?.name.isNullOrBlank()) "Merhaba ${profile?.name?.split(" ")?.first()}" else "Merhaba"
+                    val firstName = profile?.name?.split(" ")?.firstOrNull() ?: ""
+                    val greeting = if (firstName.isNotEmpty()) "Merhaba $firstName! Sana nasıl yardımcı olabilirim?"
+                                   else "Merhaba! Sana nasıl yardımcı olabilirim?"
 
-                    WelcomeCard("$personalizedGreeting! $welcomeMsg", themeColors, themeStyles)
+                    WelcomeCard(greeting, themeColors, themeStyles)
 
-                    if (aboutMe.isNotBlank() || userInterests.isNotEmpty()) {
-                        PersonalizedContextCard(aboutMe, themeColors)
-                    }
+                    // truthfulness audit: context is no longer sent to AI to ensure reliable response
+                    // but we can still show that user preferences are respected in local UI or saved
+                    PersonalizedContextCard("Tercihlerin ve ilgi alanların kaydedildi", themeColors)
 
                     if (activeTrip != null) {
-                        ActiveTripContextCard(activeTrip, themeColors)
+                        ActiveTripContextCard(activeTrip, themeColors) {
+                            viewModel.sendMessage("${activeTrip.city} seyahatim için hava durumu nasıl?")
+                        }
                     }
 
                     currentWeatherData?.let { data ->
@@ -157,15 +158,13 @@ fun AiChatScreen(
 
                     AssistantSectionLabel("NELER YAPABİLİRİM?")
                     FeatureCards(themeColors, themeStyles) { prompt ->
-                        val context = buildPersonalizedContext(aboutMe, userInterests)
-                        viewModel.sendMessage(prompt, systemContext = context)
+                        viewModel.sendMessage(prompt)
                     }
 
                     AssistantSectionLabel("HIZLI SORULAR")
                     QuickSuggestions(
                         onSuggestionClick = { prompt ->
-                            val context = buildPersonalizedContext(aboutMe, userInterests)
-                            viewModel.sendMessage(prompt, systemContext = context)
+                            viewModel.sendMessage(prompt)
                         },
                         c = themeColors,
                         hasTrip = activeTrip != null
@@ -251,7 +250,7 @@ private fun WelcomeCard(message: String, c: HavamaniaColors, s: HavamaniaStyles)
 }
 
 @Composable
-private fun PersonalizedContextCard(aboutMe: String, c: HavamaniaColors) {
+private fun PersonalizedContextCard(text: String, c: HavamaniaColors) {
     Surface(
         color = c.accent.copy(alpha = 0.05f),
         shape = RoundedCornerShape(16.dp),
@@ -260,7 +259,7 @@ private fun PersonalizedContextCard(aboutMe: String, c: HavamaniaColors) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Kişisel tercihlerine göre özelleştirildi", style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold), color = c.accent)
+            Text(text, style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold), color = c.accent)
         }
     }
 }
@@ -291,7 +290,7 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 }
 
 @Composable
-private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors) {
+private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: () -> Unit) {
     HavamaniaCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         backgroundColor = c.accent.copy(alpha = 0.05f),
@@ -301,10 +300,10 @@ private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.FlightTakeoff, null, tint = c.accent, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Yaklaşan Seyahat",
-                    style = HavamaniaTheme.typography.caption,
+                    text = "YAKLAŞAN SEYAHAT",
+                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                     color = c.accent
                 )
                 Text(
@@ -312,6 +311,10 @@ private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors) {
                     style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = c.textPrimary
                 )
+            }
+
+            TextButton(onClick = onAsk) {
+                Text("SOR", color = c.accent, fontWeight = FontWeight.Bold)
             }
         }
     }

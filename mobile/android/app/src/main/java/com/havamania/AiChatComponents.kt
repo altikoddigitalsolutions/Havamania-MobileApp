@@ -261,17 +261,104 @@ fun ChatInput(
 
 @Composable
 fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
-    // Placeholder
+    Surface(
+        color = c.surface.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "BUGÜN ÖZET",
+                style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                color = c.textMuted
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "${data.cityName} için bugün hava ${data.condition.lowercase()}. Sıcaklık ${data.temperature} civarında seyrediyor.",
+                style = HavamaniaTheme.typography.bodyMedium,
+                color = c.textPrimary
+            )
+        }
+    }
 }
 
 @Composable
 fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String) -> Unit) {
-    // Placeholder
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        val features = listOf(
+            Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", "Ankara'da hava nasıl?"),
+            Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", "Seyahatim için hava uygun mu?"),
+            Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?")
+        )
+
+        features.forEach { (icon, title, prompt) ->
+            Surface(
+                modifier = Modifier.weight(1f).height(100.dp).clickable { onFeatureClick(prompt) },
+                color = c.surface.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, c.border.copy(alpha = 0.1f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(icon, null, tint = c.accent, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = title,
+                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                        textAlign = TextAlign.Center,
+                        color = c.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean) {
-    // Placeholder
+    val suggestions = mutableListOf(
+        "Bugün hava nasıl?",
+        "Yağmur bekleniyor mu?",
+        "Yarın hava nasıl?"
+    )
+    if (hasTrip) {
+        suggestions.add("Seyahatim için hava uygun mu?")
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        suggestions.forEach { prompt ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { onSuggestionClick(prompt) },
+                color = c.accent.copy(alpha = 0.05f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.ChatBubbleOutline, null, tint = c.accent, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = prompt,
+                        style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                        color = c.textPrimary
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

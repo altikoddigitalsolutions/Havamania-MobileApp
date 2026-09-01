@@ -173,18 +173,20 @@ fun TravelRouteWeatherScreen(
                         Spacer(Modifier.height(16.dp))
                     }
 
-                    RouteContent(
-                        trip = trip,
-                        routeState = routeState,
-                        waypoints = waypoints,
-                        startWeather = startWeather,
-                        endWeather = endWeather,
-                        departureMillis = departureMillis,
-                        analyzing = analyzing,
-                        analyzed = analyzed,
-                        onAnalyze = { viewModel.analyzeWeather() },
-                        onSelect = { selected = it }
-                    )
+                    if (errorMessage == null) {
+                        RouteContent(
+                            trip = trip,
+                            routeState = routeState,
+                            waypoints = waypoints,
+                            startWeather = startWeather,
+                            endWeather = endWeather,
+                            departureMillis = departureMillis,
+                            analyzing = analyzing,
+                            analyzed = analyzed,
+                            onAnalyze = { viewModel.analyzeWeather() },
+                            onSelect = { selected = it }
+                        )
+                    }
                 }
             }
         } else {
@@ -207,19 +209,21 @@ fun TravelRouteWeatherScreen(
                     Spacer(Modifier.height(16.dp))
                 }
 
-                RouteContent(
-                    trip = trip,
-                    routeState = routeState,
-                    waypoints = waypoints,
-                    startWeather = startWeather,
-                    endWeather = endWeather,
-                    departureMillis = departureMillis,
-                    analyzing = analyzing,
-                    analyzed = analyzed,
-                    onAnalyze = { viewModel.analyzeWeather() },
-                    onSelect = { selected = it },
-                    showTimeline = false
-                )
+                if (errorMessage == null) {
+                    RouteContent(
+                        trip = trip,
+                        routeState = routeState,
+                        waypoints = waypoints,
+                        startWeather = startWeather,
+                        endWeather = endWeather,
+                        departureMillis = departureMillis,
+                        analyzing = analyzing,
+                        analyzed = analyzed,
+                        onAnalyze = { viewModel.analyzeWeather() },
+                        onSelect = { selected = it },
+                        showTimeline = false
+                    )
+                }
 
                 Spacer(Modifier.height(styles.spacingMD))
 
@@ -235,13 +239,23 @@ fun TravelRouteWeatherScreen(
                         styleRef = style
                     })
 
-                    if (routeState == null) {
+                    if (routeState == null && errorMessage == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = colors.accent)
                         }
+                    } else if (errorMessage != null) {
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.03f)), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "Başlangıç noktası seçildiğinde rota burada gösterilecek.",
+                                style = HavamaniaTheme.typography.bodySmall,
+                                color = colors.textMuted,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(32.dp)
+                            )
+                        }
                     } else if (routeState is RouteResult.Error || routeState is RouteResult.NoRoute) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
-                            Text("Harita verisi yüklenemedi", color = colors.textMuted)
+                            Text("Harita verisi şu an yüklenemedi", color = colors.textMuted)
                         }
                     }
                 }

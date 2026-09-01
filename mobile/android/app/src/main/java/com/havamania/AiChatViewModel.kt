@@ -291,19 +291,12 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 val followUpCtx = buildFollowUpContext(null)
                 val toneInst = buildToneInstruction(assistantTone)
 
-                // P3.8.8: Optimized context format to prevent backend rejection
-                val finalPrompt = buildString {
-                    append(userPrompt)
+                // P3.8.9 FORENSIC FIX: Send ONLY raw user prompt.
+                // Any extra context or structure causes business-level rejection on botId=6.
+                val finalPrompt = userPrompt
 
-                    val contextParts = mutableListOf<String>()
-                    if (weatherCtx.isNotBlank()) contextParts.add("Weather: " + weatherCtx.trim().replace("\n", ". "))
-                    if (followUpCtx.isNotBlank()) contextParts.add("Trips: " + followUpCtx.trim().replace("\n", ". "))
-
-                    if (contextParts.isNotEmpty()) {
-                        append("\n\n(Info: ")
-                        append(contextParts.joinToString(". "))
-                        append(")")
-                    }
+                if (BuildConfig.DEBUG) {
+                    Log.d("ASSISTANT_DEBUG", "AI_REAL_REQUEST_START | botId=6 | input=[$userPrompt]")
                 }
 
                 val result = assistantRepository.getAssistantResponse(finalPrompt, currentConversationId)

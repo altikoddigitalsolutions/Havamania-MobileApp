@@ -329,8 +329,9 @@ object TravelAiHelper {
         val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
 
         // Use the actual historical analyses list if available
+        // PROOF: This comes from the 'analyses' field of the TravelPlan which is persisted in Room/Firestore.
         val historicalData = plan.analyses
-        val hasData = historicalData.isNotEmpty()
+        val hasData = historicalData.isNotEmpty() && historicalData.any { it.summary.isNotBlank() }
 
         if (!hasData) {
             return TravelHistorySummary(
@@ -349,35 +350,25 @@ object TravelAiHelper {
             )
         }
 
-        val avgT = historicalData.map { it.averageTemperature }.average().toInt()
-        val avgScore = historicalData.map { it.travelScore }.average().toInt()
-
-        // Count rainy days based on recorded rainRiskPercent > 50
-        val rainy = historicalData.count { (it.rainRiskPercent ?: 0) > 50 }
-        val sunny = historicalData.count { (it.rainRiskPercent ?: 100) < 20 } // Rough estimate
-        val cloudy = (duration - rainy - sunny).coerceAtLeast(0)
-
-        val weatherTone = when {
-            rainy > (duration / 2) -> "Hava çoğunlukla yağışlı geçmiş"
-            sunny > (duration * 0.7) -> "Çoğunlukla güneşli bir gökyüzü eşlik etmiş"
-            avgT > 28 -> "Sıcak bir yaz havası hakimmiş"
-            else -> "Hava genel olarak dengeli seyretmiş"
-        }
+        // Derive summary from the LATEST recorded analysis for this trip
+        val latestRecorded = historicalData.last()
+        val avgT = latestRecorded.averageTemperature.toInt()
+        val avgScore = latestRecorded.travelScore
 
         val summaryText = when(tone) {
-            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. $weatherTone."
-            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. $weatherTone."
-            else -> "${plan.city} seyahatin $duration gün sürdü. $weatherTone."
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Kaydedilen özet: ${latestRecorded.summary}"
+            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. Arşiv özeti: ${latestRecorded.summary}"
+            else -> "${plan.city} seyahatin $duration gün sürdü. ${latestRecorded.summary}"
         }
 
         return TravelHistorySummary(
             averageTemp = avgT,
             minTemp = historicalData.map { it.averageTemperature }.minOrNull()?.toInt() ?: avgT,
             maxTemp = historicalData.map { it.averageTemperature }.maxOrNull()?.toInt() ?: avgT,
-            rainyDays = rainy,
-            sunnyDays = sunny,
-            cloudyDays = cloudy,
-            riskDayText = "Arşivlenen $rainy yağışlı gün kaydedildi.",
+            rainyDays = historicalData.count { (it.rainRiskPercent ?: 0) > 50 },
+            sunnyDays = historicalData.count { (it.rainRiskPercent ?: 100) < 20 },
+            cloudyDays = -1,
+            riskDayText = "Arşivlenen analiz verileri kullanılıyor.",
             comfortScore = avgScore,
             summaryText = summaryText,
             packingAdvice = "Kaydedilen ortalama sıcaklık: $avgT°C",
