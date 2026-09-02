@@ -49,7 +49,6 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     val departureMillis: StateFlow<Long?> = _departureMillis.asStateFlow()
 
     fun loadTrip(tripId: String) {
-        _trip.value = null
         _routeState.value = null
         _waypoints.value = emptyList()
         _startWeather.value = null
@@ -60,20 +59,24 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         _departureMillis.value = null
 
         viewModelScope.launch {
-            Log.d("RouteVM", "Loading trip: $tripId")
-            val entity = dao.getTravelPlanById(tripId)
-            if (entity != null) {
-                val plan = entity.toDomain()
-                _trip.value = plan
+            Log.d("RouteVM", "Observing trip: $tripId")
+            dao.getTravelPlanByIdFlow(tripId).collect { entity ->
+                if (entity != null) {
+                    val plan = entity.toDomain()
+                    _trip.value = plan
 
-                val departureDateTime = plan.departureDateTime
-                if (departureDateTime != null) {
-                    _departureMillis.value = departureDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    val departureDateTime = plan.departureDateTime
+                    if (departureDateTime != null) {
+                        _departureMillis.value = departureDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    } else {
+                        _departureMillis.value = null
+                    }
+
+                    // Only recalculate route if essential fields changed or first load
+                    calculateRoute(plan)
+                } else {
+                    _errorMessage.value = "Seyahat bulunamadı."
                 }
-
-                calculateRoute(plan)
-            } else {
-                _errorMessage.value = "Seyahat bulunamadı."
             }
         }
     }

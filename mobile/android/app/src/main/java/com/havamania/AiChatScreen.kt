@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -135,9 +136,12 @@ fun AiChatScreen(
         ) {
             if (messages.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    val firstName = profile?.name?.split(" ")?.firstOrNull() ?: ""
-                    val greeting = if (firstName.isNotEmpty()) "Merhaba $firstName! Sana nasıl yardımcı olabilirim?"
-                                   else "Merhaba! Sana nasıl yardımcı olabilirim?"
+                    val firstName = profile?.name?.trim()?.split(" ")?.firstOrNull() ?: ""
+                    val greeting = if (firstName.isNotEmpty() && firstName.lowercase() != "user") {
+                        "Merhaba $firstName! Sana nasıl yardımcı olabilirim? 😊"
+                    } else {
+                        "Merhaba! Sana nasıl yardımcı olabilirim? 😊"
+                    }
 
                     WelcomeCard(greeting, themeColors, themeStyles)
 
@@ -291,19 +295,24 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 
 @Composable
 private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: () -> Unit) {
-    HavamaniaCard(
+    Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        backgroundColor = c.accent.copy(alpha = 0.05f),
-        borderColor = c.accent.copy(alpha = 0.1f),
-        padding = 16.dp
+        color = c.accent.copy(alpha = 0.04f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.FlightTakeoff, null, tint = c.accent, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(40.dp).background(c.accent.copy(alpha = 0.08f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.FlightTakeoff, null, tint = c.accent, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "YAKLAŞAN SEYAHAT",
-                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
                     color = c.accent
                 )
                 Text(
@@ -313,8 +322,11 @@ private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: (
                 )
             }
 
-            TextButton(onClick = onAsk) {
-                Text("SOR", color = c.accent, fontWeight = FontWeight.Bold)
+            TextButton(
+                onClick = onAsk,
+                colors = ButtonDefaults.textButtonColors(contentColor = c.accent)
+            ) {
+                Text("SOR", style = HavamaniaTheme.typography.button.copy(fontWeight = FontWeight.Black))
             }
         }
     }

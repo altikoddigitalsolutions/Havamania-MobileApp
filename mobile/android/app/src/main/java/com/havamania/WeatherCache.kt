@@ -228,6 +228,9 @@ interface WeatherDao {
     @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
     suspend fun getTravelPlanById(id: String): TravelPlanEntity?
 
+    @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
+    fun getTravelPlanByIdFlow(id: String): kotlinx.coroutines.flow.Flow<TravelPlanEntity?>
+
     @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
     fun getAllTravelPlansFlow(uid: String): kotlinx.coroutines.flow.Flow<List<TravelPlanEntity>>
 

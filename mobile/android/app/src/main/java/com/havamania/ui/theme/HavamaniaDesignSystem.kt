@@ -130,10 +130,10 @@ data class HavamaniaElevation(
 
 @Immutable
 data class HavamaniaStyles(
-    val glassBlur: Dp = 16.dp,
+    val glassBlur: Dp = 12.dp,
     val cardCornerRadius: Dp = 24.dp,
     val cardBorderWidth: Dp = 1.dp,
-    val elevation: Dp = 8.dp,
+    val elevation: Dp = 4.dp,
 
     // Standardized Spacing Scale
     val spacingNone: Dp = 0.dp,
@@ -217,7 +217,7 @@ object ThemeFactory {
                 error = Color(0xFFEF4444),
                 success = Color(0xFF10B981),
                 warning = Color(0xFFF59E0B),
-                shadow = Color.Black.copy(alpha = 0.4f),
+                shadow = Color.Black.copy(alpha = 0.25f),
                 buttonGradient = listOf(Color(0xFF00C2FF), Color(0xFF0077FF)),
                 isDark = true,
                 weatherClear = Color(0xFFFBBF24),
@@ -377,7 +377,7 @@ object ThemeFactory {
                 error = Color(0xFFEF4444),
                 success = Color(0xFF10B981),
                 warning = Color(0xFFF59E0B),
-                shadow = Color.Black.copy(alpha = 0.4f),
+                shadow = Color.Black.copy(alpha = 0.25f),
                 buttonGradient = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
                 isDark = true,
                 weatherClear = Color(0xFF60A5FA),

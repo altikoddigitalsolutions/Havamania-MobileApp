@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import com.havamania.ui.theme.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -128,7 +129,7 @@ fun NotificationCenterScreen(
         )
     }
 
-    Scaffold(
+    HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
                 title = if (state.isSelectionMode) "${state.selectedIds.size} SEÇİLDİ" else "BİLDİRİM MERKEZİ",
@@ -164,8 +165,7 @@ fun NotificationCenterScreen(
                     }
                 }
             )
-        },
-        containerColor = Color.Transparent
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -428,9 +428,9 @@ fun NotificationCard(
     val cardBgColor = if (isSelected) {
         themeColors.accent.copy(alpha = 0.15f)
     } else if (notification.isRead) {
-        themeColors.surfaceGlass.copy(alpha = if (themeColors.isDark) 0.4f else 0.7f)
+        themeColors.surface.copy(alpha = if (themeColors.isDark) 0.5f else 0.7f)
     } else {
-        themeColors.surfaceGlass
+        themeColors.surface.copy(alpha = if (themeColors.isDark) 0.7f else 0.9f)
     }
 
     val cardBorderColor = if (isSelected) {
@@ -438,15 +438,15 @@ fun NotificationCard(
     } else if (notification.isRead) {
         themeColors.border.copy(alpha = 0.1f)
     } else {
-        themeColors.accent.copy(alpha = 0.25f)
+        themeColors.accent.copy(alpha = 0.2f)
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(20.dp),
         color = cardBgColor,
         border = BorderStroke(if (isSelected) 2.dp else 1.dp, cardBorderColor),
-        shadowElevation = if (notification.isRead) 0.dp else 2.dp
+        shadowElevation = if (notification.isRead) 0.dp else 1.dp
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -595,17 +595,16 @@ fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = if (isSelected) themeColors.accent else themeColors.surfaceGlass.copy(alpha = 0.4f),
-        border = BorderStroke(1.dp, if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.15f)),
-        tonalElevation = if (isSelected) 4.dp else 0.dp
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) themeColors.accent else themeColors.surface.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.1f))
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
-            style = HavamaniaTheme.typography.label.copy(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = HavamaniaTheme.typography.caption.copy(
                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                letterSpacing = 0.5.sp
+                fontSize = 11.sp
             ),
             color = if (isSelected) Color.White else themeColors.textPrimary
         )
@@ -620,22 +619,35 @@ fun EmptyNotificationState(onResetFilter: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = Icons.Rounded.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = themeColors.accent.copy(alpha = 0.3f)
-        )
+        Box(
+            modifier = Modifier.size(100.dp).background(themeColors.accent.copy(alpha = 0.05f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.SearchOff,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = themeColors.accent.copy(alpha = 0.4f)
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Bu kategoride filtreye uygun bildirim bulunamadı.",
-            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
+            text = "Herhangi bir bildirim bulunamadı.",
+            style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onResetFilter, colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent)) {
-            Text("FİLTREYİ TEMİZLE", fontWeight = FontWeight.Bold)
-        }
+        Text(
+            text = "Seçili filtreye uygun kayıt yok.",
+            style = HavamaniaTheme.typography.bodySmall,
+            color = themeColors.textSecondary,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        HavamaniaPrimaryButton(
+            text = "FİLTREYİ TEMİZLE",
+            onClick = onResetFilter,
+            height = 48.dp
+        )
     }
 }

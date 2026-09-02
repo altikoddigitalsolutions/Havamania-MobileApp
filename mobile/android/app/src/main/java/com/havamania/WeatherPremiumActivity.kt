@@ -371,7 +371,10 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
-                                composable(Routes.NOTIFICATION_CENTER) {
+                                composable(
+                                    Routes.NOTIFICATION_CENTER,
+                                    deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/notifications" })
+                                ) {
                                     NotificationCenterScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToDetail = { screen, params ->

@@ -189,12 +189,9 @@ fun HavamaniaGlassCard(
         label = "pressScale"
     )
 
-    Box(
+    Surface(
         modifier = modifier
             .scale(scale)
-            .shadow(themeStyles.elevation, RoundedCornerShape(cornerRadius))
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(colors.surfaceGlass.copy(alpha = alpha))
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
@@ -203,14 +200,16 @@ fun HavamaniaGlassCard(
                         onClick = onClick
                     )
                 } else Modifier
+            ),
+        shape = RoundedCornerShape(cornerRadius),
+        color = colors.surface.copy(alpha = alpha),
+        border = BorderStroke(
+            width = themeStyles.cardBorderWidth,
+            brush = Brush.verticalGradient(
+                colors = listOf(colors.border, Color.Transparent)
             )
-            .border(
-                width = themeStyles.cardBorderWidth,
-                brush = Brush.verticalGradient(
-                    colors = listOf(colors.border, Color.Transparent)
-                ),
-                shape = RoundedCornerShape(cornerRadius)
-            )
+        ),
+        shadowElevation = themeStyles.elevation / 2
     ) {
         Column(
             modifier = Modifier.padding(
@@ -781,7 +780,6 @@ fun HavamaniaCard(
     Surface(
         modifier = modifier
             .scale(scale)
-            .shadow(elevation, shape)
             .then(
                 if (onClick != null) Modifier.clickable(
                     interactionSource = interactionSource,
@@ -791,7 +789,8 @@ fun HavamaniaCard(
             ),
         shape = shape,
         color = backgroundColor,
-        border = BorderStroke(HavamaniaTheme.styles.cardBorderWidth, borderColor)
+        border = BorderStroke(HavamaniaTheme.styles.cardBorderWidth, borderColor),
+        shadowElevation = elevation / 2
     ) {
         Column(
             modifier = Modifier.padding(padding),

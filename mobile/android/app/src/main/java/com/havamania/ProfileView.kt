@@ -122,7 +122,7 @@ fun ProfileScreen(
                 name = displayNameToDisplay,
                 bio = bioToDisplay,
                 imageUri = photoToDisplay,
-                avatarVersion = avatarVersion,
+                avatarVersion = profile?.updatedAt ?: avatarVersion,
                 isUploading = uploadProgress,
                 interests = userInterests,
                 aboutMe = aboutMe,
@@ -220,17 +220,22 @@ fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val hasContent = text.isNotBlank()
 
-    HavamaniaGlassCard(onClick = onClick, alpha = 0.6f, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(4.dp)) {
+    Surface(
+        onClick = onClick,
+        color = themeColors.surface.copy(alpha = if (themeColors.isDark) 0.5f else 0.7f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(HavamaniaTheme.styles.radiusSmall)).background(themeColors.accent.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(themeColors.accent.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
                         Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.width(16.dp))
                     Column {
                         Text("Kendinden Bahset", style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                        Text("AI seni tanısın, önerileri özelleştirilsin.", style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary)
+                        Text("AI seni tanısın, önerileri özelleştirilsin.", style = HavamaniaTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary)
                     }
                 }
                 Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted)
@@ -238,9 +243,7 @@ fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
 
             if (hasContent) {
                 Spacer(Modifier.height(16.dp))
-                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(themeColors.surfaceGlass.copy(alpha = 0.3f)).padding(16.dp)) {
-                    Text(text = text, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp), color = themeColors.textPrimary.copy(alpha = 0.9f), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
+                Text(text = text, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp), color = themeColors.textPrimary.copy(alpha = 0.9f), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(16.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val badges = remember(text) { generateBadges(text) }
@@ -364,10 +367,15 @@ fun PremiumInterestCategoryCard(category: InterestCategory, selectedInterests: S
     var expanded by remember { mutableStateOf(false) }
     val selectedCount = remember(selectedInterests) { category.interests.count { selectedInterests.contains(it.id) } }
 
-    HavamaniaGlassCard(alpha = 0.45f, modifier = Modifier.fillMaxWidth()) {
-        Column {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = themeColors.surface.copy(alpha = if (themeColors.isDark) 0.5f else 0.7f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(HavamaniaTheme.styles.radiusSmall)).background(themeColors.accent.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(themeColors.accent.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
                     Icon(category.icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(16.dp))
@@ -385,7 +393,7 @@ fun PremiumInterestCategoryCard(category: InterestCategory, selectedInterests: S
             }
             AnimatedVisibility(visible = expanded) {
                 Column {
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(16.dp))
                     FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         category.interests.forEach { PremiumInterestChip(it, selectedInterests.contains(it.id)) { onInterestToggle(it.id) } }
                     }

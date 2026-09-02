@@ -335,11 +335,13 @@ private fun SettingsGroupLabel(text: String) {
 
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
-    HavamaniaGlassCard(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        alpha = 0.4f
+        color = HavamaniaTheme.colors.surface.copy(alpha = if (HavamaniaTheme.colors.isDark) 0.5f else 0.8f),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, HavamaniaTheme.colors.border.copy(alpha = 0.1f))
     ) {
-        Column {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
             content()
         }
     }

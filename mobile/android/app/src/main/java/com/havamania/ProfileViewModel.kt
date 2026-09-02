@@ -291,13 +291,21 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
             } catch (e: Exception) {
                 android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
-                if (e is com.google.firebase.storage.StorageException) {
-                    android.util.Log.e("PHOTO_DEBUG", "StorageException Error: ${e.errorCode}, HTTP: ${e.httpResultCode}")
-                    android.util.Log.e("PHOTO_DEBUG", "Message: ${e.message}")
-                    e.cause?.let { android.util.Log.e("PHOTO_DEBUG", "Cause: ${it.message}") }
+                val friendlyError = when {
+                    e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED ->
+                        "Yetki hatası: Fotoğraf yükleme izniniz bulunmuyor."
+                    e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_QUOTA_EXCEEDED ->
+                        "Sunucu kotası doldu, lütfen daha sonra tekrar deneyin."
+                    e is com.google.firebase.storage.StorageException && e.httpResultCode == 402 ->
+                        "Servis kısıtlaması: Cloud Storage kullanımı için Blaze planı gereklidir. Lütfen sistem yöneticisiyle iletişime geçin."
+                    e is java.io.IOException ->
+                        "Bağlantı hatası: Lütfen internetinizi kontrol edin."
+                    e.message?.contains("unknown", true) == true ->
+                        "Sunucu hatası: Firebase Storage yapılandırması (Blaze planı) kontrol edilmelidir."
+                    else -> "Beklenmedik bir hata oluştu: ${e.localizedMessage ?: "Bilinmiyor"}"
                 }
-                android.util.Log.e("PHOTO_DEBUG", "Exception:", e)
-                _profileState.value = ProfileState.Error("Profil fotoğrafı yüklenemedi: ${e.message}")
+                android.util.Log.e("PHOTO_DEBUG", "Mapped Error: $friendlyError", e)
+                _profileState.value = ProfileState.Error(friendlyError)
             } finally {
                 _uploadProgress.value = false
             }

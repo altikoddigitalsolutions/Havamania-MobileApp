@@ -284,6 +284,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
             val existing = dao.getAllTravelPlans(currentUid)
             val isDuplicate = existing.any {
+                it.id != plan.id && // Don't check against self when editing
                 it.city.equals(cityNameTrimmed, ignoreCase = true) &&
                 (it.district ?: "").equals(plan.district ?: "", ignoreCase = true) &&
                 it.startDate == plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() &&

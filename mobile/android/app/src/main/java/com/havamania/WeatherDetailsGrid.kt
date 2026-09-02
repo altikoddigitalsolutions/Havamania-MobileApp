@@ -230,7 +230,7 @@ fun WindDirectionCard(
 
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Rounded.CompassCalibration, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.CompassCalibration, null, tint = themeColors.textMuted, modifier = Modifier.size(14.dp))
                     Text(
                         "RÜZGAR YÖNÜ",
                         style = HavamaniaTheme.typography.sectionTitle,

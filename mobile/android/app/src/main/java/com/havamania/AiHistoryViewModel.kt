@@ -24,18 +24,44 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         loadHistoryForUid(newUid)
     }
 
+    private var historyListener: com.google.firebase.firestore.ListenerRegistration? = null
+
     init {
         auth.addAuthStateListener(authListener)
+        observeFirestoreHistory(currentUid)
     }
 
     override fun onCleared() {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
+        historyListener?.remove()
+    }
+
+    private fun observeFirestoreHistory(uid: String) {
+        historyListener?.remove()
+        if (uid == "legacy") return
+
+        historyListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users").document(uid).collection("ai_history")
+            .addSnapshotListener { snapshot, e ->
+                if (e == null && snapshot != null) {
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        val items = snapshot.documents.mapNotNull { doc ->
+                            try { doc.toObject(AiHistoryEntity::class.java) } catch (ex: Exception) { null }
+                        }
+                        items.forEach { dao.insertAiHistory(it) }
+                        loadHistory()
+                    }
+                }
+            }
     }
 
     fun loadHistoryForUid(uid: String) {
         viewModelScope.launch {
             _historyItems.value = dao.getAllAiHistory(uid)
+            if (uid != "legacy" && historyListener == null) {
+                observeFirestoreHistory(uid)
+            }
         }
     }
 
@@ -68,6 +94,16 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                 updatedAt = System.currentTimeMillis()
             )
             dao.insertAiHistory(item)
+
+            if (uid != "legacy") {
+                try {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users").document(uid).collection("ai_history")
+                        .document(finalId).set(item)
+                } catch (e: Exception) {
+                    android.util.Log.e("AiHistoryVM", "Firestore save failed", e)
+                }
+            }
             loadHistoryForUid(uid)
         }
     }
@@ -76,6 +112,15 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         val uid = currentUid
         viewModelScope.launch {
             dao.deleteAiHistory(id)
+            if (uid != "legacy") {
+                try {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users").document(uid).collection("ai_history")
+                        .document(id).delete()
+                } catch (e: Exception) {
+                    android.util.Log.e("AiHistoryVM", "Firestore delete failed", e)
+                }
+            }
             loadHistoryForUid(uid)
         }
     }
