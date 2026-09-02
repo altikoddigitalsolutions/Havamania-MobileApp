@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.havamania.ui.theme.*
 
+const val IS_AVATAR_UPLOAD_ENABLED = false
+
 @Composable
 fun PremiumProfileHeader(
     name: String,
@@ -65,7 +67,7 @@ fun PremiumProfileHeader(
                     .clip(CircleShape)
                     .background(themeColors.surfaceGlass)
                     .border(1.5.dp, Brush.linearGradient(listOf(themeColors.accent, themeColors.accent.copy(0.4f))), CircleShape)
-                    .clickable { onAvatarClick() },
+                    .then(if (IS_AVATAR_UPLOAD_ENABLED) Modifier.clickable { onAvatarClick() } else Modifier),
                 contentAlignment = Alignment.Center
             ) {
                 if (!imageUri.isNullOrBlank()) {
@@ -109,7 +111,7 @@ fun PremiumProfileHeader(
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
                     }
-                } else {
+                } else if (IS_AVATAR_UPLOAD_ENABLED) {
                     Box(
                         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.BottomCenter
