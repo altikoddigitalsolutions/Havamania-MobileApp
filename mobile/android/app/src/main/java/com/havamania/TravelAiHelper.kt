@@ -350,15 +350,27 @@ object TravelAiHelper {
             )
         }
 
-        // Derive summary from the LATEST recorded analysis for this trip
+        // Derive summary from the LATEST recorded analysis for this trip in retrospective past tense
         val latestRecorded = historicalData.last()
         val avgT = latestRecorded.averageTemperature.toInt()
         val avgScore = latestRecorded.travelScore
+        val rainRisk = latestRecorded.rainRiskPercent ?: 0
+        val uvRisk = latestRecorded.uvRiskPercent ?: 0
+
+        val weatherDesc = when {
+            rainRisk > 40 -> "yağışlı ve bulutlu"
+            avgT > 28 -> "sıcak ve güneşli"
+            avgT < 10 -> "serin ve soğuk"
+            else -> "ılıman ve elverişli"
+        }
+
+        val rainText = if (rainRisk > 20) "Yağmur ihtimali %$rainRisk seviyesindeydi." else "Yağmur ihtimali oldukça düşüktü."
+        val uvText = if (uvRisk > 50) "UV seviyesi yüksekti." else "UV seviyesi normal seyretti."
 
         val summaryText = when(tone) {
-            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Kaydedilen özet: ${latestRecorded.summary}"
-            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta tamamlanmıştır. Arşiv özeti: ${latestRecorded.summary}"
-            else -> "${plan.city} seyahatin $duration gün sürdü. ${latestRecorded.summary}"
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Seyahatin boyunca hava genel olarak $weatherDesc idi ve sıcaklık ortalama ${avgT}°C civarındaydı. $rainText $uvText"
+            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta gerçekleşmiştir. Bu süreçte hava koşulları $weatherDesc olmuş, sıcaklık ${avgT}°C olarak ölçülmüştür. $rainText $uvText"
+            else -> "${plan.city} seyahatin $duration gün sürdü. Seyahatin boyunca hava genel olarak $weatherDesc idi ve sıcaklık ortalama ${avgT}°C civarındaydı. $rainText $uvText"
         }
 
         return TravelHistorySummary(

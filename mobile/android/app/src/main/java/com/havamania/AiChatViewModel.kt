@@ -277,6 +277,48 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
+        val isWeatherOrTrip = AiIntentParser.isWeatherQuery(userPrompt) || AiIntentParser.detectDate(userPrompt) != null
+        if (isWeatherOrTrip) {
+            viewModelScope.launch {
+                _isSending.value = true
+                _requestState.value = AssistantRequestState.LOADING
+                _isLoading.value = true
+
+                val userMsg = AltikodChatMessage(text = userPrompt, isUser = true)
+                _messages.value = _messages.value + userMsg
+                kotlinx.coroutines.delay(400)
+
+                val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName ?: "Ankara"
+                val targetDate = AiIntentParser.detectDate(userPrompt)
+                val data = resolveCityWeather(targetCity)
+
+                val replyText = if (data == null) {
+                    "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
+                } else if (targetDate != null) {
+                    val matchingDaily = data.dailyForecast.find { it.date == targetDate.toString() }
+                    val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
+                    val formattedDateStr = targetDate.format(formatter)
+
+                    if (matchingDaily != null) {
+                        val conditionName = WeatherUtils.getWeatherDisplayName(matchingDaily.weatherCode, java.time.LocalDateTime.now(), java.time.LocalTime.of(6,30), java.time.LocalTime.of(19,30))
+                        "$formattedDateStr tarihinde $targetCity şehrinde hava $conditionName bekleniyor. Sıcaklık ${matchingDaily.minTemp}°C / ${matchingDaily.maxTemp}°C civarında olacak." +
+                        (matchingDaily.precipitationProbability?.let { " Yağmur ihtimali %$it." } ?: "")
+                    } else {
+                        "$formattedDateStr tarihi için henüz detaylı hava tahmini bulunmuyor. (Tahminler önümüzdeki 10 gün için geçerlidir)."
+                    }
+                } else {
+                    "Bugün $targetCity şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
+                }
+
+                val botMsg = AltikodChatMessage(text = replyText, isUser = false)
+                _messages.value = _messages.value + botMsg
+                _requestState.value = AssistantRequestState.SUCCESS
+                _isLoading.value = false
+                _isSending.value = false
+            }
+            return
+        }
+
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
             _isSending.value = true

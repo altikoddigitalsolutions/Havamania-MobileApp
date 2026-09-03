@@ -395,6 +395,27 @@ fun PastTravelDetailDialog(
 
                 Text(summary.summaryText, style = HavamaniaTheme.typography.bodyMedium)
 
+                Spacer(Modifier.height(16.dp))
+
+                Surface(
+                    color = colors.accent.copy(alpha = 0.04f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("BİR SONRAKİ SEFER İÇİN", style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black), color = colors.accent)
+                        Spacer(Modifier.height(4.dp))
+                        Text(summary.nextTripAdvice, style = HavamaniaTheme.typography.bodySmall, color = colors.textPrimary)
+
+                        Spacer(Modifier.height(8.dp))
+                        Text("HATIRLANACAK ÖNERİ", style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black), color = colors.accent)
+                        Spacer(Modifier.height(4.dp))
+                        val personality = CityPersonalityProvider.getPersonality(plan.city, plan.tripType)
+                        Text(personality.tip, style = HavamaniaTheme.typography.bodySmall, color = colors.textPrimary)
+                    }
+                }
+
                 Spacer(Modifier.height(20.dp))
 
                 SectionLabel("DENEYİMİN")

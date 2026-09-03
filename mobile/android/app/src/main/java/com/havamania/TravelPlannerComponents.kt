@@ -51,8 +51,8 @@ fun NextTripHero(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = themeStyles.pagePadding),
-        backgroundColor = if (isOngoing) themeColors.success.copy(alpha = 0.08f) else themeColors.accent.copy(alpha = 0.1f),
-        borderColor = if (isOngoing) themeColors.success.copy(alpha = 0.2f) else themeColors.accent.copy(alpha = 0.2f),
+        backgroundColor = themeColors.surface.copy(alpha = if (themeColors.isDark) 0.6f else 0.8f),
+        borderColor = if (isOngoing) themeColors.success.copy(alpha = 0.3f) else themeColors.accent.copy(alpha = 0.3f),
         padding = 24.dp
     ) {
         Column {
@@ -115,13 +115,17 @@ fun NextTripHero(
             }
 
             // City Personality for Hero
-            val personality = remember(plan.city) { CityPersonalityProvider.getPersonality(plan.city) }
+            val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = personality.slogan,
-                style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
-                color = if (isOngoing) themeColors.success else themeColors.accent
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = if (isOngoing) themeColors.success else themeColors.accent, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = personality.slogan,
+                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                    color = if (isOngoing) themeColors.success else themeColors.accent
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 
@@ -333,59 +337,51 @@ fun TravelPlanCard(
                 )
             }
 
-            // City Personality Section (New P4.1.1)
+            // City Personality Section (Trip-Type Aware & Clean Surface)
             var showPersonality by remember { mutableStateOf(false) }
-            val personality = remember(plan.city) { CityPersonalityProvider.getPersonality(plan.city) }
+            val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
 
             Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
+            Spacer(Modifier.height(12.dp))
 
-            Surface(
-                onClick = { showPersonality = !showPersonality },
-                color = themeColors.accent.copy(alpha = 0.04f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.08f))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPersonality = !showPersonality }
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = if (showPersonality) "Rehberi Kapat" else personality.slogan,
-                            style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
-                            color = themeColors.accent,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            if (showPersonality) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                            null,
-                            tint = themeColors.accent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (showPersonality) "Rehberi Kapat" else personality.slogan,
+                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                        color = themeColors.accent,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        if (showPersonality) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        null,
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
 
-                    AnimatedVisibility(visible = showPersonality) {
-                        Column {
-                            Spacer(Modifier.height(12.dp))
-                            Text(personality.description, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
+                AnimatedVisibility(visible = showPersonality) {
+                    Column(modifier = Modifier.padding(top = 12.dp)) {
+                        Text(personality.description, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 
-                            Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                PersonalityInfoBlock("MUTLAKA GÖR", personality.mustSee.firstOrNull() ?: "", Icons.Rounded.LocationOn, Modifier.weight(1f))
-                                PersonalityInfoBlock("DENEMEDEN DÖNME", personality.food.firstOrNull() ?: "", Icons.Rounded.Restaurant, Modifier.weight(1f))
-                            }
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PersonalityInfoBlock("MUTLAKA GÖR", personality.mustSee.firstOrNull() ?: "", Icons.Rounded.LocationOn, Modifier.weight(1f))
+                            PersonalityInfoBlock("DENEMEDEN DÖNME", personality.food.firstOrNull() ?: "", Icons.Rounded.Restaurant, Modifier.weight(1f))
+                        }
 
-                            Spacer(Modifier.height(12.dp))
-                            Surface(
-                                color = themeColors.surface.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Rounded.Lightbulb, null, tint = themeColors.warning, modifier = Modifier.size(14.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(personality.tip, style = HavamaniaTheme.typography.caption.copy(fontSize = 10.sp), color = themeColors.textSecondary)
-                                }
-                            }
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Icon(Icons.Rounded.Lightbulb, null, tint = themeColors.warning, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(personality.tip, style = HavamaniaTheme.typography.caption.copy(fontSize = 10.sp), color = themeColors.textSecondary)
                         }
                     }
                 }

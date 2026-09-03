@@ -341,7 +341,11 @@ fun HavamaniaChip(
         label = {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         },
         modifier = modifier,

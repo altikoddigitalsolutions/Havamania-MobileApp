@@ -151,7 +151,9 @@ fun AiChatScreen(
 
                     if (activeTrip != null) {
                         ActiveTripContextCard(activeTrip, themeColors) {
-                            viewModel.sendMessage("${activeTrip.city} seyahatim için hava durumu nasıl?")
+                            val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
+                            val dateStr = activeTrip.startDate.format(formatter)
+                            viewModel.sendMessage("${activeTrip.city} seyahati için $dateStr tarihindeki hava durumu nasıl?")
                         }
                     }
 
@@ -295,6 +297,9 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 
 @Composable
 private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: () -> Unit) {
+    val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr")) }
+    val formattedDate = remember(trip.startDate) { trip.startDate.format(formatter) }
+
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         color = c.accent.copy(alpha = 0.04f),
@@ -316,7 +321,7 @@ private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: (
                     color = c.accent
                 )
                 Text(
-                    text = "${trip.displayName} • ${trip.startDate}",
+                    text = "${trip.displayName} • $formattedDate",
                     style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = c.textPrimary
                 )

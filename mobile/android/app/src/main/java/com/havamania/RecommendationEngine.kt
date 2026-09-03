@@ -142,15 +142,19 @@ object RecommendationEngine {
             .minByOrNull { it.startDate }
 
         val promptCity = AiIntentParser.detectCity(userPrompt)
+        val targetDate = AiIntentParser.detectDate(userPrompt)
+        val matchingForecast = targetDate?.let { target ->
+            weatherData.dailyForecast.find { it.date == target.toString() }
+        }
 
         // Context Selection
         val targetCity: String = promptCity ?: weatherData.cityName
-        val currentTemp = weatherData.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
-        val feelsLike = weatherData.feelsLike.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: currentTemp
+        val currentTemp = matchingForecast?.let { (it.minTemp + it.maxTemp) / 2 } ?: weatherData.temperature.filter { it.isDigit() || it == '-' }.toIntOrNull() ?: 20
+        val feelsLike = currentTemp
         val uv = weatherData.uvIndex ?: 0
         val humidity = weatherData.humidity ?: 50
         val wind = weatherData.windSpeed ?: 10.0
-        val precip = weatherData.precipitationProbability ?: 0
+        val precip = matchingForecast?.precipitationProbability ?: weatherData.precipitationProbability ?: 0
 
         return when (intent) {
             AiIntent.CLOTHING -> generateClothingReply(targetCity, currentTemp, feelsLike, uv, wind, humidity, tone, interests)
