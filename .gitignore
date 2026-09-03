@@ -72,3 +72,4 @@ dist/
 build/
 coverage/
 *.log
+mobile/android/keystore.properties
