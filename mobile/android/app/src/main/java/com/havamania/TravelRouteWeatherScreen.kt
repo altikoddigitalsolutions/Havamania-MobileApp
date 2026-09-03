@@ -38,6 +38,7 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.annotations.PolylineOptions
+import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.camera.CameraUpdateFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +78,7 @@ fun TravelRouteWeatherScreen(
         }
     }
 
-    LaunchedEffect(mapRef, styleRef, routeState) {
+    LaunchedEffect(mapRef, styleRef, routeState, waypoints) {
         val map = mapRef ?: return@LaunchedEffect
         if (styleRef == null) return@LaunchedEffect
 
@@ -94,16 +95,43 @@ fun TravelRouteWeatherScreen(
                     .width(5f)
                 )
 
+                waypoints.forEach { wp ->
+                    map.addMarker(MarkerOptions()
+                        .position(LatLng(wp.location.latitude, wp.location.longitude))
+                        .title(wp.placeName ?: "Ara Nokta")
+                    )
+                }
+
                 val builder = LatLngBounds.Builder()
                 points.forEach { builder.include(it) }
                 val bounds = builder.build()
 
-                // Add a small delay to ensure MapView layout is finalized
                 kotlinx.coroutines.delay(500)
                 map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 2000)
             } catch (e: Exception) {
                 Log.e("MapRoute", "Error fitting bounds", e)
             }
+        }
+    }
+
+    LaunchedEffect(mapRef) {
+        mapRef?.setOnMarkerClickListener { marker ->
+            val pos = marker.position
+            val matched = waypoints.find {
+                kotlin.math.abs(it.location.latitude - pos.latitude) < 0.001 &&
+                kotlin.math.abs(it.location.longitude - pos.longitude) < 0.001
+            }
+            if (matched != null) {
+                selected = matched
+                mapRef?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(matched.location.latitude, matched.location.longitude), 13.0), 1000)
+            }
+            true
+        }
+    }
+
+    LaunchedEffect(selected) {
+        selected?.let { wp ->
+            mapRef?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(wp.location.latitude, wp.location.longitude), 13.0), 1000)
         }
     }
 
@@ -284,6 +312,97 @@ fun TravelRouteWeatherScreen(
                 }
 
                 Spacer(Modifier.height(100.dp))
+            }
+        }
+
+        // Waypoint Detail Popup Overlay
+        if (selected != null) {
+            val wp = selected!!
+            val weather = wp.weather
+            val timeStr = wp.etaEpochMillis?.let {
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+            } ?: "--:--"
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Surface(
+                    color = colors.surface,
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, colors.border.copy(alpha = 0.2f)),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = wp.placeName ?: "Ara Nokta",
+                                    style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = "Tahmini Geçiş: $timeStr",
+                                    style = HavamaniaTheme.typography.caption,
+                                    color = colors.textSecondary
+                                )
+                            }
+                            IconButton(onClick = { selected = null }) {
+                                Icon(Icons.Rounded.Close, null, tint = colors.textMuted)
+                            }
+                        }
+
+                        if (weather != null) {
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
+                                        fontSize = 28.sp
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = WeatherUtils.getWeatherDisplayName(weather.weatherCode, LocalDateTime.now(), null, null),
+                                            style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = colors.textPrimary
+                                        )
+                                        Text(
+                                            text = "Sıcaklık: ${weather.temperatureC.toInt()}°C",
+                                            style = HavamaniaTheme.typography.bodySmall,
+                                            color = colors.textSecondary
+                                        )
+                                    }
+                                }
+                                if (weather.risk != RouteRisk.OK && !weather.riskReason.isNullOrBlank()) {
+                                    Surface(
+                                        color = colors.warning.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, colors.warning.copy(alpha = 0.3f))
+                                    ) {
+                                        Text(
+                                            text = "⚠️ ${weather.riskReason}",
+                                            style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                                            color = colors.warning,
+                                            modifier = Modifier.padding(8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
