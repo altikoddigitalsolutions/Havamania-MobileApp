@@ -40,6 +40,13 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.annotations.PolylineOptions
 import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.Property
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +87,7 @@ fun TravelRouteWeatherScreen(
 
     LaunchedEffect(mapRef, styleRef, routeState, waypoints) {
         val map = mapRef ?: return@LaunchedEffect
-        if (styleRef == null) return@LaunchedEffect
+        val style = styleRef ?: return@LaunchedEffect
 
         val state = routeState as? RouteResult.Success ?: return@LaunchedEffect
 
@@ -100,6 +107,61 @@ fun TravelRouteWeatherScreen(
                         .position(LatLng(wp.location.latitude, wp.location.longitude))
                         .title(wp.placeName ?: "Ara Nokta")
                     )
+                }
+
+                // Add GeoJSON source and SymbolLayer for persistent waypoint labels with empty-overwrite safeguard
+                val validWaypoints = waypoints.filter { !it.placeName.isNullOrBlank() }
+                val features = validWaypoints.map { wp ->
+                    val point = Point.fromLngLat(wp.location.longitude, wp.location.latitude)
+                    val feature = Feature.fromGeometry(point)
+                    feature.addStringProperty("name", wp.placeName ?: "")
+                    feature
+                }
+
+                val sourceId = "route-waypoints-source"
+                val layerId = "route-waypoints-layer"
+                val existingSource = style.getSource(sourceId) as? GeoJsonSource
+
+                val action = if (features.isNotEmpty()) "UPDATE" else "KEEP_LAST_VALID"
+                val featureCollection = if (features.isNotEmpty()) {
+                    FeatureCollection.fromFeatures(features)
+                } else {
+                    null
+                }
+
+                if (BuildConfig.DEBUG) {
+                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "UPDATE_REASON=route_or_weather_state_change")
+                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "WAYPOINT_COUNT=${waypoints.size}")
+                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_COUNT=${features.size}")
+                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_NAMES=${validWaypoints.map { it.placeName }}")
+                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "SOURCE_ACTION=$action")
+                }
+
+                if (existingSource != null) {
+                    if (featureCollection != null) {
+                        existingSource.setGeoJson(featureCollection)
+                    }
+                } else {
+                    val initCollection = featureCollection ?: FeatureCollection.fromFeatures(emptyList())
+                    val geoJsonSource = GeoJsonSource(sourceId, initCollection)
+                    style.addSource(geoJsonSource)
+                }
+
+                if (style.getLayer(layerId) == null) {
+                    val symbolLayer = SymbolLayer(layerId, sourceId).withProperties(
+                        PropertyFactory.textField("{name}"),
+                        PropertyFactory.textSize(13f),
+                        PropertyFactory.textColor(android.graphics.Color.parseColor("#111827")),
+                        PropertyFactory.textHaloColor(android.graphics.Color.parseColor("#FFFFFF")),
+                        PropertyFactory.textHaloWidth(2.5f),
+                        PropertyFactory.textOffset(arrayOf(0f, 1.8f)),
+                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textIgnorePlacement(true),
+                        PropertyFactory.textFont(arrayOf("Noto Sans Regular", "Open Sans Regular", "Arial Unicode MS Regular"))
+                    )
+                    style.addLayer(symbolLayer)
+                    if (BuildConfig.DEBUG) Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "LAYER_EXISTS=true (created)")
                 }
 
                 val builder = LatLngBounds.Builder()
@@ -693,7 +755,7 @@ private fun RouteAnalysisActionCard(analyzing: Boolean, onAnalyze: () -> Unit, c
 fun MapLayer(mapView: MapView, onMapReady: (MapLibreMap, Style) -> Unit) {
     androidx.compose.ui.viewinterop.AndroidView(factory = { mapView }) { mv ->
         mv.getMapAsync { map ->
-            map.setStyle("https://demotiles.maplibre.org/style.json") { style ->
+            map.setStyle(MapStyleProvider.currentStyle()) { style ->
                 onMapReady(map, style)
             }
         }
