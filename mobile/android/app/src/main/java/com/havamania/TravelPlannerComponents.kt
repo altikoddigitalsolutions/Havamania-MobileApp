@@ -456,14 +456,26 @@ fun RichTravelGuideView(
         SectionHeader("VALİZ / HAZIRLIK TAVSİYESİ", Icons.Rounded.Backpack)
         Spacer(Modifier.height(6.dp))
         val packingTip = if (avgTemp != null && rainRisk != null) {
-            when {
-                avgTemp < 12 -> "Hava oldukça serin/soğuk; kalın mont, kaban ve sıcak tutan katmanlar al."
-                rainRisk > 40 -> "Yağış ihtimali yüksek; suya dayanıklı ayakkabı, yağmurluk veya şemsiye mutlaka ekle."
-                avgTemp > 28 -> "Hava sıcak; hafif kıyafetler, güneş kremi ve şapka unutma."
-                else -> "Mevsim koşullarına uygun katmanlı giysiler ve rahat yürüyüş ayakkabıları idealdir."
+            val weatherPart = when {
+                avgTemp < 12 -> "Hava serin/soğuk; kalın mont ve sıcak tutan katmanlar al."
+                rainRisk > 40 -> "Yağış ihtimali yüksek; yağmurluk veya şemsiye ekle."
+                avgTemp > 28 -> "Hava sıcak; hafif kıyafetler ve güneş koruması al."
+                else -> "Mevsim koşullarına uygun giysiler tercih et."
             }
+            val tripTypePart = when (plan.tripType) {
+                TripType.GASTRONOMY -> "Şehir içindeki lezzet durakları arasında rahat hareket etmek için konforlu günlük ayakkabılar ve pratik çanta seç."
+                TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Doğa yürüyüşlerine uygun sağlam tabanlı ayakkabı ve esnek outdoor kıyafetler tercih et."
+                TripType.CULTURE -> "Uzun müze ve sokak gezileri için rahat yürüyüş ayakkabıları idealdir."
+                TripType.BEACH -> "Plaj giysileri, havlu ve güneş gözlüğü unutma."
+                else -> "Seyahat konforunu artıracak rahat günlük eşyalar al."
+            }
+            "$weatherPart $tripTypePart"
         } else {
-            "Mevsim şartlarına uygun temel seyahat hazırlıkları yapılabilir."
+            when (plan.tripType) {
+                TripType.GASTRONOMY -> "Şehir içi keşifler ve lezzet durakları için konforlu günlük ayakkabılar tercih et."
+                TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Doğa yürüyüşlerine uygun sağlam tabanlı ayakkabılar ve rahat outdoor kıyafetler seç."
+                else -> "Mevsim şartlarına uygun temel seyahat hazırlıkları yapılabilir."
+            }
         }
         Text(packingTip, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 
@@ -613,7 +625,7 @@ fun TripListSection(
 ) {
     val responsive = LocalResponsiveValues.current
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxWidth()) {
         if (isLoading) {
             TravelListSkeleton()
         } else if (plans.isEmpty()) {
@@ -643,15 +655,11 @@ fun TripListSection(
                 TravelEmptyState(filter, onAddClick)
             }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(
-                    horizontal = responsive.pagePadding,
-                    vertical = 8.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(plans, key = { it.id }) { plan ->
+                plans.forEach { plan ->
                     TravelPlanCard(
                         plan = plan,
                         today = today,

@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 import java.time.LocalDate
@@ -228,12 +230,38 @@ fun TravelPlannerScreen(
             ) {
                 if (windowSize.isTablet || windowSize.isLargeTablet) {
                     // Tablet layout: Two columns for summary/calendar and trip list, with full-width rich guide below when expanded
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1.2f).padding(responsive.pagePadding)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coords ->
+                                if (BuildConfig.DEBUG) {
+                                    android.util.Log.d("HAVAMANIA_TABLET_LAYOUT_DEBUG", "TABLET_ROOT_HEIGHT_DP=${coords.size.height / 3}")
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onGloballyPositioned { coords ->
+                                    if (BuildConfig.DEBUG) {
+                                        android.util.Log.d("HAVAMANIA_TABLET_LAYOUT_DEBUG", "TOP_ROW_HEIGHT_DP=${coords.size.height / 3}")
+                                    }
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .onGloballyPositioned { coords ->
+                                        if (BuildConfig.DEBUG) {
+                                            android.util.Log.d("HAVAMANIA_TABLET_LAYOUT_DEBUG", "LEFT_COLUMN_HEIGHT_DP=${coords.size.height / 3}")
+                                        }
+                                    }
+                            ) {
                                 if (nextTrip != null) {
                                     NextTripHero(nextTrip, today, onViewRoute)
-                                    Spacer(Modifier.height(themeStyles.spacingLG))
+                                    Spacer(Modifier.height(themeStyles.spacingMD))
                                 }
 
                                 TravelCalendarStripe(
@@ -243,7 +271,15 @@ fun TravelPlannerScreen(
                                 )
                             }
 
-                            Column(modifier = Modifier.weight(1f).padding(responsive.pagePadding)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .onGloballyPositioned { coords ->
+                                        if (BuildConfig.DEBUG) {
+                                            android.util.Log.d("HAVAMANIA_TABLET_LAYOUT_DEBUG", "RIGHT_COLUMN_HEIGHT_DP=${coords.size.height / 3}")
+                                        }
+                                    }
+                            ) {
                                 TripListSection(
                                     filter = selectedFilter,
                                     plans = displayPlans,
@@ -270,8 +306,17 @@ fun TravelPlannerScreen(
                         }
 
                         if (expandedGuidePlan != null) {
-                            Spacer(Modifier.height(themeStyles.spacingLG))
-                            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = responsive.pagePadding)) {
+                            Spacer(Modifier.height(themeStyles.spacingMD))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = responsive.pagePadding)
+                                    .onGloballyPositioned { coords ->
+                                        if (BuildConfig.DEBUG) {
+                                            android.util.Log.d("HAVAMANIA_TABLET_LAYOUT_DEBUG", "RICH_GUIDE_Y_DP=${coords.positionInParent().y / 3}")
+                                        }
+                                    }
+                            ) {
                                 RichTravelGuideView(plan = expandedGuidePlan!!, today = today)
                             }
                         }

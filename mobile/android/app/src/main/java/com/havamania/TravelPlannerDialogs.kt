@@ -404,6 +404,19 @@ fun PastTravelDetailDialog(
     val colors = HavamaniaTheme.colors
     val summary = remember(plan) { TravelAiHelper.generateHistorySummary(plan) }
 
+    LaunchedEffect(plan) {
+        if (BuildConfig.DEBUG) {
+            val hasData = plan.analyses.isNotEmpty() && plan.analyses.any { it.summary.isNotBlank() }
+            android.util.Log.d(
+                "HAVAMANIA_PAST_TRIP_DEBUG",
+                "TRIP_ID=${plan.id} | IS_PAST=true | ANALYSIS_SOURCE=plan.analyses | " +
+                "ANALYSIS_PERSISTED=$hasData | ANALYSIS_TIMESTAMP=${plan.analyses.lastOrNull()?.createdAt ?: 0} | " +
+                "WEATHER_FETCH_TRIGGERED=false | FORECAST_FETCH_TRIGGERED=false | ROUTE_WEATHER_FETCH_TRIGGERED=false | " +
+                "DISPLAYED_TEMP_SOURCE=${summary.averageTemp ?: "N/A"} | DISPLAYED_SCORE_SOURCE=${summary.comfortScore}"
+            )
+        }
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             color = colors.surface,
@@ -422,6 +435,21 @@ fun PastTravelDetailDialog(
                 )
 
                 Spacer(Modifier.height(16.dp))
+
+                Surface(
+                    color = colors.accent.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.2f))
+                ) {
+                    Text(
+                        text = "PLANLAMA SIRASINDAKİ HAVA TAHMİNİ",
+                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black, fontSize = 10.sp),
+                        color = colors.accent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
 
                 Text(summary.summaryText, style = HavamaniaTheme.typography.bodyMedium)
 

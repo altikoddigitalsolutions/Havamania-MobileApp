@@ -25,7 +25,7 @@ app.add_middleware(MetricsMiddleware)
 # CORS ayarları configuration üzerinden yönetilir
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins if settings.cors_origins else ["*"] if settings.debug else [],
+    allow_origins=settings.cors_origins if settings.cors_origins else ([] if settings.app_env == "production" else ["*"]),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

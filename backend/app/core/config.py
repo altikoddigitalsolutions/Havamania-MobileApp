@@ -39,6 +39,13 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be set in production environment")
         return v
 
+    @field_validator("debug")
+    @classmethod
+    def check_debug_in_production(cls, v: bool, info: Any) -> bool:
+        if v and info.data.get("app_env") == "production":
+            raise ValueError("DEBUG must be false in production environment")
+        return v
+
     @field_validator("database_url")
     @classmethod
     def check_database_url(cls, v: str, info: Any) -> str:

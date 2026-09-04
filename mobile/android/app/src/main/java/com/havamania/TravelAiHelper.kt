@@ -355,7 +355,6 @@ object TravelAiHelper {
         val avgT = latestRecorded.averageTemperature.toInt()
         val avgScore = latestRecorded.travelScore
         val rainRisk = latestRecorded.rainRiskPercent ?: 0
-        val uvRisk = latestRecorded.uvRiskPercent ?: 0
 
         val weatherDesc = when {
             rainRisk > 40 -> "yağışlı ve bulutlu"
@@ -364,13 +363,12 @@ object TravelAiHelper {
             else -> "ılıman ve elverişli"
         }
 
-        val rainText = if (rainRisk > 20) "Yağmur ihtimali %$rainRisk seviyesindeydi." else "Yağmur ihtimali oldukça düşüktü."
-        val uvText = if (uvRisk > 50) "UV seviyesi yüksekti." else "UV seviyesi normal seyretti."
+        val rainText = if (rainRisk > 20) "Planlama tahmininde yağış riski %$rainRisk olarak öngörülüyordu." else "Planlama tahmininde yağış riski düşüktü."
 
         val summaryText = when(tone) {
-            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Seyahatin boyunca hava genel olarak $weatherDesc idi ve sıcaklık ortalama ${avgT}°C civarındaydı. $rainText $uvText"
-            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta gerçekleşmiştir. Bu süreçte hava koşulları $weatherDesc olmuş, sıcaklık ${avgT}°C olarak ölçülmüştür. $rainText $uvText"
-            else -> "${plan.city} seyahatin $duration gün sürdü. Seyahatin boyunca hava genel olarak $weatherDesc idi ve sıcaklık ortalama ${avgT}°C civarındaydı. $rainText $uvText"
+            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Planlama sırasında kaydedilen hava tahmininde hava genel olarak $weatherDesc idi ve ortalama sıcaklık ${avgT}°C civarında öngörülüyordu. $rainText"
+            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta gerçekleşmiştir. Planlama evresindeki tahmin verilerine göre hava koşulları $weatherDesc öngörülmüş, sıcaklık ortalaması ${avgT}°C olarak hesaplanmıştır. $rainText"
+            else -> "${plan.city} seyahatin $duration gün sürdü. Planlama sırasında kaydedilen hava tahmininde hava genel olarak $weatherDesc idi ve ortalama sıcaklık ${avgT}°C civarında öngörülüyordu. $rainText"
         }
 
         return TravelHistorySummary(
