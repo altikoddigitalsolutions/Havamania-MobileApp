@@ -73,3 +73,8 @@ build/
 coverage/
 *.log
 mobile/android/keystore.properties
+
+# Gradle prefs & scratch test scripts
+mobile/android/.gradle_prefs/
+test_api*.py
+test_backend_api.py
