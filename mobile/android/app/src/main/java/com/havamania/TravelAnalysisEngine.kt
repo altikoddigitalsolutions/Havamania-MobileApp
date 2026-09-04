@@ -109,19 +109,29 @@ object TravelAnalysisEngine {
 
             if (overlapIndices.isNotEmpty()) {
                 val maxCode = overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
-                val avgMin = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.average()
-                val avgMax = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.average()
+                val avgMin = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.takeIf { it.isNotEmpty() }?.average()
+                val avgMax = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.takeIf { it.isNotEmpty() }?.average()
 
-                snapshot = ForecastSnapshot(
-                    precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
-                    minTemp = avgMin,
-                    maxTemp = avgMax,
-                    windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull(),
-                    uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
-                    conditionSummary = WeatherMapper.getWeatherCondition(maxCode),
-                    weatherCode = maxCode,
-                    travelScore = calculateTravelScore(ForecastSnapshot(minTemp = avgMin, maxTemp = avgMax), plan.tripType)
-                )
+                if (avgMin != null && !avgMin.isNaN() && avgMax != null && !avgMax.isNaN()) {
+                    val tempSnapshot = ForecastSnapshot(
+                        minTemp = avgMin,
+                        maxTemp = avgMax,
+                        precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
+                        windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull()
+                    )
+                    val score = calculateTravelScore(tempSnapshot, plan.tripType)
+
+                    snapshot = ForecastSnapshot(
+                        precipitationProbability = tempSnapshot.precipitationProbability,
+                        minTemp = avgMin,
+                        maxTemp = avgMax,
+                        windSpeed = tempSnapshot.windSpeed,
+                        uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
+                        conditionSummary = WeatherMapper.getWeatherCondition(maxCode),
+                        weatherCode = maxCode,
+                        travelScore = score
+                    )
+                }
             }
         }
 
@@ -168,17 +178,21 @@ object TravelAnalysisEngine {
             weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY,
             latitude = lat,
             longitude = lon,
-            analyses = plan.analyses + TravelWeatherAnalysis(
-                tripId = plan.id,
-                travelScore = snapshot?.travelScore ?: 0,
-                rainRiskPercent = snapshot?.precipitationProbability,
-                averageTemperature = ((snapshot?.minTemp ?: 0.0) + (snapshot?.maxTemp ?: 0.0)) / 2.0,
-                summary = weatherSum ?: "Hava durumu verisi alındı.",
-                recommendation = aiResult,
-                comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null)
-                    TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot)
-                    else null
-            )
+            analyses = if (snapshot != null && snapshot.minTemp != null) {
+                plan.analyses + TravelWeatherAnalysis(
+                    tripId = plan.id,
+                    travelScore = snapshot.travelScore ?: 0,
+                    rainRiskPercent = snapshot.precipitationProbability,
+                    averageTemperature = ((snapshot.minTemp!! + snapshot.maxTemp!!) / 2.0),
+                    summary = weatherSum ?: "Hava durumu verisi alındı.",
+                    recommendation = aiResult,
+                    comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null)
+                        TravelAiHelper.generateComparisonText(plan.lastForecastSnapshot, snapshot)
+                        else null
+                )
+            } else {
+                plan.analyses
+            }
         )
     }
 
@@ -217,11 +231,22 @@ object TravelAnalysisEngine {
         val finalScore = (tempComfort * 0.45) + (precipComfort * 0.35) + (windComfort * 0.20)
         val rounded = finalScore.roundToInt().coerceIn(0, 100)
 
-        if (BuildConfig.DEBUG) {
-            Log.d(
-                "HAVAMANIA_TRAVEL_SCORE_DEBUG",
-                "TRIP_TYPE=$type | TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=$avgTemp | PRECIP_METRIC_NAME=precipitationProbability | PRECIP_INPUT_EXACT=$precip | WIND_METRIC_NAME=windSpeed | WIND_INPUT_EXACT=$wind | TEMP_IDEAL=$idealTemp | TEMP_COMFORT_EXACT=$tempComfort | PRECIP_SENSITIVITY=$precipSensitivity | PRECIP_COMFORT_EXACT=$precipComfort | WIND_SENSITIVITY=$windSensitivity | WIND_COMFORT_EXACT=$windComfort | WEIGHT_TEMP=0.45 | WEIGHT_PRECIP=0.35 | WEIGHT_WIND=0.20 | RAW_SCORE=$finalScore | ROUNDED_SCORE=$rounded"
-            )
+        val isDebugSafe = try {
+            val field = BuildConfig::class.java.getField("DEBUG")
+            field.getBoolean(null)
+        } catch (e: Exception) {
+            false
+        }
+
+        if (isDebugSafe) {
+            try {
+                Log.d(
+                    "HAVAMANIA_TRAVEL_SCORE_DEBUG",
+                    "TRIP_TYPE=$type | TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=$avgTemp | PRECIP_METRIC_NAME=precipitationProbability | PRECIP_INPUT_EXACT=$precip | WIND_METRIC_NAME=windSpeed | WIND_INPUT_EXACT=$wind | TEMP_IDEAL=$idealTemp | TEMP_COMFORT_EXACT=$tempComfort | PRECIP_SENSITIVITY=$precipSensitivity | PRECIP_COMFORT_EXACT=$precipComfort | WIND_SENSITIVITY=$windSensitivity | WIND_COMFORT_EXACT=$windComfort | WEIGHT_TEMP=0.45 | WEIGHT_PRECIP=0.35 | WEIGHT_WIND=0.20 | RAW_SCORE=$finalScore | ROUNDED_SCORE=$rounded"
+                )
+            } catch (e: Exception) {
+                // Ignore when Android log is not mocked in JVM unit tests
+            }
         }
 
         return rounded

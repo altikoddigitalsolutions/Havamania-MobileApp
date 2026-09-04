@@ -169,7 +169,9 @@ object CityPersonalityProvider {
         val customFood = base.foodByTripType[tripType]
         val customTip = base.tipByTripType[tripType]
 
-        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "getPersonality: city=$cityName, tripType=$tripType, highlights=${customHighlights?.size}, food=${customFood?.size}")
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "getPersonality: city=$cityName, tripType=$tripType, highlights=${customHighlights?.size}, food=${customFood?.size}")
+        }
 
         var result = base
         if (!customHighlights.isNullOrEmpty()) {

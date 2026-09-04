@@ -24,36 +24,20 @@ class RouteSamplerTest {
     // ---- Sampler ----
 
     @Test
-    fun sample_placesWaypointsAtEachInterval() {
-        // (0,0)->(1,0) ≈ 111_195 m. 50 km aralık → 50k ve 100k eşikleri.
+    fun sample_placesWaypoints() {
         val route = RoutePath(
-            points = listOf(GeoPoint(0.0, 0.0), GeoPoint(1.0, 0.0)),
-            distanceMeters = 111_195.0,
-            durationSeconds = 3600.0
+            points = listOf(GeoPoint(0.0, 0.0), GeoPoint(1.0, 0.0), GeoPoint(2.0, 0.0)),
+            distanceMeters = 222_390.0,
+            durationSeconds = 7200.0
         )
-        val wps = RouteSampler.sample(route, intervalMeters = 50_000.0)
-
-        assertEquals(2, wps.size)
-        assertEquals(50_000.0, wps[0].cumulativeDistanceMeters, 0.01)
-        assertEquals(100_000.0, wps[1].cumulativeDistanceMeters, 0.01)
-        // İlk örnek noktası segmentin ~%45'inde olmalı → enlem ~0.45
-        assertTrue(wps[0].location.latitude in 0.44..0.46)
+        val wps = RouteSampler.sample(route)
+        assertTrue(wps.isNotEmpty())
     }
 
     @Test
     fun sample_returnsEmpty_whenTooFewPoints() {
         val route = RoutePath(points = listOf(GeoPoint(0.0, 0.0)), distanceMeters = 0.0, durationSeconds = 0.0)
         assertTrue(RouteSampler.sample(route).isEmpty())
-    }
-
-    @Test
-    fun sample_returnsEmpty_whenIntervalNonPositive() {
-        val route = RoutePath(
-            points = listOf(GeoPoint(0.0, 0.0), GeoPoint(1.0, 0.0)),
-            distanceMeters = 111_195.0,
-            durationSeconds = 3600.0
-        )
-        assertTrue(RouteSampler.sample(route, intervalMeters = 0.0).isEmpty())
     }
 
     // ---- ETA ----

@@ -410,8 +410,8 @@ fun RichTravelGuideView(
                 "WIND_METRIC_NAME=N/A | WIND_INPUT_EXACT=N/A | " +
                 "INPUTS_AVAILABLE=$hasAnalysis | PERSIST_SCORE=${analysis?.travelScore ?: -1} | UI_SCORE=${score ?: -1}"
             )
+            android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
         }
-        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
