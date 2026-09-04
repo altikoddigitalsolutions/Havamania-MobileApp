@@ -193,6 +193,8 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
+    var expandedGuidePlan by remember { mutableStateOf<TravelPlan?>(null) }
+
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
@@ -217,6 +219,7 @@ fun TravelPlannerScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .then(
                         if (windowSize.isTablet || windowSize.isLargeTablet)
                             Modifier.widthIn(max = responsive.maxContentWidth)
@@ -224,41 +227,53 @@ fun TravelPlannerScreen(
                     )
             ) {
                 if (windowSize.isTablet || windowSize.isLargeTablet) {
-                    // Tablet layout: Two columns
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        Column(modifier = Modifier.weight(1.2f).padding(responsive.pagePadding)) {
-                            if (nextTrip != null) {
-                                NextTripHero(nextTrip, today, onViewRoute)
-                                Spacer(Modifier.height(themeStyles.spacingLG))
+                    // Tablet layout: Two columns for summary/calendar and trip list, with full-width rich guide below when expanded
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1.2f).padding(responsive.pagePadding)) {
+                                if (nextTrip != null) {
+                                    NextTripHero(nextTrip, today, onViewRoute)
+                                    Spacer(Modifier.height(themeStyles.spacingLG))
+                                }
+
+                                TravelCalendarStripe(
+                                    selectedDate = selectedDate,
+                                    onDateSelect = { selectedDate = it },
+                                    tripDates = tripDates
+                                )
                             }
 
-                            TravelCalendarStripe(
-                                selectedDate = selectedDate,
-                                onDateSelect = { selectedDate = it },
-                                tripDates = tripDates
-                            )
+                            Column(modifier = Modifier.weight(1f).padding(responsive.pagePadding)) {
+                                TripListSection(
+                                    filter = selectedFilter,
+                                    plans = displayPlans,
+                                    isLoading = isLoading && plans.isEmpty(),
+                                    onFilterChange = { selectedFilter = it },
+                                    selectedDate = selectedDate,
+                                    onAddClick = { showAddDialog = true },
+                                    onDelete = { deleteConfirmPlan = it },
+                                    onEdit = { planToEdit = it; showAddDialog = true },
+                                    onArchive = { viewModel.archiveTrip(it) },
+                                    onUnarchive = { viewModel.unarchiveTrip(it) },
+                                    onShowDetail = { planForSummary = it },
+                                    onReanalyze = { viewModel.analyzeTravelWeather(it) },
+                                    onViewRoute = onViewRoute,
+                                    isOnline = isOnline,
+                                    focusId = focusId,
+                                    highlight = highlight,
+                                    today = today,
+                                    onToggleGuide = { plan ->
+                                        expandedGuidePlan = if (expandedGuidePlan?.id == plan.id) null else plan
+                                    }
+                                )
+                            }
                         }
 
-                        Column(modifier = Modifier.weight(1f).padding(responsive.pagePadding)) {
-                            TripListSection(
-                                filter = selectedFilter,
-                                plans = displayPlans,
-                                isLoading = isLoading && plans.isEmpty(),
-                                onFilterChange = { selectedFilter = it },
-                                selectedDate = selectedDate,
-                                onAddClick = { showAddDialog = true },
-                                onDelete = { deleteConfirmPlan = it },
-                                onEdit = { planToEdit = it; showAddDialog = true },
-                                onArchive = { viewModel.archiveTrip(it) },
-                                onUnarchive = { viewModel.unarchiveTrip(it) },
-                                onShowDetail = { planForSummary = it },
-                                onReanalyze = { viewModel.analyzeTravelWeather(it) },
-                                onViewRoute = onViewRoute,
-                                isOnline = isOnline,
-                                focusId = focusId,
-                                highlight = highlight,
-                                today = today
-                            )
+                        if (expandedGuidePlan != null) {
+                            Spacer(Modifier.height(themeStyles.spacingLG))
+                            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = responsive.pagePadding)) {
+                                RichTravelGuideView(plan = expandedGuidePlan!!, today = today)
+                            }
                         }
                     }
                 } else {

@@ -159,7 +159,8 @@ fun TravelPlanCard(
     onReanalyze: () -> Unit,
     onViewRoute: (String) -> Unit = {},
     isOnline: Boolean = true,
-    isAnalyzing: Boolean = false
+    isAnalyzing: Boolean = false,
+    onToggleGuide: ((TravelPlan) -> Unit)? = null
 ) {
     val themeColors = HavamaniaTheme.colors
     val tripStatus = TravelStatusResolver.getStatus(plan.startDate, plan.endDate, today)
@@ -336,6 +337,7 @@ fun TravelPlanCard(
 
             // City Personality Section (Trip-Type Aware & Clean Surface)
             var showPersonality by remember { mutableStateOf(false) }
+            val isTablet = LocalWindowSize.current.isTablet || LocalWindowSize.current.isLargeTablet
             val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
 
             Spacer(Modifier.height(16.dp))
@@ -345,13 +347,19 @@ fun TravelPlanCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showPersonality = !showPersonality }
+                    .clickable {
+                        if (isTablet && onToggleGuide != null) {
+                            onToggleGuide(plan)
+                        } else {
+                            showPersonality = !showPersonality
+                        }
+                    }
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (showPersonality) "Rehberi Kapat" else personality.slogan,
+                        text = if (isTablet || showPersonality) "Rehberi Kapat / Aç" else personality.slogan,
                         style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.accent,
                         modifier = Modifier.weight(1f)
@@ -364,8 +372,10 @@ fun TravelPlanCard(
                     )
                 }
 
-                AnimatedVisibility(visible = showPersonality) {
-                    RichTravelGuideView(plan = plan, today = today)
+                if (!isTablet) {
+                    AnimatedVisibility(visible = showPersonality) {
+                        RichTravelGuideView(plan = plan, today = today)
+                    }
                 }
             }
         }
@@ -390,6 +400,17 @@ fun RichTravelGuideView(
     val scoreText = score?.let { "$it/100" } ?: "Analiz Bekleniyor"
 
     LaunchedEffect(plan) {
+        if (BuildConfig.DEBUG) {
+            val hasAnalysis = analysis != null
+            android.util.Log.d(
+                "HAVAMANIA_TRAVEL_SCORE_DEBUG",
+                "TRIP_ID=${plan.id} | TRIP_TYPE=${plan.tripType} | " +
+                "TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=${analysis?.averageTemperature ?: "N/A"} | " +
+                "PRECIP_METRIC_NAME=rainRiskPercent | PRECIP_INPUT_EXACT=${analysis?.rainRiskPercent ?: "N/A"} | " +
+                "WIND_METRIC_NAME=N/A | WIND_INPUT_EXACT=N/A | " +
+                "INPUTS_AVAILABLE=$hasAnalysis | PERSIST_SCORE=${analysis?.travelScore ?: -1} | UI_SCORE=${score ?: -1}"
+            )
+        }
         android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
     }
 
@@ -587,7 +608,8 @@ fun TripListSection(
     focusId: String?,
     highlight: String?,
     today: LocalDate,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onToggleGuide: ((TravelPlan) -> Unit)? = null
 ) {
     val responsive = LocalResponsiveValues.current
 
@@ -642,7 +664,8 @@ fun TripListSection(
                         onReanalyze = { onReanalyze(plan) },
                         onViewRoute = onViewRoute,
                         isOnline = isOnline,
-                        isAnalyzing = plan.isAnalyzing
+                        isAnalyzing = plan.isAnalyzing,
+                        onToggleGuide = onToggleGuide
                     )
                 }
             }
