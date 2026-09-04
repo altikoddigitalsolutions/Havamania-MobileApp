@@ -454,17 +454,27 @@ object RecommendationEngine {
     /**
      * P4.1.1: Historical analysis summary formatter.
      */
-    fun getShortWeatherSummaryFromAnalysis(analysis: TravelWeatherAnalysis): String {
+    fun getShortWeatherSummaryFromAnalysis(analysis: TravelWeatherAnalysis, isOngoing: Boolean = false): String {
         val score = analysis.travelScore
         val temp = analysis.averageTemperature.toInt()
         val risk = analysis.rainRiskPercent ?: 0
 
-        return when {
-            score >= 85 -> "Harika bir hava sizi bekliyor! ($temp°C)"
-            score >= 70 -> "Hava koşulları oldukça elverişli. ($temp°C)"
-            risk > 60 -> "Yağış ihtimaline karşı hazırlıklı olun. ($temp°C)"
-            temp < 10 -> "Hava oldukça serin, kalın giyinmelisiniz. ($temp°C)"
-            else -> "Seyahatiniz için ortalama koşullar hakim. ($temp°C)"
+        return if (isOngoing) {
+            when {
+                score >= 85 -> "Bugün hava oldukça uygun ve açık! ($temp°C)"
+                score >= 70 -> "Bugün hava koşulları oldukça elverişli. ($temp°C)"
+                risk > 60 -> "Bugün yağış ihtimaline karşı hazırlıklı olun. ($temp°C)"
+                temp < 10 -> "Bugün hava oldukça serin, kalın giyinmelisiniz. ($temp°C)"
+                else -> "Bugün seyahatiniz için uygun koşullar hakim. ($temp°C)"
+            }
+        } else {
+            when {
+                score >= 85 -> "Harika bir hava sizi bekliyor! ($temp°C)"
+                score >= 70 -> "Hava koşulları oldukça elverişli. ($temp°C)"
+                risk > 60 -> "Yağış ihtimaline karşı hazırlıklı olun. ($temp°C)"
+                temp < 10 -> "Hava oldukça serin, kalın giyinmelisiniz. ($temp°C)"
+                else -> "Seyahatiniz için ortalama koşullar hakim. ($temp°C)"
+            }
         }
     }
 }

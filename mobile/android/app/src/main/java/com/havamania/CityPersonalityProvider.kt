@@ -94,9 +94,21 @@ object CityPersonalityProvider {
             food = listOf("Rize Kavurması", "Muhlama", "Laz Böreği"),
             tip = "Fırtına Deresi'nde rafting yapmadan ve Ayder'de kaplıcalara girmeden dönmeyin.",
             highlightsByTripType = mapOf(
-                TripType.NATURE to listOf("Ayder Yaylası", "Gito Yaylası", "Palovit Şelalesi"),
-                TripType.GASTRONOMY to listOf("Rize Bezi Atölyeleri", "Meşhur Rize Çayı", "Hamsili Ekmek"),
+                TripType.NATURE to listOf("Ayder Yaylası", "Fırtına Vadisi", "Zilkale", "Palovit Şelalesi"),
+                TripType.GASTRONOMY to listOf("Meşhur Rize Çayı", "Muhlama / Kuymak", "Rize Kavurması", "Laz Böreği"),
                 TripType.ADVENTURE to listOf("Fırtına Deresi Zipline", "Kaçkar Dağları Tırmanışı")
+            )
+        ),
+        "Ordu" to CityPersonality(
+            slogan = "Karadeniz'in mavi ve yeşil buluşma noktası",
+            description = "Fındık bahçeleri, muhteşem yaylaları ve teleferikle çıkılan Boztepe'siyle büyüleyici bir kent.",
+            mustSee = listOf("Boztepe", "Perşembe Yaylası", "Yason Burnu"),
+            food = listOf("Ordu Pidesi", "Mısır Ekmeği", "Fındıklı Kurabiye"),
+            tip = "Teleferikle Boztepe'ye çıkıp Karadeniz manzarasında çay içmeyi unutmayın.",
+            highlightsByTripType = mapOf(
+                TripType.NATURE to listOf("Perşembe Yaylası Menderesleri", "Yason Burnu", "Çambaşı Yaylası", "Olukbaşı Yaylası"),
+                TripType.GASTRONOMY to listOf("Tarihi Ordu Pidesi", "Yöresel Fındık Ürünleri", "Melocan Kavurması", "Mısır Çorbası"),
+                TripType.CULTURE to listOf("Taşbaşı Kültür Merkezi", "Ordu Kültür Evi", "Tarihi Cezaevi")
             )
         ),
         "Çankırı" to CityPersonality(
@@ -114,7 +126,7 @@ object CityPersonalityProvider {
             tip = "Abbaralardan geçerek eski şehri yürüyerek keşfedin ve telkari gümüşlerini inceleyin.",
             highlightsByTripType = mapOf(
                 TripType.CULTURE to listOf("Zinciriye Medresesi", "Kasımiye Medresesi", "Mardin Müzesi"),
-                TripType.GASTRONOMY to listOf("Cercis Murat Konağı", "İncirli Köşk", "Tarihi Çaycılar")
+                TripType.GASTRONOMY to listOf("Cercis Murat Konağı", "İncirli Köşk", "Kaburga Dolması")
             )
         )
     )
@@ -135,8 +147,9 @@ object CityPersonalityProvider {
         if (tripType == null || base.highlightsByTripType.isEmpty()) return base
 
         val customHighlights = base.highlightsByTripType[tripType] ?: return base
-        return base.copy(
-            mustSee = customHighlights
-        )
+        return when (tripType) {
+            TripType.GASTRONOMY -> base.copy(food = customHighlights)
+            else -> base.copy(mustSee = customHighlights)
+        }
     }
 }
