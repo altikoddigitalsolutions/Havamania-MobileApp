@@ -10,7 +10,9 @@ data class CityPersonality(
     val mustSee: List<String>,
     val food: List<String>,
     val tip: String,
-    val highlightsByTripType: Map<TripType, List<String>> = emptyMap()
+    val highlightsByTripType: Map<TripType, List<String>> = emptyMap(),
+    val foodByTripType: Map<TripType, List<String>> = emptyMap(),
+    val tipByTripType: Map<TripType, String> = emptyMap()
 )
 
 object CityPersonalityProvider {
@@ -22,9 +24,12 @@ object CityPersonalityProvider {
             food = listOf("Simit", "Balık Ekmek", "Kanlıca Yoğurdu"),
             tip = "Vapur sefası yapmadan ve martılara simit atmadan dönmeyin.",
             highlightsByTripType = mapOf(
-                TripType.GASTRONOMY to listOf("Karaköy Güllüoğlu Baklava", "Tarihi Eminönü Balık Ekmek", "Kadıköy Çarşısı Lezzetleri"),
+                TripType.GASTRONOMY to listOf("Tarihi Tarihi Eminönü Balık Ekmek", "Karaköy Güllüoğlu Baklava", "Kadıköy Çarşısı"),
                 TripType.CULTURE to listOf("Topkapı Sarayı", "İstanbul Arkeoloji Müzeleri", "Yerebatan Sarnıcı"),
                 TripType.NATURE to listOf("Emirgan Korusu", "Belgrad Ormanı", "Atatürk Arboretumu")
+            ),
+            foodByTripType = mapOf(
+                TripType.GASTRONOMY to listOf("Karaköy Güllüoğlu Baklava", "Tarihi Eminönü Balık Ekmek", "Kanlıca Yoğurdu")
             )
         ),
         "Ankara" to CityPersonality(
@@ -95,8 +100,14 @@ object CityPersonalityProvider {
             tip = "Fırtına Deresi'nde rafting yapmadan ve Ayder'de kaplıcalara girmeden dönmeyin.",
             highlightsByTripType = mapOf(
                 TripType.NATURE to listOf("Ayder Yaylası", "Fırtına Vadisi", "Zilkale", "Palovit Şelalesi"),
-                TripType.GASTRONOMY to listOf("Meşhur Rize Çayı", "Muhlama / Kuymak", "Rize Kavurması", "Laz Böreği"),
                 TripType.ADVENTURE to listOf("Fırtına Deresi Zipline", "Kaçkar Dağları Tırmanışı")
+            ),
+            foodByTripType = mapOf(
+                TripType.GASTRONOMY to listOf("Meşhur Rize Çayı", "Muhlama / Kuymak", "Rize Kavurması", "Laz Böreği", "Hamsili Ekmek")
+            ),
+            tipByTripType = mapOf(
+                TripType.GASTRONOMY to "Yöresel çay bahçelerini ziyaret edin ve geleneksel kuymak lezzetini yerinde tadın.",
+                TripType.NATURE to "Yaylalarda hava kısa sürede değişebilir; yanınıza mutlaka rüzgarlık ve yürüyüş ayakkabısı alın."
             )
         ),
         "Ordu" to CityPersonality(
@@ -107,8 +118,14 @@ object CityPersonalityProvider {
             tip = "Teleferikle Boztepe'ye çıkıp Karadeniz manzarasında çay içmeyi unutmayın.",
             highlightsByTripType = mapOf(
                 TripType.NATURE to listOf("Perşembe Yaylası Menderesleri", "Yason Burnu", "Çambaşı Yaylası", "Olukbaşı Yaylası"),
-                TripType.GASTRONOMY to listOf("Tarihi Ordu Pidesi", "Yöresel Fındık Ürünleri", "Melocan Kavurması", "Mısır Çorbası"),
                 TripType.CULTURE to listOf("Taşbaşı Kültür Merkezi", "Ordu Kültür Evi", "Tarihi Cezaevi")
+            ),
+            foodByTripType = mapOf(
+                TripType.GASTRONOMY to listOf("Tarihi Ordu Pidesi", "Yöresel Fındık Ürünleri", "Melocan Kavurması", "Mısır Çorbası")
+            ),
+            tipByTripType = mapOf(
+                TripType.GASTRONOMY to "Ordu pidesini yerinde tadın ve yöresel fındık ürünlerini inceleyin.",
+                TripType.NATURE to "Yaylalarda ve Yason Burnu'nda rüzgara karşı hazırlıklı olun ve doğa yürüyüşü yapın."
             )
         ),
         "Çankırı" to CityPersonality(
@@ -125,7 +142,9 @@ object CityPersonalityProvider {
             food = listOf("İçli Köfte", "Sembusek", "Mardin Çöreği"),
             tip = "Abbaralardan geçerek eski şehri yürüyerek keşfedin ve telkari gümüşlerini inceleyin.",
             highlightsByTripType = mapOf(
-                TripType.CULTURE to listOf("Zinciriye Medresesi", "Kasımiye Medresesi", "Mardin Müzesi"),
+                TripType.CULTURE to listOf("Zinciriye Medresesi", "Kasımiye Medresesi", "Mardin Müzesi")
+            ),
+            foodByTripType = mapOf(
                 TripType.GASTRONOMY to listOf("Cercis Murat Konağı", "İncirli Köşk", "Kaburga Dolması")
             )
         )
@@ -144,12 +163,24 @@ object CityPersonalityProvider {
             cityName.contains(it.key, ignoreCase = true)
         }?.value ?: defaultPersonality
 
-        if (tripType == null || base.highlightsByTripType.isEmpty()) return base
+        if (tripType == null) return base
 
-        val customHighlights = base.highlightsByTripType[tripType] ?: return base
-        return when (tripType) {
-            TripType.GASTRONOMY -> base.copy(food = customHighlights)
-            else -> base.copy(mustSee = customHighlights)
+        val customHighlights = base.highlightsByTripType[tripType]
+        val customFood = base.foodByTripType[tripType]
+        val customTip = base.tipByTripType[tripType]
+
+        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "getPersonality: city=$cityName, tripType=$tripType, highlights=${customHighlights?.size}, food=${customFood?.size}")
+
+        var result = base
+        if (!customHighlights.isNullOrEmpty()) {
+            result = result.copy(mustSee = customHighlights)
         }
+        if (!customFood.isNullOrEmpty()) {
+            result = result.copy(food = customFood)
+        }
+        if (!customTip.isNullOrBlank()) {
+            result = result.copy(tip = customTip)
+        }
+        return result
     }
 }

@@ -383,7 +383,15 @@ fun RichTravelGuideView(
 
     val avgTemp = analysis?.averageTemperature?.toInt() ?: 22
     val rainRisk = analysis?.rainRiskPercent ?: 15
-    val score = analysis?.travelScore ?: 82
+    val score = analysis?.travelScore ?: when {
+        avgTemp in 18..26 && rainRisk < 20 -> 92
+        rainRisk > 50 -> 60
+        else -> 78
+    }
+
+    LaunchedEffect(plan) {
+        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | MUST_SEE=${personality.mustSee} | FOOD=${personality.food}")
+    }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Text(
@@ -391,6 +399,19 @@ fun RichTravelGuideView(
             style = HavamaniaTheme.typography.bodySmall,
             color = themeColors.textPrimary
         )
+
+        Spacer(Modifier.height(16.dp))
+
+        // HAVA ÖZETİ Section
+        SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
+        Spacer(Modifier.height(6.dp))
+        val weatherSummaryText = when {
+            rainRisk > 40 -> "Seyahat gününde hava yağışlı ve bulutlu geçebilir. Ortalama sıcaklık ${avgTemp}°C civarında bekleniyor."
+            avgTemp > 28 -> "Hava sıcak ve güneşli olacak. Sıcaklık ${avgTemp}°C seviyelerinde seyredecek."
+            avgTemp < 10 -> "Hava serin ve soğuk geçecek. Ortalama sıcaklık ${avgTemp}°C."
+            else -> "Hava genel olarak ılıman ve seyahat için elverişli. Ortalama sıcaklık ${avgTemp}°C civarında."
+        }
+        Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 
         Spacer(Modifier.height(16.dp))
 
