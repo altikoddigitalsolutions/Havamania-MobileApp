@@ -47,6 +47,7 @@ import org.maplibre.android.style.layers.Property
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
+import org.maplibre.android.style.expressions.Expression
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,19 +150,31 @@ fun TravelRouteWeatherScreen(
 
                 if (style.getLayer(layerId) == null) {
                     val symbolLayer = SymbolLayer(layerId, sourceId).withProperties(
-                        PropertyFactory.textField("{name}"),
+                        PropertyFactory.textField(Expression.get("name")),
                         PropertyFactory.textSize(13f),
                         PropertyFactory.textColor(android.graphics.Color.parseColor("#111827")),
                         PropertyFactory.textHaloColor(android.graphics.Color.parseColor("#FFFFFF")),
                         PropertyFactory.textHaloWidth(2.5f),
-                        PropertyFactory.textOffset(arrayOf(0f, 1.8f)),
-                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                        PropertyFactory.textOffset(arrayOf(0f, -1.5f)),
+                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_BOTTOM),
                         PropertyFactory.textAllowOverlap(true),
                         PropertyFactory.textIgnorePlacement(true),
-                        PropertyFactory.textFont(arrayOf("Noto Sans Regular", "Open Sans Regular", "Arial Unicode MS Regular"))
+                        PropertyFactory.textFont(arrayOf("Noto Sans Regular"))
                     )
                     style.addLayer(symbolLayer)
-                    if (BuildConfig.DEBUG) Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "LAYER_EXISTS=true (created)")
+
+                    val layerIndex = style.layers.indexOf(symbolLayer)
+                    val totalLayers = style.layers.size
+                    if (BuildConfig.DEBUG) {
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "LAYER_EXISTS=true (created)")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FONT_STACK=[Noto Sans Regular]")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_FIELD=Expression.get(\"name\")")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_ANCHOR=TEXT_ANCHOR_BOTTOM")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_OFFSET=[0f, -1.5f]")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "CUSTOM_LAYER_INDEX=$layerIndex")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TOTAL_LAYER_COUNT=$totalLayers")
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "GLYPH_CONFIG_SOURCE=OpenFreeMap Liberty existing style layer")
+                    }
                 }
 
                 val builder = LatLngBounds.Builder()
