@@ -381,16 +381,16 @@ fun RichTravelGuideView(
     val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
     val analysis = plan.analyses.lastOrNull()
 
-    val avgTemp = analysis?.averageTemperature?.toInt() ?: 22
-    val rainRisk = analysis?.rainRiskPercent ?: 15
-    val score = analysis?.travelScore ?: when {
-        avgTemp in 18..26 && rainRisk < 20 -> 92
-        rainRisk > 50 -> 60
-        else -> 78
-    }
+    val avgTemp = analysis?.averageTemperature?.toInt()
+    val rainRisk = analysis?.rainRiskPercent
+    val score = analysis?.travelScore
+
+    val avgTempText = avgTemp?.let { "$it°C" } ?: "Veri bekleniyor"
+    val rainRiskText = rainRisk?.let { "%$it" } ?: "Veri bekleniyor"
+    val scoreText = score?.let { "$it/100" } ?: "Analiz Bekleniyor"
 
     LaunchedEffect(plan) {
-        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | MUST_SEE=${personality.mustSee} | FOOD=${personality.food}")
+        android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
@@ -405,11 +405,15 @@ fun RichTravelGuideView(
         // HAVA ÖZETİ Section
         SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
         Spacer(Modifier.height(6.dp))
-        val weatherSummaryText = when {
-            rainRisk > 40 -> "Seyahat gününde hava yağışlı ve bulutlu geçebilir. Ortalama sıcaklık ${avgTemp}°C civarında bekleniyor."
-            avgTemp > 28 -> "Hava sıcak ve güneşli olacak. Sıcaklık ${avgTemp}°C seviyelerinde seyredecek."
-            avgTemp < 10 -> "Hava serin ve soğuk geçecek. Ortalama sıcaklık ${avgTemp}°C."
-            else -> "Hava genel olarak ılıman ve seyahat için elverişli. Ortalama sıcaklık ${avgTemp}°C civarında."
+        val weatherSummaryText = if (analysis != null && avgTemp != null && rainRisk != null) {
+            when {
+                rainRisk > 40 -> "Seyahat gününde hava yağışlı ve bulutlu geçebilir. Ortalama sıcaklık ${avgTemp}°C civarında bekleniyor."
+                avgTemp > 28 -> "Hava sıcak ve güneşli olacak. Sıcaklık ${avgTemp}°C seviyelerinde seyredecek."
+                avgTemp < 10 -> "Hava serin ve soğuk geçecek. Ortalama sıcaklık ${avgTemp}°C."
+                else -> "Hava genel olarak ılıman ve seyahat için elverişli. Ortalama sıcaklık ${avgTemp}°C civarında."
+            }
+        } else {
+            "Bu seyahat için henüz detaylı hava analizi yapılmadı. Tahminler hazır olduğunda burada görünecek."
         }
         Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 
@@ -420,9 +424,9 @@ fun RichTravelGuideView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MetricTile("SEYAHAT SKORU", "$score/100", Icons.Rounded.Star, themeColors.warning, Modifier.weight(1f))
-            MetricTile("ORT. SICAKLIK", "$avgTemp°C", Icons.Rounded.Thermostat, themeColors.accent, Modifier.weight(1f))
-            MetricTile("YAĞIŞ RİSKİ", "%$rainRisk", Icons.Rounded.WaterDrop, if (rainRisk > 50) themeColors.error else themeColors.success, Modifier.weight(1f))
+            MetricTile("SEYAHAT SKORU", scoreText, Icons.Rounded.Star, themeColors.warning, Modifier.weight(1f))
+            MetricTile("ORT. SICAKLIK", avgTempText, Icons.Rounded.Thermostat, themeColors.accent, Modifier.weight(1f))
+            MetricTile("YAĞIŞ RİSKİ", rainRiskText, Icons.Rounded.WaterDrop, if ((rainRisk ?: 0) > 50) themeColors.error else themeColors.success, Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(16.dp))
@@ -430,11 +434,15 @@ fun RichTravelGuideView(
         // Valiz / Hazırlık Tavsiyesi
         SectionHeader("VALİZ / HAZIRLIK TAVSİYESİ", Icons.Rounded.Backpack)
         Spacer(Modifier.height(6.dp))
-        val packingTip = when {
-            avgTemp < 12 -> "Hava oldukça serin/soğuk; kalın mont, kaban ve sıcak tutan katmanlar al."
-            rainRisk > 40 -> "Yağış ihtimali yüksek; suya dayanıklı ayakkabı, yağmurluk veya şemsiye mutlaka ekle."
-            avgTemp > 28 -> "Hava sıcak; hafif kıyafetler, güneş kremi ve şapka unutma."
-            else -> "Mevsim koşullarına uygun katmanlı giysiler ve rahat yürüyüş ayakkabıları idealdir."
+        val packingTip = if (avgTemp != null && rainRisk != null) {
+            when {
+                avgTemp < 12 -> "Hava oldukça serin/soğuk; kalın mont, kaban ve sıcak tutan katmanlar al."
+                rainRisk > 40 -> "Yağış ihtimali yüksek; suya dayanıklı ayakkabı, yağmurluk veya şemsiye mutlaka ekle."
+                avgTemp > 28 -> "Hava sıcak; hafif kıyafetler, güneş kremi ve şapka unutma."
+                else -> "Mevsim koşullarına uygun katmanlı giysiler ve rahat yürüyüş ayakkabıları idealdir."
+            }
+        } else {
+            "Mevsim şartlarına uygun temel seyahat hazırlıkları yapılabilir."
         }
         Text(packingTip, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 

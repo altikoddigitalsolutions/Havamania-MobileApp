@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 
 /**
  * P1 Refactor: Extraction of analysis logic from ViewModel to allow Worker usage
@@ -182,49 +183,48 @@ object TravelAnalysisEngine {
     }
 
     fun calculateTravelScore(snapshot: ForecastSnapshot, type: TripType): Int {
-        // Deterministic base score based on city name or trip id to keep it stable but slightly varied
-        var score = 88
+        val minT = snapshot.minTemp ?: 15.0
+        val maxT = snapshot.maxTemp ?: 25.0
+        val avgTemp = (minT + maxT) / 2.0
+
         val precip = snapshot.precipitationProbability ?: 0
-        val wind = snapshot.windSpeed ?: 0.0
-        val temp = snapshot.maxTemp ?: 20.0
+        val wind = snapshot.windSpeed ?: 10.0
 
-        // Impact of precipitation
-        if (precip > 70) score -= 35
-        else if (precip > 40) score -= 20
-        else if (precip > 15) score -= 8
+        // 1. Temperature Comfort (0..100) based on TripType ideal temperature using averageTemperature
+        val idealTemp = when(type) {
+            TripType.BEACH -> 28.0
+            TripType.WINTER -> 0.0
+            TripType.CAMPING, TripType.SPORTS -> 20.0
+            else -> 23.0
+        }
+        val tempDiff = kotlin.math.abs(avgTemp - idealTemp)
+        val tempComfort = (100.0 - (tempDiff * 3.0)).coerceIn(0.0, 100.0)
 
-        // Impact of wind
-        if (wind > 50) score -= 25
-        else if (wind > 30) score -= 12
-        else if (wind > 20) score -= 5
+        // 2. Precipitation Comfort (0..100) with trip-type sensitivity
+        val precipSensitivity = when(type) {
+            TripType.NATURE, TripType.CAMPING, TripType.SPORTS -> 1.2
+            else -> 0.8
+        }
+        val precipComfort = (100.0 - (precip * precipSensitivity)).coerceIn(0.0, 100.0)
 
-        // Impact of temperature based on trip type
-        when(type) {
-            TripType.BEACH -> {
-                if (temp < 22) score -= 30
-                else if (temp < 26) score -= 15
-                else if (temp > 38) score -= 10
-            }
-            TripType.WINTER -> {
-                if (temp > 8) score -= 25
-                else if (temp < -10) score -= 15
-            }
-            TripType.CAMPING -> {
-                if (temp < 12) score -= 25
-                else if (temp > 35) score -= 15
-                if (precip > 30) score -= 20
-            }
-            TripType.SPORTS -> {
-                if (temp > 32) score -= 20
-                if (wind > 25) score -= 15
-            }
-            else -> {
-                if (temp < 5) score -= 20
-                else if (temp > 35) score -= 15
-            }
+        // 3. Wind Comfort (0..100)
+        val windSensitivity = when(type) {
+            TripType.NATURE, TripType.CAMPING -> 1.5
+            else -> 1.0
+        }
+        val windComfort = (100.0 - (wind * windSensitivity)).coerceIn(0.0, 100.0)
+
+        val finalScore = (tempComfort * 0.45) + (precipComfort * 0.35) + (windComfort * 0.20)
+        val rounded = finalScore.roundToInt().coerceIn(0, 100)
+
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                "HAVAMANIA_TRAVEL_SCORE_DEBUG",
+                "TRIP_TYPE=$type | TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=$avgTemp | PRECIP_METRIC_NAME=precipitationProbability | PRECIP_INPUT_EXACT=$precip | WIND_METRIC_NAME=windSpeed | WIND_INPUT_EXACT=$wind | TEMP_IDEAL=$idealTemp | TEMP_COMFORT_EXACT=$tempComfort | PRECIP_SENSITIVITY=$precipSensitivity | PRECIP_COMFORT_EXACT=$precipComfort | WIND_SENSITIVITY=$windSensitivity | WIND_COMFORT_EXACT=$windComfort | WEIGHT_TEMP=0.45 | WEIGHT_PRECIP=0.35 | WEIGHT_WIND=0.20 | RAW_SCORE=$finalScore | ROUNDED_SCORE=$rounded"
+            )
         }
 
-        return score.coerceIn(40, 100)
+        return rounded
     }
 
     private fun normalizeCityName(name: String): String {
