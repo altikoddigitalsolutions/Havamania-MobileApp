@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.havamania.ui.theme.*
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -86,7 +87,7 @@ fun AddTravelPlanDialog(
                         .padding(24.dp)
                 ) {
                     // 1. Destination
-                    SectionLabel("VARALACAK ŞEHİR")
+                    SectionLabel("VARILACAK ŞEHİR")
                     if (destinationLocked) {
                         LockedLocationCard(
                             title = destinationQuery,
@@ -192,9 +193,38 @@ fun AddTravelPlanDialog(
 
                     Spacer(Modifier.height(32.dp))
 
+                    val now = LocalDateTime.now()
+                    val depTime = departureTime
+                    val departureDateTime = if (depTime != null) {
+                        try {
+                            val parts = depTime.split(":")
+                            startDate.atTime(parts[0].toInt(), parts[1].toInt())
+                        } catch (e: Exception) {
+                            startDate.atTime(8, 0)
+                        }
+                    } else {
+                        startDate.atTime(0, 0)
+                    }
+
+                    val isFutureOrPresent = if (depTime != null) {
+                        departureDateTime.isAfter(now)
+                    } else {
+                        !startDate.isBefore(LocalDate.now())
+                    }
+
                     val hasDestination = destinationPick != null || (editPlan != null && destinationLocked && destinationQuery.isNotBlank())
-                    val isFormValid = hasDestination && !startDate.isAfter(endDate)
+                    val isFormValid = hasDestination && !startDate.isAfter(endDate) && isFutureOrPresent
                     val isProcessingState by viewModel.isLoading.collectAsState()
+
+                    if (!isFutureOrPresent) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Geçmiş bir tarih veya saat için seyahat oluşturamazsın.",
+                            style = HavamaniaTheme.typography.caption,
+                            color = themeColors.error
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
 
                     HavamaniaPrimaryButton(
                         text = if (editPlan != null) "DEĞİŞİKLİKLERİ KAYDET" else "SEYAHATİ OLUŞTUR",

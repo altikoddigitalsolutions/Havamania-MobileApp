@@ -76,7 +76,7 @@ fun JourneyHero(
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.End
                     )
-                    Text("VARALACAK YER", style = typography.caption.copy(fontSize = 9.sp), color = colors.textMuted, textAlign = TextAlign.End)
+                    Text("VARILACAK YER", style = typography.caption.copy(fontSize = 9.sp), color = colors.textMuted, textAlign = TextAlign.End)
                 }
             }
 

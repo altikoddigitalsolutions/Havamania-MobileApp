@@ -279,8 +279,29 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val todayVal = _today.value
-            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
-            val isUpcoming = !plan.startDate.isBefore(todayVal)
+            val now = LocalDateTime.now()
+
+            val planDt = if (plan.departureTime != null) {
+                try {
+                    val parts = plan.departureTime!!.split(":")
+                    plan.startDate.atTime(parts[0].toInt(), parts[1].toInt())
+                } catch (e: Exception) {
+                    plan.startDate.atTime(8, 0)
+                }
+            } else {
+                plan.startDate.atTime(0, 0)
+            }
+
+            val isValidTime = if (plan.departureTime != null) {
+                planDt.isAfter(now)
+            } else {
+                !plan.startDate.isBefore(LocalDate.now())
+            }
+
+            if (!isValidTime && !plan.isDemo) {
+                _uiEvent.emit("PAST_TRIP_ERROR|Geçmiş bir tarih veya saat için seyahat oluşturamazsın.")
+                return@launch
+            }
 
             val existing = dao.getAllTravelPlans(currentUid)
             val isDuplicate = existing.any {
@@ -315,6 +336,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
 
+            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
+            val isUpcoming = !plan.startDate.isBefore(todayVal)
             if (isUpcoming && daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS) {
                 analyzeTravelWeather(finalPlan)
             }
