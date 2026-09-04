@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
@@ -20,6 +21,7 @@ from app.services.subscription_service import (
 )
 
 router = APIRouter()
+settings = get_settings()
 
 
 @router.get("/status", response_model=SubscriptionStatusResponse)
