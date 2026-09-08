@@ -220,7 +220,7 @@ fun TravelPlannerScreen(
             Column(
                 modifier = Modifier
                     .padding(padding)
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .then(
                         if (windowSize.isTablet || windowSize.isLargeTablet)
@@ -377,9 +377,11 @@ fun TravelPlannerScreen(
                         focusId = focusId,
                         highlight = highlight,
                         today = today,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                Spacer(Modifier.height(100.dp))
             }
         }
     }
