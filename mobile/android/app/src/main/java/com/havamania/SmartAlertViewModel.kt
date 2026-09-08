@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.havamania.ui.theme.ThemeManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -18,23 +19,29 @@ class SmartAlertViewModel(application: Application) : AndroidViewModel(applicati
     private val _activeAlerts = MutableStateFlow<List<SmartAlert>>(emptyList())
     val activeAlerts: StateFlow<List<SmartAlert>> = _activeAlerts.asStateFlow()
 
+    private var configJob: Job? = null
+    private val authListener = FirebaseAuth.AuthStateListener {
+        loadConfig()
+    }
+
     init {
         loadConfig()
-
-        // Reload when auth changes
-        viewModelScope.launch {
-            auth.addAuthStateListener {
-                loadConfig()
-            }
-        }
+        auth.addAuthStateListener(authListener)
     }
 
     private fun loadConfig() {
-        viewModelScope.launch {
+        configJob?.cancel()
+        configJob = viewModelScope.launch {
             ThemeManager.getSmartAlertConfig(getApplication(), currentUid).collect {
                 _config.value = it
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
+        configJob?.cancel()
     }
 
     fun toggleAlert(alertId: String, enabled: Boolean) {

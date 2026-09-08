@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.havamania.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +27,7 @@ fun SmartAlertsScreen(
     onBack: () -> Unit,
     viewModel: SmartAlertViewModel = viewModel()
 ) {
-    val config by viewModel.config.collectAsState()
+    val config by viewModel.config.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
     HavamaniaScreen(

@@ -34,7 +34,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-        Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+        }
         _uiState.value = NotificationUiState(isLoading = true)
         didSeedInThisSession = false
         startCollectingNotifications(newUid)
@@ -62,12 +64,16 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         emit(emptyList())
                     }
                     .collect { list ->
-                        Log.d("Notifications", "collected size=${list.size} for $uid")
+                        if (BuildConfig.DEBUG) {
+                            Log.d("Notifications", "collected size=${list.size} for $uid")
+                        }
 
                         // If user is legacy, we might want to seed.
                         // If user is authenticated, we start clean (size 0).
                         if (list.isEmpty() && uid == "legacy") {
-                            Log.d("Notifications", "Legacy user list is empty. Forcing DefaultNotifications.")
+                            if (BuildConfig.DEBUG) {
+                                Log.d("Notifications", "Legacy user list is empty. Forcing DefaultNotifications.")
+                            }
                             updateStateWithList(DefaultNotifications.create(uid))
 
                             if (!didSeedInThisSession) {

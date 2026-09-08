@@ -240,18 +240,24 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         val uid = currentUser.uid
 
         viewModelScope.launch {
-            android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE START ---")
-            android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2 OK: Uploading URI = $uri")
+            if (BuildConfig.DEBUG) {
+                android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE START ---")
+                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2 OK: Uploading URI = $uri")
+            }
 
             _uploadProgress.value = true
             try {
                 val context = getApplication<Application>()
 
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.1: Checking URI accessibility...")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.1: Checking URI accessibility...")
+                }
                 context.contentResolver.openInputStream(uri)?.use { it.close() }
                     ?: throw Exception("URI access failed")
 
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.2: Processing image...")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.2: Processing image...")
+                }
                 val bitmap = processImage(uri) ?: throw Exception("Görsel işlenemedi.")
 
                 val baos = java.io.ByteArrayOutputStream()
@@ -262,35 +268,49 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val storagePath = "profile-images/$uid/avatar.jpg"
                 val storageRef = storage.reference.child(storagePath)
 
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3: PRE-UPLOAD DATA:")
-                android.util.Log.i("PHOTO_DEBUG", ">> Bucket: ${storageRef.bucket}")
-                android.util.Log.i("PHOTO_DEBUG", ">> Path: $storagePath")
-                android.util.Log.i("PHOTO_DEBUG", ">> Size: ${data.size} bytes")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3: PRE-UPLOAD DATA:")
+                    android.util.Log.i("PHOTO_DEBUG", ">> Bucket: ${storageRef.bucket}")
+                    android.util.Log.i("PHOTO_DEBUG", ">> Path: $storagePath")
+                    android.util.Log.i("PHOTO_DEBUG", ">> Size: ${data.size} bytes")
+                }
 
                 val metadata = com.google.firebase.storage.StorageMetadata.Builder()
                     .setContentType("image/jpeg")
                     .build()
 
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3.1: storageRef.putBytes() starting...")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3.1: storageRef.putBytes() starting...")
+                }
 
                 storageRef.putBytes(data, metadata).await()
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3 OK: Upload Success")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3 OK: Upload Success")
+                }
 
                 val downloadUrl = storageRef.downloadUrl.await().toString()
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 4 OK: Download URL = $downloadUrl")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 4 OK: Download URL = $downloadUrl")
 
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 5: Saving imageUrl = $downloadUrl")
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 5: Saving imageUrl = $downloadUrl")
+                }
                 db.collection("users").document(uid).update("photoURL", downloadUrl, "updatedAt", System.currentTimeMillis()).await()
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 6 OK: Firestore Updated")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 6 OK: Firestore Updated")
+                }
 
                 _avatarVersion.value = System.currentTimeMillis()
 
                 // CRITICAL SYNC: Update local DataStore immediately to prevent UI flicker
                 ThemeManager.saveUserImageUriByUid(context, uid, downloadUrl)
 
-                android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
+                }
             } catch (e: Exception) {
-                android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
+                }
                 val friendlyError = when {
                     e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED ->
                         "Yetki hatası: Fotoğraf yükleme izniniz bulunmuyor."

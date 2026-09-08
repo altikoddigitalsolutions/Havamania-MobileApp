@@ -222,6 +222,8 @@ fun TravelPlannerScreen(
                     .padding(padding)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(bottom = 80.dp)
                     .then(
                         if (windowSize.isTablet || windowSize.isLargeTablet)
                             Modifier.widthIn(max = responsive.maxContentWidth)

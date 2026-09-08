@@ -72,6 +72,9 @@ class WeatherNotificationWorker(
     }
 
     private fun showNotification(title: String, message: String) {
+        if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
+            return
+        }
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "weather_updates"
 

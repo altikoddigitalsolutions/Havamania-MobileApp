@@ -41,7 +41,9 @@ data class WeatherData(
     val weatherSuitabilityDesc: String = "",
     val hourlyForecast: List<HourlyWeather> = emptyList(),
     val dailyForecast: List<DailyForecast> = emptyList(),
-    val details: List<WeatherDetailData> = emptyList()
+    val details: List<WeatherDetailData> = emptyList(),
+    val timestamp: Long = System.currentTimeMillis(),
+    val isStale: Boolean = false
 )
 
 @Serializable
@@ -51,7 +53,7 @@ data class HourlyWeather(
     val temp: String,
     val condition: String = "Bulutlu",
     val weatherCode: Int = 0,
-    val isDay: Boolean = true,
+    val isDay: Boolean? = null,
     val precipProb: String? = null,
     val precipitationProbability: Int? = null,
     val iconName: String = "Cloud",

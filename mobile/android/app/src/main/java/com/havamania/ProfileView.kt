@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.havamania.ui.theme.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,17 +56,17 @@ fun ProfileScreen(
     val scrollState = rememberScrollState()
     val themeColors = HavamaniaTheme.colors
 
-    val profileState by profileViewModel.profileState.collectAsState()
-    val uploadProgress by profileViewModel.uploadProgress.collectAsState()
-    val avatarVersion by profileViewModel.avatarVersion.collectAsState()
+    val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
+    val uploadProgress by profileViewModel.uploadProgress.collectAsStateWithLifecycle()
+    val avatarVersion by profileViewModel.avatarVersion.collectAsStateWithLifecycle()
 
-    val name by themeViewModel.userName.collectAsState()
-    val bio by themeViewModel.userBio.collectAsState()
-    val userInterests by themeViewModel.userInterests.collectAsState()
-    val aboutMe by themeViewModel.userAboutMe.collectAsState()
+    val name by themeViewModel.userName.collectAsStateWithLifecycle()
+    val bio by themeViewModel.userBio.collectAsStateWithLifecycle()
+    val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
+    val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
 
-    val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsState()
-    val travelPlans by travelViewModel.plans.collectAsState()
+    val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsStateWithLifecycle()
+    val travelPlans by travelViewModel.plans.collectAsStateWithLifecycle()
 
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
@@ -85,7 +86,7 @@ fun ProfileScreen(
     val windowSize = LocalWindowSize.current
 
     val profile = (profileState as? ProfileState.Success)?.profile
-    val localImageUri by themeViewModel.userImageUri.collectAsState()
+    val localImageUri by themeViewModel.userImageUri.collectAsStateWithLifecycle()
 
     val displayNameToDisplay = profile?.name ?: name
     val bioToDisplay = profile?.bio ?: bio

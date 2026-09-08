@@ -47,8 +47,9 @@ object WeatherMapper {
             solarNoon = calculateSolarNoon(sunrise, sunset)
         }
 
-        val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { LocalTime.of(6, 30) }
-        val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { LocalTime.of(19, 30) }
+        val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { null }
+        val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { null }
+        val currentIsDay = current?.isDay == 1
 
         return WeatherData(
             cityName = cityName,
@@ -82,7 +83,7 @@ object WeatherMapper {
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
-            hourlyForecast = mapHourly(hourly, sunriseLocalTime, sunsetLocalTime),
+            hourlyForecast = mapHourly(hourly, daily),
             dailyForecast = mapDaily(daily),
             details = mapDetails(current, daily)
         )
@@ -128,8 +129,8 @@ object WeatherMapper {
             score -= 15
             warnings.add("yüksek UV")
         }
-        val visibility = current.visibility ?: 10000.0
-        if (visibility < 3000.0) {
+        val visibility = current?.visibility
+        if (visibility != null && visibility < 3000.0) {
             score -= 20
             warnings.add("düşük görüş")
         }
@@ -160,16 +161,34 @@ object WeatherMapper {
         return directions[((deg + 22.5) / 45).toInt() % 8]
     }
 
-    private fun mapHourly(hourly: HourlyDto?, sunrise: LocalTime, sunset: LocalTime): List<HourlyWeather> {
+    private fun mapHourly(hourly: HourlyDto?, daily: DailyDto?): List<HourlyWeather> {
         if (hourly == null) return emptyList()
         val calendar = Calendar.getInstance()
         val currentHourStr = SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(calendar.time)
 
-        return hourly.time.indices.map { i ->
+        val sunTimesByDate = mutableMapOf<String, Pair<LocalTime, LocalTime>>()
+        if (daily != null && daily.time.size == daily.sunrise.size && daily.time.size == daily.sunset.size) {
+            for (i in daily.time.indices) {
+                val dateStr = daily.time[i]
+                val riseStr = daily.sunrise[i].split("T").lastOrNull()
+                val setStr = daily.sunset[i].split("T").lastOrNull()
+                val rise = try { LocalTime.parse(riseStr) } catch (e: Exception) { null }
+                val set = try { LocalTime.parse(setStr) } catch (e: Exception) { null }
+                if (rise != null && set != null) {
+                    sunTimesByDate[dateStr] = Pair(rise, set)
+                }
+            }
+        }
+
+        return hourly.time.indices.mapNotNull { i ->
             val fullTime = hourly.time[i]
-            val hourLabelRaw = fullTime.split("T").last()
+            val parts = fullTime.split("T")
+            if (parts.size != 2) return@mapNotNull null
+            val datePart = parts[0]
+            val hourLabelRaw = parts[1]
+
+            val d = try { LocalDate.parse(datePart) } catch (e: Exception) { return@mapNotNull null }
             val hourLabel = if (hourLabelRaw == "00:00") {
-                val d = try { LocalDate.parse(fullTime.split("T").first()) } catch (e: Exception) { LocalDate.now() }
                 d.format(DateTimeFormatter.ofPattern("d MMM", Locale("tr")))
             } else {
                 hourLabelRaw
@@ -180,8 +199,15 @@ object WeatherMapper {
                 try {
                     LocalTime.of(hourLabelRaw.split(":").first().toInt(), 0)
                 } catch (e2: Exception) {
-                    LocalTime.of(0, 0)
+                    return@mapNotNull null
                 }
+            }
+
+            val sunTimes = sunTimesByDate[datePart]
+            val isDay: Boolean? = if (sunTimes != null) {
+                !timeObj.isBefore(sunTimes.first) && timeObj.isBefore(sunTimes.second)
+            } else {
+                null
             }
 
             HourlyWeather(
@@ -190,7 +216,7 @@ object WeatherMapper {
                 iconName = getWeatherIconName(hourly.weatherCode[i]),
                 condition = getWeatherCondition(hourly.weatherCode[i]),
                 weatherCode = hourly.weatherCode[i],
-                isDay = !timeObj.isBefore(sunrise) && timeObj.isBefore(sunset),
+                isDay = isDay,
                 temp = "${hourly.temperature[i].toInt()}°",
                 precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
                 precipitationProbability = hourly.precipitationProbability?.get(i),
@@ -371,10 +397,11 @@ object WeatherMapper {
         }
     }
 
-    fun mapWeatherCodeToCondition(code: Int, isDay: Boolean): WeatherCondition {
+    fun mapWeatherCodeToCondition(code: Int, isDay: Boolean? = true): WeatherCondition {
+        val day = isDay ?: true
         return when (code) {
-            0 -> if (isDay) WeatherCondition.Clear else WeatherCondition.NightClear
-            1 -> if (isDay) WeatherCondition.MostlySunny else WeatherCondition.NightClear
+            0 -> if (day) WeatherCondition.Clear else WeatherCondition.NightClear
+            1 -> if (day) WeatherCondition.MostlySunny else WeatherCondition.NightClear
             2 -> WeatherCondition.PartlyCloudy
             3 -> WeatherCondition.Cloudy
             45, 48 -> WeatherCondition.Fog

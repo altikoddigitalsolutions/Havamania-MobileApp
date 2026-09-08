@@ -3,6 +3,7 @@ package com.havamania
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -64,6 +65,7 @@ fun HomeScreen(
 
     val notificationUiState by notificationViewModel.uiState.collectAsStateWithLifecycle()
     val unreadNotificationsCount = notificationUiState.unreadCount
+    val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
@@ -128,7 +130,7 @@ fun HomeScreen(
                         }
                     }
                     is WeatherUiState.Error -> {
-                        val isOffline = !viewModel.isOnline.collectAsState().value
+                        val isOffline = !isOnline
                         HavamaniaErrorState(
                             title = if (isOffline) "Bağlantı Yok" else "Hata",
                             description = if (isOffline) "İnternet bağlantını kontrol et." else state.message,
@@ -288,6 +290,43 @@ fun BoxScope.WeatherSuccessContent(
             )
     ) {
         Spacer(modifier = Modifier.height(themeStyles.spacingSM))
+
+        if (data.isStale) {
+            val formattedTime = remember(data.timestamp) {
+                try {
+                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("tr"))
+                    java.util.Date(data.timestamp).let { sdf.format(it) }
+                } catch (e: Exception) { "" }
+            }
+            Surface(
+                color = themeColors.warning.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, themeColors.warning.copy(alpha = 0.3f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = themeStyles.pagePadding)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Info,
+                        contentDescription = "Çevrimdışı / Eski Veri",
+                        tint = themeColors.warning,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (formattedTime.isNotBlank()) "Çevrimdışı veri • Son güncelleme $formattedTime" else "Çevrimdışı veri",
+                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                        color = themeColors.warning
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(themeStyles.spacingSM))
+        }
 
         // 1. WEATHER HERO
         EntranceAnimation(delayMillis = 50) {

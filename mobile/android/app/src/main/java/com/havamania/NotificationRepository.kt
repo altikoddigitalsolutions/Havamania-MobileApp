@@ -10,7 +10,9 @@ class NotificationRepository(private val dao: NotificationDao) {
 
     fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid).map { list ->
         if (list.isEmpty() && uid == "legacy") {
-            Log.d(TAG, "Legacy user list is empty. Returning DefaultNotifications.")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Legacy user list is empty. Returning DefaultNotifications.")
+            }
             DefaultNotifications.create(uid)
         } else {
             list
@@ -105,29 +107,43 @@ class NotificationRepository(private val dao: NotificationDao) {
             // New logic: If user is authenticated, they should start clean unless they migrated.
             // For now, let's keep seeding only for "legacy" or if explicitly asked.
             if (uid != "legacy") {
-                Log.d(TAG, "🚀 SEED SKIP: Authenticated user $uid starts clean.")
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "🚀 SEED SKIP: Authenticated user $uid starts clean.")
+                }
                 return
             }
 
             val hasSeeded = com.havamania.ui.theme.ThemeManager.getHasSeededNotifications(context, uid).first()
             val count = dao.getTotalCountFirst(uid)
-            Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB for $uid: $count, hasSeeded: $hasSeeded")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB for $uid: $count, hasSeeded: $hasSeeded")
+            }
 
             if (count == 0 && !hasSeeded) {
-                Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating default test notifications...")
+                if (BuildConfig.DEBUG) {
+                    Log.d("Notifications", "🚀 SEEDING: Database is empty. Generating default test notifications...")
+                }
                 val demoList = DefaultNotifications.create(uid)
-                Log.d("Notifications", "seed created size=${demoList.size}")
+                if (BuildConfig.DEBUG) {
+                    Log.d("Notifications", "seed created size=${demoList.size}")
+                }
 
                 demoList.forEach {
                     dao.insert(it)
-                    Log.v(TAG, "✅ SEEDED: ${it.id} (${it.category})")
+                    if (BuildConfig.DEBUG) {
+                        Log.v(TAG, "✅ SEEDED: ${it.id} (${it.category})")
+                    }
                 }
                 com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(context, true, uid)
 
                 val checkCount = dao.getTotalCountFirst(uid)
-                Log.d(TAG, "📊 SEED DONE: New count: $checkCount")
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "📊 SEED DONE: New count: $checkCount")
+                }
             } else {
-                Log.d(TAG, "⏩ SEED SKIP: Database already has items or was already seeded.")
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "⏩ SEED SKIP: Database already has items or was already seeded.")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ SEED ERROR: Critical failure during seeding", e)
@@ -136,11 +152,15 @@ class NotificationRepository(private val dao: NotificationDao) {
 
     suspend fun refreshDemoNotifications(uid: String) {
         try {
-            Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
+            }
             dao.deleteAll(uid)
             val demoList = DefaultNotifications.create(uid)
             demoList.forEach { dao.insert(it) }
-            Log.d(TAG, "Manual seed notifications inserted: ${demoList.size}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Manual seed notifications inserted: ${demoList.size}")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh demo notifications", e)
         }

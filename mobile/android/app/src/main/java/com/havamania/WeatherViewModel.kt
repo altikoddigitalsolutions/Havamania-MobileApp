@@ -147,7 +147,9 @@ class WeatherViewModel(
                     mode to city
                 }.collect { (mode, city) ->
                     _locationMode.value = mode
-                    Log.d("WeatherVM", "Data update: mode=$mode, city=${city?.name}")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("WeatherVM", "Data update: mode=$mode, city=${city?.name}")
+                    }
 
                     if (mode == LocationMode.AUTO) {
                         refreshWeatherWithCurrentLocation()

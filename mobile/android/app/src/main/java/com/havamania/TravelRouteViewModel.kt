@@ -59,7 +59,9 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         _departureMillis.value = null
 
         viewModelScope.launch {
-            Log.d("RouteVM", "Observing trip: $tripId")
+            if (BuildConfig.DEBUG) {
+                Log.d("RouteVM", "Observing trip: $tripId")
+            }
             dao.getTravelPlanByIdFlow(tripId).collect { entity ->
                 if (entity != null) {
                     val plan = entity.toDomain()
@@ -82,7 +84,9 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private fun calculateRoute(plan: TravelPlan) {
-        Log.d("RouteVM", "Calculating route. OriginCity=${plan.originCity}, OriginLat=${plan.originLatitude}, OriginLon=${plan.originLongitude}")
+        if (BuildConfig.DEBUG) {
+            Log.d("RouteVM", "Calculating route. OriginCity=${plan.originCity}, OriginLat=${plan.originLatitude}, OriginLon=${plan.originLongitude}")
+        }
         viewModelScope.launch {
             var origin = plan.originPoint?.let { GeoPoint(it.first, it.second) }
 

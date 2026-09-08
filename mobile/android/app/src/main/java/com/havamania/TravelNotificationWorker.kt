@@ -315,6 +315,9 @@ class TravelNotificationWorker(
     }
 
     private fun showSystemNotification(item: NotificationItem) {
+        if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
+            return
+        }
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "travel_notifications"
 

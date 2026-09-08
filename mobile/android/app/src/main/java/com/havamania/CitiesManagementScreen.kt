@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.havamania.ui.theme.*
 import java.util.Locale
 
@@ -28,9 +29,9 @@ fun CitiesManagementScreen(
     themeViewModel: ThemeViewModel = viewModel(),
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
-    val registeredCities by themeViewModel.registeredCities.collectAsState()
-    val defaultCity by themeViewModel.defaultCity.collectAsState()
-    val citySuggestions by weatherViewModel.citySuggestions.collectAsState()
+    val registeredCities by themeViewModel.registeredCities.collectAsStateWithLifecycle()
+    val defaultCity by themeViewModel.defaultCity.collectAsStateWithLifecycle()
+    val citySuggestions by weatherViewModel.citySuggestions.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
     var searchText by remember { mutableStateOf("") }

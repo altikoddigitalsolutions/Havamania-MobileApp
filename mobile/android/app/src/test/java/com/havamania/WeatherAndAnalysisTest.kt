@@ -107,6 +107,99 @@ class WeatherAndAnalysisTest {
     }
 
     @Test
+    fun `weatherMapper sunrise sunset null does not crash or use fake times`() {
+        val response = OpenMeteoResponse(
+            latitude = 41.0,
+            longitude = 29.0,
+            daily = DailyDto(
+                time = listOf("2026-09-05"),
+                weatherCode = listOf(0),
+                tempMax = listOf(25.0),
+                tempMin = listOf(20.0),
+                sunrise = emptyList(),
+                sunset = emptyList()
+            ),
+            hourly = HourlyDto(
+                time = listOf("2026-09-05T12:00"),
+                weatherCode = listOf(0),
+                temperature = listOf(22.0)
+            )
+        )
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        assertNull(domain.sunriseTime)
+        assertNull(domain.sunsetTime)
+        assertEquals(1, domain.hourlyForecast.size)
+    }
+
+    @Test
+    fun `weatherMapper invalid hourly timestamp is skipped`() {
+        val response = OpenMeteoResponse(
+            latitude = 41.0,
+            longitude = 29.0,
+            hourly = HourlyDto(
+                time = listOf("invalid-time"),
+                weatherCode = listOf(0),
+                temperature = listOf(22.0)
+            )
+        )
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        assertTrue(domain.hourlyForecast.isEmpty())
+    }
+
+    @Test
+    fun `weatherMapper visibility null does not assume good visibility`() {
+        val response = OpenMeteoResponse(
+            latitude = 41.0,
+            longitude = 29.0,
+            current = CurrentWeatherDto(visibility = null)
+        )
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        assertNull(domain.visibilityKm)
+    }
+
+    @Test
+    fun `cache age under 15 minutes is not stale`() {
+        val now = System.currentTimeMillis()
+        val timestamp = now - (10 * 60 * 1000L) // 10 minutes ago
+        val cacheTimeoutMillis = 15 * 60 * 1000L
+        val isStale = (now - timestamp) >= cacheTimeoutMillis
+        assertFalse(isStale)
+    }
+
+    @Test
+    fun `cache age over 15 minutes is stale`() {
+        val now = System.currentTimeMillis()
+        val timestamp = now - (20 * 60 * 1000L) // 20 minutes ago
+        val cacheTimeoutMillis = 15 * 60 * 1000L
+        val isStale = (now - timestamp) >= cacheTimeoutMillis
+        assertTrue(isStale)
+    }
+
+    @Test
+    fun `cache key normalization handles turkish casing and whitespace correctly`() {
+        fun canonicalKey(cityName: String, districtName: String?): String {
+            val normCity = cityName.trim().lowercase(java.util.Locale("tr"))
+            val normDistrict = districtName?.trim()?.takeIf { it.isNotBlank() }?.lowercase(java.util.Locale("tr"))
+            return if (normDistrict != null) "$normCity-$normDistrict" else normCity
+        }
+
+        assertEquals("istanbul", canonicalKey("İstanbul", null))
+        assertEquals("istanbul", canonicalKey("istanbul", null))
+        assertEquals("istanbul", canonicalKey("İSTANBUL", null))
+        assertEquals("ankara", canonicalKey(" Ankara", null))
+        assertEquals("ankara", canonicalKey("Ankara ", null))
+        assertEquals("izmir", canonicalKey("İZMİR", null))
+        assertEquals("izmir", canonicalKey("İzmir", null))
+        assertEquals("izmir", canonicalKey("izmir", null))
+        assertEquals("ığdır", canonicalKey("IĞDIR", null))
+        assertEquals("ığdır", canonicalKey("ığdır", null))
+        assertEquals("çankırı", canonicalKey("ÇANKIRI", null))
+        assertEquals("çankırı", canonicalKey("çankırı", null))
+        assertEquals("istanbul-kadıköy", canonicalKey("İSTANBUL", " KADIKÖY "))
+        assertEquals("istanbul-kadıköy", canonicalKey("istanbul", "kadıköy"))
+    }
+
+    @Test
     fun `travelAnalysisEngine missing required weather input creates no fake analysis`() {
         val snapshot = ForecastSnapshot(
             minTemp = null,

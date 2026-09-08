@@ -27,17 +27,24 @@ class AuthViewModel : ViewModel() {
 
     val currentUser: FirebaseUser? get() = auth.currentUser
 
-    init {
-        auth.addAuthStateListener { firebaseAuth ->
-            val user = firebaseAuth.currentUser
-            if (user != null) {
-                _authState.value = AuthState.Authenticated(user)
-            } else {
-                if (_authState.value !is AuthState.Loading && _authState.value !is AuthState.Error) {
-                    _authState.value = AuthState.Idle
-                }
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val user = firebaseAuth.currentUser
+        if (user != null) {
+            _authState.value = AuthState.Authenticated(user)
+        } else {
+            if (_authState.value !is AuthState.Loading && _authState.value !is AuthState.Error) {
+                _authState.value = AuthState.Idle
             }
         }
+    }
+
+    init {
+        auth.addAuthStateListener(authListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        auth.removeAuthStateListener(authListener)
     }
 
     private fun mapFirebaseError(e: Exception): String {

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
@@ -172,7 +173,7 @@ fun LoginScreen(
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val authState by viewModel.authState.collectAsState()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
     HavamaniaScreen(
@@ -289,7 +290,7 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var termsAccepted by remember { mutableStateOf(false) }
 
-    val authState by viewModel.authState.collectAsState()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
@@ -441,7 +442,7 @@ fun ForgotPasswordScreen(
     onBack: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
-    val authState by viewModel.authState.collectAsState()
+    val authState by viewModel.authState.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
     var successSent by remember { mutableStateOf(false) }
 

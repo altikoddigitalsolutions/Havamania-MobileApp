@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.havamania.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -57,8 +58,8 @@ fun AddTravelPlanDialog(
     var endDate by remember { mutableStateOf(editPlan?.endDate ?: startDate) }
     var departureTime by remember { mutableStateOf(editPlan?.departureTime) }
 
-    val citySuggestions by viewModel.citySuggestions.collectAsState()
-    val originSuggestions by viewModel.originSuggestions.collectAsState()
+    val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
+    val originSuggestions by viewModel.originSuggestions.collectAsStateWithLifecycle()
 
     val displayFormatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr")) }
 
@@ -214,7 +215,7 @@ fun AddTravelPlanDialog(
 
                     val hasDestination = destinationPick != null || (editPlan != null && destinationLocked && destinationQuery.isNotBlank())
                     val isFormValid = hasDestination && !startDate.isAfter(endDate) && isFutureOrPresent
-                    val isProcessingState by viewModel.isLoading.collectAsState()
+                    val isProcessingState by viewModel.isLoading.collectAsStateWithLifecycle()
 
                     if (!isFutureOrPresent) {
                         Spacer(Modifier.height(8.dp))

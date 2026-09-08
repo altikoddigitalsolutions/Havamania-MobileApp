@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -22,7 +23,7 @@ fun AiHistoryDetailScreen(
     onBack: () -> Unit,
     viewModel: AiHistoryViewModel = viewModel()
 ) {
-    val historyItems by viewModel.historyItems.collectAsState()
+    val historyItems by viewModel.historyItems.collectAsStateWithLifecycle()
     val item = remember(historyItems, itemId) { historyItems.firstOrNull { it.id == itemId } }
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles

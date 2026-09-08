@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.havamania.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,7 +40,7 @@ fun EditProfileScreen(
     var createdAt by remember { mutableLongStateOf(0L) }
 
     val userProfileRepository = remember { UserProfileRepository.getInstance() }
-    val profile by userProfileRepository.profile.collectAsState()
+    val profile by userProfileRepository.profile.collectAsStateWithLifecycle()
 
     LaunchedEffect(profile) {
         profile?.let {

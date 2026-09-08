@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,7 +35,7 @@ fun AiHistoryScreen(
     onNavigateToChat: (String) -> Unit,
     viewModel: AiHistoryViewModel = viewModel()
 ) {
-    val historyItems by viewModel.historyItems.collectAsState()
+    val historyItems by viewModel.historyItems.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
     var showDeleteConfirm by remember { mutableStateOf(false) }

@@ -35,9 +35,16 @@ class WeatherRepository(
         }
     }
 
-    suspend fun clearCache(cityName: String) {
+    private fun canonicalKey(cityName: String, districtName: String?): String {
+        val normCity = cityName.trim().lowercase(java.util.Locale("tr"))
+        val normDistrict = districtName?.trim()?.takeIf { it.isNotBlank() }?.lowercase(java.util.Locale("tr"))
+        return if (normDistrict != null) "$normCity-$normDistrict" else normCity
+    }
+
+    suspend fun clearCache(cityName: String, districtName: String? = null) {
         try {
-            weatherDao.deleteWeather(cityName)
+            val cacheKey = canonicalKey(cityName, districtName)
+            weatherDao.deleteWeather(cacheKey)
         } catch (e: Exception) {
             // Log or ignore
         }
@@ -92,7 +99,7 @@ class WeatherRepository(
         forceRefresh: Boolean = false
     ): Flow<WeatherData> = flow {
         var hasEmitted = false
-        val cacheKey = if (districtName != null) "$cityName-$districtName" else cityName
+        val cacheKey = canonicalKey(cityName, districtName)
         val cacheTimeoutMillis = 15 * 60 * 1000L // 15 dakika
 
         // 1. Her zaman önce Cache'den oku ve varsa anında dön (Business Rule 7: Offline-first)
@@ -105,8 +112,8 @@ class WeatherRepository(
                 val age = System.currentTimeMillis() - cachedEntity.timestamp
                 isCacheFresh = age < cacheTimeoutMillis
 
-                // KURAL 6.1: Eski de olsa cache verisini anında göster
-                emit(cachedData)
+                val annotatedData = cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh)
+                emit(annotatedData)
                 hasEmitted = true
                 android.util.Log.d("WeatherRepo", "Cache emitted for $cacheKey (Age: ${age/1000}s, Fresh: $isCacheFresh)")
             } catch (e: Exception) {
@@ -127,11 +134,12 @@ class WeatherRepository(
                     current = currentFields,
                     daily = dailyFields
                 )
-                val domainData = WeatherMapper.mapToDomain(response, cityName, districtName)
+                val now = System.currentTimeMillis()
+                val domainData = WeatherMapper.mapToDomain(response, cityName, districtName).copy(timestamp = now, isStale = false)
 
                 // 3. Cache'i ve State'i güncelle
                 val jsonString = json.encodeToString(domainData)
-                weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString))
+                weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString, now))
 
                 emit(domainData)
                 hasEmitted = true
