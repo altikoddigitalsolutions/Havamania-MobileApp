@@ -134,8 +134,12 @@ fun TravelRouteWeatherScreen(
                     Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "UPDATE_REASON=route_or_weather_state_change")
                     Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "WAYPOINT_COUNT=${waypoints.size}")
                     Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_COUNT=${features.size}")
-                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_NAMES=${validWaypoints.map { it.placeName }}")
-                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "SOURCE_ACTION=$action")
+if (BuildConfig.DEBUG) {
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_NAMES=${validWaypoints.map { it.placeName }}")
+}
+if (BuildConfig.DEBUG) {
+                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "SOURCE_ACTION=$action")
+}
                 }
 
                 if (existingSource != null) {
@@ -169,11 +173,21 @@ fun TravelRouteWeatherScreen(
                         Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "LAYER_EXISTS=true (created)")
                         Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FONT_STACK=[Noto Sans Regular]")
                         Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_FIELD=Expression.get(\"name\")")
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_ANCHOR=TEXT_ANCHOR_BOTTOM")
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_OFFSET=[0f, -1.5f]")
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "CUSTOM_LAYER_INDEX=$layerIndex")
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TOTAL_LAYER_COUNT=$totalLayers")
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "GLYPH_CONFIG_SOURCE=OpenFreeMap Liberty existing style layer")
+if (BuildConfig.DEBUG) {
+                            Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_ANCHOR=TEXT_ANCHOR_BOTTOM")
+}
+if (BuildConfig.DEBUG) {
+                            Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TEXT_OFFSET=[0f, -1.5f]")
+}
+if (BuildConfig.DEBUG) {
+                            Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "CUSTOM_LAYER_INDEX=$layerIndex")
+}
+if (BuildConfig.DEBUG) {
+                            Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "TOTAL_LAYER_COUNT=$totalLayers")
+}
+if (BuildConfig.DEBUG) {
+                            Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "GLYPH_CONFIG_SOURCE=OpenFreeMap Liberty existing style layer")
+}
                     }
                 }
 
@@ -184,7 +198,9 @@ fun TravelRouteWeatherScreen(
                 kotlinx.coroutines.delay(500)
                 map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 2000)
             } catch (e: Exception) {
-                Log.e("MapRoute", "Error fitting bounds", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("MapRoute", "Error fitting bounds", e)
+}
             }
         }
     }
@@ -268,7 +284,9 @@ fun TravelRouteWeatherScreen(
                                     val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                                     context.startActivity(intent)
                                 } catch (e: Exception) {
-                                    Log.e("RouteScreen", "Failed to open location settings", e)
+if (BuildConfig.DEBUG) {
+                                        Log.e("RouteScreen", "Failed to open location settings", e)
+}
                                 }
                             },
                             onPickOrigin = onBack // Return to planner to pick origin
@@ -304,7 +322,9 @@ fun TravelRouteWeatherScreen(
                                 val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
                                 context.startActivity(intent)
                             } catch (e: Exception) {
-                                Log.e("RouteScreen", "Failed to open location settings", e)
+if (BuildConfig.DEBUG) {
+                                    Log.e("RouteScreen", "Failed to open location settings", e)
+}
                             }
                         },
                         onPickOrigin = onBack

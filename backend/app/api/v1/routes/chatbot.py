@@ -91,6 +91,15 @@ def ask_chatbot_premium(
 ) -> ChatbotAskResponse:
     usage = chatbot_usage_service.get_or_create_today_usage(db, current_user.id)
     daily_limit = settings.chatbot_premium_daily_limit
+
+    if usage.message_count >= daily_limit:
+        return ChatbotAskResponse(
+            answer="Günlük limit doldu. Premium ile daha fazla kullanım açılabilir.",
+            used_messages_today=usage.message_count,
+            remaining_messages_today=0,
+            is_premium=True,
+        )
+
     # Profil verilerini çek (AI kişiselleştirme için)
     profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
     context = {}

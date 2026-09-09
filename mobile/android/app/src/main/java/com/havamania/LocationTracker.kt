@@ -84,7 +84,9 @@ class DefaultLocationTracker(
                     )
                 } else null
             } catch (e: Exception) {
-                android.util.Log.e("LocationTracker", "Reverse Geocoding failed", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("LocationTracker", "Reverse Geocoding failed", e)
+}
                 null
             }
         }

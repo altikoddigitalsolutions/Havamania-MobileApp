@@ -271,10 +271,12 @@ fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: 
     )
 
     SideEffect {
-        Log.d(
-            "DailyForecastStyle",
-            "label=${if (data.isToday) "Bugün" else data.day} date=${data.date} selected=$isSelected today=${data.isToday}"
-        )
+if (BuildConfig.DEBUG) {
+            Log.d(
+                "DailyForecastStyle",
+                "label=${if (data.isToday) "Bugün" else data.day} date=${data.date} selected=$isSelected today=${data.isToday}"
+            )
+}
     }
 
     Row(

@@ -60,7 +60,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             try {
                 repository.getAllNotificationsFlow(uid)
                     .catch { e ->
-                        Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting empty for $uid.", e)
+if (BuildConfig.DEBUG) {
+                            Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting empty for $uid.", e)
+}
                         emit(emptyList())
                     }
                     .collect { list ->
@@ -87,7 +89,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         }
                     }
             } catch (e: Exception) {
-                Log.e(TAG, "Fatal error in collect chain for $uid", e)
+if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "Fatal error in collect chain for $uid", e)
+}
                 updateStateWithList(emptyList())
             }
         }
@@ -221,7 +225,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 repository.deleteAll(uid)
                 com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(getApplication(), true, uid)
             } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in deleteAllNotifications", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("NotificationVM", "Error in deleteAllNotifications", e)
+}
             }
         }
     }
@@ -231,7 +237,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             try {
                 repository.deleteByCategory(currentUid, NotificationCategory.TRAVEL)
             } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in deleteTravelNotifications", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("NotificationVM", "Error in deleteTravelNotifications", e)
+}
             }
         }
     }
@@ -241,7 +249,9 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             try {
                 repository.refreshDemoNotifications(currentUid)
             } catch (e: Exception) {
-                Log.e("NotificationVM", "Error in refreshDemoNotifications", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("NotificationVM", "Error in refreshDemoNotifications", e)
+}
             }
         }
     }

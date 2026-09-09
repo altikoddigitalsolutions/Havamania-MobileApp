@@ -49,7 +49,9 @@ class AuthViewModel : ViewModel() {
 
     private fun mapFirebaseError(e: Exception): String {
         val message = e.message ?: ""
-        android.util.Log.e("AuthError", "Firebase Auth Error: $message", e)
+if (BuildConfig.DEBUG) {
+            android.util.Log.e("AuthError", "Firebase Auth Error: $message", e)
+}
 
         return when {
             message.contains("INVALID_LOGIN_CREDENTIALS") ||
@@ -160,10 +162,27 @@ class AuthViewModel : ViewModel() {
                 val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
                 user.reauthenticate(credential).await()
 
-                // 2. Delete Firestore Data
-                db.collection("users").document(user.uid).delete().await()
+                // 2. Explicitly delete known Firestore subcollections (/users/{uid}/trips, /users/{uid}/cities, /users/{uid}/ai_history)
+                val userRef = db.collection("users").document(user.uid)
 
-                // 3. Delete Auth Account
+                listOf("trips", "cities", "ai_history").forEach { subColName ->
+                    val colRef = userRef.collection(subColName)
+                    val snapshot = colRef.get().await()
+                    if (!snapshot.isEmpty) {
+                        for (chunk in snapshot.documents.chunked(500)) {
+                            val batch = db.batch()
+                            for (doc in chunk) {
+                                batch.delete(doc.reference)
+                            }
+                            batch.commit().await()
+                        }
+                    }
+                }
+
+                // 3. Delete Root Firestore User Document
+                userRef.delete().await()
+
+                // 4. Delete Auth Account
                 user.delete().await()
 
                 _authState.value = AuthState.Idle

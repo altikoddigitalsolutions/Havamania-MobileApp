@@ -97,7 +97,9 @@ fun WeatherBottomBar(
                     NavigationBarItem(
                         selected = isSelected,
                         onClick = {
-                            android.util.Log.d("Navigation", "Tab Click: ${item.route}")
+if (BuildConfig.DEBUG) {
+                                android.util.Log.d("Navigation", "Tab Click: ${item.route}")
+}
                             onNavigate(item.route)
                         },
                         label = {

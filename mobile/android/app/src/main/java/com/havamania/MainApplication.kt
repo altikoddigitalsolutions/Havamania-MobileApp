@@ -9,13 +9,17 @@ class MainApplication : Application() {
 
   override fun onCreate() {
     super.onCreate()
-    android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
+if (BuildConfig.DEBUG) {
+        android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
+}
 
     // 1. Firebase must be first
     try {
         com.google.firebase.FirebaseApp.initializeApp(this)
     } catch (e: Exception) {
-        android.util.Log.e("HavamaniaApp", "Firebase init failed", e)
+if (BuildConfig.DEBUG) {
+            android.util.Log.e("HavamaniaApp", "Firebase init failed", e)
+}
     }
 
     // Schedule background tasks in scope

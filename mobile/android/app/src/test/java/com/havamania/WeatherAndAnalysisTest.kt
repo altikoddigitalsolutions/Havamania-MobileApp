@@ -200,6 +200,63 @@ class WeatherAndAnalysisTest {
     }
 
     @Test
+    fun `parseDepartureTime handles valid and invalid times correctly`() {
+        assertNotNull(parseDepartureTime("00:00"))
+        assertNotNull(parseDepartureTime("08:00"))
+        assertNotNull(parseDepartureTime("09:30"))
+        assertNotNull(parseDepartureTime("23:59"))
+
+        assertNull(parseDepartureTime(null))
+        assertNull(parseDepartureTime(""))
+        assertNull(parseDepartureTime("   "))
+        assertNull(parseDepartureTime("abc"))
+        assertNull(parseDepartureTime("9"))
+        assertNull(parseDepartureTime("09"))
+        assertNull(parseDepartureTime("09:"))
+        assertNull(parseDepartureTime(":30"))
+        assertNull(parseDepartureTime("24:00"))
+        assertNull(parseDepartureTime("99:30"))
+        assertNull(parseDepartureTime("12:60"))
+        assertNull(parseDepartureTime("-1:30"))
+    }
+
+    @Test
+    fun `travelPlan departureDateTime with malformed time returns null without exception`() {
+        val plan = TravelPlan(
+            city = "Ankara",
+            startDate = java.time.LocalDate.now().plusDays(1),
+            endDate = java.time.LocalDate.now().plusDays(2),
+            departureTime = "99:30"
+        )
+        assertNull(plan.departureDateTime)
+    }
+
+    @Test
+    fun `travelPlan departureDateTime with null time returns null`() {
+        val plan = TravelPlan(
+            city = "Ankara",
+            startDate = java.time.LocalDate.now().plusDays(1),
+            endDate = java.time.LocalDate.now().plusDays(2),
+            departureTime = null
+        )
+        assertNull(plan.departureDateTime)
+    }
+
+    @Test
+    fun `travelPlan departureDateTime with valid time returns datetime`() {
+        val date = java.time.LocalDate.now().plusDays(1)
+        val plan = TravelPlan(
+            city = "Ankara",
+            startDate = date,
+            endDate = date.plusDays(1),
+            departureTime = "08:00"
+        )
+        val dt = plan.departureDateTime
+        assertNotNull(dt)
+        assertEquals(date.atTime(8, 0), dt)
+    }
+
+    @Test
     fun `travelAnalysisEngine missing required weather input creates no fake analysis`() {
         val snapshot = ForecastSnapshot(
             minTemp = null,

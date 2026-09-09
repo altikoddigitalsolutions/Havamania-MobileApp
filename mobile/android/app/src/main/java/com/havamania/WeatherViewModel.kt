@@ -210,7 +210,9 @@ class WeatherViewModel(
                 kotlinx.coroutines.withTimeout(20000) {
                     repository.getWeatherData(lat, lon, cityName, districtName)
                         .catch { e ->
-                            android.util.Log.e("WeatherVM", "Fetch error", e)
+if (BuildConfig.DEBUG) {
+                                android.util.Log.e("WeatherVM", "Fetch error", e)
+}
                             _uiState.value = WeatherUiState.Error(
                                 if (!isOnline.value) "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
                                 else "Hava durumu sunucularına şu an ulaşılamıyor. Lütfen daha sonra tekrar deneyin."

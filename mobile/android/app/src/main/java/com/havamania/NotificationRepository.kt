@@ -25,7 +25,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.insert(notification)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to insert notification", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to insert notification", e)
+}
         }
     }
 
@@ -33,7 +35,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.markAsRead(listOf(id))
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to mark as read: $id", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to mark as read: $id", e)
+}
         }
     }
 
@@ -41,7 +45,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             if (ids.isNotEmpty()) dao.markAsRead(ids)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to mark as read: $ids", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to mark as read: $ids", e)
+}
         }
     }
 
@@ -50,7 +56,9 @@ class NotificationRepository(private val dao: NotificationDao) {
             if (currentRead) dao.markAsUnread(listOf(id))
             else dao.markAsRead(listOf(id))
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to toggle read status: $id", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to toggle read status: $id", e)
+}
         }
     }
 
@@ -58,7 +66,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             if (ids.isNotEmpty()) dao.markAsUnread(ids)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to mark as unread: $ids", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to mark as unread: $ids", e)
+}
         }
     }
 
@@ -66,7 +76,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.markAllAsRead(uid)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to mark all as read", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to mark all as read", e)
+}
         }
     }
 
@@ -74,7 +86,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.delete(listOf(id))
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete: $id", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to delete: $id", e)
+}
         }
     }
 
@@ -82,7 +96,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             if (ids.isNotEmpty()) dao.delete(ids)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete: $ids", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to delete: $ids", e)
+}
         }
     }
 
@@ -90,7 +106,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.deleteAll(uid)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete all", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to delete all", e)
+}
         }
     }
 
@@ -98,7 +116,9 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.deleteByCategory(uid, category.name)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete by category: $category", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to delete by category: $category", e)
+}
         }
     }
 
@@ -146,7 +166,9 @@ class NotificationRepository(private val dao: NotificationDao) {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ SEED ERROR: Critical failure during seeding", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "❌ SEED ERROR: Critical failure during seeding", e)
+}
         }
     }
 
@@ -162,7 +184,9 @@ class NotificationRepository(private val dao: NotificationDao) {
                 Log.d(TAG, "Manual seed notifications inserted: ${demoList.size}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to refresh demo notifications", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to refresh demo notifications", e)
+}
         }
     }
 }

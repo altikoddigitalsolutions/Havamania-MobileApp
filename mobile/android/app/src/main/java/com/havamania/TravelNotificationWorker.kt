@@ -309,7 +309,9 @@ class TravelNotificationWorker(
                 else -> "Güzergâh hava tahmininde önemli bir değişiklik yok. Yol boyunca koşullar uygun görünüyor."
             }
         } catch (e: Exception) {
-            Log.e("RouteWorker", "Route analysis failed", e)
+if (BuildConfig.DEBUG) {
+                Log.e("RouteWorker", "Route analysis failed", e)
+}
             return null
         }
     }

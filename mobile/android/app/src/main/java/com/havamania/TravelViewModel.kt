@@ -95,7 +95,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         firestoreListener = db.collection("users").document(uid).collection("trips")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
-                    Log.w(TAG, "Firestore listen failed.", e)
+if (BuildConfig.DEBUG) {
+                        Log.w(TAG, "Firestore listen failed.", e)
+}
                     return@addSnapshotListener
                 }
 
@@ -107,7 +109,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                                 try {
                                     doc.toObject(TravelPlanEntity::class.java)
                                 } catch (me: Exception) {
-                                    Log.e(TAG, "Data mapping error for doc ${doc.id}", me)
+if (BuildConfig.DEBUG) {
+                                        Log.e(TAG, "Data mapping error for doc ${doc.id}", me)
+}
                                     null
                                 }
                             }
@@ -121,13 +125,15 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                                     if (!remoteIds.contains(local.id) && !local.isDemo) {
                                         val ageMs = System.currentTimeMillis() - local.createdAt
                                         if (ageMs > 60000) {
-                                            dao.deleteTravelPlan(local.id)
+                                            dao.deleteTravelPlan(local.id, uid)
                                         }
                                     }
                                 }
                             }
                         } catch (ex: Exception) {
-                            Log.e(TAG, "Sync process failed", ex)
+if (BuildConfig.DEBUG) {
+                                Log.e(TAG, "Sync process failed", ex)
+}
                         }
                     }
                 }
@@ -233,7 +239,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                         try {
                             db.collection("users").document(currentUid).collection("trips").document(updatedPlan.id).set(entity).await()
                         } catch (e: Exception) {
-                            Log.e(TAG, "Analysis Firestore sync failed", e)
+if (BuildConfig.DEBUG) {
+                                Log.e(TAG, "Analysis Firestore sync failed", e)
+}
                         }
                     }
                     _plans.value = _plans.value.map {
@@ -251,7 +259,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                     _uiEvent.emit("Öneriler şu anda hazırlanamadı. Biraz sonra tekrar deneyebilirsiniz.")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Analysis failed", e)
+if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "Analysis failed", e)
+}
                 _plans.value = _plans.value.map {
                     if (it.id == plan.id) it.copy(isAnalyzing = false) else it
                 }
@@ -281,18 +291,14 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             val todayVal = _today.value
             val now = LocalDateTime.now()
 
-            val planDt = if (plan.departureTime != null) {
-                try {
-                    val parts = plan.departureTime!!.split(":")
-                    plan.startDate.atTime(parts[0].toInt(), parts[1].toInt())
-                } catch (e: Exception) {
-                    plan.startDate.atTime(8, 0)
-                }
+            val depTime = parseDepartureTime(plan.departureTime)
+            val planDt = if (depTime != null) {
+                plan.startDate.atTime(depTime)
             } else {
                 plan.startDate.atTime(0, 0)
             }
 
-            val isValidTime = if (plan.departureTime != null) {
+            val isValidTime = if (depTime != null) {
                 planDt.isAfter(now)
             } else {
                 !plan.startDate.isBefore(LocalDate.now())
@@ -331,7 +337,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                     db.collection("users").document(currentUid).collection("trips")
                         .document(entity.id).set(entity).await()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Firestore save failed", e)
+if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "Firestore save failed", e)
+}
                     _uiEvent.emit("Seyahat yerel olarak kaydedildi ancak bulut senkronizasyonu şu anda yapılamıyor.")
                 }
             }
@@ -346,13 +354,15 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deletePlan(id: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            dao.deleteTravelPlan(id)
+            dao.deleteTravelPlan(id, currentUid)
             if (currentUid != "legacy") {
                 try {
                     db.collection("users").document(currentUid).collection("trips")
                         .document(id).delete().await()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Firestore delete failed", e)
+if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "Firestore delete failed", e)
+}
                     _uiEvent.emit("Şu anda seyahat buluttan silinemedi.")
                 }
             }
@@ -407,7 +417,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Archive Firestore sync failed", e)
+if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "Archive Firestore sync failed", e)
+}
                     _uiEvent.emit("Şu anda seyahat arşivlenemedi.")
                 }
             }
@@ -425,7 +437,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Unarchive Firestore sync failed", e)
+if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "Unarchive Firestore sync failed", e)
+}
                     _uiEvent.emit("Şu anda seyahat aktifleştirilemedi.")
                 }
             }
@@ -443,7 +457,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Note/Rating Firestore sync failed", e)
+if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "Note/Rating Firestore sync failed", e)
+}
                     _uiEvent.emit("Not kaydedilemedi ancak yerel olarak saklandı.")
                 }
             }
@@ -461,7 +477,9 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
                     try {
                         db.collection("users").document(currentUid).collection("trips").document(newEntity.id).set(newEntity).await()
                     } catch (e: Exception) {
-                        Log.e(TAG, "Migration sync failed for trip ${newEntity.id}", e)
+if (BuildConfig.DEBUG) {
+                            Log.e(TAG, "Migration sync failed for trip ${newEntity.id}", e)
+}
                     }
                 }
             }

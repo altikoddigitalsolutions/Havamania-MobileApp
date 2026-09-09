@@ -196,18 +196,14 @@ fun AddTravelPlanDialog(
 
                     val now = LocalDateTime.now()
                     val depTime = departureTime
-                    val departureDateTime = if (depTime != null) {
-                        try {
-                            val parts = depTime.split(":")
-                            startDate.atTime(parts[0].toInt(), parts[1].toInt())
-                        } catch (e: Exception) {
-                            startDate.atTime(8, 0)
-                        }
+                    val depParsed = parseDepartureTime(depTime)
+                    val departureDateTime = if (depParsed != null) {
+                        startDate.atTime(depParsed)
                     } else {
                         startDate.atTime(0, 0)
                     }
 
-                    val isFutureOrPresent = if (depTime != null) {
+                    val isFutureOrPresent = if (depParsed != null) {
                         departureDateTime.isAfter(now)
                     } else {
                         !startDate.isBefore(LocalDate.now())

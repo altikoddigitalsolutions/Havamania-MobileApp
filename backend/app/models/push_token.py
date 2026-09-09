@@ -13,5 +13,5 @@ class PushToken(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     platform: Mapped[str] = mapped_column(String(16), nullable=False)
-    token: Mapped[str] = mapped_column(String(512), nullable=False)
+    token: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

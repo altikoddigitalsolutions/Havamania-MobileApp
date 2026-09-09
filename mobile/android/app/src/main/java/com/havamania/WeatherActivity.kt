@@ -73,7 +73,9 @@ class WeatherActivity : ComponentActivity() {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
                                 onNavigate = { route ->
-                                    android.util.Log.d("Navigation", "BottomBar Action: $route | From: $currentRoute")
+if (BuildConfig.DEBUG) {
+                                        android.util.Log.d("Navigation", "BottomBar Action: $route | From: $currentRoute")
+}
 
                                     val startDestId = navController.graph.findStartDestination().id
                                     // Hava ve Profil daima root'a dönmeli.

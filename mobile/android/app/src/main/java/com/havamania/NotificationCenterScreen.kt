@@ -95,7 +95,9 @@ fun NotificationCenterScreen(
                         }
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("NotificationCenter", "Navigation failed", e)
+if (BuildConfig.DEBUG) {
+                        android.util.Log.e("NotificationCenter", "Navigation failed", e)
+}
                     onNavigateToDetail(Routes.WEATHER_ROOT, null)
                 } finally {
                     // Small delay to prevent instant re-clicks
@@ -182,12 +184,7 @@ fun NotificationCenterScreen(
                     CircularProgressIndicator(color = themeColors.accent)
                 }
             } else {
-                // Guaranteed non-empty list logic
-                val notificationsToShow = if (state.notifications.isEmpty()) {
-                    DefaultNotifications.create()
-                } else {
-                    state.notifications
-                }
+                val notificationsToShow = state.notifications
 
                 // Filter & Group logic
                 val filteredList = remember(notificationsToShow, state.activeFilter) {

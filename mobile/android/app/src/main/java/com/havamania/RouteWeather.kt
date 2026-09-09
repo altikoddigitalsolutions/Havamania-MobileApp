@@ -125,7 +125,9 @@ class RouteWeatherProvider(
                 WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
             }
         } catch (e: Exception) {
-            Log.e("RouteWeather", "Batch fetch failed, falling back to individual", e)
+if (BuildConfig.DEBUG) {
+                Log.e("RouteWeather", "Batch fetch failed, falling back to individual", e)
+}
             // Hata durumunda boş liste dönmek yerine bireysel deneme yapılabilir
             // ama genellikle bağlantı hatasıdır.
             points.map { null }

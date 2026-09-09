@@ -85,7 +85,9 @@ fun NextTripHero(
             Surface(
                 color = if (daysUntil <= 0) themeColors.success else themeColors.accent,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier
+                    .size(56.dp)
+                    .clickable { onViewRoute(plan.id) }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -410,7 +412,9 @@ fun RichTravelGuideView(
                 "WIND_METRIC_NAME=N/A | WIND_INPUT_EXACT=N/A | " +
                 "INPUTS_AVAILABLE=$hasAnalysis | PERSIST_SCORE=${analysis?.travelScore ?: -1} | UI_SCORE=${score ?: -1}"
             )
-            android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
+if (BuildConfig.DEBUG) {
+                android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "TRIP_ID=${plan.id} | DESTINATION=${plan.city} | TRIP_TYPE=${plan.tripType} | HAS_ANALYSIS=${analysis != null} | SCORE=$score")
+}
         }
     }
 

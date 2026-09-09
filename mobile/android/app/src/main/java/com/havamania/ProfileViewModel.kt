@@ -99,7 +99,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 db.collection("users").document(uid).set(newProfile).await()
             } catch (e: Exception) {
-                Log.e("ProfileVM", "Failed to create new profile", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("ProfileVM", "Failed to create new profile", e)
+}
             }
         }
     }
@@ -165,7 +167,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ThemeManager.saveUserBio(context, uid, finalBio)
 
             } catch (e: Exception) {
-                android.util.Log.e("ProfileVM", "Update profile failed", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("ProfileVM", "Update profile failed", e)
+}
                 _profileState.value = ProfileState.Error("Profil güncellenemedi. Lütfen tekrar deneyin.")
             }
         }
@@ -194,7 +198,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ThemeManager.saveUserInterests(context, uid, interests.toSet())
                 ThemeManager.saveOnboardingCompleted(context, uid, true)
             } catch (e: Exception) {
-                android.util.Log.e("ProfileVM", "Update personalization failed", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("ProfileVM", "Update personalization failed", e)
+}
                 _profileState.value = ProfileState.Error("Tercihler güncellenemedi.")
             }
         }
@@ -206,7 +212,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             try {
                 db.collection("users").document(uid).update("aboutMe", aboutMe, "updatedAt", System.currentTimeMillis()).await()
             } catch (e: Exception) {
-                android.util.Log.e("ProfileVM", "Update aboutMe failed", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("ProfileVM", "Update aboutMe failed", e)
+}
                 _profileState.value = ProfileState.Error("Bilgiler güncellenemedi.")
             }
         }
@@ -225,7 +233,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "updatedAt", System.currentTimeMillis()
                 ).await()
             } catch (e: Exception) {
-                android.util.Log.e("ProfileVM", "Toggle interest failed", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("ProfileVM", "Toggle interest failed", e)
+}
                 _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi.")
             }
         }
@@ -234,7 +244,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     fun uploadProfileImage(uri: Uri) {
         val currentUser = auth.currentUser
         if (currentUser == null) {
-            android.util.Log.e("PHOTO_DEBUG", "[PHOTO] Step 2 FAILED: No authenticated user")
+if (BuildConfig.DEBUG) {
+                android.util.Log.e("PHOTO_DEBUG", "[PHOTO] Step 2 FAILED: No authenticated user")
+}
             return
         }
         val uid = currentUser.uid
@@ -272,7 +284,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3: PRE-UPLOAD DATA:")
                     android.util.Log.i("PHOTO_DEBUG", ">> Bucket: ${storageRef.bucket}")
                     android.util.Log.i("PHOTO_DEBUG", ">> Path: $storagePath")
-                    android.util.Log.i("PHOTO_DEBUG", ">> Size: ${data.size} bytes")
+if (BuildConfig.DEBUG) {
+                        android.util.Log.i("PHOTO_DEBUG", ">> Size: ${data.size} bytes")
+}
                 }
 
                 val metadata = com.google.firebase.storage.StorageMetadata.Builder()
@@ -324,7 +338,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         "Sunucu hatası: Firebase Storage yapılandırması (Blaze planı) kontrol edilmelidir."
                     else -> "Beklenmedik bir hata oluştu: ${e.localizedMessage ?: "Bilinmiyor"}"
                 }
-                android.util.Log.e("PHOTO_DEBUG", "Mapped Error: $friendlyError", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("PHOTO_DEBUG", "Mapped Error: $friendlyError", e)
+}
                 _profileState.value = ProfileState.Error(friendlyError)
             } finally {
                 _uploadProgress.value = false
@@ -403,7 +419,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 rotatedBitmap
             }
         } catch (e: Exception) {
-            android.util.Log.e("PHOTO_DEBUG", "Error processing image", e)
+if (BuildConfig.DEBUG) {
+                android.util.Log.e("PHOTO_DEBUG", "Error processing image", e)
+}
             null
         } finally {
             try { inputStream?.close() } catch (e: Exception) {}

@@ -16,16 +16,19 @@ def register_push_token(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PushTokenResponse:
-    existing = (
-        db.query(PushToken)
-        .filter(PushToken.user_id == current_user.id, PushToken.platform == payload.platform)
-        .first()
-    )
+    existing = db.query(PushToken).filter(PushToken.token == payload.token).first()
     if existing:
-        existing.token = payload.token
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
+        if existing.user_id != current_user.id:
+            existing.user_id = current_user.id
+            existing.platform = payload.platform
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
+        else:
+            existing.platform = payload.platform
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
         return PushTokenResponse(
             id=existing.id,
             user_id=existing.user_id,
@@ -44,3 +47,20 @@ def register_push_token(
         platform=token.platform,
         token=token.token,
     )
+
+
+@router.delete("/push-token", status_code=status.HTTP_204_NO_CONTENT)
+def unregister_push_token(
+    payload: PushTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    token_obj = (
+        db.query(PushToken)
+        .filter(PushToken.user_id == current_user.id, PushToken.token == payload.token)
+        .first()
+    )
+    if token_obj:
+        db.delete(token_obj)
+        db.commit()
+    return None

@@ -68,26 +68,15 @@ abstract class NotificationDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): NotificationDatabase {
             return INSTANCE ?: synchronized(this) {
-                try {
-                    val instance = Room.databaseBuilder(
-                        context.applicationContext,
-                        NotificationDatabase::class.java,
-                        "notification_database"
-                    )
-                    .addMigrations(MIGRATION_3_4)
-                    .fallbackToDestructiveMigration()
-                    .build()
-                    INSTANCE = instance
-                    instance
-                } catch (e: Exception) {
-                    // Critical fallback if DB is totally corrupted
-                    context.deleteDatabase("notification_database")
-                    Room.databaseBuilder(
-                        context.applicationContext,
-                        NotificationDatabase::class.java,
-                        "notification_database"
-                    ).build()
-                }
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    NotificationDatabase::class.java,
+                    "notification_database"
+                )
+                .addMigrations(MIGRATION_3_4)
+                .build()
+                INSTANCE = instance
+                instance
             }
         }
     }

@@ -100,7 +100,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
-        Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
+if (BuildConfig.DEBUG) {
+            Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
+}
 
         if (user == null) {
             clearLocalUserData()
@@ -127,11 +129,15 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         citiesListener?.remove()
         if (uid == "legacy") return
 
-        Log.d("ThemeVM", "Starting Cities listener for $uid")
+if (BuildConfig.DEBUG) {
+            Log.d("ThemeVM", "Starting Cities listener for $uid")
+}
         citiesListener = db.collection("users").document(uid).collection("cities")
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
-                    Log.w("ThemeVM", "Cities listen failed.", e)
+if (BuildConfig.DEBUG) {
+                        Log.w("ThemeVM", "Cities listen failed.", e)
+}
                     return@addSnapshotListener
                 }
 
@@ -141,14 +147,18 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                             val remoteCities = snapshot.documents.mapNotNull {
                                 it.toObject(com.havamania.GeocodingResultDto::class.java)
                             }
-                            Log.d("ThemeVM", "Firestore cities received: ${remoteCities.size}")
+if (BuildConfig.DEBUG) {
+                                Log.d("ThemeVM", "Firestore cities received: ${remoteCities.size}")
+}
 
                             if (remoteCities != _registeredCities.value) {
                                 ThemeManager.saveRegisteredCities(getApplication(), uid, remoteCities)
                                 _registeredCities.value = remoteCities
                             }
                         } catch (ex: Exception) {
-                            Log.e("ThemeVM", "Error parsing cities snapshot", ex)
+if (BuildConfig.DEBUG) {
+                                Log.e("ThemeVM", "Error parsing cities snapshot", ex)
+}
                         }
                     }
                 }
@@ -300,7 +310,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ThemeVM", "Failed to add city", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("ThemeVM", "Failed to add city", e)
+}
                 _uiEvent.emit("Şehir şu anda kaydedilemedi.")
             }
         }
@@ -327,7 +339,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ThemeVM", "Failed to remove city", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("ThemeVM", "Failed to remove city", e)
+}
                 _uiEvent.emit("Şehir şu anda silinemedi.")
             }
         }
@@ -346,7 +360,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                         .await()
                 }
             } catch (e: Exception) {
-                Log.e("ThemeVM", "Failed to sync default city", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("ThemeVM", "Failed to sync default city", e)
+}
             }
         }
     }
@@ -445,9 +461,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
                     _userInterests.value = it.selectedInterests.toSet()
                 }
 
-                Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
+if (BuildConfig.DEBUG) {
+                    Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
+}
             } catch (e: Exception) {
-                Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
+}
             }
         }
     }

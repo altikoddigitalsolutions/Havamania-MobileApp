@@ -88,7 +88,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
-        android.util.Log.i("ASSISTANT_TRACE", "AiChatViewModel init (Assistant mounted)")
+if (BuildConfig.DEBUG) {
+            android.util.Log.i("ASSISTANT_TRACE", "AiChatViewModel init (Assistant mounted)")
+}
         auth.addAuthStateListener(authListener)
         loadConfig()
     }
@@ -112,7 +114,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 _activeTravels.value = active
             } catch (e: Exception) {
-                android.util.Log.e("ASSISTANT_TRACE", "loadActiveTravels FAILED: ${e.message}", e)
+if (BuildConfig.DEBUG) {
+                    android.util.Log.e("ASSISTANT_TRACE", "loadActiveTravels FAILED: ${e.message}", e)
+}
             }
         }
     }
@@ -379,7 +383,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ASSISTANT_DEBUG", "SendMessage FATAL EXCEPTION: ${e.message}", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("ASSISTANT_DEBUG", "SendMessage FATAL EXCEPTION: ${e.message}", e)
+}
                 handleError(e, userPrompt)
             } finally {
                 _isLoading.value = false
@@ -413,14 +419,16 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     fun loadConversation(conversationId: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val history = dao.getAiHistoryItem(conversationId)
+                val history = dao.getAiHistoryItem(conversationId, currentUid)
                 if (history != null) {
                     currentConversationId = conversationId
                     _messages.value = history.messages
                     _requestState.value = AssistantRequestState.SUCCESS
                 }
             } catch (e: Exception) {
-                Log.e("AiChatVM", "Failed to load conversation $conversationId", e)
+if (BuildConfig.DEBUG) {
+                    Log.e("AiChatVM", "Failed to load conversation $conversationId", e)
+}
             }
         }
     }

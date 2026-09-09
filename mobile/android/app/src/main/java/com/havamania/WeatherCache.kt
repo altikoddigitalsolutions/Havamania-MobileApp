@@ -225,11 +225,11 @@ interface WeatherDao {
     @Query("DELETE FROM weather_cache WHERE cityName = :city")
     suspend fun deleteWeather(city: String)
 
-    @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
-    suspend fun getTravelPlanById(id: String): TravelPlanEntity?
+    @Query("SELECT * FROM travel_plans WHERE id = :id AND userId = :uid LIMIT 1")
+    suspend fun getTravelPlanById(id: String, uid: String): TravelPlanEntity?
 
-    @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
-    fun getTravelPlanByIdFlow(id: String): kotlinx.coroutines.flow.Flow<TravelPlanEntity?>
+    @Query("SELECT * FROM travel_plans WHERE id = :id AND userId = :uid LIMIT 1")
+    fun getTravelPlanByIdFlow(id: String, uid: String): kotlinx.coroutines.flow.Flow<TravelPlanEntity?>
 
     @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
     fun getAllTravelPlansFlow(uid: String): kotlinx.coroutines.flow.Flow<List<TravelPlanEntity>>
@@ -240,11 +240,23 @@ interface WeatherDao {
     @Query("SELECT * FROM travel_plans WHERE userId = :uid AND isDemo = 0 ORDER BY startDate ASC")
     suspend fun getUserTravelPlans(uid: String): List<TravelPlanEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTravelPlan(plan: TravelPlanEntity)
+    @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
+    suspend fun getTravelPlanByIdRaw(id: String): TravelPlanEntity?
 
-    @Query("DELETE FROM travel_plans WHERE id = :id")
-    suspend fun deleteTravelPlan(id: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTravelPlanRaw(plan: TravelPlanEntity)
+
+    @Transaction
+    suspend fun insertTravelPlan(plan: TravelPlanEntity) {
+        val existing = getTravelPlanByIdRaw(plan.id)
+        if (existing != null && existing.userId != plan.userId) {
+            return
+        }
+        insertTravelPlanRaw(plan)
+    }
+
+    @Query("DELETE FROM travel_plans WHERE id = :id AND userId = :uid")
+    suspend fun deleteTravelPlan(id: String, uid: String)
 
     @Query("DELETE FROM travel_plans WHERE userId = :uid")
     suspend fun clearAllTravelPlans(uid: String)
@@ -256,14 +268,26 @@ interface WeatherDao {
     @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY updatedAt DESC")
     suspend fun getAllAiHistory(uid: String): List<AiHistoryEntity>
 
+    @Query("SELECT * FROM ai_history WHERE id = :id AND userId = :uid LIMIT 1")
+    suspend fun getAiHistoryItem(id: String, uid: String): AiHistoryEntity?
+
     @Query("SELECT * FROM ai_history WHERE id = :id LIMIT 1")
-    suspend fun getAiHistoryItem(id: String): AiHistoryEntity?
+    suspend fun getAiHistoryItemRaw(id: String): AiHistoryEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAiHistory(item: AiHistoryEntity)
+    suspend fun insertAiHistoryRaw(item: AiHistoryEntity)
 
-    @Query("DELETE FROM ai_history WHERE id = :id")
-    suspend fun deleteAiHistory(id: String)
+    @Transaction
+    suspend fun insertAiHistory(item: AiHistoryEntity) {
+        val existing = getAiHistoryItemRaw(item.id)
+        if (existing != null && existing.userId != item.userId) {
+            return
+        }
+        insertAiHistoryRaw(item)
+    }
+
+    @Query("DELETE FROM ai_history WHERE id = :id AND userId = :uid")
+    suspend fun deleteAiHistory(id: String, uid: String)
 
     @Query("DELETE FROM ai_history WHERE userId = :uid")
     suspend fun clearAllAiHistory(uid: String)
@@ -324,25 +348,15 @@ abstract class WeatherDatabase : RoomDatabase() {
 
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
-                try {
-                    val instance = Room.databaseBuilder(
-                        context.applicationContext,
-                        WeatherDatabase::class.java,
-                        "weather_database"
-                    )
-                    .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
-                    .fallbackToDestructiveMigration()
-                    .build()
-                    INSTANCE = instance
-                    instance
-                } catch (e: Exception) {
-                    context.deleteDatabase("weather_database")
-                    Room.databaseBuilder(
-                        context.applicationContext,
-                        WeatherDatabase::class.java,
-                        "weather_database"
-                    ).build()
-                }
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    WeatherDatabase::class.java,
+                    "weather_database"
+                )
+                .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .build()
+                INSTANCE = instance
+                instance
             }
         }
     }

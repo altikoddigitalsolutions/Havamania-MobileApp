@@ -40,12 +40,18 @@ class WeatherPremiumActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
 
         // Initialize MapLibre before any MapView is created
-        Log.i("MapInit", "Initializing MapLibre getInstance")
+if (BuildConfig.DEBUG) {
+            Log.i("MapInit", "Initializing MapLibre getInstance")
+}
         try {
             MapLibre.getInstance(this, null, WellKnownTileServer.MapLibre)
-            Log.i("MapInit", "MapLibre initialized successfully")
+if (BuildConfig.DEBUG) {
+                Log.i("MapInit", "MapLibre initialized successfully")
+}
         } catch (e: Exception) {
-            Log.e("MapInit", "MapLibre initialization FAILED", e)
+if (BuildConfig.DEBUG) {
+                Log.e("MapInit", "MapLibre initialization FAILED", e)
+}
         }
         var isReady by mutableStateOf(false)
         var splashMinimumTimedOut by mutableStateOf(false)
@@ -124,7 +130,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("Nav", "Initial redirection failed", e)
+if (BuildConfig.DEBUG) {
+                                        Log.e("Nav", "Initial redirection failed", e)
+}
                                 }
                             }
                         } else if (state is ProfileState.Success) {
@@ -138,7 +146,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("Nav", "Main redirection failed", e)
+if (BuildConfig.DEBUG) {
+                                        Log.e("Nav", "Main redirection failed", e)
+}
                                 }
                             }
                         }
@@ -197,7 +207,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                 restoreState = !shouldResetState
                                             }
                                         } catch (e: Exception) {
-                                            Log.e("Nav", "Navigation failed to $route", e)
+if (BuildConfig.DEBUG) {
+                                                Log.e("Nav", "Navigation failed to $route", e)
+}
                                         }
                                     }
                                 )
@@ -383,7 +395,9 @@ class WeatherPremiumActivity : ComponentActivity() {
                                                     launchSingleTop = true
                                                 }
                                             } catch (e: Exception) {
-                                                Log.e("Nav", "Failed to navigate to $screen", e)
+if (BuildConfig.DEBUG) {
+                                                    Log.e("Nav", "Failed to navigate to $screen", e)
+}
                                                 navController.navigate(Routes.WEATHER_ROOT) {
                                                     launchSingleTop = true
                                                 }

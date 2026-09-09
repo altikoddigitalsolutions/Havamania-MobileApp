@@ -185,11 +185,8 @@ data class TravelPlan(
     /** Yola çıkış tarih ve saatini LocalDateTime olarak döner. Saat belirtilmemişse null döner. */
     val departureDateTime: java.time.LocalDateTime?
         get() {
-            val timeStr = departureTime ?: return null
-            val parts = timeStr.split(":")
-            val h = parts.getOrNull(0)?.toIntOrNull() ?: return null
-            val m = parts.getOrNull(1)?.toIntOrNull() ?: return null
-            return startDate.atTime(h, m)
+            val time = parseDepartureTime(departureTime) ?: return null
+            return startDate.atTime(time)
         }
 
     /** Kartlarda ve bot bağlamında gösterilecek ad: ilçe seçildiyse "İlçe, İl". */
@@ -250,4 +247,18 @@ data class TravelPlan(
         routeWeatherSummary = routeWeatherSummary,
         lastRouteAnalysisAt = lastRouteAnalysisAt
     )
+}
+
+fun parseDepartureTime(timeStr: String?): java.time.LocalTime? {
+    if (timeStr.isNullOrBlank()) return null
+    val parts = timeStr.trim().split(":")
+    if (parts.size != 2) return null
+    val h = parts[0].toIntOrNull() ?: return null
+    val m = parts[1].toIntOrNull() ?: return null
+    if (h !in 0..23 || m !in 0..59) return null
+    return try {
+        java.time.LocalTime.of(h, m)
+    } catch (e: Exception) {
+        null
+    }
 }

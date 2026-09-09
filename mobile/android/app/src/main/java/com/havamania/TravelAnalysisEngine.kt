@@ -84,7 +84,9 @@ object TravelAnalysisEngine {
                 apiService.getFullWeather(lat = lat, lon = lon, days = 16)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Weather API fail", e)
+if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Weather API fail", e)
+}
             null
         }
 
@@ -240,10 +242,12 @@ object TravelAnalysisEngine {
 
         if (isDebugSafe) {
             try {
-                Log.d(
-                    "HAVAMANIA_TRAVEL_SCORE_DEBUG",
-                    "TRIP_TYPE=$type | TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=$avgTemp | PRECIP_METRIC_NAME=precipitationProbability | PRECIP_INPUT_EXACT=$precip | WIND_METRIC_NAME=windSpeed | WIND_INPUT_EXACT=$wind | TEMP_IDEAL=$idealTemp | TEMP_COMFORT_EXACT=$tempComfort | PRECIP_SENSITIVITY=$precipSensitivity | PRECIP_COMFORT_EXACT=$precipComfort | WIND_SENSITIVITY=$windSensitivity | WIND_COMFORT_EXACT=$windComfort | WEIGHT_TEMP=0.45 | WEIGHT_PRECIP=0.35 | WEIGHT_WIND=0.20 | RAW_SCORE=$finalScore | ROUNDED_SCORE=$rounded"
-                )
+if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "HAVAMANIA_TRAVEL_SCORE_DEBUG",
+                        "TRIP_TYPE=$type | TEMP_METRIC_NAME=averageTemperature | TEMP_INPUT_EXACT=$avgTemp | PRECIP_METRIC_NAME=precipitationProbability | PRECIP_INPUT_EXACT=$precip | WIND_METRIC_NAME=windSpeed | WIND_INPUT_EXACT=$wind | TEMP_IDEAL=$idealTemp | TEMP_COMFORT_EXACT=$tempComfort | PRECIP_SENSITIVITY=$precipSensitivity | PRECIP_COMFORT_EXACT=$precipComfort | WIND_SENSITIVITY=$windSensitivity | WIND_COMFORT_EXACT=$windComfort | WEIGHT_TEMP=0.45 | WEIGHT_PRECIP=0.35 | WEIGHT_WIND=0.20 | RAW_SCORE=$finalScore | ROUNDED_SCORE=$rounded"
+                    )
+}
             } catch (e: Exception) {
                 // Ignore when Android log is not mocked in JVM unit tests
             }

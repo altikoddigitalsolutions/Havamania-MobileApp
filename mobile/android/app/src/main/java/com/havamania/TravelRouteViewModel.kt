@@ -48,7 +48,15 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     private val _departureMillis = MutableStateFlow<Long?>(null)
     val departureMillis: StateFlow<Long?> = _departureMillis.asStateFlow()
 
+    private var tripJob: kotlinx.coroutines.Job? = null
+
+    override fun onCleared() {
+        super.onCleared()
+        tripJob?.cancel()
+    }
+
     fun loadTrip(tripId: String) {
+        tripJob?.cancel()
         _routeState.value = null
         _waypoints.value = emptyList()
         _startWeather.value = null
@@ -58,11 +66,12 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         _errorMessage.value = null
         _departureMillis.value = null
 
-        viewModelScope.launch {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
+        tripJob = viewModelScope.launch {
             if (BuildConfig.DEBUG) {
                 Log.d("RouteVM", "Observing trip: $tripId")
             }
-            dao.getTravelPlanByIdFlow(tripId).collect { entity ->
+            dao.getTravelPlanByIdFlow(tripId, uid).collect { entity ->
                 if (entity != null) {
                     val plan = entity.toDomain()
                     _trip.value = plan
@@ -198,7 +207,9 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             _isAnalyzed.value = true
 
         } catch (e: Exception) {
-            Log.e("RouteVM", "Analysis failed", e)
+if (BuildConfig.DEBUG) {
+                Log.e("RouteVM", "Analysis failed", e)
+}
             _errorMessage.value = "Hava durumu analizi başarısız oldu."
         } finally {
             _isAnalyzing.value = false
