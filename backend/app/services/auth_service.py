@@ -72,7 +72,13 @@ def refresh(db: Session, refresh_token: str) -> tuple[str, str]:
     if not token_record or token_record.revoked:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked")
 
-    if token_record.expires_at < datetime.now(UTC):
+    exp = token_record.expires_at
+    if exp and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=UTC)
+    elif exp:
+        exp = exp.astimezone(UTC)
+
+    if not exp or exp < datetime.now(UTC):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
 
     user = db.get(User, payload.get("sub"))

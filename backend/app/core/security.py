@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from uuid import uuid4
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -44,11 +45,15 @@ def create_access_token(user_id: str) -> str:
 
 
 def create_refresh_token(user_id: str) -> str:
-    return _create_token(
-        subject=user_id,
-        token_type="refresh",
-        expires_delta=timedelta(days=settings.refresh_token_expire_days),
-    )
+    now = datetime.now(UTC)
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "jti": str(uuid4()),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(days=settings.refresh_token_expire_days)).timestamp()),
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> dict:

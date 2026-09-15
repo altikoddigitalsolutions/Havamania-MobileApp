@@ -113,8 +113,8 @@ fun HourlyForecastItem(
     )
 
     val phase = remember(data.fullTime, data.time, sunriseTime, sunsetTime) {
-        val sunrise = try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
-        val sunset = try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+        val sunrise = sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+        val sunset = sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
 
         val ldt = try {
             if (!data.fullTime.isNullOrEmpty()) {

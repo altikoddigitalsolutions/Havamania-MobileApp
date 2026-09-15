@@ -382,8 +382,11 @@ object WeatherMapper {
         )
     }
 
-    fun getDayPhase(now: LocalDateTime, sunrise: LocalTime, sunset: LocalTime): DayPhase {
+    fun getDayPhase(now: LocalDateTime, sunrise: LocalTime? = null, sunset: LocalTime? = null): DayPhase {
         val current = now.toLocalTime()
+        if (sunrise == null || sunset == null) {
+            return if (current.hour in 6..19) DayPhase.DAY else DayPhase.NIGHT
+        }
 
         return when {
             // MORNING: sunrise ile sunrise + 2 saat arası
@@ -397,11 +400,18 @@ object WeatherMapper {
         }
     }
 
-    fun mapWeatherCodeToCondition(code: Int, isDay: Boolean? = true): WeatherCondition {
-        val day = isDay ?: true
+    fun mapWeatherCodeToCondition(code: Int, isDay: Boolean? = null): WeatherCondition {
         return when (code) {
-            0 -> if (day) WeatherCondition.Clear else WeatherCondition.NightClear
-            1 -> if (day) WeatherCondition.MostlySunny else WeatherCondition.NightClear
+            0 -> when (isDay) {
+                true -> WeatherCondition.Clear
+                false -> WeatherCondition.NightClear
+                else -> WeatherCondition.Cloudy
+            }
+            1 -> when (isDay) {
+                true -> WeatherCondition.MostlySunny
+                false -> WeatherCondition.NightClear
+                else -> WeatherCondition.Cloudy
+            }
             2 -> WeatherCondition.PartlyCloudy
             3 -> WeatherCondition.Cloudy
             45, 48 -> WeatherCondition.Fog

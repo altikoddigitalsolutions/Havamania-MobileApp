@@ -351,8 +351,8 @@ fun HavamaniaChip(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
         colors = FilterChipDefaults.filterChipColors(
-            containerColor = colors.surfaceGlass.copy(alpha = 0.3f),
-            labelColor = colors.textSecondary,
+            containerColor = if (selected) colors.accent else Color.Transparent,
+            labelColor = if (selected) colors.onAccent else colors.textSecondary,
             selectedContainerColor = colors.accent,
             selectedLabelColor = colors.onAccent,
             selectedLeadingIconColor = colors.onAccent
@@ -360,7 +360,7 @@ fun HavamaniaChip(
         border = FilterChipDefaults.filterChipBorder(
             enabled = true,
             selected = selected,
-            borderColor = colors.border.copy(alpha = 0.2f),
+            borderColor = if (selected) colors.accent else colors.border.copy(alpha = 0.25f),
             selectedBorderColor = colors.accent
         )
     )

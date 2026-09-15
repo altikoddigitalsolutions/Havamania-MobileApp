@@ -4,11 +4,13 @@ import android.content.Context
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -40,13 +42,29 @@ class ReverseGeocoder(private val context: Context) {
     /** Ağ tabanlı yedek reverse-geocode (BigDataCloud, ücretsiz, key gerektirmez). */
     private suspend fun networkPlaceName(point: GeoPoint): String? = withContext(Dispatchers.IO) {
         try {
-            val url = "https://api.bigdatacloud.net/data/reverse-geocode-client" +
+            val urlStr = "https://api.bigdatacloud.net/data/reverse-geocode-client" +
                 "?latitude=${point.latitude}&longitude=${point.longitude}&localityLanguage=tr"
-            val text = URL(url).readText()
-            val r = json.decodeFromString(BdcReverse.serializer(), text)
-            r.city?.takeIf { it.isNotBlank() }
-                ?: r.locality?.takeIf { it.isNotBlank() }
-                ?: r.principalSubdivision?.takeIf { it.isNotBlank() }
+            val url = URL(urlStr)
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+            }
+            try {
+                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    val text = connection.inputStream.bufferedReader().use { it.readText() }
+                    val r = json.decodeFromString(BdcReverse.serializer(), text)
+                    r.city?.takeIf { it.isNotBlank() }
+                        ?: r.locality?.takeIf { it.isNotBlank() }
+                        ?: r.principalSubdivision?.takeIf { it.isNotBlank() }
+                } else {
+                    null
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             null
         }
@@ -66,6 +84,8 @@ class ReverseGeocoder(private val context: Context) {
                     @Suppress("DEPRECATION")
                     geocoder.getFromLocation(point.latitude, point.longitude, 1)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 null
             }

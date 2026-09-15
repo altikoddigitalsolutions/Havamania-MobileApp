@@ -292,26 +292,32 @@ if (BuildConfig.DEBUG) {
                 _messages.value = _messages.value + userMsg
                 kotlinx.coroutines.delay(400)
 
-                val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName ?: "Ankara"
-                val targetDate = AiIntentParser.detectDate(userPrompt)
-                val data = resolveCityWeather(targetCity)
-
-                val replyText = if (data == null) {
-                    "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
-                } else if (targetDate != null) {
-                    val matchingDaily = data.dailyForecast.find { it.date == targetDate.toString() }
-                    val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
-                    val formattedDateStr = targetDate.format(formatter)
-
-                    if (matchingDaily != null) {
-                        val conditionName = WeatherUtils.getWeatherDisplayName(matchingDaily.weatherCode, java.time.LocalDateTime.now(), java.time.LocalTime.of(6,30), java.time.LocalTime.of(19,30))
-                        "$formattedDateStr tarihinde $targetCity şehrinde hava $conditionName bekleniyor. Sıcaklık ${matchingDaily.minTemp}°C / ${matchingDaily.maxTemp}°C civarında olacak." +
-                        (matchingDaily.precipitationProbability?.let { " Yağmur ihtimali %$it." } ?: "")
-                    } else {
-                        "$formattedDateStr tarihi için henüz detaylı hava tahmini bulunmuyor. (Tahminler önümüzdeki 10 gün için geçerlidir)."
-                    }
+                val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName
+                val replyText = if (targetCity == null) {
+                    "Hangi şehir hakkında bilgi almak istediğinizi belirtir misiniz?"
                 } else {
-                    "Bugün $targetCity şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
+                    val targetDate = AiIntentParser.detectDate(userPrompt)
+                    val data = resolveCityWeather(targetCity)
+
+                    if (data == null) {
+                        "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
+                    } else if (targetDate != null) {
+                        val matchingDaily = data.dailyForecast.find { it.date == targetDate.toString() }
+                        val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
+                        val formattedDateStr = targetDate.format(formatter)
+
+                        if (matchingDaily != null) {
+                            val sunriseTime = data.sunriseTime?.let { try { java.time.LocalTime.parse(it) } catch(e: Exception) { null } }
+                            val sunsetTime = data.sunsetTime?.let { try { java.time.LocalTime.parse(it) } catch(e: Exception) { null } }
+                            val conditionName = WeatherUtils.getWeatherDisplayName(matchingDaily.weatherCode, java.time.LocalDateTime.now(), sunriseTime, sunsetTime)
+                            "$formattedDateStr tarihinde $targetCity şehrinde hava $conditionName bekleniyor. Sıcaklık ${matchingDaily.minTemp}°C / ${matchingDaily.maxTemp}°C civarında olacak." +
+                            (matchingDaily.precipitationProbability?.let { " Yağmur ihtimali %$it." } ?: "")
+                        } else {
+                            "$formattedDateStr tarihi için henüz detaylı hava tahmini bulunmuyor. (Tahminler önümüzdeki 10 gün için geçerlidir)."
+                        }
+                    } else {
+                        "Bugün $targetCity şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
+                    }
                 }
 
                 val botMsg = AltikodChatMessage(text = replyText, isUser = false)

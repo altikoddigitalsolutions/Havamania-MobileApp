@@ -262,8 +262,8 @@ fun BoxScope.WeatherSuccessContent(
     val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf {
             val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
-            val sunrise = try { LocalTime.parse(data.sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) }
-            val sunset = try { LocalTime.parse(data.sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) }
+            val sunrise = data.sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+            val sunset = data.sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
             val now = if (selectedHourlyWeather != null) {
                 try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(LocalDate.now()) }
             } else { java.time.LocalDateTime.now() }
@@ -276,7 +276,7 @@ fun BoxScope.WeatherSuccessContent(
     }
 
     val displayIsDay by remember(data, selectedHourlyWeather) {
-        derivedStateOf { selectedHourlyWeather?.isDay ?: true }
+        derivedStateOf { selectedHourlyWeather?.isDay }
     }
 
     Column(

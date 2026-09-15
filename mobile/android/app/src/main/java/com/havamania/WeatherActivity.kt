@@ -168,7 +168,8 @@ if (BuildConfig.DEBUG) {
                                             navController.popBackStack()
                                         },
                                         onNavigateToTravelCreate = { city: String, start: String? ->
-                                            navController.navigate(Routes.CALENDAR_ROOT + "?city=$city&start=$start") {
+                                            val encodedCity = android.net.Uri.encode(city)
+                                            navController.navigate(Routes.CALENDAR_ROOT + "?city=$encodedCity&start=$start") {
                                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                                 launchSingleTop = true
                                                 restoreState = true

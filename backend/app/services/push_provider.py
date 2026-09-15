@@ -1,12 +1,51 @@
+import logging
+import firebase_admin
+from firebase_admin import messaging
+
+logger = logging.getLogger(__name__)
+
+
 class PushProvider:
     def send(self, platform: str, token: str, title: str, body: str) -> bool:
         raise NotImplementedError
 
 
 class FCMApnsPushProvider(PushProvider):
-    """Skeleton adapter for FCM/APNs integration."""
+    """Real FCM push provider implementation using firebase-admin SDK."""
+
+    def __init__(self):
+        self._init_firebase()
+
+    def _init_firebase(self):
+        if not firebase_admin._apps:
+            try:
+                firebase_admin.initialize_app()
+            except Exception as e:
+                logger.warning(f"Firebase Admin default initialization notice: {e}")
 
     def send(self, platform: str, token: str, title: str, body: str) -> bool:
-        # TODO: Integrate real push provider SDK/API.
-        _ = (platform, token, title, body)
-        return True
+        if platform.lower() != "android":
+            logger.warning(f"Push platform '{platform}' not supported for FCM delivery.")
+            return False
+
+        if not token or not token.strip():
+            return False
+
+        try:
+            if not firebase_admin._apps:
+                logger.error("Firebase Admin SDK is not initialized. Cannot send push notification.")
+                return False
+
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body,
+                ),
+                token=token,
+            )
+            response = messaging.send(message)
+            logger.info(f"Successfully sent FCM message: {response}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send push notification via FCM: {e}")
+            return False

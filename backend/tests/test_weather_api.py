@@ -9,6 +9,11 @@ class StubWeatherService:
             "humidity": 50,
             "feels_like": 21,
             "wind_speed": 7,
+            "wind_direction": 0.0,
+            "uv_index": 3.0,
+            "pressure": 1013.0,
+            "visibility": 10.0,
+            "cloud_cover": 20.0,
             "provider": "stub",
         }
 

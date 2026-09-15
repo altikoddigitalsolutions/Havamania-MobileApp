@@ -111,15 +111,17 @@ object WeatherHeroStyleManager {
         selectedTime: LocalTime,
         latitude: Double,
         longitude: Double,
-        sunrise: LocalTime,
-        sunset: LocalTime
+        sunrise: LocalTime?,
+        sunset: LocalTime?
     ): HeroThemeSpec {
+        val rise = sunrise ?: LocalTime.of(6, 0)
+        val set = sunset ?: LocalTime.of(18, 0)
         // 1. Resolve Day Part
         val dayPart = when {
-            selectedTime.isBefore(sunrise) -> DayPhase.NIGHT
-            !selectedTime.isBefore(sunrise) && selectedTime.isBefore(sunrise.plusHours(2)) -> DayPhase.MORNING
-            !selectedTime.isBefore(sunrise.plusHours(2)) && selectedTime.isBefore(sunset.minusHours(2)) -> DayPhase.DAY
-            !selectedTime.isBefore(sunset.minusHours(2)) && selectedTime.isBefore(sunset.plusHours(1)) -> DayPhase.EVENING
+            selectedTime.isBefore(rise) -> DayPhase.NIGHT
+            !selectedTime.isBefore(rise) && selectedTime.isBefore(rise.plusHours(2)) -> DayPhase.MORNING
+            !selectedTime.isBefore(rise.plusHours(2)) && selectedTime.isBefore(set.minusHours(2)) -> DayPhase.DAY
+            !selectedTime.isBefore(set.minusHours(2)) && selectedTime.isBefore(set.plusHours(1)) -> DayPhase.EVENING
             else -> DayPhase.NIGHT
         }
 
@@ -289,7 +291,7 @@ fun WeatherHeroCard(
     temperature: String,
     conditionLabel: String,
     weatherCode: Int,
-    isDay: Boolean,
+    isDay: Boolean? = null,
     high: String,
     low: String,
     feelsLike: String,
@@ -309,8 +311,8 @@ fun WeatherHeroCard(
     parallaxOffset: Float = 0f,
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    val sunrise = remember(sunriseTime) { try { LocalTime.parse(sunriseTime) } catch (e: Exception) { LocalTime.of(6, 30) } }
-    val sunset = remember(sunsetTime) { try { LocalTime.parse(sunsetTime) } catch (e: Exception) { LocalTime.of(19, 30) } }
+    val sunrise = remember(sunriseTime) { sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } } }
+    val sunset = remember(sunsetTime) { sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } } }
 
     val spec = remember(weatherCode, conditionLabel, time, sunrise, sunset, latitude, longitude) {
         WeatherHeroStyleManager.resolveWeatherHeroTheme(weatherCode, conditionLabel, time, latitude, longitude, sunrise, sunset)

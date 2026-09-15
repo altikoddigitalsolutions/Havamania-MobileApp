@@ -9,8 +9,13 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         with RequestTimer() as timer:
             response = await call_next(request)
 
+        route = request.scope.get("route")
+        path_label = getattr(route, "path", None) or getattr(route, "path_format", None)
+        if not path_label:
+            path_label = "unmatched" if response.status_code == 404 else "other"
+
         observe_request(
-            path=request.url.path,
+            path=path_label,
             method=request.method,
             status=response.status_code,
             elapsed_seconds=timer.elapsed,

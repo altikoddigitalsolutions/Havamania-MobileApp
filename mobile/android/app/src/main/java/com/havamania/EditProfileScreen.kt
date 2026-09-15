@@ -57,7 +57,7 @@ fun EditProfileScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFILI DÜZENLE",
+                title = "PROFILİ DÜZENLE",
                 onBack = onBack
             )
         }
@@ -100,30 +100,35 @@ fun EditProfileScreen(
             // 2. HAVA KİMLİĞİ (BIO)
             SectionLabel("HAVA KİMLİĞİ")
             HavamaniaGlassCard(alpha = 0.4f) {
-                OutlinedTextField(
-                    value = bio,
-                    onValueChange = { if (it.length <= 500) bio = it },
-                    placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp) },
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        unfocusedBorderColor = themeColors.border.copy(alpha = 0.1f),
-                        focusedBorderColor = themeColors.accent,
-                        focusedTextColor = themeColors.textPrimary,
-                        unfocusedTextColor = themeColors.textPrimary,
-                        cursorColor = themeColors.accent
+                Column {
+                    TextField(
+                        value = bio,
+                        onValueChange = { if (it.length <= 500) bio = it },
+                        placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp, color = themeColors.textMuted) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            focusedTextColor = themeColors.textPrimary,
+                            unfocusedTextColor = themeColors.textPrimary,
+                            cursorColor = themeColors.accent
+                        )
                     )
-                )
 
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "${bio.length}/500",
-                    style = HavamaniaTheme.typography.caption,
-                    color = themeColors.textMuted,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "${bio.length}/500",
+                        style = HavamaniaTheme.typography.caption,
+                        color = themeColors.textMuted,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(themeStyles.spacingLG))
@@ -162,23 +167,19 @@ fun EditProfileScreen(
 @Composable
 private fun ReadOnlyField(value: String, label: String, icon: ImageVector) {
     val colors = HavamaniaTheme.colors
-    Surface(
-        color = colors.surface.copy(alpha = 0.05f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().alpha(0.7f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .alpha(0.7f),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(label, style = HavamaniaTheme.typography.caption, color = colors.textMuted)
-                Text(value, style = HavamaniaTheme.typography.bodyMedium, color = colors.textSecondary)
-            }
-            Spacer(Modifier.weight(1f))
-            Icon(Icons.Rounded.Lock, null, tint = colors.textMuted.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
+        Icon(icon, null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = HavamaniaTheme.typography.caption, color = colors.textMuted)
+            Text(value, style = HavamaniaTheme.typography.bodyMedium, color = colors.textSecondary)
         }
+        Icon(Icons.Rounded.Lock, null, tint = colors.textMuted.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
     }
 }

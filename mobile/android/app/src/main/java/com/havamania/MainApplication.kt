@@ -9,17 +9,17 @@ class MainApplication : Application() {
 
   override fun onCreate() {
     super.onCreate()
-if (BuildConfig.DEBUG) {
+    if (BuildConfig.DEBUG) {
         android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
-}
+    }
 
-    // 1. Firebase must be first
+    // Configure Crashlytics collection policy (auto-init handled by FirebaseInitProvider)
     try {
-        com.google.firebase.FirebaseApp.initializeApp(this)
+        com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
     } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-            android.util.Log.e("HavamaniaApp", "Firebase init failed", e)
-}
+        if (BuildConfig.DEBUG) {
+            android.util.Log.e("HavamaniaApp", "Crashlytics init failed", e)
+        }
     }
 
     // Schedule background tasks in scope

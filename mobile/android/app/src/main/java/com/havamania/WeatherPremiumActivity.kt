@@ -316,7 +316,8 @@ if (BuildConfig.DEBUG) {
                                             navController.navigate(Routes.AI_HISTORY)
                                         },
                                         onNavigateToTravelCreate = { city: String, date: String? ->
-                                            navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$city&date=$date")
+                                            val encodedCity = android.net.Uri.encode(city)
+                                            navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$encodedCity&date=$date")
                                         }
                                     )
                                 }

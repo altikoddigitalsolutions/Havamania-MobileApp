@@ -2,12 +2,12 @@ from app.api.v1.routes import chatbot as chatbot_route
 
 
 class StubBridge:
-    def ask(self, question: str, user_id: str) -> str:
+    def ask(self, question: str, user_id: str, context: dict | None = None) -> str:
         return f"stub-answer:{question}"
 
 
 class StubFailingBridge:
-    def ask(self, question: str, user_id: str) -> str:
+    def ask(self, question: str, user_id: str, context: dict | None = None) -> str:
         return "Yanıt gecikiyor. Lütfen tekrar deneyin."
 
 

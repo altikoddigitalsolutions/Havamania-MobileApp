@@ -4,6 +4,7 @@ from typing import List, Union, Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine.url import make_url
 
 
 class Settings(BaseSettings):
@@ -23,6 +24,7 @@ class Settings(BaseSettings):
     chatbot_timeout_seconds: int = 15
     chatbot_free_daily_limit: int = 10
     chatbot_premium_daily_limit: int = 100
+    metrics_secret: str = "change-me"
     sentry_dsn_backend: str | None = None
 
     model_config = SettingsConfigDict(
@@ -49,9 +51,31 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def check_database_url(cls, v: str, info: Any) -> str:
-        if "localhost" in v and info.data.get("app_env") == "production":
-            import logging
-            logging.warning("DATABASE_URL points to localhost in production mode")
+        if info.data.get("app_env") == "production":
+            try:
+                parsed = make_url(v)
+                host = parsed.host
+                if host and host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+                    raise ValueError("DATABASE_URL cannot use a loopback host in production environment")
+            except Exception as e:
+                if isinstance(e, ValueError):
+                    raise e
+                raise ValueError("Invalid DATABASE_URL format")
+        return v
+
+    @field_validator("chatbot_base_url")
+    @classmethod
+    def check_chatbot_base_url(cls, v: str, info: Any) -> str:
+        if info.data.get("app_env") == "production":
+            try:
+                parsed = make_url(v)
+                host = parsed.host
+                if host and host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+                    raise ValueError("CHATBOT_BASE_URL cannot use a loopback host in production environment")
+            except Exception as e:
+                if isinstance(e, ValueError):
+                    raise e
+                raise ValueError("Invalid CHATBOT_BASE_URL format")
         return v
 
     @field_validator("cors_origins", mode="before")

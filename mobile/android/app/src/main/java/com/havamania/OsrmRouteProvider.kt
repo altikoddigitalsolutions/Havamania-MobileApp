@@ -54,6 +54,8 @@ class OsrmRouteProvider(
                         durationSeconds = route.duration
                     )
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 RouteResult.Error(e.message ?: "Rota alınamadı", e)
             }
