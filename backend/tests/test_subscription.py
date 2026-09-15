@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 
 def _auth_header(client):
@@ -25,7 +26,11 @@ def test_subscription_status_default_free(client):
     assert data["is_premium_active"] is False
 
 
-def test_validate_receipt_activates_subscription(client):
+def test_validate_receipt_activates_subscription(client, monkeypatch):
+    from app.api.v1.routes import chatbot, weather
+    monkeypatch.setattr(weather, "weather_service", SimpleNamespace(get_current=lambda **_: {
+        "location": {"lat": 41, "lon": 29}, "provider": "local-test"}))
+    monkeypatch.setattr(chatbot, "chatbot_bridge_client", SimpleNamespace(ask=lambda **_: "Local test answer"))
     headers, _ = _auth_header(client)
 
     response = client.post(

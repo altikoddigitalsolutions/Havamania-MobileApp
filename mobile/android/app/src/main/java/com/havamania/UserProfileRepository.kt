@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * P2 OPTIMIZATION: Unified repository for User Profile to prevent duplicate Firestore listeners.
  */
 class UserProfileRepository private constructor() {
-    private val db = FirebaseFirestore.getInstance()
+    private val db get() = FirebaseFirestore.getInstance()
     private var profileListener: ListenerRegistration? = null
 
     private val _profile = MutableStateFlow<UserProfile?>(null)

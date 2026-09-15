@@ -1,11 +1,14 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    function activeOwner(userId) {
+      return request.auth != null && request.auth.uid == userId
+        && !firestore.exists(/databases/(default)/documents/account_deletions/$(userId));
+    }
     // RCA FIX: Path updated to match code and include proper validation
     match /profile-images/{userId}/{allPaths=**} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if request.auth != null
-                   && request.auth.uid == userId
+      allow read, delete: if activeOwner(userId);
+      allow create, update: if activeOwner(userId)
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }

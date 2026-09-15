@@ -2,6 +2,8 @@
 
 Tarih: 15 Eylül 2026. Hedef: önce Android / Google Play.
 
+**Güncel takip:** Bu rapordaki ilk turdan sonra hesap silme, veritabanı geçişleri, koordinat önbelleği ve saat dilimi düzeltmeleri eklendi. Son test sonuçları ve kalan öncelikler [yayın öncelikleri](YAYIN_ONCELIKLERI.md) dosyasındadır.
+
 ## Karar
 
 **Henüz üretime yayın onayı verilmedi.** Kodda önemli hatalar giderildi; aşağıdaki canlı servis, imzalama, veri silme ve cihaz kontrolleri tamamlanmalıdır. Birim testlerin geçmesi uygulamanın tüm cihazlarda hatasız olduğu anlamına gelmez.
@@ -41,8 +43,8 @@ Depodaki Android uygulaması Kotlin / Jetpack Compose kullanıyor. Launcher `Wea
 
 1. **Release imzası:** `keystore.properties` ve gerçek yükleme anahtarı bu klonda yok. İmzalı ve küçültülmüş release AAB üretilip çalıştırılmadı. Debug APK yayın paketi değildir. Mevcut Play kaydı varsa uygulama kimliği, anahtar ve versionCode eşleşmesi doğrulanmalı.
 2. **Firebase ve backend:** Android `https://api.havamania.com/` kullanıyor. Bu alan adının depodaki backend'i çalıştırdığı doğrulanmadı. `FIREBASE_PROJECT_ID` Android Firebase projesiyle aynı olmalı; sunucuda Application Default Credentials ve token iptal kontrolü için yetki bulunmalı. Gerçek tokenlarla canlı uçtan uca asistan testi yapılmadı. Firebase takma adları/değerleri tahmin edilerek yapılandırılmadı.
-3. **Hesap silme:** Android akışı Firestore alt koleksiyonları ve Auth kullanıcısını siliyor. Storage avatarı, cihazdaki Room/DataStore verileri ve backend'deki kullanıcı kayıtlarının tek, yeniden denenebilir silme işiyle temizlenmesi tamamlanmalı. Kısmi hata ve yeniden kimlik doğrulama senaryoları gerçek test hesabıyla doğrulanmalı.
-4. **Kurallar:** Storage değişiklikleri kaynak kodda hazır; Firebase'e yayınlanmadı. Firestore/Storage emulator testleri ve canlı projedeki kurallarla fark kontrolü gerekli. Download token içeren fotoğraf URL'leri bağlantıyı bilenlere erişim sağlayabilir; gizlilik modeli buna göre belirlenmeli.
+3. **Hesap silme:** Sunucu tarafından yönetilen, devam anahtarlı ve cihazdaki temizlikten sonra tamamlanan akış eklendi. Yerel testleri yapıldı; canlı özellik kapalıdır. Dağıtım sırası ve kalan kontroller [hesap silme raporunda](HESAP_SILME_VE_SUNUCU_GECISLERI.md). Gerçek test hesabıyla uçtan uca doğrulama ayrıca gereklidir.
+4. **Kurallar:** Firestore/Storage sahiplik ve silme engeli için dört yerel emülatör testi geçti. Kurallar Firebase'e yayınlanmadı; canlı projeyle fark kontrolü gerekli. Download token içeren fotoğraf URL'leri bağlantıyı bilenlere erişim sağlayabilir; gizlilik modeli buna göre belirlenmeli.
 5. **Ticari servisler:** Open-Meteo ücretsiz uç noktası ve OSRM demo sunucusu kullanılıyor. Ticari kullanım sözleşmesi/kota ve üretim rota altyapısı kararı gerekli; ödeme veya servis satın alımı yapılmadı.
 6. **Yasal sayfalar:** Kodda `/privacy`, `/terms`, `/kvkk` bağlantıları var. Web aracıyla privacy/terms içerikleri doğrulanamadı; bu sonuç tek başına sayfaların kapalı olduğunu kanıtlamaz. Sayfalar tarayıcıdan açılıp veri toplama, Firebase, konum, fotoğraf, AI sağlayıcısı ve saklama süreleriyle karşılaştırılmalı.
 7. **Google Play beyanları:** Data Safety, içerik derecelendirme, uygulama erişimi/test hesabı, hesap silme web bağlantısı, izin açıklamaları ve mağaza görselleri Play Console'da kontrol edilmedi.
@@ -50,10 +52,10 @@ Depodaki Android uygulaması Kotlin / Jetpack Compose kullanıyor. Launcher `Wea
 
 ## Diğer açık teknik bulgular
 
-- Backend `get_db()` her istekte şema değiştiren `run_push_token_migration()` çalıştırıyor. Bu iş versiyonlu Alembic migration'a taşınmalı; PostgreSQL üzerinde yükseltme ve eşzamanlılık testi yapılmalı. SQLite testleri üretim PostgreSQL DDL davranışını doğrulamaz.
+- Backend istek başına DDL kaldırıldı; token tekilliği Alembic 0012 geçişine taşındı. Eksik profil kolonları 0013 ile eklendi. Gerçek Alembic zinciri SQLite üzerinde doğrulandı; üretim PostgreSQL yükseltme/eşzamanlılık testi halen gereklidir.
 - Backend avatarında uygulama düzeyinde sınır ve dosya imzası kontrolü var. Ters proxy/gateway üzerinde toplam istek boyutu sınırı, antivirüs/decode doğrulaması ve eski avatar temizliği ayrıca yapılandırılmalı.
 - Rate limit süreç içidir; birden çok worker/replica için ortak sayaç ve güvenilir proxy yapılandırması gerekir. Kapasite sınırı bu mimari ihtiyacı çözmez.
-- Hava önbelleği şehir/ilçe adıyla anahtarlanıyor; aynı adlı farklı koordinatların ayrılması ve farklı zaman dilimlerindeki saat/tarih seçimleri ayrıca ele alınmalı.
+- Hava önbelleği artık koordinatları içerir ve 100 kayıtla sınırlıdır. Seçili saat konumun saat dilimine göre hesaplanır, rota istekleri UTC kullanır. Tüm astronomi/tarih gösterimlerinin farklı saat dilimi ve yaz saati senaryolarında görsel testi halen gereklidir.
 - Güzergâh riskleri sınırlı ara nokta sayısına indirgeniyor. Şiddetli hava noktalarının seçimin dışında kalmadığı, eksik verinin güvenli koşul gibi sunulmadığı senaryo testleri gerekli.
 - Java/Kotlin deprecation uyarıları mevcut. Bunlar tek başına çökme kanıtı değildir; özellikle MapLibre annotation API ve eski geocoder API geçişi planlanmalı.
 - React Native testinde bulunmayan `SignUpScreen` import'u var; eski mobil CI işi ayrı bir bakım sorunu. Android yayını native Android çıktısıyla yapılmalı.
@@ -98,7 +100,7 @@ ELF kontrolü yalnızca kütüphane segment hizalamasını doğrular; ayrıca `z
 - [Android 16 KB uyumluluk ve doğrulama](https://developer.android.com/guide/practices/page-sizes)
 - [Open-Meteo parametreleri ve ticari API açıklaması](https://open-meteo.com/en/docs)
 
-## Son doğrulama sonuçları
+## İlk tur doğrulama sonuçları (d06ef8b)
 
 - Backend: **49 test geçti**; dört bağımlılık deprecation uyarısı var. Son kod üzerinde Ruff geçti.
 - Son API 36 Android turu: **51 test geçti**, sıfır hata; debug APK üretildi. Android lint geçti: **0 hata, 204 uyarı, 1 ipucu**. Uyarıların 153'ü mevcut Android Log kullanımı; 21'i kullanılmayan kaynaklar. Bunlar kapatılarak gizlenmedi.
@@ -106,7 +108,7 @@ ELF kontrolü yalnızca kütüphane segment hizalamasını doğrular; ayrıca `z
 - Cihaz: bağlı SM-T500 üzerine son debug APK `adb install -r` ile mevcut veriler korunarak yüklendi. `am start -W` başarılı; cihaz hedef SDK'yı 36 olarak raporladı. Süreç kontrol anında çalışıyordu; incelenen son uygulama loglarında FATAL EXCEPTION/ANR bulunmadı. GoogleApiManager, Google Play Services broker SecurityException logları üretiyor; bunun giriş/konum işlevlerine etkisi henüz doğrulanmadı. İlk UI denemesinde kilit ekranı görüldü; kullanıcı kilidi açmadığı için uygulama ekranları doğrulanmış sayılmıyor.
 - Üretim dağıtımı, Play Console yüklemesi, gerçek satın alma veya gerçek hesap silme yapılmadı.
 
-### Üretilen test APK'sı
+### İlk tur test APK'sı (d06ef8b)
 
 Dosya: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 

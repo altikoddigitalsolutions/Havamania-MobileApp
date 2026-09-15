@@ -10,6 +10,7 @@ class RouteWeatherProviderTest {
     private val response = OpenMeteoResponse(41.0, 29.0, hourly = HourlyDto(
         time = listOf("2026-09-15T12:00"), temperature = listOf(20.0), weatherCode = listOf(0)
     ))
+    private val eta = Instant.parse("2026-09-15T12:00:00Z").toEpochMilli()
 
     private fun api(handler: (String, Array<out Any?>) -> Any?): WeatherApiService =
         Proxy.newProxyInstance(WeatherApiService::class.java.classLoader,
@@ -23,10 +24,11 @@ class RouteWeatherProviderTest {
             assertEquals("getBatchRouteHourly", method)
             assertEquals("41.0,42.0", args[0])
             assertEquals("29.0,30.0", args[1])
+            assertEquals("UTC", args[3])
             listOf(response, response)
         })
         val result = provider.weatherAtBatch(listOf(GeoPoint(41.0, 29.0), GeoPoint(42.0, 30.0)),
-            listOf(null, null))
+            listOf(eta, eta))
         assertEquals(2, result.filterNotNull().size)
     }
 
@@ -39,10 +41,15 @@ class RouteWeatherProviderTest {
 
     @Test
     fun `single point uses object response endpoint`() = runBlocking {
-        val provider = RouteWeatherProvider(api { method, _ ->
+        val provider = RouteWeatherProvider(api { method, args ->
             assertEquals("getRouteHourly", method)
+            assertEquals("UTC", args[3])
             response
         })
-        assertNotNull(provider.weatherAtBatch(listOf(GeoPoint(41.0, 29.0)), listOf(null)).single())
+        assertNotNull(provider.weatherAtBatch(listOf(GeoPoint(41.0, 29.0)), listOf(eta)).single())
+    }
+
+    @Test fun `unknown ETA does not substitute midnight weather`() = runBlocking {
+        assertNull(RouteWeatherProvider(api { _, _ -> response }).weatherAt(GeoPoint(41.0, 29.0), null))
     }
 }

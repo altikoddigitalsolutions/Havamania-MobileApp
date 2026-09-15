@@ -44,7 +44,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Run debug unit tests, lint, and assemble debug
-        run: ./gradlew testDebugUnitTest lintDebug assembleDebug
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
       - name: Verify 64-bit ELF alignment
         run: python ../../tools/check_apk_alignment.py app/build/outputs/apk/debug/app-debug.apk
       - name: Upload Android verification reports

@@ -31,13 +31,14 @@ class TravelNotificationWorker(
 
     override suspend fun doWork(): Result {
         val application = applicationContext as android.app.Application
+        if (AccountDeletionManager.getInstance(application).state.value.pending) return Result.success()
         val weatherDb = WeatherDatabase.getDatabase(application)
         val notificationDb = NotificationDatabase.getDatabase(application)
         val weatherDao = weatherDb.weatherDao()
         val notificationDao = notificationDb.notificationDao()
 
         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-        val currentUid = auth.currentUser?.uid ?: "legacy"
+        val currentUid = auth.currentUser?.uid ?: return Result.success()
 
         // Bildirimlerin açık olup olmadığını kontrol et
         val notificationsEnabled = ThemeManager.getNotificationsEnabled(application, currentUid).first()

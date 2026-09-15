@@ -300,7 +300,11 @@ fun SettingsScreen(
     }
 
     if (showDeleteDialog) {
+        val deletionManager = remember { AccountDeletionManager.getInstance(context.applicationContext as android.app.Application) }
+        val deletionState by deletionManager.state.collectAsState()
         AccountDeleteDialog(
+            busy = deletionState.busy,
+            error = deletionState.message,
             onDismiss = { showDeleteDialog = false },
             onConfirm = { password ->
                 authViewModel.deleteAccount(password = password, onComplete = { success, _ ->
@@ -599,22 +603,24 @@ fun ToneSelectionDialog(currentTone: AssistantTone, onToneSelected: (AssistantTo
 }
 
 @Composable
-fun AccountDeleteDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+fun AccountDeleteDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit, busy: Boolean = false, error: String? = null) {
     var password by remember { mutableStateOf("") }
     var confirmText by remember { mutableStateOf("") }
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
     HavamaniaDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         title = "Hesabımı Sil",
         text = "Hesabınız, verileriniz ve analizleriniz kalıcı olarak silinecektir. Devam etmek için şifrenizi girin ve 'SİL' yazın.",
         confirmText = "HESABI SİL",
         confirmColor = themeColors.error,
-        confirmEnabled = confirmText == "SİL" && password.isNotBlank(),
+        confirmEnabled = !busy && confirmText == "SİL" && password.isNotBlank(),
         onConfirm = { onConfirm(password) },
         content = {
             Column(modifier = Modifier.padding(top = 16.dp)) {
+                if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                error?.let { Text(it, color = themeColors.error) }
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },

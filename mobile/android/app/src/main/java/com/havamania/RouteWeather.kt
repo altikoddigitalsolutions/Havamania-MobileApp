@@ -78,7 +78,7 @@ class RouteWeatherProvider(
     suspend fun weatherAt(point: GeoPoint, etaEpochMillis: Long?): WaypointWeather? =
         withContext(Dispatchers.IO) {
             try {
-                val resp = api.getRouteHourly(lat = point.latitude, lon = point.longitude)
+                val resp = api.getRouteHourly(lat = point.latitude, lon = point.longitude, timezone = "UTC")
                 val hourly = resp.hourly ?: return@withContext null
                 val idx = hourly.indexNearest(etaEpochMillis, resp.timezone) ?: return@withContext null
 
@@ -108,7 +108,7 @@ class RouteWeatherProvider(
             val lats = points.map { it.latitude }
             val lons = points.map { it.longitude }
 
-            val responses = api.getBatchRouteHourly(lats = lats.joinToString(","), lons = lons.joinToString(","))
+            val responses = api.getBatchRouteHourly(lats = lats.joinToString(","), lons = lons.joinToString(","), timezone = "UTC")
 
             points.indices.map { i ->
                 val resp = responses.getOrNull(i) ?: return@map null
@@ -140,11 +140,11 @@ if (BuildConfig.DEBUG) {
     /** Saatlik zaman dizisinde hedef ana en yakın indeksi bulur. */
     private fun HourlyDto.indexNearest(etaEpochMillis: Long?, timezone: String): Int? {
         if (time.isEmpty()) return null
-        if (etaEpochMillis == null) return 0
+        if (etaEpochMillis == null) return null
         val zone = try {
             ZoneId.of(timezone)
         } catch (e: Exception) {
-            ZoneId.systemDefault()
+            return null
         }
         // Open-Meteo timezone=auto → saatlik zamanlar noktanın yerel saatinde döner.
         val target = Instant.ofEpochMilli(etaEpochMillis).atZone(zone).toLocalDateTime()

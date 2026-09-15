@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
+    account,
     alerts,
     auth,
     chatbot,
@@ -12,6 +13,7 @@ from app.api.v1.routes import (
 )
 
 api_router = APIRouter()
+api_router.include_router(account.router, prefix="/account", tags=["account"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(profile.router, prefix="/profile", tags=["profile"])
 api_router.include_router(weather.router, prefix="/weather", tags=["weather"])

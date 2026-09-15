@@ -8,6 +8,7 @@ COPY alembic /app/alembic
 COPY alembic.ini /app/alembic.ini
 
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN mkdir -p /app/static/avatars
 
 EXPOSE 8000
 

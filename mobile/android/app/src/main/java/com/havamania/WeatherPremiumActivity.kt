@@ -66,6 +66,24 @@ if (BuildConfig.DEBUG) {
 
         setContent {
             HavamaniaTheme {
+                val deletionManager = remember { AccountDeletionManager.getInstance(application) }
+                val deletionState by deletionManager.state.collectAsState()
+                if (deletionState.pending) {
+                    LaunchedEffect(Unit) {
+                        isReady = true
+                        splashMinimumTimedOut = true
+                        // Cancel old profile/sync jobs before local cleanup.
+                        viewModelStore.clear()
+                        UserProfileRepository.getInstance().stopObserving()
+                        deletionManager.retry()
+                    }
+                    AccountDeletionRecoveryScreen(deletionState, deletionManager::retry) {
+                        viewModelStore.clear()
+                        deletionManager.acknowledgeCompletion()
+                        recreate()
+                    }
+                    return@HavamaniaTheme
+                }
                 val authViewModel: AuthViewModel = viewModel()
                 val profileViewModel: ProfileViewModel = viewModel()
                 val themeViewModel: ThemeViewModel = viewModel()

@@ -1,7 +1,9 @@
 import os
 from collections.abc import Generator
 
+import httpx
 import pytest
+import requests
 from app import models  # noqa: F401 -- register all SQLAlchemy model metadata
 from app.db.base import Base
 from app.db.session import get_db
@@ -14,6 +16,17 @@ from sqlalchemy.orm import Session, sessionmaker
 # Windows uyumlu geçici DB yolu
 TEST_DB_FILE = "test_db.sqlite"
 TEST_DATABASE_URL = f"sqlite:///{TEST_DB_FILE}"
+
+
+@pytest.fixture(autouse=True)
+def prohibit_real_http(monkeypatch):
+    def blocked(*args, **kwargs):
+        pytest.fail("Real HTTP is forbidden in local tests; provide a test transport or stub")
+
+    # TestClient and httpx.MockTransport remain available; real network adapters do not.
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", blocked)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", blocked)
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", blocked)
 
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):

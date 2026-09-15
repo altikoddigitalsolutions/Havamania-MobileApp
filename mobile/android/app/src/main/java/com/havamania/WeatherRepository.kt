@@ -45,7 +45,7 @@ class WeatherRepository(
     suspend fun clearCache(cityName: String, districtName: String? = null) {
         try {
             val cacheKey = canonicalKey(cityName, districtName)
-            weatherDao.deleteWeather(cacheKey)
+            weatherDao.deleteWeatherByPrefix(weatherCachePrefix(cityName, districtName), cacheKey)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             // Log or ignore
@@ -104,66 +104,57 @@ if (BuildConfig.DEBUG) {
         districtName: String? = null,
         forceRefresh: Boolean = false
     ): Flow<WeatherData> = flow {
-        var hasEmitted = false
-        val cacheKey = canonicalKey(cityName, districtName)
-        val cacheTimeoutMillis = 15 * 60 * 1000L // 15 dakika
-
-        // 1. Her zaman önce Cache'den oku ve varsa anında dön (Business Rule 7: Offline-first)
-        val cachedEntity = weatherDao.getCachedWeather(cacheKey)
-        var isCacheFresh = false
-
-        if (cachedEntity != null) {
-            try {
-                val cachedData = json.decodeFromString<WeatherData>(cachedEntity.jsonData)
-                val age = System.currentTimeMillis() - cachedEntity.timestamp
-                isCacheFresh = age < cacheTimeoutMillis
-
-                val annotatedData = cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh)
-                emit(annotatedData)
-                hasEmitted = true
-if (BuildConfig.DEBUG) {
-                    android.util.Log.d("WeatherRepo", "Cache emitted for $cacheKey (Age: ${age/1000}s, Fresh: $isCacheFresh)")
-}
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("WeatherRepo", "Cache decode failed", e)
-}
-            }
+        val cacheKey = weatherCacheKey(cityName, districtName, lat, lon)
+        val cachedEntity = try {
+            weatherDao.getCachedWeather(cacheKey)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null // A broken disposable cache must not prevent a network refresh.
         }
-
-        // 2. Network'ten çek (Cache taze değilse VEYA forceRefresh ise)
-        if (!isCacheFresh || forceRefresh) {
-            try {
-if (BuildConfig.DEBUG) {
-                    android.util.Log.i("WeatherRepo", "Fetching from Network for $cacheKey (Reason: ${if (forceRefresh) "Force" else "Stale"})")
-}
-                val currentFields = "temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,visibility,dew_point_2m,precipitation,cloud_cover,uv_index"
-                val dailyFields = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset,wind_speed_10m_max,wind_gusts_10m_max"
-
-                val response = apiService.getFullWeather(
-                    lat = lat,
-                    lon = lon,
-                    current = currentFields,
-                    daily = dailyFields
-                )
-                val now = System.currentTimeMillis()
-                val domainData = WeatherMapper.mapToDomain(response, cityName, districtName).copy(timestamp = now, isStale = false)
-
-                // 3. Cache'i ve State'i güncelle
-                val jsonString = json.encodeToString(domainData)
-                weatherDao.insertWeather(WeatherCacheEntity(cacheKey, jsonString, now))
-
-                emit(domainData)
-                hasEmitted = true
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("WeatherRepo", "Network fetch failed", e)
-}
-                // Eğer hiçbir veri dönemediysek (ne cache ne network) hata fırlat
-                if (!hasEmitted) throw e
-            }
+        val cachedData = cachedEntity?.let {
+            try { json.decodeFromString<WeatherData>(it.jsonData) } catch (_: Exception) { null }
         }
+        val isCacheFresh = cachedEntity != null && weatherCacheIsFresh(cachedEntity.timestamp, System.currentTimeMillis())
+        if (cachedData != null && cachedEntity != null) {
+            emit(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh))
+        }
+        if (cachedData != null && isCacheFresh && !forceRefresh) return@flow
+
+        val domainData = try {
+            val response = apiService.getFullWeather(lat = lat, lon = lon)
+            WeatherMapper.mapToDomain(response, cityName, districtName)
+                .copy(timestamp = System.currentTimeMillis(), isStale = false)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (cachedData == null) throw e
+            return@flow
+        }
+        try {
+            weatherDao.insertWeather(WeatherCacheEntity(cacheKey, json.encodeToString(domainData), domainData.timestamp))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Show valid network data even if the disk is full or cache write fails.
+        }
+        // Keep emit outside exception handlers: downstream errors belong to the collector.
+        emit(domainData)
     }.onEach { _currentWeatherState.value = it }
 }
+
+internal fun weatherCachePrefix(city: String, district: String?): String {
+    val locale = java.util.Locale.forLanguageTag("tr")
+    val normalizedCity = city.trim().lowercase(locale)
+    val normalizedDistrict = district?.trim()?.lowercase(locale).orEmpty()
+    return "v2|${normalizedCity.length}:$normalizedCity|${normalizedDistrict.length}:$normalizedDistrict|"
+}
+
+internal fun weatherCacheKey(city: String, district: String?, lat: Double, lon: Double): String {
+    require(lat.isFinite() && lon.isFinite() && lat in -90.0..90.0 && lon in -180.0..180.0)
+    // ~100 m cells prevent GPS jitter from creating a new row for every refresh.
+    return weatherCachePrefix(city, district) + "${kotlin.math.round(lat * 1000).toInt()}:${kotlin.math.round(lon * 1000).toInt()}"
+}
+
+internal fun weatherCacheIsFresh(timestamp: Long, now: Long): Boolean =
+    timestamp <= now && now - timestamp in 0 until 15 * 60 * 1000L

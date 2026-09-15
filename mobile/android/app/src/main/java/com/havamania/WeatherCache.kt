@@ -220,7 +220,19 @@ interface WeatherDao {
     suspend fun getCachedWeather(city: String): WeatherCacheEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertWeather(weather: WeatherCacheEntity)
+    suspend fun insertWeatherRaw(weather: WeatherCacheEntity)
+
+    @Query("DELETE FROM weather_cache WHERE cityName NOT IN (SELECT cityName FROM weather_cache ORDER BY timestamp DESC, cityName LIMIT 100)")
+    suspend fun pruneWeatherCache()
+
+    @Transaction
+    suspend fun insertWeather(weather: WeatherCacheEntity) {
+        insertWeatherRaw(weather)
+        pruneWeatherCache()
+    }
+
+    @Query("DELETE FROM weather_cache WHERE cityName = :legacyKey OR substr(cityName, 1, length(:prefix)) = :prefix")
+    suspend fun deleteWeatherByPrefix(prefix: String, legacyKey: String)
 
     @Query("DELETE FROM weather_cache WHERE cityName = :city")
     suspend fun deleteWeather(city: String)
@@ -305,10 +317,34 @@ abstract class WeatherDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: WeatherDatabase? = null
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN isDemo INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE travel_plans ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy'")
                 database.execSQL("ALTER TABLE ai_history ADD COLUMN userId TEXT NOT NULL DEFAULT 'legacy'")
+            }
+        }
+
+        // The historical release jumped directly from 11 to 13.
+        val MIGRATION_11_13 = object : Migration(11, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("UPDATE travel_plans SET updatedAt = createdAt")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN archivedAt INTEGER")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN lastAnalysisAt INTEGER")
+                database.execSQL("UPDATE travel_plans SET lastAnalysisAt = lastWeatherAnalysisDate")
+                for (column in listOf("packingAdvice", "mustSee", "foodAdvice", "localAdvice")) {
+                    database.execSQL("ALTER TABLE travel_plans ADD COLUMN $column TEXT")
+                }
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN comfortScore INTEGER")
+                database.execSQL("ALTER TABLE ai_history ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("UPDATE ai_history SET updatedAt = timestamp")
+                database.execSQL("UPDATE travel_plans SET weatherAnalysisStatus = 'WAITING_FOR_WINDOW' WHERE weatherAnalysisStatus = 'TOO_EARLY'")
             }
         }
 
@@ -353,7 +389,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .addMigrations(MIGRATION_10_11, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                 .build()
                 INSTANCE = instance
                 instance

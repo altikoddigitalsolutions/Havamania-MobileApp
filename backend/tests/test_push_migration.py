@@ -33,6 +33,45 @@ def test_migration_fail_fast_on_duplicates(tmp_path):
     finally:
         db_session.engine = orig_engine
 
+
+@pytest.mark.parametrize("constraint", ["UNIQUE(user_id, platform)",
+                                          "CONSTRAINT old_device UNIQUE(user_id, platform)"])
+def test_removes_legacy_constraint_and_preserves_rows(tmp_path, constraint):
+    from app.db.push_token_migration import migrate_push_tokens
+    from sqlalchemy.exc import IntegrityError
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.sqlite'}")
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f"CREATE TABLE push_tokens (id TEXT PRIMARY KEY, "
+                                    f"user_id TEXT NOT NULL, platform TEXT NOT NULL, "
+                                    f"token TEXT NOT NULL, {constraint})"))
+            connection.execute(text("INSERT INTO push_tokens VALUES ('1', 'u', 'android', 'a')"))
+            migrate_push_tokens(connection)
+            migrate_push_tokens(connection)  # repeated deployment is harmless
+            connection.execute(text("INSERT INTO push_tokens VALUES ('2', 'u', 'android', 'b')"))
+            assert connection.execute(text("SELECT count(*) FROM push_tokens")).scalar() == 2
+        with engine.begin() as connection, pytest.raises(IntegrityError):
+            connection.execute(text("INSERT INTO push_tokens VALUES ('3', 'other', 'ios', 'a')"))
+    finally:
+        engine.dispose()
+
+
+def test_request_database_dependency_never_runs_migration(monkeypatch):
+    from unittest.mock import Mock
+
+    from app.db import session
+
+    migrate = Mock(side_effect=AssertionError("DDL during request"))
+    database = Mock()
+    monkeypatch.setattr(session, "run_push_token_migration", migrate)
+    monkeypatch.setattr(session, "SessionLocal", lambda: database)
+    generator = session.get_db()
+    assert next(generator) is database
+    generator.close()
+    database.close.assert_called_once()
+    migrate.assert_not_called()
+
 def test_migration_success_and_multi_device(tmp_path):
     db_file = tmp_path / "test_migration_success.db"
     engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})

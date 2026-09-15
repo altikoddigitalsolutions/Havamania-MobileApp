@@ -1,6 +1,7 @@
 package com.havamania
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -18,7 +19,7 @@ sealed class AuthState {
     data class Error(val message: String) : AuthState()
 }
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 
@@ -148,51 +149,8 @@ if (BuildConfig.DEBUG) {
         _authState.value = AuthState.Idle
     }
 
-    /**
-     * Account Deletion with Safety (Business Rule 9)
-     */
     fun deleteAccount(password: String, onComplete: (Boolean, String?) -> Unit) {
-        val user = auth.currentUser ?: return
-        val email = user.email ?: return
-
-        viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            try {
-                // 1. Re-authenticate
-                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
-                user.reauthenticate(credential).await()
-
-                // 2. Explicitly delete known Firestore subcollections (/users/{uid}/trips, /users/{uid}/cities, /users/{uid}/ai_history)
-                val userRef = db.collection("users").document(user.uid)
-
-                listOf("trips", "cities", "ai_history").forEach { subColName ->
-                    val colRef = userRef.collection(subColName)
-                    val snapshot = colRef.get().await()
-                    if (!snapshot.isEmpty) {
-                        for (chunk in snapshot.documents.chunked(500)) {
-                            val batch = db.batch()
-                            for (doc in chunk) {
-                                batch.delete(doc.reference)
-                            }
-                            batch.commit().await()
-                        }
-                    }
-                }
-
-                // 3. Delete Root Firestore User Document
-                userRef.delete().await()
-
-                // 4. Delete Auth Account
-                user.delete().await()
-
-                _authState.value = AuthState.Idle
-                onComplete(true, null)
-            } catch (e: Exception) {
-                val error = mapFirebaseError(e)
-                _authState.value = AuthState.Error(error)
-                onComplete(false, error)
-            }
-        }
+        AccountDeletionManager.getInstance(getApplication()).start(password, onComplete)
     }
 
     fun clearError() {

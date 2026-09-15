@@ -1,3 +1,4 @@
+from app.models.account_deletion import AccountDeletion
 from app.models.alert import Alert, AlertSeverity
 from app.models.chatbot_usage_daily import ChatbotUsageDaily
 from app.models.location import Location
@@ -10,6 +11,7 @@ from app.models.user import User
 from app.models.weather_snapshot import WeatherSnapshot
 
 __all__ = [
+    "AccountDeletion",
     "Alert",
     "AlertSeverity",
     "ChatbotUsageDaily",

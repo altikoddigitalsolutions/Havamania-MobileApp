@@ -11,6 +11,7 @@ import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.GET
 
 @Serializable
 data class BackendChatbotAskRequest(
@@ -26,12 +27,30 @@ data class BackendChatbotAskResponse(
 )
 
 interface BackendChatbotService {
+    @GET("v1/account/deletion/availability")
+    suspend fun deletionAvailability(): Response<AccountDeletionAvailability>
+
+    @POST("v1/account/deletion")
+    suspend fun deleteAccount(
+        @Header("Authorization") authorization: String?,
+        @Body request: AccountDeletionRequest
+    ): Response<AccountDeletionResponse>
+
     @POST("v1/chatbot/ask")
     suspend fun ask(
         @Header("Authorization") authorization: String,
         @Body request: BackendChatbotAskRequest
     ): Response<BackendChatbotAskResponse>
 }
+
+@Serializable
+data class AccountDeletionRequest(val continuation_key: String)
+
+@Serializable
+data class AccountDeletionResponse(val status: String)
+
+@Serializable
+data class AccountDeletionAvailability(val available: Boolean)
 
 object BackendChatbotFactory {
     private val json = Json { ignoreUnknownKeys = true }

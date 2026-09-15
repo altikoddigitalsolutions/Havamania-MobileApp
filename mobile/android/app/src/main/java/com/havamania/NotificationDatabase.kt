@@ -66,6 +66,13 @@ abstract class NotificationDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE notifications ADD COLUMN deduplicationKey TEXT")
+                database.execSQL("ALTER TABLE notifications ADD COLUMN severity TEXT NOT NULL DEFAULT 'NORMAL'")
+            }
+        }
+
         fun getDatabase(context: Context): NotificationDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -73,7 +80,7 @@ abstract class NotificationDatabase : RoomDatabase() {
                     NotificationDatabase::class.java,
                     "notification_database"
                 )
-                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                 .build()
                 INSTANCE = instance
                 instance

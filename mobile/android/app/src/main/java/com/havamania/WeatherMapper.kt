@@ -17,7 +17,8 @@ import kotlin.math.roundToInt
 
 object WeatherMapper {
 
-    fun mapToDomain(response: OpenMeteoResponse, cityName: String, districtName: String? = null): WeatherData {
+    fun mapToDomain(response: OpenMeteoResponse, cityName: String, districtName: String? = null,
+                    now: java.time.Instant = java.time.Instant.now()): WeatherData {
         val current = response.current
         val daily = response.daily
         val hourly = response.hourly
@@ -83,7 +84,7 @@ object WeatherMapper {
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
-            hourlyForecast = mapHourly(hourly, daily),
+            hourlyForecast = mapHourly(hourly, daily, response.timezone, now),
             dailyForecast = mapDaily(daily),
             details = mapDetails(current, daily)
         )
@@ -161,10 +162,10 @@ object WeatherMapper {
         return directions[((deg + 22.5) / 45).toInt() % 8]
     }
 
-    private fun mapHourly(hourly: HourlyDto?, daily: DailyDto?): List<HourlyWeather> {
+    private fun mapHourly(hourly: HourlyDto?, daily: DailyDto?, timezone: String, now: java.time.Instant): List<HourlyWeather> {
         if (hourly == null) return emptyList()
-        val calendar = Calendar.getInstance()
-        val currentHourStr = SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(calendar.time)
+        val zone = try { java.time.ZoneId.of(timezone) } catch (_: Exception) { java.time.ZoneOffset.UTC }
+        val currentHourStr = now.atZone(zone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:00", Locale.US))
 
         val sunTimesByDate = mutableMapOf<String, Pair<LocalTime, LocalTime>>()
         if (daily != null && daily.time.size == daily.sunrise.size && daily.time.size == daily.sunset.size) {

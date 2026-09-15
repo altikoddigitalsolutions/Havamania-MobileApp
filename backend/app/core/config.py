@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     metrics_secret: str = "change-me"
     sentry_dsn_backend: str | None = None
     firebase_project_id: str | None = None
+    firebase_storage_bucket: str | None = None
+    account_deletion_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
