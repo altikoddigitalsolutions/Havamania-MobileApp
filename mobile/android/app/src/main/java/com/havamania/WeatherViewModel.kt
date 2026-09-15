@@ -96,13 +96,20 @@ class WeatherViewModel(
 
     private var fetchJob: kotlinx.coroutines.Job? = null
     private var searchJob: kotlinx.coroutines.Job? = null
+    private val accountTasks = AccountTaskScope(viewModelScope) { currentUid }
+    private var locationJob: kotlinx.coroutines.Job? = null
 
     private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+        accountTasks.reset()
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
 
         // Clear UI state to prevent showing old user's data
         fetchJob?.cancel()
+        locationJob?.cancel()
+        searchJob?.cancel()
+        _isRefreshing.value = false
+        _citySuggestions.value = emptyList()
         currentUserInterests = emptySet()
         currentUserAboutMe = null
         currentPersonalization = null
@@ -152,6 +159,8 @@ class WeatherViewModel(
                 ) { mode, city ->
                     mode to city
                 }.collect { (mode, city) ->
+                    if (uid != currentUid) return@collect
+                    locationJob?.cancel()
                     _locationMode.value = mode
                     if (BuildConfig.DEBUG) {
                         Log.d("WeatherVM", "Data update: mode=$mode, city=${city?.name}")
@@ -184,13 +193,17 @@ class WeatherViewModel(
     }
 
     fun refreshWeatherWithCurrentLocation() {
-        viewModelScope.launch {
+        locationJob?.cancel()
+        val uid = currentUid
+        locationJob = viewModelScope.launch {
             val city = locationTracker.getCurrentCity()
+            if (uid != currentUid) return@launch
             if (city != null) {
                 fetchWeather(city.latitude, city.longitude, city.name, city.admin1)
             } else {
                 // If failed, fall back to default city from settings
-                val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), currentUid).firstOrNull()
+                val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
+                if (uid != currentUid) return@launch
                 if (defaultCity != null) {
                     fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
                 } else {
@@ -210,7 +223,7 @@ class WeatherViewModel(
         lastDistrict = districtName
 
         fetchJob?.cancel()
-        fetchJob = viewModelScope.launch {
+        fetchJob = accountTasks.launch { ownerUid ->
             _uiState.value = WeatherUiState.Loading
 
             try {
@@ -230,9 +243,9 @@ if (BuildConfig.DEBUG) {
                             _uiState.value = WeatherUiState.Success(data)
 
                             // Calculate Smart Alerts
-                            viewModelScope.launch {
-                                val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), currentUid).first()
-                                _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, currentUid)
+                            launch {
+                                val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
+                                _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
                             }
 
                             // Reset to today
@@ -267,7 +280,7 @@ if (BuildConfig.DEBUG) {
         }
 
         fetchJob?.cancel()
-        fetchJob = viewModelScope.launch {
+        fetchJob = accountTasks.launch { ownerUid ->
             _isRefreshing.value = true
             try {
             repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict, forceRefresh = true)
@@ -278,9 +291,9 @@ if (BuildConfig.DEBUG) {
                     _uiState.value = WeatherUiState.Success(data)
 
                     // Calculate Smart Alerts
-                    viewModelScope.launch {
-                        val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), currentUid).first()
-                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, currentUid)
+                    launch {
+                        val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
+                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
                     }
 
                     val todayDate = LocalDate.now()
@@ -353,7 +366,7 @@ if (BuildConfig.DEBUG) {
         if (currentUiState is WeatherUiState.Success) {
             val weather = currentUiState.data
 
-            viewModelScope.launch {
+            accountTasks.launch { _ ->
                 _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
                     weatherData = weather,
                     userInterests = currentUserInterests,

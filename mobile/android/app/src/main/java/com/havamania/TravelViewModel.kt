@@ -33,6 +33,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
     private val timeProvider: TimeProvider = DefaultTimeProvider
 
     private var firestoreListener: ListenerRegistration? = null
@@ -68,6 +69,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val FLOW_TAG = "TripCreateFlow"
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        accountTasks.reset()
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed. New UID: $newUid")
         analysisJobs.values.forEach { it.cancel() }
@@ -106,12 +108,13 @@ if (BuildConfig.DEBUG) {
 
                 if (snapshot != null) {
                     val isFromCache = snapshot.metadata.isFromCache
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
                         try {
                             val entities = snapshot.documents.mapNotNull { doc ->
                                 try {
                                     doc.toObject(TravelPlanEntity::class.java)?.copy(id = doc.id, userId = uid)
                                 } catch (me: Exception) {
+                                    if (me is kotlinx.coroutines.CancellationException) throw me
 if (BuildConfig.DEBUG) {
                                         Log.e(TAG, "Data mapping error for doc ${doc.id}", me)
 }
@@ -134,6 +137,7 @@ if (BuildConfig.DEBUG) {
                                 }
                             }
                         } catch (ex: Exception) {
+                            if (ex is kotlinx.coroutines.CancellationException) throw ex
 if (BuildConfig.DEBUG) {
                                 Log.e(TAG, "Sync process failed", ex)
 }
@@ -147,8 +151,9 @@ if (BuildConfig.DEBUG) {
 
     private fun loadPlansForUid(uid: String) {
         plansJob?.cancel()
-        plansJob = viewModelScope.launch {
+        plansJob = accountTasks.launch launch@ { currentUid ->
             dao.getAllTravelPlansFlow(uid).collect { entities ->
+                if (uid != this@TravelViewModel.currentUid) return@collect
                 val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
                 _plans.value = domainPlans
                 checkAndTriggerAutoAnalysis(domainPlans)
@@ -159,7 +164,7 @@ if (BuildConfig.DEBUG) {
 
 
     fun seedInitialDataIfNeeded(force: Boolean = false) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             if (currentUid != "legacy" && !force) {
                 loadPlans()
                 return@launch
@@ -187,10 +192,10 @@ if (BuildConfig.DEBUG) {
     fun loadPlans() {
         _today.value = timeProvider.today()
         val uid = currentUid
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             _isLoading.value = true
             val entities = dao.getAllTravelPlans(uid)
-            if (currentUid != uid) return@launch
+            if (this@TravelViewModel.currentUid != uid) return@launch
             val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
             _plans.value = domainPlans
             _isLoading.value = false
@@ -225,9 +230,9 @@ if (BuildConfig.DEBUG) {
     }
 
     fun analyzeTravelWeather(plan: TravelPlan) {
-        if (analysisJobs.containsKey(plan.id)) return
+        if (plan.userId != currentUid || analysisJobs.containsKey(plan.id)) return
 
-        val job = viewModelScope.launch {
+        val job = accountTasks.launch launch@ { currentUid ->
             _plans.value = _plans.value.map {
                 if (it.id == plan.id) it.copy(isAnalyzing = true) else it
             }
@@ -244,6 +249,7 @@ if (BuildConfig.DEBUG) {
                         try {
                             db.collection("users").document(currentUid).collection("trips").document(updatedPlan.id).set(entity).await()
                         } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                                 Log.e(TAG, "Analysis Firestore sync failed", e)
 }
@@ -264,6 +270,7 @@ if (BuildConfig.DEBUG) {
                     _uiEvent.emit("Öneriler şu anda hazırlanamadı. Biraz sonra tekrar deneyebilirsiniz.")
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e(TAG, "Analysis failed", e)
 }
@@ -282,7 +289,7 @@ if (BuildConfig.DEBUG) {
         return TravelAnalysisEngine.performAnalysis(
             context = getApplication(),
             plan = plan,
-            currentUid = currentUid,
+            currentUid = plan.userId,
             apiService = apiService,
             repository = repository
         )
@@ -292,7 +299,8 @@ if (BuildConfig.DEBUG) {
         val cityNameTrimmed = plan.city.trim()
         if (cityNameTrimmed.isEmpty()) return
 
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+            if (plan.userId != "legacy" && plan.userId != currentUid) return@launch
             val todayVal = _today.value
             val now = LocalDateTime.now()
 
@@ -342,6 +350,7 @@ if (BuildConfig.DEBUG) {
                     db.collection("users").document(currentUid).collection("trips")
                         .document(entity.id).set(entity).await()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         Log.e(TAG, "Firestore save failed", e)
 }
@@ -358,13 +367,14 @@ if (BuildConfig.DEBUG) {
     }
 
     fun deletePlan(id: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             dao.deleteTravelPlan(id, currentUid)
             if (currentUid != "legacy") {
                 try {
                     db.collection("users").document(currentUid).collection("trips")
                         .document(id).delete().await()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         Log.e(TAG, "Firestore delete failed", e)
 }
@@ -375,7 +385,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun clearAllPlans() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             val uid = currentUid
             dao.clearAllTravelPlans(uid)
             dao.clearAllWeatherCache()
@@ -393,7 +403,7 @@ if (BuildConfig.DEBUG) {
             _citySuggestions.value = emptyList()
             return
         }
-        citySearchJob = viewModelScope.launch {
+        citySearchJob = accountTasks.launch launch@ { currentUid ->
             kotlinx.coroutines.delay(300)
             _citySuggestions.value = repository.searchCity(query.trim())
         }
@@ -405,15 +415,15 @@ if (BuildConfig.DEBUG) {
             _originSuggestions.value = emptyList()
             return
         }
-        originSearchJob = viewModelScope.launch {
+        originSearchJob = accountTasks.launch launch@ { currentUid ->
             kotlinx.coroutines.delay(300)
             _originSuggestions.value = repository.searchCity(query.trim())
         }
     }
 
     fun archiveTrip(id: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val plan = _plans.value.find { it.id == id } ?: return@launch
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+            val plan = _plans.value.find { it.id == id && it.userId == currentUid } ?: return@launch
             val updated = plan.copy(isArchived = true, archivedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
@@ -422,6 +432,7 @@ if (BuildConfig.DEBUG) {
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         Log.e(TAG, "Archive Firestore sync failed", e)
 }
@@ -432,8 +443,8 @@ if (BuildConfig.DEBUG) {
     }
 
     fun unarchiveTrip(id: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val plan = _plans.value.find { it.id == id } ?: return@launch
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+            val plan = _plans.value.find { it.id == id && it.userId == currentUid } ?: return@launch
             val updated = plan.copy(isArchived = false, archivedAt = null, updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
@@ -442,6 +453,7 @@ if (BuildConfig.DEBUG) {
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         Log.e(TAG, "Unarchive Firestore sync failed", e)
 }
@@ -452,8 +464,8 @@ if (BuildConfig.DEBUG) {
     }
 
     fun updateTripNoteAndRating(id: String, note: String, rating: Int) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val plan = _plans.value.find { it.id == id } ?: return@launch
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+            val plan = _plans.value.find { it.id == id && it.userId == currentUid } ?: return@launch
             val updated = plan.copy(userNote = note, userRating = rating, updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
@@ -462,6 +474,7 @@ if (BuildConfig.DEBUG) {
                 try {
                     db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         Log.e(TAG, "Note/Rating Firestore sync failed", e)
 }
@@ -473,7 +486,7 @@ if (BuildConfig.DEBUG) {
 
     fun migrateLegacyDataToUser() {
         if (currentUid == "legacy") return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             val legacyPlans = dao.getAllTravelPlans("legacy")
             if (legacyPlans.isNotEmpty()) {
                 legacyPlans.forEach { entity ->
@@ -482,6 +495,7 @@ if (BuildConfig.DEBUG) {
                     try {
                         db.collection("users").document(currentUid).collection("trips").document(newEntity.id).set(newEntity).await()
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                             Log.e(TAG, "Migration sync failed for trip ${newEntity.id}", e)
 }
@@ -495,7 +509,7 @@ if (BuildConfig.DEBUG) {
 
     fun declineMigration() {
         if (currentUid == "legacy") return
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveMigrationChoiceMade(getApplication(), currentUid, true)
         }
     }

@@ -66,6 +66,7 @@ if (BuildConfig.DEBUG) {
                         emit(emptyList())
                     }
                     .collect { list ->
+                        if (uid != currentUid) return@collect
                         if (BuildConfig.DEBUG) {
                             Log.d("Notifications", "collected size=${list.size} for $uid")
                         }
@@ -89,6 +90,8 @@ if (BuildConfig.DEBUG) {
                         }
                     }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (uid != currentUid) return@launch
 if (BuildConfig.DEBUG) {
                     Log.e(TAG, "Fatal error in collect chain for $uid", e)
 }

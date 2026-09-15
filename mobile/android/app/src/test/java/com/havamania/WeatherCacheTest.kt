@@ -3,6 +3,8 @@ package com.havamania
 import java.lang.reflect.Proxy
 import java.time.Instant
 import java.util.TimeZone
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -64,4 +66,38 @@ class WeatherCacheTest {
             TimeZone.setDefault(old)
         }
     }
+    @Test fun offlineWithExpiredCacheKeepsWeatherAndMarksItStale() = runBlocking {
+        val weather = WeatherMapper.mapToDomain(
+            OpenMeteoResponse(41.0, 29.0, current = CurrentWeatherDto(temperature = 19.0)), "Test")
+        val cached = WeatherCacheEntity("unused", Json.encodeToString(weather), 1L)
+        val dao = proxy(WeatherDao::class.java) { _, _ -> cached }
+        val api = proxy(WeatherApiService::class.java) { _, _ -> throw java.io.IOException("offline") }
+        val results = WeatherRepository(api, dao).getWeatherData(41.0, 29.0, "Test").toList()
+        assertEquals(1, results.size)
+        assertEquals("19°", results.single().temperature)
+        assertTrue(results.single().isStale)
+        assertEquals(1L, results.single().timestamp)
+    }
+
+    @Test fun offlineWithoutCachePropagatesFailureInsteadOfInventingWeather() = runBlocking {
+        val dao = proxy(WeatherDao::class.java) { _, _ -> null }
+        val api = proxy(WeatherApiService::class.java) { _, _ -> throw java.io.IOException("offline") }
+        val repository = WeatherRepository(api, dao)
+        val result = runCatching { repository.getWeatherData(41.0, 29.0, "Test").toList() }
+        assertTrue(result.isFailure)
+        assertNull(repository.currentWeatherState.value)
+    }
+
+    @Test fun cancellationIsNotSwallowedAsOfflineCacheFallback() = runBlocking {
+        val weather = WeatherMapper.mapToDomain(OpenMeteoResponse(41.0, 29.0), "Test")
+        val dao = proxy(WeatherDao::class.java) { _, _ ->
+            WeatherCacheEntity("unused", Json.encodeToString(weather), 1L)
+        }
+        val api = proxy(WeatherApiService::class.java) { _, _ ->
+            throw kotlinx.coroutines.CancellationException("account changed")
+        }
+        val result = runCatching { WeatherRepository(api, dao).getWeatherData(41.0, 29.0, "Test").toList() }
+        assertTrue(result.exceptionOrNull() is kotlinx.coroutines.CancellationException)
+    }
+
 }

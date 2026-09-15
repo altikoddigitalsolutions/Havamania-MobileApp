@@ -46,19 +46,30 @@ class DefaultLocationTracker(
 
         if (!isGpsEnabled) return null
 
-        return suspendCancellableCoroutine { cont ->
-            val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
-            cont.invokeOnCancellation { cancellation.cancel() }
-            locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
-                .addOnSuccessListener { location ->
-                    if (cont.isActive) cont.resume(location)
+        return try {
+            kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                suspendCancellableCoroutine { cont ->
+                    val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
+                    cont.invokeOnCancellation { cancellation.cancel() }
+                    val priority = if (hasAccessFineLocationPermission) {
+                        Priority.PRIORITY_HIGH_ACCURACY
+                    } else {
+                        Priority.PRIORITY_BALANCED_POWER_ACCURACY
+                    }
+                    locationClient.getCurrentLocation(priority, cancellation.token)
+                        .addOnSuccessListener { location ->
+                            if (cont.isActive) cont.resume(location)
+                        }
+                        .addOnFailureListener {
+                            if (cont.isActive) cont.resume(null)
+                        }
+                        .addOnCanceledListener {
+                            if (cont.isActive) cont.resume(null)
+                        }
                 }
-                .addOnFailureListener {
-                    if (cont.isActive) cont.resume(null)
-                }
-                .addOnCanceledListener {
-                    if (cont.isActive) cont.resume(null)
-                }
+            }
+        } catch (_: SecurityException) {
+            null
         }
     }
 
@@ -86,6 +97,7 @@ class DefaultLocationTracker(
                     )
                 } else null
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("LocationTracker", "Reverse Geocoding failed", e)
 }

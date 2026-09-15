@@ -20,6 +20,7 @@ class LocationService(private val context: android.content.Context) {
                 addresses?.firstOrNull()?.locality ?: addresses?.firstOrNull()?.subAdminArea
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             null
         }
     }

@@ -24,6 +24,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = WeatherRepository.getInstance(application)
     private val userProfileRepository = com.havamania.UserProfileRepository.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
 
     private var citiesListener: ListenerRegistration? = null
     private var userDocListener: ListenerRegistration? = null
@@ -97,16 +98,18 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiEvent = MutableSharedFlow<String>()
     val uiEvent = _uiEvent.asSharedFlow()
 
+    private var settingsJob: kotlinx.coroutines.Job? = null
+    private var profileSyncJob: kotlinx.coroutines.Job? = null
+
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        accountTasks.reset()
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
 if (BuildConfig.DEBUG) {
             Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
 }
 
-        if (user == null) {
-            clearLocalUserData()
-        }
+        clearLocalUserData()
 
         loadSettings()
         observeFirestoreUserDoc(newUid)
@@ -134,6 +137,7 @@ if (BuildConfig.DEBUG) {
 }
         citiesListener = db.collection("users").document(uid).collection("cities")
             .addSnapshotListener { snapshot, e ->
+                if (uid != currentUid) return@addSnapshotListener
                 if (e != null) {
 if (BuildConfig.DEBUG) {
                         Log.w("ThemeVM", "Cities listen failed.", e)
@@ -142,7 +146,7 @@ if (BuildConfig.DEBUG) {
                 }
 
                 if (snapshot != null) {
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
                         try {
                             val remoteCities = snapshot.documents.mapNotNull {
                                 it.toObject(com.havamania.GeocodingResultDto::class.java)
@@ -156,6 +160,7 @@ if (BuildConfig.DEBUG) {
                                 _registeredCities.value = remoteCities
                             }
                         } catch (ex: Exception) {
+                            if (ex is kotlinx.coroutines.CancellationException) throw ex
 if (BuildConfig.DEBUG) {
                                 Log.e("ThemeVM", "Error parsing cities snapshot", ex)
 }
@@ -166,12 +171,14 @@ if (BuildConfig.DEBUG) {
     }
 
     private fun observeFirestoreUserDoc(uid: String) {
+        profileSyncJob?.cancel()
         if (uid == "legacy") return
 
         userProfileRepository.startObserving(uid)
 
-        viewModelScope.launch {
+        profileSyncJob = accountTasks.launch launch@ { currentUid ->
             userProfileRepository.profile.collect { profile ->
+                if (uid != this@ThemeViewModel.currentUid || profile?.uid != uid) return@collect
                 profile?.let { p ->
                     // Sync defaultCity
                     val remoteDefaultCityName = p.defaultCity
@@ -187,39 +194,46 @@ if (BuildConfig.DEBUG) {
         }
     }
 
+
     fun loadSettings() {
+        settingsJob?.cancel()
         val uid = currentUid
-        viewModelScope.launch { ThemeManager.getTheme(getApplication(), uid).collect { _currentTheme.value = it } }
-        viewModelScope.launch { ThemeManager.getAnimationsEnabled(getApplication(), uid).collect { _animationsEnabled.value = it } }
-        viewModelScope.launch { ThemeManager.getTempUnit(getApplication(), uid).collect { _tempUnit.value = it } }
-        viewModelScope.launch { ThemeManager.getWindUnit(getApplication(), uid).collect { _windUnit.value = it } }
-        viewModelScope.launch { ThemeManager.getPressureUnit(getApplication(), uid).collect { _pressureUnit.value = it } }
-        viewModelScope.launch { ThemeManager.getLanguage(getApplication(), uid).collect { _language.value = it } }
+        settingsJob = accountTasks.launch { _ ->
+            launch { ThemeManager.getTheme(getApplication(), uid).collect { _currentTheme.value = it } }
+            launch { ThemeManager.getAnimationsEnabled(getApplication(), uid).collect { _animationsEnabled.value = it } }
+            launch { ThemeManager.getTempUnit(getApplication(), uid).collect { _tempUnit.value = it } }
+            launch { ThemeManager.getWindUnit(getApplication(), uid).collect { _windUnit.value = it } }
+            launch { ThemeManager.getPressureUnit(getApplication(), uid).collect { _pressureUnit.value = it } }
+            launch { ThemeManager.getLanguage(getApplication(), uid).collect { _language.value = it } }
 
-        viewModelScope.launch { ThemeManager.getNotificationsEnabled(getApplication(), uid).collect { _notificationsEnabled.value = it } }
-        viewModelScope.launch { ThemeManager.getPersonalizationEnabled(getApplication(), uid).collect { _personalizationEnabled.value = it } }
-        viewModelScope.launch { ThemeManager.getAssistantTone(getApplication(), uid).collect { _assistantTone.value = it } }
-        viewModelScope.launch { ThemeManager.getUserName(getApplication(), uid).collect { _userName.value = it } }
-        viewModelScope.launch { ThemeManager.getUserBio(getApplication(), uid).collect { _userBio.value = it } }
-        viewModelScope.launch { ThemeManager.getUserImageUriByUid(getApplication(), uid).collect { _userImageUri.value = it } }
-        viewModelScope.launch { ThemeManager.getUserInterests(getApplication(), uid).collect { _userInterests.value = it } }
-        viewModelScope.launch { ThemeManager.getUserAboutMe(getApplication(), uid).collect { _userAboutMe.value = it } }
-        viewModelScope.launch { ThemeManager.getRegisteredCities(getApplication(), uid).collect { _registeredCities.value = it } }
-        viewModelScope.launch { ThemeManager.getDefaultCity(getApplication(), uid).collect { _defaultCity.value = it } }
-        viewModelScope.launch { ThemeManager.getLocationMode(getApplication(), uid).collect { _locationMode.value = it } }
+            launch { ThemeManager.getNotificationsEnabled(getApplication(), uid).collect { _notificationsEnabled.value = it } }
+            launch { ThemeManager.getPersonalizationEnabled(getApplication(), uid).collect { _personalizationEnabled.value = it } }
+            launch { ThemeManager.getAssistantTone(getApplication(), uid).collect { _assistantTone.value = it } }
+            launch { ThemeManager.getUserName(getApplication(), uid).collect { _userName.value = it } }
+            launch { ThemeManager.getUserBio(getApplication(), uid).collect { _userBio.value = it } }
+            launch { ThemeManager.getUserImageUriByUid(getApplication(), uid).collect { _userImageUri.value = it } }
+            launch { ThemeManager.getUserInterests(getApplication(), uid).collect { _userInterests.value = it } }
+            launch { ThemeManager.getUserAboutMe(getApplication(), uid).collect { _userAboutMe.value = it } }
+            launch { ThemeManager.getRegisteredCities(getApplication(), uid).collect { _registeredCities.value = it } }
+            launch { ThemeManager.getDefaultCity(getApplication(), uid).collect { _defaultCity.value = it } }
+            launch { ThemeManager.getLocationMode(getApplication(), uid).collect { _locationMode.value = it } }
 
-        viewModelScope.launch { ThemeManager.getTiltEffectEnabled(getApplication(), uid).collect { _tiltEffectEnabled.value = it } }
-        viewModelScope.launch { ThemeManager.getLiveEffects(getApplication(), uid).collect { _liveEffectsEnabled.value = it } }
-        viewModelScope.launch {
-            ThemeManager.getEffectIntensity(getApplication(), uid).collect { intensityStr ->
-                _userEffectIntensity.value = try { com.havamania.WeatherEffectIntensity.valueOf(intensityStr) } catch (e: Exception) { com.havamania.WeatherEffectIntensity.MEDIUM }
+            launch { ThemeManager.getTiltEffectEnabled(getApplication(), uid).collect { _tiltEffectEnabled.value = it } }
+            launch { ThemeManager.getLiveEffects(getApplication(), uid).collect { _liveEffectsEnabled.value = it } }
+            launch {
+                ThemeManager.getEffectIntensity(getApplication(), uid).collect { intensityStr ->
+                    _userEffectIntensity.value = try { com.havamania.WeatherEffectIntensity.valueOf(intensityStr) } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        com.havamania.WeatherEffectIntensity.MEDIUM
+                    }
+                }
             }
         }
     }
 
     fun setTheme(theme: AppTheme) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveTheme(getApplication(), theme, uid)
             _currentTheme.value = theme
         }
@@ -227,7 +241,7 @@ if (BuildConfig.DEBUG) {
 
     fun setAnimationsEnabled(enabled: Boolean) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveAnimationsEnabled(getApplication(), enabled, uid)
             _animationsEnabled.value = enabled
         }
@@ -235,7 +249,7 @@ if (BuildConfig.DEBUG) {
 
     fun setTempUnit(unit: TemperatureUnit) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveTempUnit(getApplication(), unit, uid)
             _tempUnit.value = unit
         }
@@ -243,7 +257,7 @@ if (BuildConfig.DEBUG) {
 
     fun setWindUnit(unit: WindSpeedUnit) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveWindUnit(getApplication(), unit, uid)
             _windUnit.value = unit
         }
@@ -251,7 +265,7 @@ if (BuildConfig.DEBUG) {
 
     fun setPressureUnit(unit: PressureUnit) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.savePressureUnit(getApplication(), unit, uid)
             _pressureUnit.value = unit
         }
@@ -259,42 +273,42 @@ if (BuildConfig.DEBUG) {
 
     fun setLanguage(lang: String) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveLanguage(getApplication(), lang, uid)
             _language.value = lang
         }
     }
 
     fun setNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveNotificationsEnabled(getApplication(), currentUid, enabled)
             _notificationsEnabled.value = enabled
         }
     }
 
     fun setPersonalizationEnabled(enabled: Boolean) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.savePersonalizationEnabled(getApplication(), currentUid, enabled)
             _personalizationEnabled.value = enabled
         }
     }
 
     fun setAssistantTone(tone: AssistantTone) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveAssistantTone(getApplication(), currentUid, tone)
             _assistantTone.value = tone
         }
     }
 
     fun setUserImageUri(uri: String?) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveUserImageUriByUid(getApplication(), currentUid, uri)
             _userImageUri.value = uri
         }
     }
 
     fun addCity(city: GeocodingResultDto) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             try {
                 val uid = currentUid
                 val current = _registeredCities.value.toMutableList()
@@ -310,6 +324,7 @@ if (BuildConfig.DEBUG) {
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e("ThemeVM", "Failed to add city", e)
 }
@@ -319,7 +334,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun removeCity(city: GeocodingResultDto) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             try {
                 val uid = currentUid
                 val current = _registeredCities.value.toMutableList()
@@ -339,6 +354,7 @@ if (BuildConfig.DEBUG) {
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e("ThemeVM", "Failed to remove city", e)
 }
@@ -348,7 +364,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun setDefaultCity(city: GeocodingResultDto) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             try {
                 val uid = currentUid
                 ThemeManager.saveDefaultCity(getApplication(), uid, city)
@@ -360,6 +376,7 @@ if (BuildConfig.DEBUG) {
                         .await()
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e("ThemeVM", "Failed to sync default city", e)
 }
@@ -368,14 +385,14 @@ if (BuildConfig.DEBUG) {
     }
 
     fun setLocationMode(mode: LocationMode) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveLocationMode(getApplication(), currentUid, mode)
             _locationMode.value = mode
         }
     }
 
     fun checkInitialLocationMode() {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             val uid = currentUid
             val context = getApplication<Application>()
 
@@ -392,7 +409,7 @@ if (BuildConfig.DEBUG) {
 
     fun setTiltEffectEnabled(enabled: Boolean) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveTiltEffectEnabled(getApplication(), enabled, uid)
             _tiltEffectEnabled.value = enabled
         }
@@ -400,7 +417,7 @@ if (BuildConfig.DEBUG) {
 
     fun setLiveEffectsEnabled(enabled: Boolean) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveLiveEffects(getApplication(), enabled, uid)
             _liveEffectsEnabled.value = enabled
         }
@@ -408,14 +425,14 @@ if (BuildConfig.DEBUG) {
 
     fun setEffectIntensity(intensity: com.havamania.WeatherEffectIntensity) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             ThemeManager.saveEffectIntensity(getApplication(), intensity.name, uid)
             _userEffectIntensity.value = intensity
         }
     }
 
     fun resetCities() {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             val uid = currentUid
             ThemeManager.clearRegisteredCities(getApplication(), uid)
             _registeredCities.value = emptyList()
@@ -424,7 +441,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun resetAllData() {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             val uid = currentUid
             ThemeManager.resetAll(getApplication(), uid)
             loadSettings()
@@ -432,7 +449,8 @@ if (BuildConfig.DEBUG) {
     }
 
     fun syncWithFirebase(profile: com.havamania.UserProfile) {
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
+            if (profile.uid != currentUid) return@launch
             val uid = currentUid
             if (BuildConfig.DEBUG) Log.i("PHOTO", "[PHOTO] syncWithFirebase started for $uid")
 
@@ -465,6 +483,7 @@ if (BuildConfig.DEBUG) {
                     Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
 }
@@ -474,6 +493,7 @@ if (BuildConfig.DEBUG) {
 
     fun clearLocalUserData() {
         // Oturum kapatıldığında state temizlenir ama DataStore'daki kalıcı veri silinmez (talimat gereği)
+        _isPremium.value = false
         _userName.value = ""
         _userBio.value = ""
         _userImageUri.value = null

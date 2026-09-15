@@ -14,23 +14,26 @@ import kotlinx.coroutines.tasks.await
 class AiHistoryViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
     private val dao = WeatherDatabase.getDatabase(application).weatherDao()
 
     private val _historyItems = MutableStateFlow<List<AiHistoryEntity>>(emptyList())
     val historyItems: StateFlow<List<AiHistoryEntity>> = _historyItems.asStateFlow()
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        accountTasks.reset()
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        clearEpoch++
         _historyItems.value = emptyList()
+        observeFirestoreHistory(newUid)
         loadHistoryForUid(newUid)
     }
 
     private var historyListener: com.google.firebase.firestore.ListenerRegistration? = null
-    private var clearEpoch = 0
+    @Volatile private var clearEpoch = 0
 
     init {
         auth.addAuthStateListener(authListener)
-        observeFirestoreHistory(currentUid)
     }
 
     override fun onCleared() {
@@ -40,18 +43,24 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun observeFirestoreHistory(uid: String) {
+        if (uid != currentUid) return
         historyListener?.remove()
+        historyListener = null
         if (uid == "legacy") return
 
         val observationEpoch = clearEpoch
         historyListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("users").document(uid).collection("ai_history")
             .addSnapshotListener { snapshot, e ->
+                if (uid != currentUid || observationEpoch != clearEpoch) return@addSnapshotListener
                 if (e == null && snapshot != null) {
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
                         if (observationEpoch != clearEpoch) return@launch
                         val items = snapshot.documents.mapNotNull { doc ->
-                            try { doc.toObject(AiHistoryEntity::class.java) } catch (ex: Exception) { null }
+                            try { doc.toObject(AiHistoryEntity::class.java)?.copy(id = doc.id, userId = uid) } catch (ex: Exception) {
+                                if (ex is kotlinx.coroutines.CancellationException) throw ex
+                                null
+                            }
                         }
                         if (observationEpoch != clearEpoch) return@launch
                         items.forEach {
@@ -68,8 +77,12 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun loadHistoryForUid(uid: String) {
-        viewModelScope.launch {
-            _historyItems.value = dao.getAllAiHistory(uid)
+        if (uid != currentUid) return
+        accountTasks.launch launch@ { currentUid ->
+            val epoch = clearEpoch
+            val items = dao.getAllAiHistory(uid)
+            if (uid != this@AiHistoryViewModel.currentUid || epoch != clearEpoch) return@launch
+            _historyItems.value = items
             if (uid != "legacy" && historyListener == null) {
                 observeFirestoreHistory(uid)
             }
@@ -88,7 +101,7 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         cityName: String?
     ) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             val finalId = id ?: java.util.UUID.randomUUID().toString()
 
             // Fetch existing to preserve timestamp if updating
@@ -112,6 +125,7 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                         .collection("users").document(uid).collection("ai_history")
                         .document(finalId).set(item)
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         android.util.Log.e("AiHistoryVM", "Firestore save failed", e)
 }
@@ -123,7 +137,7 @@ if (BuildConfig.DEBUG) {
 
     fun deleteItem(id: String) {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             dao.deleteAiHistory(id, uid)
             if (uid != "legacy") {
                 try {
@@ -131,6 +145,7 @@ if (BuildConfig.DEBUG) {
                         .collection("users").document(uid).collection("ai_history")
                         .document(id).delete()
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                         android.util.Log.e("AiHistoryVM", "Firestore delete failed", e)
 }
@@ -142,7 +157,7 @@ if (BuildConfig.DEBUG) {
 
     fun clearAll() {
         val uid = currentUid
-        viewModelScope.launch {
+        accountTasks.launch launch@ { currentUid ->
             clearEpoch++
             historyListener?.remove()
             historyListener = null
@@ -162,6 +177,7 @@ if (BuildConfig.DEBUG) {
                         }
                     }
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     if (BuildConfig.DEBUG) {
                         android.util.Log.e("AiHistoryVM", "Firestore clearAll failed", e)
                     }

@@ -78,3 +78,6 @@ mobile/android/keystore.properties
 mobile/android/.gradle_prefs/
 test_api*.py
 test_backend_api.py
+
+# Kotlin compiler session cache
+mobile/android/.kotlin/
