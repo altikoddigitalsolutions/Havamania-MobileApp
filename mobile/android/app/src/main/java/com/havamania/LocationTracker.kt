@@ -47,15 +47,17 @@ class DefaultLocationTracker(
         if (!isGpsEnabled) return null
 
         return suspendCancellableCoroutine { cont ->
-            locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
+            cont.invokeOnCancellation { cancellation.cancel() }
+            locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
                 .addOnSuccessListener { location ->
-                    cont.resume(location)
+                    if (cont.isActive) cont.resume(location)
                 }
                 .addOnFailureListener {
-                    cont.resume(null)
+                    if (cont.isActive) cont.resume(null)
                 }
                 .addOnCanceledListener {
-                    cont.resume(null)
+                    if (cont.isActive) cont.resume(null)
                 }
         }
     }

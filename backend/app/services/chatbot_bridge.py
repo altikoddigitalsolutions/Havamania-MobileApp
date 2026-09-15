@@ -25,7 +25,7 @@ class ChatbotBridgeClient:
                     response.raise_for_status()
                     data = response.json()
                     return str(data.get("answer", ""))
-            except Exception:
+            except (httpx.HTTPError, ValueError, TypeError, AttributeError):
                 if attempt == 1:
                     mark_chatbot_timeout()
                     return "Yanıt gecikiyor. Lütfen tekrar deneyin."

@@ -1,7 +1,6 @@
 from typing import Any
 
 import httpx
-
 from app.services.weather.provider import WeatherProvider
 
 

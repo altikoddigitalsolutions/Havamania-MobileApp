@@ -27,6 +27,12 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
             self._request_counter = 0
             self._cleanup(now)
 
+        # Check capacity before defaultdict inserts the new client key.
+        if key not in self.hits and len(self.hits) >= self.max_tracked_keys:
+            self._cleanup(now)
+            if len(self.hits) >= self.max_tracked_keys:
+                self.hits.pop(next(iter(self.hits)), None)
+
         window = self.hits[key]
 
         while window and now - window[0] > self.window_seconds:
@@ -37,15 +43,6 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
                 status_code=429,
                 content={"detail": "Rate limit exceeded"},
             )
-
-        # Enforce hard key bound to prevent memory exhaustion attack
-        if len(self.hits) >= self.max_tracked_keys and key not in self.hits:
-            expired_keys = [k for k, v in self.hits.items() if not v or now - v[-1] > self.window_seconds]
-            if expired_keys:
-                for ek in expired_keys:
-                    self.hits.pop(ek, None)
-            if len(self.hits) >= self.max_tracked_keys:
-                self.hits.pop(next(iter(self.hits)), None)
 
         window.append(now)
         return await call_next(request)

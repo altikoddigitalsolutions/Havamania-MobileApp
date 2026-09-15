@@ -181,6 +181,8 @@ object WeatherMapper {
         }
 
         return hourly.time.indices.mapNotNull { i ->
+            val code = hourly.weatherCode.getOrNull(i) ?: return@mapNotNull null
+            val temperature = hourly.temperature.getOrNull(i) ?: return@mapNotNull null
             val fullTime = hourly.time[i]
             val parts = fullTime.split("T")
             if (parts.size != 2) return@mapNotNull null
@@ -213,13 +215,13 @@ object WeatherMapper {
             HourlyWeather(
                 time = hourLabel,
                 fullTime = fullTime,
-                iconName = getWeatherIconName(hourly.weatherCode[i]),
-                condition = getWeatherCondition(hourly.weatherCode[i]),
-                weatherCode = hourly.weatherCode[i],
+                iconName = getWeatherIconName(code),
+                condition = getWeatherCondition(code),
+                weatherCode = code,
                 isDay = isDay,
-                temp = "${hourly.temperature[i].toInt()}°",
-                precipProb = hourly.precipitationProbability?.get(i)?.let { "$it%" },
-                precipitationProbability = hourly.precipitationProbability?.get(i),
+                temp = "${temperature.roundToInt()}°",
+                precipProb = hourly.precipitationProbability?.getOrNull(i)?.let { "$it%" },
+                precipitationProbability = hourly.precipitationProbability?.getOrNull(i),
                 isSelected = fullTime == currentHourStr
             )
         }
@@ -227,14 +229,17 @@ object WeatherMapper {
 
     private fun mapDaily(daily: DailyDto?): List<DailyForecast> {
         if (daily == null) return emptyList()
-        return daily.time.mapIndexed { index, time ->
+        return daily.time.mapIndexedNotNull { index, time ->
+            val code = daily.weatherCode.getOrNull(index) ?: return@mapIndexedNotNull null
+            val min = daily.tempMin.getOrNull(index) ?: return@mapIndexedNotNull null
+            val max = daily.tempMax.getOrNull(index) ?: return@mapIndexedNotNull null
             DailyForecast(
                 day = getDayName(time),
                 date = time,
-                iconName = getWeatherIconName(daily.weatherCode[index]),
-                weatherCode = daily.weatherCode[index],
-                minTemp = daily.tempMin[index].toInt(),
-                maxTemp = daily.tempMax[index].toInt(),
+                iconName = getWeatherIconName(code),
+                weatherCode = code,
+                minTemp = min.roundToInt(),
+                maxTemp = max.roundToInt(),
                 precipitationProbability = daily.precipProbMax?.getOrNull(index),
                 isToday = index == 0
             )
@@ -320,10 +325,8 @@ object WeatherMapper {
 
     fun getMoonAndSunData(daily: DailyDto?): List<Pair<String, String>> {
         val list = mutableListOf<Pair<String, String>>()
-        if (daily != null && daily.sunrise.isNotEmpty()) {
-            list.add("Güneş Doğuşu" to daily.sunrise.first().split("T").last())
-            list.add("Güneş Batışı" to daily.sunset.first().split("T").last())
-        }
+        daily?.sunrise?.firstOrNull()?.let { list.add("Güneş Doğuşu" to it.substringAfter("T")) }
+        daily?.sunset?.firstOrNull()?.let { list.add("Güneş Batışı" to it.substringAfter("T")) }
         val moon = getMoonPhase(Date())
         list.add("Ay Fazı" to moon.label)
         list.add("Aydınlık" to WeatherUtils.formatRainProbability(moon.illumination))

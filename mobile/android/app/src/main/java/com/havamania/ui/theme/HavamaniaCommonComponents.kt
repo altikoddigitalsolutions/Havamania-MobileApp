@@ -267,7 +267,7 @@ fun HavamaniaPrimaryButton(
         enabled = enabled && !isLoading,
         modifier = modifier
             .scale(scale)
-            .height(height)
+            .heightIn(min = maxOf(height, 48.dp))
             .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier)
             .drawBehind {
                 if (enabled && !isLoading) {
@@ -285,8 +285,10 @@ fun HavamaniaPrimaryButton(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundBrush),
+                .fillMaxWidth()
+                .heightIn(min = maxOf(height, 48.dp))
+                .background(backgroundBrush)
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
@@ -313,8 +315,7 @@ fun HavamaniaPrimaryButton(
                             letterSpacing = 0.5.sp,
                             color = colors.onAccent
                         ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip
+                        textAlign = TextAlign.Center
                     )
                 }
             }

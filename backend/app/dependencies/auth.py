@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.user import User
+from app.services.firebase_identity import firebase_user
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 
@@ -15,11 +16,8 @@ def get_current_user(
 ) -> User:
     try:
         payload = decode_token(token)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-        ) from exc
+    except ValueError:
+        return firebase_user(token, db)
 
     if payload.get("type") != "access":
         raise HTTPException(

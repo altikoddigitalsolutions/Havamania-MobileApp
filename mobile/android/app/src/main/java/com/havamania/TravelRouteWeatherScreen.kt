@@ -786,10 +786,12 @@ private fun RouteAnalysisActionCard(analyzing: Boolean, onAnalyze: () -> Unit, c
 
 @Composable
 fun MapLayer(mapView: MapView, onMapReady: (MapLibreMap, Style) -> Unit) {
-    androidx.compose.ui.viewinterop.AndroidView(factory = { mapView }) { mv ->
-        mv.getMapAsync { map ->
+    val latestOnMapReady by rememberUpdatedState(onMapReady)
+    androidx.compose.ui.viewinterop.AndroidView(factory = { mapView })
+    LaunchedEffect(mapView) {
+        mapView.getMapAsync { map ->
             map.setStyle(MapStyleProvider.currentStyle()) { style ->
-                onMapReady(map, style)
+                latestOnMapReady(map, style)
             }
         }
     }
@@ -807,7 +809,8 @@ fun rememberMapViewWithLifecycle(): MapView {
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                // Disposal owns destruction, including navigation away while the activity lives.
+                Lifecycle.Event.ON_DESTROY -> Unit
                 else -> {}
             }
         }
@@ -817,6 +820,9 @@ fun rememberMapViewWithLifecycle(): MapView {
         lifecycle.addObserver(lifecycleObserver)
         onDispose {
             lifecycle.removeObserver(lifecycleObserver)
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
     return mapView

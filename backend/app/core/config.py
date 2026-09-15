@@ -1,6 +1,6 @@
 import json
 from functools import lru_cache
-from typing import List, Union, Any
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/havamania"
-    cors_origins: List[str] = Field(default_factory=list)
+    cors_origins: list[str] = Field(default_factory=list)
     weather_provider: str = "open_meteo"
     chatbot_base_url: str = "http://localhost:9000"
     chatbot_timeout_seconds: int = 15
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     chatbot_premium_daily_limit: int = 100
     metrics_secret: str = "change-me"
     sentry_dsn_backend: str | None = None
+    firebase_project_id: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -59,7 +60,7 @@ class Settings(BaseSettings):
                     raise ValueError("DATABASE_URL cannot use a loopback host in production environment")
             except Exception as e:
                 if isinstance(e, ValueError):
-                    raise e
+                    raise
                 raise ValueError("Invalid DATABASE_URL format")
         return v
 
@@ -74,13 +75,13 @@ class Settings(BaseSettings):
                     raise ValueError("CHATBOT_BASE_URL cannot use a loopback host in production environment")
             except Exception as e:
                 if isinstance(e, ValueError):
-                    raise e
+                    raise
                 raise ValueError("Invalid CHATBOT_BASE_URL format")
         return v
 
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value: Any) -> List[str]:
+    def parse_cors_origins(cls, value: Any) -> list[str]:
         if isinstance(value, list):
             return value
         if isinstance(value, str):

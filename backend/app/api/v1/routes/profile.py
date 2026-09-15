@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-import shutil
 import os
 from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -21,6 +21,8 @@ from app.schemas.profile import (
 )
 
 router = APIRouter()
+AVATAR_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "static", "avatars")
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 
 def _ensure_profile(db: Session, user_id: str) -> Profile:
@@ -284,23 +286,31 @@ def update_notification_preferences(
 
 
 @router.post("/avatar", response_model=ProfileResponse)
-async def upload_avatar(
+def upload_avatar(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ProfileResponse:
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    upload_dir = "static/avatars"
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename)[1]
+    extensions = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+    file_ext = extensions.get(file.content_type)
+    if file_ext is None:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG and WebP images are supported")
+    data = file.file.read(MAX_AVATAR_BYTES + 1)
+    if len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(status_code=413, detail="Avatar must not exceed 5 MB")
+    valid_signature = (
+        (file_ext == ".jpg" and data.startswith(b"\xff\xd8\xff"))
+        or (file_ext == ".png" and data.startswith(b"\x89PNG\r\n\x1a\n"))
+        or (file_ext == ".webp" and data.startswith(b"RIFF") and data[8:12] == b"WEBP")
+    )
+    if not valid_signature:
+        raise HTTPException(status_code=400, detail="Image content does not match its type")
+    os.makedirs(AVATAR_DIR, exist_ok=True)
     file_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
-    file_path = os.path.join(upload_dir, file_name)
+    file_path = os.path.join(AVATAR_DIR, file_name)
 
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(data)
 
     profile = _ensure_profile(db, current_user.id)
     profile.avatar_url = f"/static/avatars/{file_name}"

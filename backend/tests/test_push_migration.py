@@ -1,7 +1,7 @@
 import pytest
-from sqlalchemy import create_engine, text
-from app.db.base import Base
 from app.db.session import run_push_token_migration
+from sqlalchemy import create_engine, text
+
 
 def test_migration_fail_fast_on_duplicates(tmp_path):
     db_file = tmp_path / "test_migration.db"

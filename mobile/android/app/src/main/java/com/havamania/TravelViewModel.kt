@@ -70,6 +70,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed. New UID: $newUid")
+        analysisJobs.values.forEach { it.cancel() }
+        analysisJobs.clear()
         _plans.value = emptyList()
         _isLoading.value = true
         loadPlansForUid(newUid)
@@ -94,6 +96,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
         firestoreListener = db.collection("users").document(uid).collection("trips")
             .addSnapshotListener { snapshot, e ->
+                if (currentUid != uid) return@addSnapshotListener
                 if (e != null) {
 if (BuildConfig.DEBUG) {
                         Log.w(TAG, "Firestore listen failed.", e)
@@ -107,7 +110,7 @@ if (BuildConfig.DEBUG) {
                         try {
                             val entities = snapshot.documents.mapNotNull { doc ->
                                 try {
-                                    doc.toObject(TravelPlanEntity::class.java)
+                                    doc.toObject(TravelPlanEntity::class.java)?.copy(id = doc.id, userId = uid)
                                 } catch (me: Exception) {
 if (BuildConfig.DEBUG) {
                                         Log.e(TAG, "Data mapping error for doc ${doc.id}", me)
@@ -183,9 +186,11 @@ if (BuildConfig.DEBUG) {
 
     fun loadPlans() {
         _today.value = timeProvider.today()
+        val uid = currentUid
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _isLoading.value = true
-            val entities = dao.getAllTravelPlans(currentUid)
+            val entities = dao.getAllTravelPlans(uid)
+            if (currentUid != uid) return@launch
             val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
             _plans.value = domainPlans
             _isLoading.value = false

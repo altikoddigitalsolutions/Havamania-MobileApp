@@ -92,6 +92,7 @@ class RouteWeatherProvider(
                 val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
                 WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 null
             }
         }
@@ -102,11 +103,12 @@ class RouteWeatherProvider(
         etas: List<Long?>
     ): List<WaypointWeather?> = withContext(Dispatchers.IO) {
         if (points.isEmpty()) return@withContext emptyList()
+        if (points.size == 1) return@withContext listOf(weatherAt(points.single(), etas.firstOrNull()))
         try {
             val lats = points.map { it.latitude }
             val lons = points.map { it.longitude }
 
-            val responses = api.getBatchRouteHourly(lats = lats, lons = lons)
+            val responses = api.getBatchRouteHourly(lats = lats.joinToString(","), lons = lons.joinToString(","))
 
             points.indices.map { i ->
                 val resp = responses.getOrNull(i) ?: return@map null
@@ -125,6 +127,7 @@ class RouteWeatherProvider(
                 WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e("RouteWeather", "Batch fetch failed, falling back to individual", e)
 }
@@ -159,6 +162,7 @@ if (BuildConfig.DEBUG) {
                 bestIdx = i
             }
         }
-        return bestIdx
+        // A date outside the forecast horizon must not reuse the last available forecast.
+        return bestIdx.takeIf { bestDiff <= 60 }
     }
 }

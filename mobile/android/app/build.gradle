@@ -56,16 +56,12 @@ android {
         }
 
         release {
-            if (!keystorePropertiesFile.exists()) {
-                throw new GradleException(
-                    "Release signing config missing: keystore.properties not found"
-                )
-            }
-
+            if (keystorePropertiesFile.exists()) {
             storeFile file(keystoreProperties["storeFile"])
             storePassword keystoreProperties["storePassword"]
             keyAlias keystoreProperties["keyAlias"]
             keyPassword keystoreProperties["keyPassword"]
+            }
         }
     }
 
@@ -89,6 +85,14 @@ android {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (!keystorePropertiesFile.exists() && graph.allTasks.any {
+        it.project == project && it.name.toLowerCase().contains('release')
+    }) {
+        throw new GradleException("Release signing config missing: keystore.properties not found")
     }
 }
 
@@ -143,7 +147,7 @@ dependencies {
     implementation "io.coil-kt:coil-compose:2.7.0"
 
     // MapLibre
-    implementation "org.maplibre.gl:android-sdk:11.5.2"
+    implementation "org.maplibre.gl:android-sdk:11.8.0"
 
     // Firebase
     implementation platform("com.google.firebase:firebase-bom:33.1.1")
@@ -161,4 +165,3 @@ dependencies {
 }
 
 apply plugin: "com.google.gms.google-services"
-apply plugin: "com.google.firebase.crashlytics"

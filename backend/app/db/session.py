@@ -1,3 +1,5 @@
+import logging
+
 import sqlalchemy
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -5,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -52,9 +55,8 @@ def run_push_token_migration():
                                 quoted_table = preparer.quote("push_tokens")
                                 quoted_constraint = preparer.quote(c_name)
                                 conn.execute(text(f"ALTER TABLE {quoted_table} DROP CONSTRAINT {quoted_constraint}"))
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Constraint inspection/drop notice: {e}")
+                except Exception:
+                    logger.exception("Constraint inspection/drop failed")
 
                 try:
                     indexes = inspector.get_indexes("push_tokens")
@@ -65,9 +67,8 @@ def run_push_token_migration():
                             if idx_name:
                                 quoted_index = preparer.quote(idx_name)
                                 conn.execute(text(f"DROP INDEX IF EXISTS {quoted_index}"))
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Index inspection/drop notice: {e}")
+                except Exception:
+                    logger.exception("Index inspection/drop failed")
 
                 # 3. Create unique index on token
                 try:
@@ -75,9 +76,8 @@ def run_push_token_migration():
                     quoted_table = preparer.quote("push_tokens")
                     quoted_col = preparer.quote("token")
                     conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS {quoted_token_idx} ON {quoted_table} ({quoted_col})"))
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Could not create unique index on token: {e}")
+                except Exception:
+                    logger.exception("Could not create unique index on token")
 
                 # 4. Final Schema Verification
                 post_inspector = sqlalchemy.inspect(engine)
@@ -96,10 +96,9 @@ def run_push_token_migration():
                     raise RuntimeError("Final schema verification failed: New unique index/constraint on (token) not found.")
 
     except Exception as e:
-        import logging
-        logging.error(f"Push token migration final verification error: {e}")
+        logger.exception("Push token migration final verification error")
         if "getaddrinfo failed" not in str(e) and "operationalerror" not in str(e).lower():
-            raise e
+            raise
 
 
 def get_db():

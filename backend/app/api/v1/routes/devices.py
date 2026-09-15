@@ -63,4 +63,3 @@ def unregister_push_token(
     if token_obj:
         db.delete(token_obj)
         db.commit()
-    return None

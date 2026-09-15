@@ -10,15 +10,15 @@ from app.models.user import User
 from app.models.weather_snapshot import WeatherSnapshot
 
 __all__ = [
-    "User",
-    "RefreshToken",
-    "Profile",
-    "Location",
-    "NotificationPreference",
-    "WeatherSnapshot",
     "Alert",
     "AlertSeverity",
     "ChatbotUsageDaily",
-    "Subscription",
+    "Location",
+    "NotificationPreference",
+    "Profile",
     "PushToken",
+    "RefreshToken",
+    "Subscription",
+    "User",
+    "WeatherSnapshot",
 ]

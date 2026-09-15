@@ -29,8 +29,8 @@ interface WeatherApiService {
     /** Birden fazla nokta için toplu hava durumu verisi çekme (Güzergâh optimizasyonu). */
     @GET("v1/forecast")
     suspend fun getBatchRouteHourly(
-        @Query("latitude") lats: List<Double>,
-        @Query("longitude") lons: List<Double>,
+        @Query("latitude") lats: String,
+        @Query("longitude") lons: String,
         @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m",
         @Query("timezone") timezone: String = "auto",
         @Query("forecast_days") days: Int = 14

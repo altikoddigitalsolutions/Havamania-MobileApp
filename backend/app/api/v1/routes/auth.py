@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, MessageResponse, RefreshRequest, SignupRequest, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    MessageResponse,
+    RefreshRequest,
+    SignupRequest,
+    TokenResponse,
+)
 from app.services.auth_service import login, logout, refresh, signup
 
 router = APIRouter()
@@ -10,7 +16,7 @@ router = APIRouter()
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_endpoint(payload: SignupRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    user = signup(db=db, email=payload.email, password=payload.password, full_name=payload.full_name)
+    signup(db=db, email=payload.email, password=payload.password, full_name=payload.full_name)
     access_token, refresh_token = login(db=db, email=payload.email, password=payload.password)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 

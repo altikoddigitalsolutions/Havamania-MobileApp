@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'mobile/**'
+      - 'tools/check_apk_alignment.py'
       - '.github/workflows/mobile-ci.yml'
   pull_request:
     paths:
       - 'mobile/**'
+      - 'tools/check_apk_alignment.py'
       - '.github/workflows/mobile-ci.yml'
 
 jobs:
@@ -43,3 +45,11 @@ jobs:
         run: chmod +x gradlew
       - name: Run debug unit tests, lint, and assemble debug
         run: ./gradlew testDebugUnitTest lintDebug assembleDebug
+      - name: Verify 64-bit ELF alignment
+        run: python ../../tools/check_apk_alignment.py app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload Android verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-verification
+          path: mobile/android/app/build/reports/

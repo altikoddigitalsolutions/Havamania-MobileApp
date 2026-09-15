@@ -7,6 +7,31 @@ def _auth_header_for_user(client, email: str = "profile@example.com") -> dict[st
     return {"Authorization": f"Bearer {access_token}"}
 
 
+def test_avatar_rejects_active_content_and_spoofed_image(client):
+    headers = _auth_header_for_user(client)
+    for content_type in ("image/svg+xml", "image/png"):
+        response = client.post("/v1/profile/avatar", headers=headers,
+            files={"file": ("avatar.svg", b"<svg><script>alert(1)</script></svg>", content_type)})
+        assert response.status_code == 400
+
+
+def test_avatar_size_is_bounded(client):
+    headers = _auth_header_for_user(client)
+    response = client.post("/v1/profile/avatar", headers=headers,
+        files={"file": ("avatar.jpg", b"\xff\xd8\xff" + b"x" * (5 * 1024 * 1024), "image/jpeg")})
+    assert response.status_code == 413
+
+
+def test_avatar_ignores_untrusted_filename_extension(client, tmp_path, monkeypatch):
+    from app.api.v1.routes import profile
+    monkeypatch.setattr(profile, "AVATAR_DIR", str(tmp_path))
+    headers = _auth_header_for_user(client)
+    response = client.post("/v1/profile/avatar", headers=headers,
+        files={"file": ("avatar.html", b"\xff\xd8\xff\xd9", "image/jpeg")})
+    assert response.status_code == 200
+    assert response.json()["avatar_url"].endswith(".jpg")
+
+
 def test_get_and_update_profile(client):
     headers = _auth_header_for_user(client)
 

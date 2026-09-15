@@ -6,6 +6,35 @@ import org.junit.Test
 class WeatherAndAnalysisTest {
 
     @Test
+    fun `partial forecast arrays preserve complete entries without crashing`() {
+        val domain = WeatherMapper.mapToDomain(OpenMeteoResponse(
+            latitude = 41.0, longitude = 29.0,
+            hourly = HourlyDto(
+                time = listOf("2026-09-15T12:00", "2026-09-15T13:00"),
+                temperature = listOf(21.6), weatherCode = listOf(0, 1),
+                precipitationProbability = emptyList()
+            ),
+            daily = DailyDto(
+                time = listOf("2026-09-15", "2026-09-16"),
+                weatherCode = listOf(0), tempMax = listOf(25.6), tempMin = listOf(20.6)
+            )
+        ), "İstanbul")
+        assertEquals(1, domain.hourlyForecast.size)
+        assertEquals("22°", domain.hourlyForecast.single().temp)
+        assertNull(domain.hourlyForecast.single().precipitationProbability)
+        assertEquals(1, domain.dailyForecast.size)
+        assertEquals(26, domain.dailyForecast.single().maxTemp)
+    }
+
+    @Test
+    fun `sunrise without sunset does not crash`() {
+        val daily = DailyDto(time = emptyList(), weatherCode = emptyList(),
+            tempMax = emptyList(), tempMin = emptyList(),
+            sunrise = listOf("2026-09-15T06:30"))
+        assertTrue(WeatherMapper.getMoonAndSunData(daily).contains("Güneş Doğuşu" to "06:30"))
+    }
+
+    @Test
     fun `weatherMapper temperature null does not produce zero`() {
         val response = OpenMeteoResponse(
             latitude = 41.0,

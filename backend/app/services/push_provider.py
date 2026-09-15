@@ -1,4 +1,5 @@
 import logging
+
 import firebase_admin
 from firebase_admin import messaging
 
@@ -20,8 +21,8 @@ class FCMApnsPushProvider(PushProvider):
         if not firebase_admin._apps:
             try:
                 firebase_admin.initialize_app()
-            except Exception as e:
-                logger.warning(f"Firebase Admin default initialization notice: {e}")
+            except Exception:
+                logger.exception("Firebase Admin default initialization failed")
 
     def send(self, platform: str, token: str, title: str, body: str) -> bool:
         if platform.lower() != "android":
@@ -46,6 +47,6 @@ class FCMApnsPushProvider(PushProvider):
             response = messaging.send(message)
             logger.info(f"Successfully sent FCM message: {response}")
             return True
-        except Exception as e:
-            logger.error(f"Failed to send push notification via FCM: {e}")
+        except Exception:
+            logger.exception("Failed to send push notification via FCM")
             return False

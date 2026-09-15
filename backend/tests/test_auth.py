@@ -1,5 +1,3 @@
-from datetime import UTC, datetime, timedelta
-import pytest
 
 def test_signup_returns_tokens(client):
     response = client.post(

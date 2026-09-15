@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from app.services.push_provider import FCMApnsPushProvider
+
 
 @patch("firebase_admin.messaging.send")
 @patch("firebase_admin._apps", ["default"])

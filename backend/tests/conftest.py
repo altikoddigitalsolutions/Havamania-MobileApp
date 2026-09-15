@@ -1,15 +1,15 @@
-from collections.abc import Generator
-import pytest
 import os
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.engine import Engine
+from collections.abc import Generator
 
+import pytest
+from app import models  # noqa: F401 -- register all SQLAlchemy model metadata
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app import models
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 # Windows uyumlu geçici DB yolu
 TEST_DB_FILE = "test_db.sqlite"

@@ -27,6 +27,7 @@ class WeatherRepository(
 
         fun getInstance(application: android.app.Application): WeatherRepository {
             return INSTANCE ?: synchronized(this) {
+                INSTANCE?.let { return@synchronized it }
                 val database = WeatherDatabase.getDatabase(application)
                 val instance = WeatherRepository(weatherDao = database.weatherDao())
                 INSTANCE = instance
@@ -46,6 +47,7 @@ class WeatherRepository(
             val cacheKey = canonicalKey(cityName, districtName)
             weatherDao.deleteWeather(cacheKey)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             // Log or ignore
         }
     }
@@ -62,6 +64,7 @@ class WeatherRepository(
             val response = apiService.searchCity(cityName = query)
             response.results ?: emptyList()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()
         }
     }
@@ -82,6 +85,7 @@ class WeatherRepository(
             val response = apiService.getFullWeather(lat = lat, lon = lon)
             WeatherMapper.mapToDomain(response, cityName, districtName)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 android.util.Log.e("WeatherRepo", "fetchWeatherSnapshot failed for $cityName", e)
 }
@@ -121,6 +125,7 @@ if (BuildConfig.DEBUG) {
                     android.util.Log.d("WeatherRepo", "Cache emitted for $cacheKey (Age: ${age/1000}s, Fresh: $isCacheFresh)")
 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("WeatherRepo", "Cache decode failed", e)
 }
@@ -152,6 +157,7 @@ if (BuildConfig.DEBUG) {
                 emit(domainData)
                 hasEmitted = true
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("WeatherRepo", "Network fetch failed", e)
 }

@@ -44,10 +44,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val avatarVersion: StateFlow<Long> = _avatarVersion
 
     private val userProfileRepository = UserProfileRepository.getInstance()
+    private var profileJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         if (user == null) {
+            profileJob?.cancel()
+            userProfileRepository.stopObserving()
             _profileState.value = ProfileState.Idle
         } else {
             observeProfile(user.uid)
@@ -64,10 +67,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun observeProfile(uid: String) {
+        profileJob?.cancel()
+        _profileState.value = ProfileState.Loading
         userProfileRepository.startObserving(uid)
 
-        viewModelScope.launch {
+        profileJob = viewModelScope.launch {
+            try {
             userProfileRepository.profile.collect { profile ->
+                if (auth.currentUser?.uid != uid) return@collect
                 if (profile != null) {
                     _profileState.value = ProfileState.Success(profile)
                     syncDataStoreFromProfile(profile)
@@ -82,6 +89,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                 }
+            }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _profileState.value = ProfileState.Error("Profil yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.")
             }
         }
     }
@@ -272,9 +284,12 @@ if (BuildConfig.DEBUG) {
                 }
                 val bitmap = processImage(uri) ?: throw Exception("Görsel işlenemedi.")
 
-                val baos = java.io.ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 75, baos)
-                val data = baos.toByteArray()
+                val data = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    java.io.ByteArrayOutputStream().use { output ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, output)
+                        output.toByteArray()
+                    }
+                }
 
                 // Path must match rules 'profile-images/{userId}/{allPaths=**}'
                 val storagePath = "profile-images/$uid/avatar.jpg"
@@ -331,11 +346,11 @@ if (BuildConfig.DEBUG) {
                     e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_QUOTA_EXCEEDED ->
                         "Sunucu kotası doldu, lütfen daha sonra tekrar deneyin."
                     e is com.google.firebase.storage.StorageException && e.httpResultCode == 402 ->
-                        "Servis kısıtlaması: Cloud Storage kullanımı için Blaze planı gereklidir. Lütfen sistem yöneticisiyle iletişime geçin."
+                        "Fotoğraf hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin."
                     e is java.io.IOException ->
                         "Bağlantı hatası: Lütfen internetinizi kontrol edin."
                     e.message?.contains("unknown", true) == true ->
-                        "Sunucu hatası: Firebase Storage yapılandırması (Blaze planı) kontrol edilmelidir."
+                        "Fotoğraf yüklenemedi. Lütfen daha sonra tekrar deneyin."
                     else -> "Beklenmedik bir hata oluştu: ${e.localizedMessage ?: "Bilinmiyor"}"
                 }
 if (BuildConfig.DEBUG) {
@@ -393,7 +408,7 @@ if (BuildConfig.DEBUG) {
             inputStream?.close()
 
             var scale = 1
-            while (options.outWidth / scale / 2 >= 512 && options.outHeight / scale / 2 >= 512) {
+            while (options.outWidth / scale / 2 >= 512 || options.outHeight / scale / 2 >= 512) {
                 scale *= 2
             }
 
@@ -414,7 +429,7 @@ if (BuildConfig.DEBUG) {
                 val ratio = rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat()
                 val width = if (ratio > 1) 512 else (512 * ratio).toInt()
                 val height = if (ratio > 1) (512 / ratio).toInt() else 512
-                Bitmap.createScaledBitmap(rotatedBitmap, width, height, true)
+                Bitmap.createScaledBitmap(rotatedBitmap, width.coerceAtLeast(1), height.coerceAtLeast(1), true)
             } else {
                 rotatedBitmap
             }

@@ -75,6 +75,14 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
+        currentJob?.cancel()
+        fetchJob?.cancel()
+        _isLoading.value = false
+        _isSending.value = false
+        _requestState.value = AssistantRequestState.IDLE
+        _activeTravels.value = emptyList()
+        userAboutMe = ""
+        userInterests = emptySet()
         if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "Auth state changed. New UID: $newUid")
         _messages.value = emptyList()
         _weatherData.value = null
@@ -108,6 +116,7 @@ if (BuildConfig.DEBUG) {
             if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "loadActiveTravels started for $uid")
             try {
                 val entities = dao.getUserTravelPlans(uid)
+                if (currentUid != uid) return@launch
                 val today = LocalDate.now()
                 val active = entities.map { it.toDomain() }.filter {
                     !it.isArchived && !it.endDate.isBefore(today)

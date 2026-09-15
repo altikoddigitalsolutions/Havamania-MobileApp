@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
+
 from app.models.alert import Alert, AlertSeverity
 from app.models.notification_preference import NotificationPreference
 from app.services.push_service import PushService
+
 
 class StubPushProvider:
     def __init__(self):
@@ -13,7 +15,7 @@ class StubPushProvider:
 
 def _auth_headers(client):
     # Benzersiz email ile kayıt
-    email = f"push_{datetime.now().timestamp()}@example.com"
+    email = f"push_{datetime.now(UTC).timestamp()}@example.com"
     signup = client.post(
         "/v1/auth/signup",
         json={"email": email, "password": "Password123", "full_name": "Push User"},

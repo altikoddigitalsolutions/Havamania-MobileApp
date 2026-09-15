@@ -55,6 +55,8 @@ object NetworkModule {
                     }
 
                     response?.close()
+                    response = null
+                    if (chain.call().isCanceled()) throw java.io.IOException("Canceled")
                     response = chain.proceed(request)
 
                     val resp = response
@@ -68,6 +70,7 @@ object NetworkModule {
                         return@addInterceptor resp
                     }
                 } catch (e: Exception) {
+                    if (chain.call().isCanceled() || Thread.currentThread().isInterrupted) throw e
                     error = e
                     if (e is java.io.IOException || e is java.net.SocketTimeoutException) {
                         if (BuildConfig.DEBUG) {

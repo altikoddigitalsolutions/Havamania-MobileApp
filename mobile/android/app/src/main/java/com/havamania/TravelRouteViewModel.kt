@@ -49,14 +49,18 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     val departureMillis: StateFlow<Long?> = _departureMillis.asStateFlow()
 
     private var tripJob: kotlinx.coroutines.Job? = null
+    private var routeJob: kotlinx.coroutines.Job? = null
 
     override fun onCleared() {
         super.onCleared()
         tripJob?.cancel()
+        routeJob?.cancel()
     }
 
     fun loadTrip(tripId: String) {
         tripJob?.cancel()
+        routeJob?.cancel()
+        _trip.value = null
         _routeState.value = null
         _waypoints.value = emptyList()
         _startWeather.value = null
@@ -86,6 +90,10 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                     // Only recalculate route if essential fields changed or first load
                     calculateRoute(plan)
                 } else {
+                    routeJob?.cancel()
+                    _trip.value = null
+                    _routeState.value = null
+                    _waypoints.value = emptyList()
                     _errorMessage.value = "Seyahat bulunamadı."
                 }
             }
@@ -96,7 +104,8 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         if (BuildConfig.DEBUG) {
             Log.d("RouteVM", "Calculating route. OriginCity=${plan.originCity}, OriginLat=${plan.originLatitude}, OriginLon=${plan.originLongitude}")
         }
-        viewModelScope.launch {
+        routeJob?.cancel()
+        routeJob = viewModelScope.launch {
             var origin = plan.originPoint?.let { GeoPoint(it.first, it.second) }
 
             if (origin == null) {
@@ -114,6 +123,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                     _routeState.value = RouteResult.Error("İzin hatası")
                     return@launch
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     _errorMessage.value = "Konum hizmetine ulaşılamıyor."
                     _routeState.value = RouteResult.Error("GPS hatası")
                     return@launch

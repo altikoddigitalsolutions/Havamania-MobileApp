@@ -39,11 +39,15 @@ class UserProfileRepository private constructor() {
         }
 
         profileListener?.remove()
+        _profile.value = null
         activeUid = uid
         profileListener = db.collection("users").document(uid)
             .addSnapshotListener { snapshot, e ->
+                if (activeUid != uid) return@addSnapshotListener
                 if (e == null && snapshot != null && snapshot.exists()) {
                     _profile.value = snapshot.toObject(UserProfile::class.java)
+                } else {
+                    _profile.value = null
                 }
             }
     }
@@ -51,5 +55,7 @@ class UserProfileRepository private constructor() {
     fun stopObserving() {
         profileListener?.remove()
         profileListener = null
+        activeUid = null
+        _profile.value = null
     }
 }

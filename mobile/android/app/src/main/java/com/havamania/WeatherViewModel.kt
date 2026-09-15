@@ -95,12 +95,18 @@ class WeatherViewModel(
     private var lastLon = 27.8826
 
     private var fetchJob: kotlinx.coroutines.Job? = null
+    private var searchJob: kotlinx.coroutines.Job? = null
 
     private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
 
         // Clear UI state to prevent showing old user's data
+        fetchJob?.cancel()
+        currentUserInterests = emptySet()
+        currentUserAboutMe = null
+        currentPersonalization = null
+        repository.clearCurrentWeather()
         _uiState.value = WeatherUiState.Loading
         _todayRecommendation.value = null
         _smartAlerts.value = emptyList()
@@ -187,6 +193,8 @@ class WeatherViewModel(
                 val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), currentUid).firstOrNull()
                 if (defaultCity != null) {
                     fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+                } else {
+                    _uiState.value = WeatherUiState.NoCity
                 }
             }
         }
@@ -247,6 +255,7 @@ if (BuildConfig.DEBUG) {
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                 _uiState.value = WeatherUiState.Error("Zaman aşımı: Hava durumu verileri çok uzun sürdü.")
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.value = WeatherUiState.Error("Hava durumu yüklenirken bir hata oluştu.")
             }
         }
@@ -260,10 +269,8 @@ if (BuildConfig.DEBUG) {
         fetchJob?.cancel()
         fetchJob = viewModelScope.launch {
             _isRefreshing.value = true
-            val cacheKey = if (lastDistrict != null) "$lastCity-$lastDistrict" else lastCity
-            repository.clearCache(cacheKey)
-
-            repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict)
+            try {
+            repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict, forceRefresh = true)
                 .catch { e ->
                     _isRefreshing.value = false
                 }
@@ -273,7 +280,7 @@ if (BuildConfig.DEBUG) {
                     // Calculate Smart Alerts
                     viewModelScope.launch {
                         val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), currentUid).first()
-                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config)
+                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, currentUid)
                     }
 
                     val todayDate = LocalDate.now()
@@ -292,6 +299,9 @@ if (BuildConfig.DEBUG) {
                     _isRefreshing.value = false
                     updateRecommendation()
                 }
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 
@@ -356,11 +366,13 @@ if (BuildConfig.DEBUG) {
     }
 
     fun searchCity(query: String) {
+        searchJob?.cancel()
         if (query.length < 2) {
             _citySuggestions.value = emptyList()
             return
         }
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300)
             _citySuggestions.value = repository.searchCity(query)
         }
     }
