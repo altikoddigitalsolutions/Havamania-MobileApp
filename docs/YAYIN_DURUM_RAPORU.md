@@ -10,7 +10,7 @@ Canlı ekran bulguları, düzeltmeler ve açık varyantlar: [Canlı görsel dene
 
 ## Kısa durum
 
-Ana kontrol listesinde **50 geniş madde: 22 tamamlandı, 28 açık**. Canlı görsel ekran denetimi durum varyantlarıyla genişletildi; tüm kod tabanının erişilebilirlik/tekrar denetimi ayrı açık madde eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
+Ana kontrol listesinde **59 geniş madde: 22 tamamlandı, 37 açık**. Canlı görsel ekran denetimi durum varyantlarıyla genişletildi; tüm kod tabanının erişilebilirlik/tekrar denetimi ayrı açık madde eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
 
 Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. Son bildirim ve canlı görsel denetim düzeltmeleri bu tur Git gönderimine dahil edildi.
 
@@ -166,3 +166,19 @@ Profil geçişinin cihaz doğrulaması tamamlandı: ilk görünümde isim/biyogr
 Kullanıcı isteğiyle ana listenin üçüncü başlığına üç ayrı açık madde eklendi: Firebase yaşam döngüsü, Firebase–cihaz eşitlemesi ve cihazlar/Firebase/backend arasındaki uçtan uca senkronizasyon. Güncel toplam 50 geniş madde: 22 tamamlanan, 28 açık. Önceki 47/22/25 sayıları tarihsel durumdur; yeni kapsam çözülmüş sayılmaz.
 
 Öncelik: profil sayaçlarında yükleniyor/gerçek sıfır ayrımı; ardından senkronizasyon kaynakları ve kuyruk/dinleyici denetimiyle birlikte şehir/seyahat boş-dolu ekranları. Canlı dağıtım veya üretim yazımı bu kapsam eklemesiyle yapılmaz. Profil geçiş düzeltmeleri, izole test, kod temizliği ve bu takip güncellemesi aynı Git gönderimi için hazırlanmıştır. Bu tur yalnızca belgeler değişti; önceki başarılı kod testleri yeniden çalıştırılmadı.
+
+
+## Temizlik, güvenlik ve yayın hazırlığı kapsam eki — 22 Ekim 2026
+
+Beş ayrı açık kontrol eklendi: profil fotoğrafı/Blaze hazırlığı, kapsamlı güvenlik, veri/kaynak/proje temizliği, geçiş akıcılığı ve Play Console hesap kuruluşu/yükleme hazırlığı. Mevcut KVKK/gizlilik/koşullar maddesi ayrıntılandırıldı; aynı iş için ikinci bir madde sayılmadı. Güncel ana liste: 55 madde, 22 tamamlanan, 33 açık. Bunlar doğrulanmış yeni hata sayısı değil, zorunlu inceleme kapsamıdır.
+
+Öncelik sırası: profil sayaçları ve Firebase senkronizasyonu; güvenlik ve veri temizliği (kritik bulgu çıkarsa öne alınır); şehir/seyahat dahil ekran durumları ve geçiş performansı; avatar/Blaze hazırlığı; yasal metinler ve mağaza beyanları; Play Console kuruluş ve imzalı AAB iç test/yayın adımları. Güvenlik, hukuki içerik ve mağaza kontrolleri tamamlanmadan yayın onayı verilmez.
+
+Bu tur takip belgeleri güncellendi; yeni güvenlik taraması, Blaze geçişi, hesap kuruluşu, yasal uygunluk doğrulaması veya mağazaya yükleme yapılmadı. İlgili aşamalarda güncel resmi kaynaklar ve gerçek yapılandırma incelenecek. Önceki test sonuçları yeni kapsamın geçtiği anlamına gelmez.
+
+
+## Mimari ve ürün kalitesi kapsam eki
+
+Kullanıcının 30 maddesi [mimari ve kalite matrisinde](MIMARI_VE_URUN_KALITESI.md) eşlendi. Mevcut konular mükerrer sayılmadı; mimari/kod organizasyonu, teknik borç, gerçek kişiselleştirme ve 10 gün/48 saat kuralları dört ayrı açık madde olarak eklendi. Görsel denetimin tipografi/Türkçe/kozmetik kabul ölçütleri genişletildi. Güncel sayı 59 geniş madde: 22 tamamlanan, 37 açık. Yeni hata sayısı değildir.
+
+Bu tur yalnızca takip belgeleri güncellendi ve Git gönderimine hazırlandı; yeni mimari, kişiselleştirme veya performans testi çalıştırılmadı. Önceki turdan kalan temizlik/güvenlik/Blaze/Play Console/yasal sayfa/geçiş kapsamı da aynı gönderime dahildir.

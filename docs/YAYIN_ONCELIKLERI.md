@@ -34,6 +34,11 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Firebase–cihaz eşitlemesi: profil/avatar/tercihler, şehirler/varsayılan şehir, seyahatler ve AI geçmişi için kaynak sahipliği; Room/DataStore/Firestore tutarlılığı, ilk açılış uzlaştırması, çevrimdışı yazma ve yeniden bağlanma, süreç ölümü sonrası kalıcı gönderme/silme kuyruğu, idempotent yeniden deneme ve silinen verinin geri gelmemesi.
 - [ ] Uçtan uca genel senkronizasyon: iki cihazda eşzamanlı düzenleme/silme çatışmaları, zaman/sürüm sıralaması, Firebase–backend eşleşmesi ve kısmi başarısızlıkların kurtarılması; yükleniyor/bekleyen/senkronize/hata/gerçek boş durumlarının doğru gösterilmesi. Önce yerel/emülatör testleri; staging ve çok cihazlı canlı doğrulama ayrıca açık kalır.
 
+- [ ] Profil fotoğrafı / Firebase Blaze hazırlığı: mevcut özellik bayrağı ve Storage akışı, proje/bucket yapılandırması, güncel plan gereksinimleri ve maliyet kontrolü; fotoğraf seçme/izin reddi, boyut ve içerik doğrulama, sıkıştırma, yükleme ilerlemesi/iptal/yeniden deneme, eski avatarın silinmesi, önbellek yenileme ve hesaplar arası erişim. Ücretli plana geçiş ayrı operasyon adımıdır; bu madde tamamlandı sayılmaz.
+- [ ] Kapsamlı güvenlik denetimi: depoya/APK'ya/loglara sızan sırlar ve kişisel veri, bağımlılık açıkları, Android exported bileşenler/deep link/izinler/yedekleme/ağ güvenliği, backend kimlik ve nesne sahipliği doğrulaması, girdi/dosya kontrolleri, kötüye kullanım sınırları ve Firestore/Storage kuralları. Bulgular önem derecesi ve tekrar testiyle izlenir.
+
+- [ ] Gerçek kişiselleştirme: ilgi alanı, tercih ve kullanıcı açıklamasının öneri seçimi/sıralaması ile asistan bağlamına etkisi; tercih değişikliği, kapatma, veri yokluğu ve A→B geçişi. Aynı hava/rota/soru için farklı tercihlerle karşılaştırmalı davranış testleri; güvenlik uyarıları tercihle bastırılmaz. Kabul ölçütleri: [mimari ve kalite matrisi](MIMARI_VE_URUN_KALITESI.md).
+
 ## 4. Hava verisinin doğruluğu — KISMEN TAMAM
 
 - [x] Koordinatlı önbellek, 100 kayıt sınırı, bozuk disk ve çevrimdışı geri dönüş testleri.
@@ -42,6 +47,8 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [x] Geometrik uzunluk/sağlayıcı mesafe farkında tüm rota boyunca örnekleme ve orantılı ETA testi.
 - [ ] Tüm tarih/astronomi görünümleri, yaz saati geçişleri, cihaz/konum saat dilimi farkları.
 - [ ] Örnekler arasındaki hava riskleri, rüzgar/veri kalitesi ve uzun rota senaryoları; örnekleme tam güvenlik garantisi değildir.
+
+- [ ] 10 gün / 48 saat kuralları: ürün kuralının tüm ekran/API/asistan/rota yollarında tek tanımı; sınır anları, konum saat dilimi, sağlayıcıdan eksik gün/saat, eski önbellek ve ufuk dışı taleplerde açık durum. Veri yokken tahmin üretmiş gibi gösterilmez.
 
 ## 5. Gerçek cihaz dayanıklılığı — KISMEN TAMAM
 
@@ -54,9 +61,14 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 
 - [ ] Kod erişilebilirliği ve tekrar denetimi: Android, backend, React Native, test/CI; ölü kod, çift dinleyici/iş, sahte başarı ve eksik entegrasyonların doğrulanarak temizlenmesi.
 
+- [ ] Veri, kaynak ve proje temizliği: kullanılmayan dosya/asset/bağımlılıklar, geçici fotoğraf ve önbellekler, eski işler/dinleyiciler, test verileri ve hassas logların saklama/temizleme davranışı. Kod tekrar denetimiyle birlikte ele alınır; kullanıcı verisi veya platform girişleri kullanım kanıtı olmadan silinmez.
+
+- [ ] Mimari ve kod organizasyonu: UI–ViewModel–repository–veri kaynağı sorumlulukları, bağımlılık yönleri, durum sahipliği, DI/yaşam döngüsü, coroutine iptali ve hata sözleşmeleri; Kotlin/Compose, RN ve FastAPI girişlerinin/iş kurallarının haritalanması, paralel RN/Native ayrışmalarının test edilmesi.
+- [ ] Teknik borç planı: doğrulanmış borçları etki/risk/öncelik, dosya ve kapanış testiyle kaydet; lint/bağımlılık/CI açıkları ve büyük sınıfları davranış koruyan küçük değişikliklerle azalt. Sırf mimari görünüm için toplu yeniden yazım yapılmaz.
+
 ## 6. Tasarım bütünlüğü ve erişilebilirlik — KISMEN TAMAM
 
-- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; bulgu ve tekrar doğrulama matrisi. Her ekranın boş/dolu, yükleniyor/hata, çevrimdışı, izin ve hesap değişimi durumları ayrı denetlenir; şehir/seyahat eklemeden önce ve sonra dahil. Ayrıntılar: [durum matrisi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md).
+- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; premium görsel dil için ortak font ailesi/ağırlık/ölçek, boşluk/ikon/renk/köşe sistemi ve tutarlı Türkçe terminoloji; İ/i/ı/I dönüşümleri ve kullanıcı metninin korunması; bulgu ve tekrar doğrulama matrisi. Her ekranın boş/dolu, yükleniyor/hata, çevrimdışı, izin ve hesap değişimi durumları ayrı denetlenir; şehir/seyahat eklemeden önce ve sonra dahil. Ayrıntılar: [durum matrisi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md).
 
 - [x] Profil kaydı onay/hata durumu, çift tıklama engeli, taslağın snapshot ile ezilmesini önleme.
 - [x] Profil klavye boşluğu, büyüyen bio alanı ve hesap bazlı kaydedilebilir taslak.
@@ -65,10 +77,13 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Bütün ekranlar: açık/koyu/mevsimsel tema, telefon/tablet, yatay, %200 yazı, TalkBack ve kontrast.
 - [ ] Profil taslağı için gerçek rotasyon/süreç ölümü ve kayıt sırasında geri navigasyon uçtan uca testi.
 
+- [ ] Buton, sahne ve ekran geçişlerinde akıcılık: hızlı/çift tıklama, ileri/geri ve sekme dönüşü, modal/klavye açılışı, animasyon tutarlılığı, boş ekran/parlama/yerleşim sıçraması, gereksiz yeniden oluşturma, ana iş parçacığı yükü ve kare süreleri. Telefon/tablet ve düşük kaynaklı cihazda ölçüm; animasyonlar kapalıyken ve erişilebilirlik açıkken kullanılabilirlik; önce/sonra kayıt ve ölçümle doğrulama.
+
 ## 7. Üretim servisleri ve mağaza — AÇIK
 
 - [ ] Hava/rota/harita üretim sağlayıcısı, ticari lisans/kota ve hata durumları.
-- [ ] Gizlilik, KVKK, koşullar ve çalışan hesap silme web yolu.
+- [ ] KVKK / Gizlilik Politikası / Kullanım Koşulları ve yasal sayfalar: gerçek veri envanteri, amaç/saklama/silme, üçüncü taraflar ve aktarım, kullanıcı başvuru/iletişim yolu; gerekli aydınlatma ve rıza akışlarının değerlendirilmesi, çalışan hesap silme web yolu, uygulama içi ve mağaza bağlantıları, sürüm/tarih ve Data Safety tutarlılığı. Güncel mevzuat ve işletme bilgileriyle doğrulama; mevcut metinler incelenmeden uygun sayılmaz.
+- [ ] Play Console hesap kuruluşu ve yükleme hazırlığı: hesap türü/kuruluş bilgileri, güncel kimlik doğrulama ve test gereksinimleri, yetkiler, uygulama kaydı, paket kimliği/imzalama, mağaza taslağı ve imzalı AAB iç test yükleme akışı. Hesap açma, ödeme, yükleme ve yayın birbirinden ayrı izlenir; 8. başlığın paket/Play testleriyle birlikte kapanır.
 - [ ] Data Safety, içerik derecelendirmesi, test erişimi ve mağaza görselleri.
 - [ ] Çoklu sunucu rate limit, PostgreSQL kapasitesi, gözlemleme ve yedekten dönüş.
 - [ ] Eski React Native CI: bulunmayan SignUpScreen import’u RegisterScreen olarak düzeltildi; bağımlılık kurulumu ve Jest/TypeScript doğrulaması açık (native Android’den ayrı).
@@ -81,7 +96,7 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Gerçek 16 KB Android cihaz/emülatör testi.
 - [ ] Play iç test ve pre-launch raporu; gerekli hesap türü test şartları.
 
-## Son doğrulama — 22 Ekim
+## Önceki doğrulama — 22 Ekim
 
 - Android: **102 birim testi geçti; önceki cihaz koşusunda 7 test geçti**; debug derleme ve lint başarılı (**0 hata, 199 uyarı, 1 ipucu**).
 - Backend: **64 test geçti**, Ruff temiz. Standart koşuda PostgreSQL testleri atlanır; aşağıdaki ayrı koşuda gerçekten çalıştırıldı.
