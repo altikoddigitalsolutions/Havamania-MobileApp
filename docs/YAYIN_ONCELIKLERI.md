@@ -48,6 +48,8 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 
 ## 6. Tasarım bütünlüğü ve erişilebilirlik — KISMEN TAMAM
 
+- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; bulgu ve tekrar doğrulama matrisi.
+
 - [x] Profil kaydı onay/hata durumu, çift tıklama engeli, taslağın snapshot ile ezilmesini önleme.
 - [x] Profil klavye boşluğu, büyüyen bio alanı ve hesap bazlı kaydedilebilir taslak.
 - [x] Ortak düğmede yükleme adı/durum semantiği; dolu alan etiketi; %200 yazıda büyüyen düğme cihaz testleri.

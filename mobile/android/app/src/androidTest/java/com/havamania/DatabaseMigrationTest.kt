@@ -218,4 +218,22 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test fun notificationActionsAreScopedToCapturedOwner() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, NotificationDatabase::class.java).build()
+        try {
+            val dao = database.notificationDao()
+            val repository = NotificationRepository(dao)
+            dao.insert(NotificationItem(id = "a", userId = "A"))
+            dao.insert(NotificationItem(id = "b", userId = "B"))
+            repository.markAsRead("A", listOf("a", "b"))
+            assertTrue(dao.getAllNotifications("A").first().single().isRead)
+            assertFalse(dao.getAllNotifications("B").first().single().isRead)
+            repository.toggleReadStatus("A", "b", false)
+            assertFalse(dao.getAllNotifications("B").first().single().isRead)
+            repository.delete("A", listOf("a", "b"))
+            assertTrue(dao.getAllNotifications("A").first().isEmpty())
+            assertEquals("b", dao.getAllNotifications("B").first().single().id)
+        } finally { database.close() }
+    }
+
 }

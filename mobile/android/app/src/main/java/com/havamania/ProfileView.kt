@@ -106,7 +106,7 @@ fun ProfileScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFIL",
+                title = "PROFİL",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {

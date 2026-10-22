@@ -110,7 +110,7 @@ if (BuildConfig.DEBUG) {
                                     fontSize = 10.sp,
                                     letterSpacing = 0.5.sp
                                 ),
-                                color = if (isSelected) themeColors.accent else themeColors.textMuted,
+                                color = if (isSelected) themeColors.accent else themeColors.textSecondary,
                                 maxLines = 1
                             )
                         },
@@ -132,7 +132,7 @@ if (BuildConfig.DEBUG) {
                                     imageVector = item.icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(iconSize),
-                                    tint = if (isSelected) themeColors.accent else themeColors.textMuted.copy(alpha = 0.6f)
+                                    tint = if (isSelected) themeColors.accent else themeColors.textSecondary
                                 )
                             }
                         },

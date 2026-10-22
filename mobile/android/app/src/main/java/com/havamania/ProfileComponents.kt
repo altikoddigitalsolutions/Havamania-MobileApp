@@ -213,7 +213,7 @@ fun QuickActionsGrid(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Şehirler", Icons.Rounded.Map, Modifier.weight(1f), onManageCities)
-            QuickActionItem("AI Geçmişi", Icons.Rounded.History, Modifier.weight(1f), onAiHistory)
+            QuickActionItem("Asistan Geçmişi", Icons.Rounded.History, Modifier.weight(1f), onAiHistory)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Seyahatlerim", Icons.Rounded.Route, Modifier.weight(1f), onMyTravels)

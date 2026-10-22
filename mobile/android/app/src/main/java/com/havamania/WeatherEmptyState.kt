@@ -121,11 +121,11 @@ fun WeatherEmptyState(
 fun NoCitiesEmptyState(onAddClick: () -> Unit) {
     HavamaniaEmptyState(
         icon = Icons.Rounded.LocationCity,
-        title = "Henüz Şehir Yok",
-        description = "Takip ettiğiniz bir şehir bulunmuyor. Hava durumunu görmek için ilk şehrinizi ekleyin.",
+        title = "Konum Seçin",
+        description = "Hava durumunu görmek için kayıtlı bir konumu seçin veya yeni bir konum ekleyin.",
         action = {
             HavamaniaPrimaryButton(
-                text = "Şehir Ekle",
+                text = "Konum Seç",
                 onClick = onAddClick,
                 modifier = Modifier.width(240.dp),
                 icon = Icons.Rounded.AddLocationAlt

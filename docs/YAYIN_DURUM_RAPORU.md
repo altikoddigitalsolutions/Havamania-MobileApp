@@ -2,15 +2,17 @@
 
 Güncelleme: 22 Ekim 2026. Hedef: önce Android / Google Play.
 
+Canlı ekran bulguları, düzeltmeler ve açık varyantlar: [Canlı görsel denetim](CANLI_GORSEL_DENETIM.md).
+
 ## Son geniş denetim
 
 [Kapsamlı kalite raporu](KAPSAMLI_KALITE_DENETIMI_2026-10-22.md): 20 kategori, 5 kodla doğrulanmış bug, 1 UI riski ve 1 iyileştirme. Son koşu: 125 JVM + 16 cihaz + 64 backend + 4 PostgreSQL + 4 Firebase kural testi başarılı; 187 lint uyarısı açık. Ayrıntılı sonuçlar bu dosyanın sonunda.
 
 ## Kısa durum
 
-Ana kontrol listesinde **45 geniş madde: 22 tamamlandı, 23 açık**. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
+Ana kontrol listesinde **46 geniş madde: 22 tamamlandı, 24 açık**. Kullanıcının istediği canlı görsel ekran denetimi ayrı madde olarak eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
 
-Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. Son düzeltmeler yerel çalışma ağacında; bu tur commit/push yapılmadı.
+Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. Son bildirim ve canlı görsel denetim düzeltmeleri bu tur Git gönderimine dahil edildi.
 
 ## Çözülen problemler
 

@@ -338,7 +338,7 @@ object ThemeFactory {
                 surfaceGlass = Color(0xFF78350F).copy(alpha = 0.75f),
                 textPrimary = Color(0xFFFFEDD5),
                 textSecondary = Color(0xFFFED7AA),
-                textMuted = Color(0xFFD97706).copy(alpha = 0.7f),
+                textMuted = Color(0xFFFED7AA),
                 border = Color.White.copy(alpha = 0.08f),
                 divider = Color.White.copy(alpha = 0.05f),
                 glow = Color(0xFFF59E0B).copy(alpha = 0.2f),

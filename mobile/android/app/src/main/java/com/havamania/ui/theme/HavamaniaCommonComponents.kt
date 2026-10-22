@@ -677,7 +677,7 @@ fun HavamaniaEmptyState(
         Text(
             text = description,
             style = HavamaniaTheme.typography.bodyMedium,
-            color = HavamaniaTheme.colors.textMuted,
+            color = HavamaniaTheme.colors.textSecondary,
             textAlign = TextAlign.Center
         )
         if (action != null) {

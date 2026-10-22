@@ -371,14 +371,23 @@ if (BuildConfig.DEBUG) {
                             Text(
                                 text = "Başlangıç noktası seçildiğinde rota burada gösterilecek.",
                                 style = HavamaniaTheme.typography.bodySmall,
-                                color = colors.textMuted,
+                                color = colors.textPrimary,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(32.dp)
+                                modifier = Modifier.padding(24.dp)
+                                    .background(colors.surface, RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
                             )
                         }
                     } else if (routeState is RouteResult.Error || routeState is RouteResult.NoRoute) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
-                            Text("Harita verisi şu an yüklenemedi", color = colors.textMuted)
+                            Text(
+                                "Harita verisi şu an yüklenemedi",
+                                color = colors.textPrimary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(24.dp)
+                                    .background(colors.surface, RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            )
                         }
                     }
                 }

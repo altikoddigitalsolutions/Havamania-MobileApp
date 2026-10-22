@@ -366,7 +366,7 @@ if (BuildConfig.DEBUG) {
                                     AiHistoryScreen(
                                         onBack = { navController.popBackStack() },
                                         onNavigateToChat = { id ->
-                                            navController.navigate(Routes.AI_ROOT + "?conversationId=$id")
+                                            navController.navigate("sub_ai_history_detail/${android.net.Uri.encode(id)}")
                                         }
                                     )
                                 }

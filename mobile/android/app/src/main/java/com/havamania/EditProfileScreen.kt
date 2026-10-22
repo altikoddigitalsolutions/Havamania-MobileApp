@@ -69,7 +69,7 @@ fun EditProfileScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFILİ DÜZENLE",
+                title = "PROFİLİ DÜZENLE",
                 onBack = onBack
             )
         }

@@ -29,17 +29,17 @@ interface NotificationDao {
     @Update
     suspend fun update(notification: NotificationItem)
 
-    @Query("UPDATE notifications SET isRead = 1 WHERE id IN (:ids)")
-    suspend fun markAsRead(ids: List<String>)
+    @Query("UPDATE notifications SET isRead = 1 WHERE userId = :uid AND id IN (:ids)")
+    suspend fun markAsRead(uid: String, ids: List<String>)
 
-    @Query("UPDATE notifications SET isRead = 0 WHERE id IN (:ids)")
-    suspend fun markAsUnread(ids: List<String>)
+    @Query("UPDATE notifications SET isRead = 0 WHERE userId = :uid AND id IN (:ids)")
+    suspend fun markAsUnread(uid: String, ids: List<String>)
 
     @Query("UPDATE notifications SET isRead = 1 WHERE userId = :uid")
     suspend fun markAllAsRead(uid: String)
 
-    @Query("DELETE FROM notifications WHERE id IN (:ids)")
-    suspend fun delete(ids: List<String>)
+    @Query("DELETE FROM notifications WHERE userId = :uid AND id IN (:ids)")
+    suspend fun delete(uid: String, ids: List<String>)
 
     @Query("DELETE FROM notifications WHERE userId = :uid")
     suspend fun deleteAll(uid: String)

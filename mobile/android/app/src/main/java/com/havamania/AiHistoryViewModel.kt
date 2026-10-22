@@ -101,16 +101,18 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         accountTasks.reset()
-        detailLoader.reset()
+        // Firebase also invokes this listener for the initial, unchanged session.
+        // Cancelling that first read would leave Loading without a new effect key.
+        if (_detailOwner.value != newUid) detailLoader.reset()
         uploadRunner.reset()
         _uploadError.value = null
         deleteRunner.reset()
         saveController.reset()
         retryDelete = null
         _deleteError.value = null
-        _detailOwner.value = currentUid
-        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
+        _detailOwner.value = newUid
         clearEpoch++
         _historyItems.value = emptyList()
         observeFirestoreHistory(newUid)

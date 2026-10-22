@@ -55,6 +55,7 @@ fun NotificationCenterScreen(
     viewModel: NotificationViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
     val lifecycleOwner = LocalLifecycleOwner.current
     var clockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -69,6 +70,12 @@ fun NotificationCenterScreen(
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(actionError) {
+        actionError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissActionError()
+        }
+    }
 
     // To prevent double clicks/crashes during rapid navigation
     val processingIds = remember { mutableStateListOf<String>() }

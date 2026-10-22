@@ -22,75 +22,18 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    suspend fun markAsRead(id: String) {
-        try {
-            dao.markAsRead(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as read: $id", e)
-}
-        }
+    suspend fun markAsRead(uid: String, ids: List<String>) {
+        if (ids.isNotEmpty()) dao.markAsRead(uid, ids)
     }
 
-    suspend fun markAsRead(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.markAsRead(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as read: $ids", e)
-}
-        }
+    suspend fun toggleReadStatus(uid: String, id: String, currentRead: Boolean) {
+        if (currentRead) dao.markAsUnread(uid, listOf(id)) else dao.markAsRead(uid, listOf(id))
     }
 
-    suspend fun toggleReadStatus(id: String, currentRead: Boolean) {
-        try {
-            if (currentRead) dao.markAsUnread(listOf(id))
-            else dao.markAsRead(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to toggle read status: $id", e)
-}
-        }
-    }
+    suspend fun markAllAsRead(uid: String) = dao.markAllAsRead(uid)
 
-    suspend fun markAsUnread(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.markAsUnread(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as unread: $ids", e)
-}
-        }
-    }
-
-    suspend fun markAllAsRead(uid: String) {
-        try {
-            dao.markAllAsRead(uid)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark all as read", e)
-}
-        }
-    }
-
-    suspend fun delete(id: String) {
-        try {
-            dao.delete(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete: $id", e)
-}
-        }
-    }
-
-    suspend fun delete(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.delete(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete: $ids", e)
-}
-        }
+    suspend fun delete(uid: String, ids: List<String>) {
+        if (ids.isNotEmpty()) dao.delete(uid, ids)
     }
 
     suspend fun deleteAll(uid: String) {

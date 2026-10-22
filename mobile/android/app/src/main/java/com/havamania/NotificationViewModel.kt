@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.withLock
 import com.google.firebase.auth.FirebaseAuth
 
 data class NotificationUiState(
@@ -30,6 +32,29 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError = _actionError.asStateFlow()
+    private val actionTasks = AccountTaskScope(viewModelScope) { currentUid }
+    private val actionMutex = kotlinx.coroutines.sync.Mutex()
+    fun dismissActionError() { _actionError.value = null }
+
+    private fun notificationAction(onSuccess: () -> Unit = {}, action: suspend (String) -> Unit) {
+        actionTasks.launch { uid ->
+            try {
+                actionMutex.withLock {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    action(uid)
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (uid == currentUid) { _actionError.value = null; onSuccess() }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (uid == currentUid) _actionError.value = "İşlem tamamlanamadı. Lütfen tekrar deneyin."
+            }
+        }
+    }
+
     private val deleteAllRunner = AssistantTaskRunner(viewModelScope, { currentUid }, {}, 20_000)
     private var collectJob: kotlinx.coroutines.Job? = null
 
@@ -38,6 +63,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
         }
+        actionTasks.reset()
+        _actionError.value = null
         deleteAllRunner.reset()
         _uiState.value = NotificationUiState(isLoading = true)
         didSeedInThisSession = false
@@ -54,6 +81,8 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         collectJob?.cancel()
+        actionTasks.reset()
+        _actionError.value = null
         deleteAllRunner.reset()
     }
 
@@ -162,51 +191,28 @@ if (BuildConfig.DEBUG) {
         _uiState.update { it.copy(selectedIds = emptySet(), isSelectionMode = false) }
     }
 
-    fun deleteNotification(id: String) {
-        viewModelScope.launch {
-            repository.delete(id)
-            _uiState.update { it.copy(selectedIds = it.selectedIds - id) }
-        }
-    }
+    fun deleteNotification(id: String) = notificationAction(
+        onSuccess = { _uiState.update { it.copy(selectedIds = it.selectedIds - id) } }
+    ) { uid -> repository.delete(uid, listOf(id)) }
 
     fun deleteSelected() {
-        val idsToDelete = _uiState.value.selectedIds.toList()
-        if (idsToDelete.isEmpty()) return
-
-        viewModelScope.launch {
-            repository.delete(idsToDelete)
-            clearSelection()
-        }
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isNotEmpty()) notificationAction(onSuccess = ::clearSelection) { uid -> repository.delete(uid, ids) }
     }
 
-    fun markAsRead(id: String) {
-        viewModelScope.launch {
-            repository.markAsRead(id)
-        }
-    }
+    fun markAsRead(id: String) = notificationAction { uid -> repository.markAsRead(uid, listOf(id)) }
 
     fun toggleReadStatus(id: String) {
         val item = _uiState.value.notifications.find { it.id == id } ?: return
-        viewModelScope.launch {
-            repository.toggleReadStatus(id, item.isRead)
-        }
+        notificationAction { uid -> repository.toggleReadStatus(uid, id, item.isRead) }
     }
 
     fun markSelectedAsRead() {
         val ids = _uiState.value.selectedIds.toList()
-        if (ids.isEmpty()) return
-
-        viewModelScope.launch {
-            repository.markAsRead(ids)
-            clearSelection()
-        }
+        if (ids.isNotEmpty()) notificationAction(onSuccess = ::clearSelection) { uid -> repository.markAsRead(uid, ids) }
     }
 
-    fun markAllAsRead() {
-        viewModelScope.launch {
-            repository.markAllAsRead(currentUid)
-        }
-    }
+    fun markAllAsRead() = notificationAction { uid -> repository.markAllAsRead(uid) }
 
     fun deleteAllNotifications(onResult: (Boolean) -> Unit) {
         deleteAllRunner.start(
