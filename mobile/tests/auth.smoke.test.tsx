@@ -2,7 +2,7 @@ import React from 'react';
 import renderer from 'react-test-renderer';
 
 import {LoginScreen} from '../src/screens/LoginScreen';
-import {SignUpScreen} from '../src/screens/SignUpScreen';
+import {RegisterScreen} from '../src/screens/RegisterScreen';
 
 describe('Auth screens', () => {
   it('renders login screen', () => {
@@ -17,9 +17,9 @@ describe('Auth screens', () => {
 
   it('renders signup screen', () => {
     const tree = renderer.create(
-      <SignUpScreen
+      <RegisterScreen
         navigation={{navigate: jest.fn()} as any}
-        route={{key: 'SignUp', name: 'SignUp'} as any}
+        route={{key: 'Register', name: 'Register'} as any}
       />,
     );
     expect(tree.toJSON()).toBeTruthy();

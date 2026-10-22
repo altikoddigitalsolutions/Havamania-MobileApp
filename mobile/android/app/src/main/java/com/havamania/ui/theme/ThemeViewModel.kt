@@ -27,7 +27,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
 
     private var citiesListener: ListenerRegistration? = null
-    private var userDocListener: ListenerRegistration? = null
 
     private val _currentTheme = MutableStateFlow(AppTheme.DARK)
     val currentTheme: StateFlow<AppTheme> = _currentTheme.asStateFlow()
@@ -117,7 +116,6 @@ if (BuildConfig.DEBUG) {
     }
 
     init {
-        loadSettings()
         auth.addAuthStateListener(authListener)
     }
 
@@ -125,7 +123,6 @@ if (BuildConfig.DEBUG) {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         citiesListener?.remove()
-        userDocListener?.remove()
     }
 
     private fun observeFirestoreCities(uid: String) {
@@ -179,10 +176,11 @@ if (BuildConfig.DEBUG) {
         profileSyncJob = accountTasks.launch launch@ { currentUid ->
             userProfileRepository.profile.collect { profile ->
                 if (uid != this@ThemeViewModel.currentUid || profile?.uid != uid) return@collect
-                profile?.let { p ->
+                _isPremium.value = profile.isPremium
+                profile.let { p ->
                     // Sync defaultCity
                     val remoteDefaultCityName = p.defaultCity
-                    if (remoteDefaultCityName != null && remoteDefaultCityName != _defaultCity.value?.name) {
+                    if (remoteDefaultCityName != _defaultCity.value?.name) {
                         val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
                         if (cityToSet != null) {
                             ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
@@ -448,49 +446,6 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    fun syncWithFirebase(profile: com.havamania.UserProfile) {
-        accountTasks.launch launch@ { currentUid ->
-            if (profile.uid != currentUid) return@launch
-            val uid = currentUid
-            if (BuildConfig.DEBUG) Log.i("PHOTO", "[PHOTO] syncWithFirebase started for $uid")
-
-            try {
-                if (profile.name.isNotBlank()) {
-                    ThemeManager.saveUserName(getApplication(), uid, profile.name)
-                    _userName.value = profile.name
-                }
-                if (profile.bio.isNotBlank()) {
-                    ThemeManager.saveUserBio(getApplication(), uid, profile.bio)
-                    _userBio.value = profile.bio
-                }
-
-                ThemeManager.saveUserImageUriByUid(getApplication(), uid, profile.photoURL)
-                _userImageUri.value = profile.photoURL
-
-                if (profile.aboutMe.isNotBlank()) {
-                    ThemeManager.saveUserAboutMe(getApplication(), uid, profile.aboutMe)
-                    _userAboutMe.value = profile.aboutMe
-                }
-
-                _isPremium.value = profile.isPremium
-
-                profile.personalizationProfile?.let {
-                    ThemeManager.saveUserInterests(getApplication(), uid, it.selectedInterests.toSet())
-                    _userInterests.value = it.selectedInterests.toSet()
-                }
-
-if (BuildConfig.DEBUG) {
-                    Log.i("PHOTO", "[PHOTO] Step 11.2 OK: syncWithFirebase complete")
-}
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    Log.e("PHOTO", "[PHOTO] Step 11 FAILED: ${e.message}", e)
-}
-            }
-        }
-    }
-
     fun clearLocalUserData() {
         // Oturum kapatıldığında state temizlenir ama DataStore'daki kalıcı veri silinmez (talimat gereği)
         _isPremium.value = false
@@ -503,7 +458,5 @@ if (BuildConfig.DEBUG) {
         _registeredCities.value = emptyList()
         repository.clearCurrentWeather()
 
-        userDocListener?.remove()
-        userDocListener = null
     }
 }

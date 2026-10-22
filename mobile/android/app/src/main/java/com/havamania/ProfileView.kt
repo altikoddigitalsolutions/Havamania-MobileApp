@@ -50,7 +50,6 @@ fun ProfileScreen(
     onNavigateToTravels: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToPersonalization: () -> Unit = {},
-    themeViewModel: ThemeViewModel = viewModel(),
     profileViewModel: ProfileViewModel = viewModel(),
     aiHistoryViewModel: AiHistoryViewModel = viewModel(),
     travelViewModel: TravelViewModel = viewModel()
@@ -60,12 +59,6 @@ fun ProfileScreen(
 
     val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
     val uploadProgress by profileViewModel.uploadProgress.collectAsStateWithLifecycle()
-    val avatarVersion by profileViewModel.avatarVersion.collectAsStateWithLifecycle()
-
-    val name by themeViewModel.userName.collectAsStateWithLifecycle()
-    val bio by themeViewModel.userBio.collectAsStateWithLifecycle()
-    val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
-    val aboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
 
     val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsStateWithLifecycle()
     val travelPlans by travelViewModel.plans.collectAsStateWithLifecycle()
@@ -96,12 +89,10 @@ fun ProfileScreen(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    val profile = (profileState as? ProfileState.Success)?.profile
-    val localImageUri by themeViewModel.userImageUri.collectAsStateWithLifecycle()
-
-    val displayNameToDisplay = profile?.name ?: name
-    val bioToDisplay = profile?.bio ?: bio
-    val photoToDisplay = profile?.photoURL ?: localImageUri
+    // Keep identity, biography and personality on the same account snapshot.
+    val profile = (profileState as? ProfileState.Success)?.profile?.takeIf { it.uid == owner }
+    val userInterests = profile?.personalizationProfile?.selectedInterests?.toSet().orEmpty()
+    val aboutMe = profile?.aboutMe.orEmpty()
 
     HavamaniaScreen(
         topBar = {
@@ -116,6 +107,9 @@ fun ProfileScreen(
             )
         }
     ) { paddingValues ->
+        if (profile == null) {
+            HavamaniaLoading(modifier = Modifier.padding(paddingValues), text = "Profil yükleniyor…")
+        } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
@@ -131,10 +125,10 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(HavamaniaTheme.styles.spacingMD))
 
             PremiumProfileHeader(
-                name = displayNameToDisplay,
-                bio = bioToDisplay,
-                imageUri = photoToDisplay,
-                avatarVersion = profile?.updatedAt ?: avatarVersion,
+                name = profile.name,
+                bio = profile.bio,
+                imageUri = profile.photoURL,
+                avatarVersion = profile.updatedAt,
                 isUploading = uploadProgress,
                 interests = userInterests,
                 aboutMe = aboutMe,
@@ -146,7 +140,6 @@ fun ProfileScreen(
                 onAvatarClick = {
                     if (!uploadProgress) photoPickerLauncher.launch("image/*")
                 },
-                onEditClick = onNavigateToEditProfile,
                 onStatClick = { showStatsDetail = it }
             )
 
@@ -181,6 +174,7 @@ fun ProfileScreen(
         }
     }
 
+        }
         if (showAboutMeSheet) {
             DisposableEffect(profileViewModel) { onDispose { profileViewModel.resetAboutMeSave() } }
             val sheetState = rememberModalBottomSheetState(confirmValueChange = { !savingAboutMe || it != SheetValue.Hidden })

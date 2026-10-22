@@ -95,14 +95,6 @@ if (BuildConfig.DEBUG) {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER_ROOT
 
-                // Profile Sync Logic
-                LaunchedEffect(profileState) {
-                    val state = profileState
-                    if (state is ProfileState.Success) {
-                        themeViewModel.syncWithFirebase(state.profile)
-                    }
-                }
-
                 var appState by remember { mutableStateOf("splash") }
 
                 // Splash Screen Minimum Duration Timer
@@ -110,11 +102,6 @@ if (BuildConfig.DEBUG) {
                     kotlinx.coroutines.delay(1200) // Lowered for faster cold start, custom splash handles the rest
                     splashMinimumTimedOut = true
                 }
-                val themeColors = HavamaniaTheme.colors
-                val backgroundGradient = remember(themeColors) {
-                    Brush.verticalGradient(themeColors.gradientPrimary)
-                }
-
                 // Startup Logic: Execute critical path before showing anything
                 LaunchedEffect(authState) {
                     val currentUser = authViewModel.currentUser
@@ -182,7 +169,6 @@ if (BuildConfig.DEBUG) {
                 }
 
                 var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
-                var activeWeatherData by remember { mutableStateOf<WeatherData?>(null) }
 
                 // Splash Screen Logic
                 if (appState == "splash") {
@@ -215,14 +201,13 @@ if (BuildConfig.DEBUG) {
                                     onNavigate = { route ->
                                         try {
                                             val startDestId = navController.graph.findStartDestination().id
-                                            val shouldResetState = route == Routes.WEATHER_ROOT || route == Routes.PROFILE_ROOT || route == Routes.AI_ROOT
 
                                             navController.navigate(route) {
                                                 popUpTo(startDestId) {
                                                     saveState = true
                                                 }
                                                 launchSingleTop = true
-                                                restoreState = !shouldResetState
+                                                restoreState = true
                                             }
                                         } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
@@ -287,9 +272,9 @@ if (BuildConfig.DEBUG) {
                                     Routes.WEATHER_ROOT,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
                                 ) {
-                                    HomeScreen(onNavigateToAi = { rec: HavamaniaRecommendation, data: WeatherData? ->
+                                    HomeScreen(profileViewModel = profileViewModel, themeViewModel = themeViewModel,
+                                        onNavigateToAi = { rec: HavamaniaRecommendation, _: WeatherData? ->
                                         pendingRecommendation = rec
-                                        activeWeatherData = data
                                         navController.navigate(Routes.AI_ROOT)
                                     }, onNavigateToNotifications = {
                                         navController.navigate(Routes.NOTIFICATION_CENTER)
@@ -341,6 +326,7 @@ if (BuildConfig.DEBUG) {
                                 }
                                 composable(Routes.PROFILE_ROOT) {
                                     ProfileScreen(
+                                        profileViewModel = profileViewModel,
                                         onBack = { navController.popBackStack() },
                                         onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                                         onNavigateToCities = { navController.navigate(Routes.CITIES) },

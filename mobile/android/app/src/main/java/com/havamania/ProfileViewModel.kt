@@ -87,7 +87,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     private fun observeProfile(uid: String) {
         profileJob?.cancel()
-        _profileState.value = ProfileState.Loading
+        _profileState.value = userProfileRepository.profile.value
+            ?.takeIf { it.uid == uid }?.let { ProfileState.Success(it) } ?: ProfileState.Loading
         userProfileRepository.startObserving(uid)
 
         profileJob = accountTasks.launch launch@ { ownerUid ->
@@ -96,7 +97,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 if (auth.currentUser?.uid != uid) return@collect
                 if (profile != null && profile.uid == uid) {
                     _profileState.value = ProfileState.Success(profile)
-                    syncDataStoreFromProfile(profile)
+                    ThemeManager.saveProfileSnapshot(getApplication(), profile)
                 } else {
                     _profileState.value = ProfileState.Loading
                     // Handled if we need to create it
@@ -152,24 +153,6 @@ if (BuildConfig.DEBUG) {
     fun fetchProfile() {
         val uid = auth.currentUser?.uid ?: return
         observeProfile(uid)
-    }
-
-    private fun syncDataStoreFromProfile(profile: UserProfile) {
-        if (auth.currentUser?.uid != profile.uid) return
-        accountTasks.launch launch@ { ownerUid ->
-            val context = getApplication<Application>()
-            ThemeManager.saveUserName(context, profile.uid, profile.name)
-            ThemeManager.saveUserBio(context, profile.uid, profile.bio)
-            ThemeManager.saveUserAboutMe(context, profile.uid, profile.aboutMe)
-            ThemeManager.saveAssistantTone(context, profile.uid, try { AssistantTone.valueOf(profile.assistantTone.uppercase()) } catch(e: Exception) { AssistantTone.DENGELI })
-            ThemeManager.savePersonalizationEnabled(context, profile.uid, profile.personalizationEnabled)
-            ThemeManager.saveOnboardingCompleted(context, profile.uid, profile.onboardingCompleted)
-            ThemeManager.saveUserImageUriByUid(context, profile.uid, profile.photoURL)
-
-            profile.personalizationProfile?.let {
-                ThemeManager.saveUserInterests(context, profile.uid, it.selectedInterests.toSet())
-            }
-        }
     }
 
     fun updateProfile(name: String, bio: String) {

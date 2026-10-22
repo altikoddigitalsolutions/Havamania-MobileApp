@@ -60,3 +60,7 @@ Ek bulgu: analiz detayının ilk yüklemesi Firebase ilk oturum bildirimi taraf�
 
 Son cihaz doğrulaması: after-history-detail.png üzerinde seçilen kaydın başlığı, tarihi ve kullanıcı/asistan mesajları görüntülendi; yanlış yönlendirme ve sonsuz yükleme düzeltmeleri doğrulandı. Harita zemin düzeltmesi derlendi; son sürümle görsel tekrar kontrolü açık.
 Son kod üzerinde birim testleri tekrar çalıştırıldı: 125/125 geçti. Güncel lint raporu: 0 hata, 180 uyarı, 2 öneri (tur başındaki 187 uyarı tarihsel sonuçtur).
+
+## Durum varyantları ve sonraki sıra
+
+Her ekranın boş/dolu, yükleniyor/hata ve benzeri durumları ayrı açık kontroldür. Ayrıntılı sıra ve video analizi: [Ekran durumları ve kod denetimi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md). Ana liste artık 47 madde: 22 tamamlanan / 25 açık; önceki sayılar tarihsel kayıttır.

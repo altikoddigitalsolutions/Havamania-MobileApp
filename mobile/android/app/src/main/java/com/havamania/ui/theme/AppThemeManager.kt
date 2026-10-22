@@ -198,6 +198,25 @@ object ThemeManager {
         try { LocationMode.valueOf(modeName) } catch (e: Exception) { LocationMode.MANUAL }
     }
 
+    /** Persist a complete profile in one transaction, including intentionally cleared fields. */
+    suspend fun saveProfileSnapshot(context: Context, profile: com.havamania.UserProfile) {
+        val uid = profile.uid
+        require(uid.isNotBlank())
+        context.dataStore.edit { prefs ->
+            prefs[nameKey(uid)] = profile.name
+            prefs[bioKey(uid)] = profile.bio
+            prefs[aboutMeKey(uid)] = profile.aboutMe
+            prefs[interestsKey(uid)] = profile.personalizationProfile?.selectedInterests.orEmpty().joinToString(",")
+            val photo = profile.photoURL
+            if (photo == null) prefs.remove(imageUriKey(uid)) else prefs[imageUriKey(uid)] = photo
+            prefs[toneKey(uid)] = runCatching {
+                AssistantTone.valueOf(profile.assistantTone.uppercase(java.util.Locale.ROOT)).name
+            }.getOrDefault(AssistantTone.DENGELI.name)
+            prefs[personalizationEnabledKey(uid)] = profile.personalizationEnabled
+            prefs[onboardingCompletedKey(uid)] = profile.onboardingCompleted
+        }
+    }
+
     suspend fun saveUserName(context: Context, uid: String, name: String) = context.dataStore.edit { it[nameKey(uid)] = name }
     fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
 

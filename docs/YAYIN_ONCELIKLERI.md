@@ -28,6 +28,12 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Proje, bucket, servis hesabı, token doğrulama ve API alan adı eşleşmesi.
 - [ ] Canlı kurallarda kullanıcılar arası erişim ve iptal edilmiş token kontrolü.
 
+### Firebase ve senkronizasyon için ek zorunlu kontroller
+
+- [ ] Firebase yaşam döngüsü: Auth oturumu/token yenileme, Firestore/Storage dinleyici hata ve yeniden bağlanma, tek aktif dinleyici, çıkış/hesap değişiminde iptal; eski hesabın verisinin yeni ekrana taşınmaması.
+- [ ] Firebase–cihaz eşitlemesi: profil/avatar/tercihler, şehirler/varsayılan şehir, seyahatler ve AI geçmişi için kaynak sahipliği; Room/DataStore/Firestore tutarlılığı, ilk açılış uzlaştırması, çevrimdışı yazma ve yeniden bağlanma, süreç ölümü sonrası kalıcı gönderme/silme kuyruğu, idempotent yeniden deneme ve silinen verinin geri gelmemesi.
+- [ ] Uçtan uca genel senkronizasyon: iki cihazda eşzamanlı düzenleme/silme çatışmaları, zaman/sürüm sıralaması, Firebase–backend eşleşmesi ve kısmi başarısızlıkların kurtarılması; yükleniyor/bekleyen/senkronize/hata/gerçek boş durumlarının doğru gösterilmesi. Önce yerel/emülatör testleri; staging ve çok cihazlı canlı doğrulama ayrıca açık kalır.
+
 ## 4. Hava verisinin doğruluğu — KISMEN TAMAM
 
 - [x] Koordinatlı önbellek, 100 kayıt sınırı, bozuk disk ve çevrimdışı geri dönüş testleri.
@@ -46,9 +52,11 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Gerçek A→B geçişi, bekleyen bildirim/deep link ve uzun süreli bellek/pil testi.
 - [ ] Konumdan adres çözümlemenin toplam zaman aşımı (eski Geocoder API).
 
+- [ ] Kod erişilebilirliği ve tekrar denetimi: Android, backend, React Native, test/CI; ölü kod, çift dinleyici/iş, sahte başarı ve eksik entegrasyonların doğrulanarak temizlenmesi.
+
 ## 6. Tasarım bütünlüğü ve erişilebilirlik — KISMEN TAMAM
 
-- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; bulgu ve tekrar doğrulama matrisi.
+- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; bulgu ve tekrar doğrulama matrisi. Her ekranın boş/dolu, yükleniyor/hata, çevrimdışı, izin ve hesap değişimi durumları ayrı denetlenir; şehir/seyahat eklemeden önce ve sonra dahil. Ayrıntılar: [durum matrisi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md).
 
 - [x] Profil kaydı onay/hata durumu, çift tıklama engeli, taslağın snapshot ile ezilmesini önleme.
 - [x] Profil klavye boşluğu, büyüyen bio alanı ve hesap bazlı kaydedilebilir taslak.
@@ -63,7 +71,7 @@ Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi b�
 - [ ] Gizlilik, KVKK, koşullar ve çalışan hesap silme web yolu.
 - [ ] Data Safety, içerik derecelendirmesi, test erişimi ve mağaza görselleri.
 - [ ] Çoklu sunucu rate limit, PostgreSQL kapasitesi, gözlemleme ve yedekten dönüş.
-- [ ] Eski React Native CI'daki bulunmayan SignUpScreen import'u (native Android'den ayrı).
+- [ ] Eski React Native CI: bulunmayan SignUpScreen import’u RegisterScreen olarak düzeltildi; bağımlılık kurulumu ve Jest/TypeScript doğrulaması açık (native Android’den ayrı).
 
 ## 8. İmzalı release AAB — AÇIK
 

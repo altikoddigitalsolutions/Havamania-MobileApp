@@ -10,7 +10,7 @@ Canlı ekran bulguları, düzeltmeler ve açık varyantlar: [Canlı görsel dene
 
 ## Kısa durum
 
-Ana kontrol listesinde **46 geniş madde: 22 tamamlandı, 24 açık**. Kullanıcının istediği canlı görsel ekran denetimi ayrı madde olarak eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
+Ana kontrol listesinde **50 geniş madde: 22 tamamlandı, 28 açık**. Canlı görsel ekran denetimi durum varyantlarıyla genişletildi; tüm kod tabanının erişilebilirlik/tekrar denetimi ayrı açık madde eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
 
 Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. Son bildirim ve canlı görsel denetim düzeltmeleri bu tur Git gönderimine dahil edildi.
 
@@ -153,3 +153,16 @@ Yeni SQLite testi veritabanını kapatıp açar; bekleyen silme kimliği, kullan
 Sınırlar: veritabanına niyet yazılmadan süreç ölürse talep kaydedilmiş sayılmaz. Başka cihazda eşzamanlı oluşturulan yeni kayıtların küresel silme garantisi yoktur. Tamamlanmış kimlik işaretleri hesap verileri silinene kadar saklanır; zamanla büyüme için güvenli temizleme politikası ayrıca değerlendirilmeli. WorkManager arka plan yürütmesi ve gerçek Firebase kesinti/çok cihaz testi açık. Bu tur canlı kullanıcı verisi kullanılmadı. Ana 22/45 geniş madde durumu korunur; bütün senkronizasyon matrisi kapanmaz.
 
 Kalıcı silme turu doğrulaması: 125 JVM testi (0 başarısızlık), SM-T500/Android 12 üzerinde seçili 7 cihaz testi (5 SQLite, 2 Firebase model; 0 başarısızlık/0 hata) geçti. Debug derleme ve lint başarılı; 0 lint hatası, 187 uyarı, 2 ipucu. UI, backend ve canlı Firebase bu tur yeniden test edilmedi. Sonraki iş bildirim tekli silme/okundu işlemlerinde hata ve hesap değişimi koruması.
+
+## Profil geçişi ve kod tekrarları devam turu
+
+[Video analizi, durum matrisi ve kod denetimi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md). Bu turun değişiklikleri yereldedir; bu tur için Git gönderimi henüz yapılmadı. Önceki Git gönderimi bilgisi önceki tur içindir.
+
+Profil geçişinin cihaz doğrulaması tamamlandı: ilk görünümde isim/biyografi/rozet birlikte, iki Asistan → Profil dönüşünde kararlı. İlk yüklemede rota/analiz sayaçlarının geçici 0 göstermesi ayrıca doğrulandı ve sıradaki düzeltme olarak açık tutuldu. Kanıt ve kapsam: EKRAN_DURUMLARI_VE_KOD_DENETIMI.md. Değişiklikler henüz yerel; push yapılmadı.
+
+
+## Firebase ve senkronizasyon kapsamı — 22 Ekim 2026
+
+Kullanıcı isteğiyle ana listenin üçüncü başlığına üç ayrı açık madde eklendi: Firebase yaşam döngüsü, Firebase–cihaz eşitlemesi ve cihazlar/Firebase/backend arasındaki uçtan uca senkronizasyon. Güncel toplam 50 geniş madde: 22 tamamlanan, 28 açık. Önceki 47/22/25 sayıları tarihsel durumdur; yeni kapsam çözülmüş sayılmaz.
+
+Öncelik: profil sayaçlarında yükleniyor/gerçek sıfır ayrımı; ardından senkronizasyon kaynakları ve kuyruk/dinleyici denetimiyle birlikte şehir/seyahat boş-dolu ekranları. Canlı dağıtım veya üretim yazımı bu kapsam eklemesiyle yapılmaz. Profil geçiş düzeltmeleri, izole test, kod temizliği ve bu takip güncellemesi aynı Git gönderimi için hazırlanmıştır. Bu tur yalnızca belgeler değişti; önceki başarılı kod testleri yeniden çalıştırılmadı.
