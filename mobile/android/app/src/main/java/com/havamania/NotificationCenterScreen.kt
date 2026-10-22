@@ -16,6 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -31,6 +35,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.HavamaniaTheme
 import com.havamania.ui.theme.HavamaniaTopBar
@@ -46,8 +54,18 @@ fun NotificationCenterScreen(
     onNavigateToDetail: (String, Map<String, String>?) -> Unit,
     viewModel: NotificationViewModel = viewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var clockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                clockMillis = System.currentTimeMillis()
+                kotlinx.coroutines.delay(60_000)
+            }
+        }
+    }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -117,15 +135,17 @@ if (BuildConfig.DEBUG) {
     if (showDeleteAllDialog) {
         HavamaniaDialog(
             onDismissRequest = { showDeleteAllDialog = false },
-            title = "Tümünü Sil?",
+            title = "Tüm bildirimler silinsin mi?",
             text = "Tüm bildirimler kalıcı olarak silinecektir. Bu işlem geri alınamaz.",
             confirmText = "Sil",
             confirmColor = themeColors.error,
             icon = Icons.Rounded.DeleteForever,
             onConfirm = {
-                viewModel.deleteAllNotifications()
-                scope.launch {
-                    snackbarHostState.showSnackbar("Tüm bildirimler silindi")
+                showDeleteAllDialog = false
+                viewModel.deleteAllNotifications { success ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(if (success) "Tüm bildirimler silindi." else "Bildirimler silinemedi. Lütfen tekrar deneyin.")
+                    }
                 }
             }
         )
@@ -201,10 +221,7 @@ if (BuildConfig.DEBUG) {
                         NotificationFilter.SYSTEM -> notificationsToShow.filter { it.category == NotificationCategory.SYSTEM }
                     }
 
-                    // Tekrar edenleri grupla (Başlık ve Mesaj aynı olanları en yeniye göre teke düşür)
-                    base.groupBy { it.getSafeTitle() + it.getSafeMessage() }
-                        .mapNotNull { it.value.maxByOrNull { n -> n.createdAt } }
-                        .sortedByDescending { it.createdAt }
+                    notificationDisplayOrder(base)
                 }
 
                 if (filteredList.isEmpty()) {
@@ -222,6 +239,7 @@ if (BuildConfig.DEBUG) {
 
                             SwipeableNotificationItem(
                                 notification = notification,
+                                clockMillis = clockMillis,
                                 isSelected = isSelected,
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleNotificationClick(notification) },
@@ -252,7 +270,8 @@ fun SwipeableNotificationItem(
     onDelete: () -> Unit,
     onToggleRead: () -> Unit,
     onToggleSelection: () -> Unit,
-    onNavigateToDetail: (String, Map<String, String>?) -> Unit
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
+    clockMillis: Long = System.currentTimeMillis()
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -353,6 +372,18 @@ fun SwipeableNotificationItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .semantics {
+                    stateDescription = if (isSelectionMode) {
+                        if (isSelected) "Seçili" else "Seçili değil"
+                    } else if (notification.isRead) "Okundu" else "Okunmadı"
+                    customActions = if (isSelectionMode) emptyList() else listOf(
+                        CustomAccessibilityAction(if (notification.isRead) "Okunmadı olarak işaretle" else "Okundu olarak işaretle") {
+                            onToggleRead(); true
+                        },
+                        CustomAccessibilityAction("Bildirimi sil") { onDelete(); true },
+                        CustomAccessibilityAction("Bildirimi seç") { onToggleSelection(); true }
+                    )
+                }
                 .pointerInput(notification.id, isSelectionMode) {
                     if (!isSelectionMode) {
                         detectHorizontalDragGestures(
@@ -388,6 +419,7 @@ fun SwipeableNotificationItem(
         ) {
             NotificationCard(
                 notification = notification,
+                clockMillis = clockMillis,
                 isSelected = isSelected,
                 isSelectionMode = isSelectionMode,
                 onToggleSelection = onToggleSelection,
@@ -403,19 +435,13 @@ fun NotificationCard(
     isSelected: Boolean,
     isSelectionMode: Boolean,
     onToggleSelection: () -> Unit,
-    onNavigateToDetail: (String, Map<String, String>?) -> Unit
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
+    clockMillis: Long = System.currentTimeMillis()
 ) {
     val themeColors = HavamaniaTheme.colors
 
-    // Dynamic time calculation (Business Rule 7)
-    var timeStr by remember { mutableStateOf(NotificationDateFormatter.formatCreatedAt(notification.createdAt)) }
-
-    // Refresh time every minute
-    LaunchedEffect(notification.createdAt) {
-        while(true) {
-            timeStr = NotificationDateFormatter.formatCreatedAt(notification.createdAt)
-            kotlinx.coroutines.delay(60000)
-        }
+    val timeStr = remember(notification.createdAt, clockMillis) {
+        NotificationDateFormatter.formatCreatedAt(notification.createdAt, java.time.Instant.ofEpochMilli(clockMillis))
     }
 
     val eventTimeStr = remember(notification.eventAt) {
@@ -525,7 +551,7 @@ fun NotificationCard(
                             border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
                         ) {
                             Text(
-                                text = notification.actionLabel.uppercase(),
+                                text = notification.actionLabel,
                                 style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, fontSize = 10.sp),
                                 color = themeColors.accent,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)

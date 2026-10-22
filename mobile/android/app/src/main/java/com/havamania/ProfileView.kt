@@ -16,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -70,7 +72,16 @@ fun ProfileScreen(
 
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
-    var showAboutMeSheet by remember { mutableStateOf(false) }
+    val owner by profileViewModel.activeUid.collectAsStateWithLifecycle()
+    var showAboutMeSheet by remember(owner) { mutableStateOf(false) }
+    val aboutMeSaveState by profileViewModel.aboutMeSaveState.collectAsStateWithLifecycle()
+    val savingAboutMe = aboutMeSaveState == ProfileSaveState.Saving
+    LaunchedEffect(aboutMeSaveState) {
+        if (aboutMeSaveState == ProfileSaveState.Saved) {
+            showAboutMeSheet = false
+            profileViewModel.resetAboutMeSave()
+        }
+    }
     var showStatsDetail by remember { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -171,14 +182,17 @@ fun ProfileScreen(
     }
 
         if (showAboutMeSheet) {
+            DisposableEffect(profileViewModel) { onDispose { profileViewModel.resetAboutMeSave() } }
+            val sheetState = rememberModalBottomSheetState(confirmValueChange = { !savingAboutMe || it != SheetValue.Hidden })
             ModalBottomSheet(
-                onDismissRequest = { showAboutMeSheet = false },
+                sheetState = sheetState,
+                onDismissRequest = { if (!savingAboutMe) showAboutMeSheet = false },
                 containerColor = themeColors.surface,
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textPrimary.copy(0.2f)) }
             ) {
-                PremiumAboutMeContent(aboutMe) {
+                PremiumAboutMeContent(aboutMe, isSaving = savingAboutMe,
+                    errorMessage = (aboutMeSaveState as? ProfileSaveState.Failed)?.message) {
                     profileViewModel.setUserAboutMe(it)
-                    showAboutMeSheet = false
                 }
             }
         }
@@ -427,9 +441,9 @@ fun PremiumInterestChip(item: InterestItem, isSelected: Boolean, onClick: () -> 
 }
 
 @Composable
-fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
+fun PremiumAboutMeContent(initialText: String, isSaving: Boolean = false, errorMessage: String? = null, onSave: (String) -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    var text by remember { mutableStateOf(initialText) }
+    var text by rememberSaveable { mutableStateOf(initialText) }
     val sampleCards = listOf(
         AboutMeSample("Outdoor", "Hafta sonları doğa yürüyüşü ve kamp yapmayı seviyorum.", Icons.Rounded.Terrain),
         AboutMeSample("Aile", "Çocuklarım için hava durumunu takip ediyorum.", Icons.Rounded.ChildCare),
@@ -437,7 +451,7 @@ fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
         AboutMeSample("Macera", "Kar tutkunuyum. Kışın snowboard yapmayı seviyorum.", Icons.Rounded.Snowboarding)
     )
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState())) {
+    Column(modifier = Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
         Spacer(Modifier.height(8.dp))
         Text("HAVA KİMLİĞİ", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = themeColors.accent)
         Text("Kendinden Bahset", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
@@ -446,15 +460,16 @@ fun PremiumAboutMeContent(initialText: String, onSave: (String) -> Unit) {
         Spacer(Modifier.height(16.dp))
         androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 40.dp)) {
             items(sampleCards) { sample ->
-                PremiumSampleCard(sample = sample) { text = sample.text }
+                PremiumSampleCard(sample = sample) { if (!isSaving) text = sample.text }
             }
         }
         Spacer(Modifier.height(32.dp))
         Surface(color = themeColors.surfaceGlass.copy(alpha = 0.3f), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))) {
-            TextField(value = text, onValueChange = { text = it }, modifier = Modifier.fillMaxWidth().height(180.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, cursorColor = themeColors.accent, focusedTextColor = themeColors.textPrimary, unfocusedTextColor = themeColors.textPrimary))
+            TextField(value = text, onValueChange = { text = it }, enabled = !isSaving, label = { Text("Hakkımda") }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, cursorColor = themeColors.accent, focusedTextColor = themeColors.textPrimary, unfocusedTextColor = themeColors.textPrimary))
         }
         Spacer(Modifier.height(32.dp))
-        HavamaniaPrimaryButton(text = "PROFİLİ GÜNCELLE", onClick = { onSave(text) }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = text.isNotBlank())
+        HavamaniaPrimaryButton(text = "PROFİLİ GÜNCELLE", onClick = { onSave(text) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), isLoading = isSaving, enabled = text.isNotBlank() && !isSaving)
+        errorMessage?.let { Text(it, color = themeColors.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
     }
 }
 

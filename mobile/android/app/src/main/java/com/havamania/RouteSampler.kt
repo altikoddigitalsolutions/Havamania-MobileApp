@@ -34,8 +34,8 @@ object GeoMath {
         val lat2 = Math.toRadians(b.latitude)
         val dLat = Math.toRadians(b.latitude - a.latitude)
         val dLon = Math.toRadians(b.longitude - a.longitude)
-        val h = sin(dLat / 2) * sin(dLat / 2) +
-            cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        val h = (sin(dLat / 2) * sin(dLat / 2) +
+            cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)).coerceIn(0.0, 1.0)
         return 2 * EARTH_RADIUS_M * atan2(sqrt(h), sqrt(1 - h))
     }
 }
@@ -64,7 +64,10 @@ object RouteSampler {
 
     private fun adaptiveSample(route: RoutePath): List<RouteWaypoint> {
         val pts = route.points
-        if (pts.size < 2) return emptyList()
+        if (pts.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0.0 ||
+            !route.durationSeconds.isFinite() || route.durationSeconds <= 0.0) return emptyList()
+        val geometryLength = pts.zipWithNext().sumOf { (a, b) -> GeoMath.haversineMeters(a, b) }
+        if (!geometryLength.isFinite() || geometryLength <= 0.0) return emptyList()
 
         val durationHrs = route.durationSeconds / 3600.0
         val intermediateCount = getTargetIntermediateCount(durationHrs)
@@ -72,7 +75,7 @@ object RouteSampler {
         if (intermediateCount == 0) return emptyList()
 
         val result = mutableListOf<RouteWaypoint>()
-        val intervalMeters = route.distanceMeters / (intermediateCount + 1)
+        val intervalMeters = geometryLength / (intermediateCount + 1)
 
         var cumulative = 0.0
         var nextThreshold = intervalMeters
@@ -87,7 +90,7 @@ object RouteSampler {
                 val t = ((nextThreshold - cumulative) / segLen).coerceIn(0.0, 1.0)
                 val lat = segStart.latitude + (segEnd.latitude - segStart.latitude) * t
                 val lon = segStart.longitude + (segEnd.longitude - segStart.longitude) * t
-                result.add(RouteWaypoint(GeoPoint(lat, lon), nextThreshold))
+                result.add(RouteWaypoint(GeoPoint(lat, lon), nextThreshold / geometryLength * route.distanceMeters))
                 nextThreshold += intervalMeters
             }
             cumulative += segLen
@@ -101,14 +104,17 @@ object RouteSampler {
      */
     fun denseSampleForAnalysis(route: RoutePath): List<RouteWaypoint> {
         val pts = route.points
-        if (pts.size < 2) return emptyList()
+        if (pts.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0.0 ||
+            !route.durationSeconds.isFinite() || route.durationSeconds <= 0.0) return emptyList()
+        val geometryLength = pts.zipWithNext().sumOf { (a, b) -> GeoMath.haversineMeters(a, b) }
+        if (!geometryLength.isFinite() || geometryLength <= 0.0) return emptyList()
 
         val durationMins = route.durationSeconds / 60.0
         val sampleEveryMins = 45.0
         val count = (durationMins / sampleEveryMins).toInt().coerceIn(1, 20)
 
         val result = mutableListOf<RouteWaypoint>()
-        val intervalMeters = route.distanceMeters / (count + 1)
+        val intervalMeters = geometryLength / (count + 1)
 
         var cumulative = 0.0
         var nextThreshold = intervalMeters
@@ -123,7 +129,7 @@ object RouteSampler {
                 val t = ((nextThreshold - cumulative) / segLen).coerceIn(0.0, 1.0)
                 val lat = segStart.latitude + (segEnd.latitude - segStart.latitude) * t
                 val lon = segStart.longitude + (segEnd.longitude - segStart.longitude) * t
-                result.add(RouteWaypoint(GeoPoint(lat, lon), nextThreshold))
+                result.add(RouteWaypoint(GeoPoint(lat, lon), nextThreshold / geometryLength * route.distanceMeters))
                 nextThreshold += intervalMeters
             }
             cumulative += segLen

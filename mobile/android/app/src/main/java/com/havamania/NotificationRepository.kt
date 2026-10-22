@@ -8,16 +8,7 @@ import kotlinx.coroutines.flow.map
 class NotificationRepository(private val dao: NotificationDao) {
     private val TAG = "NotificationRepo"
 
-    fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid).map { list ->
-        if (list.isEmpty() && uid == "legacy") {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "Legacy user list is empty. Returning DefaultNotifications.")
-            }
-            DefaultNotifications.create(uid)
-        } else {
-            list
-        }
-    }
+    fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid)
 
     fun getUnreadCount(uid: String): Flow<Int> = dao.getUnreadCount(uid)
 
@@ -103,13 +94,7 @@ if (BuildConfig.DEBUG) {
     }
 
     suspend fun deleteAll(uid: String) {
-        try {
-            dao.deleteAll(uid)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete all", e)
-}
-        }
+        dao.deleteAll(uid)
     }
 
     suspend fun deleteByCategory(uid: String, category: NotificationCategory) {

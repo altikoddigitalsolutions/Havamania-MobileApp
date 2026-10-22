@@ -30,6 +30,19 @@ sealed class ProfileState {
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    private val _activeUid = MutableStateFlow(auth.currentUser?.uid)
+    internal val activeUid: StateFlow<String?> = _activeUid
+    private val accountTasks = AccountTaskScope(viewModelScope) { auth.currentUser?.uid ?: "legacy" }
+    private val saveController = ProfileSaveController()
+    internal val saveState = saveController.state
+    internal fun resetSaveState() = saveController.reset()
+    private val personalizationSave = PersonalizationSaveController(viewModelScope, { auth.currentUser?.uid ?: "legacy" })
+    internal val personalizationSaveState = personalizationSave.state
+    internal fun resetPersonalizationSave() = personalizationSave.reset()
+    private val _aboutMeSaveState = MutableStateFlow<ProfileSaveState>(ProfileSaveState.Idle)
+    internal val aboutMeSaveState: StateFlow<ProfileSaveState> = _aboutMeSaveState
+    private val aboutMeRunner = AssistantTaskRunner(viewModelScope, { auth.currentUser?.uid ?: "legacy" }, {}, 20_000)
+    internal fun resetAboutMeSave() { aboutMeRunner.reset(); _aboutMeSaveState.value = ProfileSaveState.Idle }
 
     // RCA FIX: Standard initialization. We will log the bucket name to verify.
     private val storage = FirebaseStorage.getInstance()
@@ -47,7 +60,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private var profileJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        accountTasks.reset()
+        saveController.reset()
+        personalizationSave.reset()
+        resetAboutMeSave()
+        _uploadProgress.value = false
         val user = firebaseAuth.currentUser
+        _activeUid.value = user?.uid
         if (user == null) {
             profileJob?.cancel()
             userProfileRepository.stopObserving()
@@ -71,11 +90,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         _profileState.value = ProfileState.Loading
         userProfileRepository.startObserving(uid)
 
-        profileJob = viewModelScope.launch {
+        profileJob = accountTasks.launch launch@ { ownerUid ->
             try {
             userProfileRepository.profile.collect { profile ->
                 if (auth.currentUser?.uid != uid) return@collect
-                if (profile != null) {
+                if (profile != null && profile.uid == uid) {
                     _profileState.value = ProfileState.Success(profile)
                     syncDataStoreFromProfile(profile)
                 } else {
@@ -93,12 +112,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _profileState.value = ProfileState.Error("Profil yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.")
             }
         }
     }
 
     private fun createNewProfile(uid: String) {
+        if (auth.currentUser?.uid != uid) return
         val authName = auth.currentUser?.displayName ?: ""
         val newProfile = UserProfile(
             uid = uid,
@@ -107,10 +128,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
-        viewModelScope.launch {
+        accountTasks.launch launch@ { ownerUid ->
             try {
                 db.collection("users").document(uid).set(newProfile).await()
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     Log.e("ProfileVM", "Failed to create new profile", e)
 }
@@ -121,6 +143,8 @@ if (BuildConfig.DEBUG) {
     override fun onCleared() {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
+        personalizationSave.reset()
+        resetAboutMeSave()
         // We don't stopObserving in repository here because other ViewModels might still need it.
         // It's a singleton.
     }
@@ -131,7 +155,8 @@ if (BuildConfig.DEBUG) {
     }
 
     private fun syncDataStoreFromProfile(profile: UserProfile) {
-        viewModelScope.launch {
+        if (auth.currentUser?.uid != profile.uid) return
+        accountTasks.launch launch@ { ownerUid ->
             val context = getApplication<Application>()
             ThemeManager.saveUserName(context, profile.uid, profile.name)
             ThemeManager.saveUserBio(context, profile.uid, profile.bio)
@@ -148,93 +173,60 @@ if (BuildConfig.DEBUG) {
     }
 
     fun updateProfile(name: String, bio: String) {
-        val trimmedName = name.trim()
-        val trimmedBio = bio.trim()
-
-        if (trimmedName.isEmpty()) {
-            _profileState.value = ProfileState.Error("İsim boş olamaz.")
-            return
-        }
-
-        val finalName = if (trimmedName.length > 50) trimmedName.take(50) else trimmedName
-        val finalBio = if (trimmedBio.length > 500) trimmedBio.take(500) else trimmedBio
-
-        val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            try {
+        val user = auth.currentUser ?: return
+        accountTasks.launch { ownerUid ->
+            if (user.uid != ownerUid) return@launch
+            saveController.save(name, bio) { finalName, finalBio ->
                 val updates = mapOf(
                     "name" to finalName,
                     "bio" to finalBio,
                     "updatedAt" to System.currentTimeMillis()
                 )
-                db.collection("users").document(uid).update(updates).await()
-
-                auth.currentUser?.updateProfile(com.google.firebase.auth.userProfileChangeRequest {
+                db.collection("users").document(ownerUid).update(updates).await()
+                // Keep the Firebase user object captured before the first suspension.
+                user.updateProfile(com.google.firebase.auth.userProfileChangeRequest {
                     displayName = finalName
-                })?.await()
-
-                // Explicit local sync
+                }).await()
                 val context = getApplication<Application>()
-                ThemeManager.saveUserName(context, uid, finalName)
-                ThemeManager.saveUserBio(context, uid, finalBio)
-
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("ProfileVM", "Update profile failed", e)
-}
-                _profileState.value = ProfileState.Error("Profil güncellenemedi. Lütfen tekrar deneyin.")
+                ThemeManager.saveUserName(context, ownerUid, finalName)
+                ThemeManager.saveUserBio(context, ownerUid, finalBio)
             }
         }
     }
 
     fun updatePersonalization(interests: List<String>, travelStyles: List<String>, weatherPrefs: WeatherPreferences) {
-        val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            try {
-                val personalization = PersonalizationProfile(
-                    uid = uid,
-                    selectedInterests = interests,
-                    travelStyles = travelStyles,
-                    weatherPreferences = weatherPrefs
-                )
-
-                val updates = mapOf(
-                    "personalizationProfile" to personalization,
-                    "onboardingCompleted" to true,
-                    "updatedAt" to System.currentTimeMillis()
-                )
-
-                db.collection("users").document(uid).update(updates).await()
-
-                val context = getApplication<Application>()
-                ThemeManager.saveUserInterests(context, uid, interests.toSet())
-                ThemeManager.saveOnboardingCompleted(context, uid, true)
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("ProfileVM", "Update personalization failed", e)
-}
-                _profileState.value = ProfileState.Error("Tercihler güncellenemedi.")
-            }
+        if (auth.currentUser == null) return
+        personalizationSave.save { owner ->
+            val personalization = PersonalizationProfile(
+                uid = owner, selectedInterests = interests.toList(),
+                travelStyles = travelStyles.toList(), weatherPreferences = weatherPrefs)
+            db.collection("users").document(owner).update(mapOf(
+                "personalizationProfile" to personalization,
+                "onboardingCompleted" to true,
+                "updatedAt" to System.currentTimeMillis()
+            )).await()
+            val context = getApplication<Application>()
+            ThemeManager.saveUserInterests(context, owner, interests.toSet())
+            ThemeManager.saveOnboardingCompleted(context, owner, true)
         }
     }
 
     fun setUserAboutMe(aboutMe: String) {
-        val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            try {
-                db.collection("users").document(uid).update("aboutMe", aboutMe, "updatedAt", System.currentTimeMillis()).await()
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("ProfileVM", "Update aboutMe failed", e)
-}
-                _profileState.value = ProfileState.Error("Bilgiler güncellenemedi.")
-            }
-        }
+        if (auth.currentUser == null) return
+        aboutMeRunner.start(
+            onStart = { _aboutMeSaveState.value = ProfileSaveState.Saving },
+            operation = { owner ->
+                db.collection("users").document(owner).update("aboutMe", aboutMe.trim(), "updatedAt", System.currentTimeMillis()).await()
+                ThemeManager.saveUserAboutMe(getApplication(), owner, aboutMe.trim())
+            },
+            onSuccess = { _aboutMeSaveState.value = ProfileSaveState.Saved },
+            onError = { _aboutMeSaveState.value = ProfileSaveState.Failed("Kayıt onayı alınamadı. Metnin korundu; tekrar deneyebilirsin.") }
+        )
     }
 
     fun toggleInterest(interestId: String, currentInterests: Set<String>) {
         val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
+        accountTasks.launch launch@ { ownerUid ->
             try {
                 val newList = currentInterests.toMutableList()
                 if (newList.contains(interestId)) newList.remove(interestId)
@@ -245,6 +237,7 @@ if (BuildConfig.DEBUG) {
                     "updatedAt", System.currentTimeMillis()
                 ).await()
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("ProfileVM", "Toggle interest failed", e)
 }
@@ -263,7 +256,7 @@ if (BuildConfig.DEBUG) {
         }
         val uid = currentUser.uid
 
-        viewModelScope.launch {
+        accountTasks.launch launch@ { ownerUid ->
             if (BuildConfig.DEBUG) {
                 android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE START ---")
                 android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2 OK: Uploading URI = $uri")
@@ -337,6 +330,7 @@ if (BuildConfig.DEBUG) {
                     android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 if (BuildConfig.DEBUG) {
                     android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
                 }
@@ -365,19 +359,22 @@ if (BuildConfig.DEBUG) {
 
     fun removeProfileImage() {
         val uid = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
+        accountTasks.launch launch@ { ownerUid ->
             _uploadProgress.value = true
             try {
                 val context = getApplication<Application>()
                 try {
                     storage.reference.child("profile-images/$uid/avatar.jpg").delete().await()
-                } catch (e: Exception) { /* ignore */ }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                }
 
                 db.collection("users").document(uid).update("photoURL", null, "updatedAt", System.currentTimeMillis()).await()
                 ThemeManager.saveUserImageUriByUid(context, uid, null)
 
                 _avatarVersion.value = System.currentTimeMillis()
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _profileState.value = ProfileState.Error("İşlem başarısız.")
             } finally {
                 _uploadProgress.value = false
@@ -395,6 +392,7 @@ if (BuildConfig.DEBUG) {
             val exif = try {
                 ExifInterface(inputStream)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 null
             }
             val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
@@ -434,6 +432,7 @@ if (BuildConfig.DEBUG) {
                 rotatedBitmap
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 android.util.Log.e("PHOTO_DEBUG", "Error processing image", e)
 }

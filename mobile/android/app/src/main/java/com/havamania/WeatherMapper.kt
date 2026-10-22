@@ -36,21 +36,11 @@ object WeatherMapper {
 
         val suitability = calculateSuitability(current, daily)
 
-        // Sunrise/Sunset/SolarNoon
-        val sunriseISO = daily?.sunrise?.firstOrNull()
-        val sunsetISO = daily?.sunset?.firstOrNull()
-        val sunrise = sunriseISO?.split("T")?.last()
-        val sunset = sunsetISO?.split("T")?.last()
-        var solarNoon: String? = null
-
-        // Solar noon fallback calculation
-        if (sunrise != null && sunset != null) {
-            solarNoon = calculateSolarNoon(sunrise, sunset)
-        }
-
-        val sunriseLocalTime = try { LocalTime.parse(sunrise) } catch (e: Exception) { null }
-        val sunsetLocalTime = try { LocalTime.parse(sunset) } catch (e: Exception) { null }
-        val currentIsDay = current?.isDay == 1
+        val today = ForecastTime.localNow(response.timezone, now).toLocalDate()
+        val todayIndex = daily?.time?.indexOf(today.toString()) ?: -1
+        val sunrise = ForecastSun.timeForDate(daily?.sunrise?.getOrNull(todayIndex), today.toString())
+        val sunset = ForecastSun.timeForDate(daily?.sunset?.getOrNull(todayIndex), today.toString())
+        val solarNoon = ForecastSun.daylightMidpoint(sunrise, sunset)
 
         return WeatherData(
             cityName = cityName,
@@ -85,23 +75,9 @@ object WeatherMapper {
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
             hourlyForecast = mapHourly(hourly, daily, response.timezone, now),
-            dailyForecast = mapDaily(daily),
+            dailyForecast = mapDaily(daily, ForecastTime.localNow(response.timezone, now).toLocalDate()),
             details = mapDetails(current, daily)
         )
-    }
-
-    private fun calculateSolarNoon(sunrise: String, sunset: String): String? {
-        return try {
-            val sdf = SimpleDateFormat("HH:mm", Locale.US)
-            val riseDate = sdf.parse(sunrise)
-            val setDate = sdf.parse(sunset)
-            if (riseDate != null && setDate != null) {
-                val midTime = (riseDate.time + setDate.time) / 2
-                sdf.format(Date(midTime))
-            } else null
-        } catch (e: Exception) {
-            null
-        }
     }
 
     private fun calculateWindChill(temp: Double, windSpeed: Double): Double? {
@@ -168,16 +144,12 @@ object WeatherMapper {
         val currentHourStr = now.atZone(zone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:00", Locale.US))
 
         val sunTimesByDate = mutableMapOf<String, Pair<LocalTime, LocalTime>>()
-        if (daily != null && daily.time.size == daily.sunrise.size && daily.time.size == daily.sunset.size) {
+        if (daily != null) {
             for (i in daily.time.indices) {
-                val dateStr = daily.time[i]
-                val riseStr = daily.sunrise[i].split("T").lastOrNull()
-                val setStr = daily.sunset[i].split("T").lastOrNull()
-                val rise = try { LocalTime.parse(riseStr) } catch (e: Exception) { null }
-                val set = try { LocalTime.parse(setStr) } catch (e: Exception) { null }
-                if (rise != null && set != null) {
-                    sunTimesByDate[dateStr] = Pair(rise, set)
-                }
+                val date = daily.time[i]
+                val rise = ForecastSun.timeForDate(daily.sunrise.getOrNull(i), date)?.let(LocalTime::parse)
+                val set = ForecastSun.timeForDate(daily.sunset.getOrNull(i), date)?.let(LocalTime::parse)
+                if (rise != null && set != null) sunTimesByDate[date] = rise to set
             }
         }
 
@@ -228,7 +200,7 @@ object WeatherMapper {
         }
     }
 
-    private fun mapDaily(daily: DailyDto?): List<DailyForecast> {
+    private fun mapDaily(daily: DailyDto?, today: LocalDate): List<DailyForecast> {
         if (daily == null) return emptyList()
         return daily.time.mapIndexedNotNull { index, time ->
             val code = daily.weatherCode.getOrNull(index) ?: return@mapIndexedNotNull null
@@ -242,7 +214,9 @@ object WeatherMapper {
                 minTemp = min.roundToInt(),
                 maxTemp = max.roundToInt(),
                 precipitationProbability = daily.precipProbMax?.getOrNull(index),
-                isToday = index == 0
+                isToday = time == today.toString(),
+                sunriseTime = ForecastSun.timeForDate(daily.sunrise.getOrNull(index), time),
+                sunsetTime = ForecastSun.timeForDate(daily.sunset.getOrNull(index), time)
             )
         }
     }

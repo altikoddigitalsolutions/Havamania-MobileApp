@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -107,7 +108,7 @@ fun HavamaniaDialog(
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Text(
-                        text = dismissText.uppercase(),
+                        text = dismissText,
                         color = themeColors.textMuted,
                         style = HavamaniaTheme.typography.label,
                         letterSpacing = 1.sp
@@ -267,6 +268,13 @@ fun HavamaniaPrimaryButton(
         enabled = enabled && !isLoading,
         modifier = modifier
             .scale(scale)
+            .semantics {
+                role = Role.Button
+                if (isLoading) {
+                    contentDescription = text
+                    stateDescription = "İşlem sürüyor"
+                }
+            }
             .heightIn(min = maxOf(height, 48.dp))
             .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier)
             .drawBehind {
@@ -308,7 +316,7 @@ fun HavamaniaPrimaryButton(
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(
-                        text = text.uppercase(),
+                        text = text,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp,
@@ -386,7 +394,7 @@ fun HavamaniaTextField(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .border(1.dp, colors.border.copy(alpha = 0.1f), RoundedCornerShape(16.dp)),
-        placeholder = { Text(placeholder, color = colors.textMuted) },
+        label = placeholder.takeIf { it.isNotBlank() }?.let { label -> { Text(label, color = colors.textMuted) } },
         leadingIcon = leadingIcon?.let { { Icon(it, null, tint = colors.accent) } },
         colors = TextFieldDefaults.colors(
             focusedContainerColor = colors.surfaceGlass.copy(alpha = 0.5f),
@@ -438,7 +446,7 @@ fun SectionLabel(
     modifier: Modifier = Modifier
 ) {
     Text(
-        text = text.uppercase(),
+        text = text,
         style = HavamaniaTheme.typography.sectionTitle,
         modifier = modifier.padding(bottom = 8.dp)
     )
@@ -468,7 +476,7 @@ fun DetailSmallCard(
             Text(emoji, fontSize = 22.sp)
             Spacer(Modifier.height(6.dp))
             Text(
-                text = label.uppercase(),
+                text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -573,7 +581,7 @@ fun HavamaniaTopBar(
         }
 
         Text(
-            text = title.uppercase(),
+            text = title,
             style = HavamaniaTheme.typography.label.copy(
                 letterSpacing = 1.sp,
                 fontWeight = FontWeight.Black,
@@ -863,7 +871,7 @@ fun HavamaniaSecondaryButton(
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(
-                        text = text.uppercase(),
+                        text = text,
                         style = HavamaniaTheme.typography.button.copy(color = colors.textPrimary),
                         maxLines = 1,
                         overflow = TextOverflow.Clip

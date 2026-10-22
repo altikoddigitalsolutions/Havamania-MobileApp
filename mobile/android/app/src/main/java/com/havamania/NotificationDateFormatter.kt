@@ -66,8 +66,7 @@ object NotificationDateFormatter {
      * - Dün 14:05
      * - 19 Haziran 14:05
      */
-    fun formatCreatedAt(timestamp: Long): String {
-        val now = Instant.now()
+    fun formatCreatedAt(timestamp: Long, now: Instant = Instant.now()): String {
         val createdAt = Instant.ofEpochMilli(timestamp)
         val duration = Duration.between(createdAt, now)
 

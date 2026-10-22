@@ -206,11 +206,11 @@ fun TravelPlannerScreen(
                     IconButton(
                         onClick = { showAddDialog = true },
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(themeColors.accent.copy(alpha = 0.1f))
                     ) {
-                        Icon(Icons.Rounded.Add, null, tint = themeColors.accent)
+                        Icon(Icons.Rounded.Add, "Seyahat ekle", tint = themeColors.accent)
                     }
                 }
             )

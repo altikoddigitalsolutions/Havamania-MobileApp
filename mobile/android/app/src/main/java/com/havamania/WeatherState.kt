@@ -69,7 +69,9 @@ data class DailyForecast(
     val precipitationProbability: Int? = null,
     val iconName: String = "WbSunny",
     val weatherCode: Int = 0,
-    val isToday: Boolean = false
+    val isToday: Boolean = false,
+    val sunriseTime: String? = null,
+    val sunsetTime: String? = null
 )
 
 @Serializable

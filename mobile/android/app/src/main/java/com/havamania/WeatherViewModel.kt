@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.LocationMode
@@ -248,19 +249,7 @@ if (BuildConfig.DEBUG) {
                                 _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
                             }
 
-                            // Reset to today
-                            val todayDate = LocalDate.now()
-                            _selectedForecastDate.value = todayDate
-                            val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
-                            _selectedDailyForecast.value = todayForecast
-
-                            // Initial hourly selection: current hour or next available
-                            val nowHour = java.time.LocalTime.now().hour
-                            val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
-                            _selectedHourlyWeather.value = todayHourly.find {
-                                val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                                h >= nowHour
-                            } ?: todayHourly.firstOrNull()
+                            selectInitialForecast(data)
 
                             updateRecommendation()
                         }
@@ -296,18 +285,7 @@ if (BuildConfig.DEBUG) {
                         _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
                     }
 
-                    val todayDate = LocalDate.now()
-                    _selectedForecastDate.value = todayDate
-                    val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
-                    _selectedDailyForecast.value = todayForecast
-
-                    // Initial hourly selection: current hour or next available
-                    val nowHour = java.time.LocalTime.now().hour
-                    val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
-                    _selectedHourlyWeather.value = todayHourly.find {
-                        val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                        h >= nowHour
-                    } ?: todayHourly.firstOrNull()
+                    selectInitialForecast(data)
 
                     _isRefreshing.value = false
                     updateRecommendation()
@@ -318,29 +296,23 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    fun selectDailyForecast(day: DailyForecast) {
-        val date = LocalDate.parse(day.date)
+    private fun selectInitialForecast(data: WeatherData) {
+        val now = java.time.Instant.now()
+        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
+        val days = ForecastTime.dailyFromToday(data, now)
+        val day = days.firstOrNull { it.date == today.toString() } ?: days.firstOrNull()
+        val date = day?.let { LocalDate.parse(it.date) } ?: today
         _selectedForecastDate.value = date
         _selectedDailyForecast.value = day
+        _selectedHourlyWeather.value = ForecastTime.hoursForDate(data, date, now).firstOrNull()
+    }
 
-        // Select first appropriate hour for the selected day
-        val currentUiState = _uiState.value
-        if (currentUiState is WeatherUiState.Success) {
-            val dayHourly = currentUiState.data.hourlyForecast.filter {
-                it.fullTime.startsWith(day.date)
-            }
-
-            if (day.isToday) {
-                val nowHour = java.time.LocalTime.now().hour
-                val futureHourly = dayHourly.filter {
-                    val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                    h >= nowHour
-                }
-                _selectedHourlyWeather.value = futureHourly.firstOrNull()
-            } else {
-                _selectedHourlyWeather.value = dayHourly.firstOrNull()
-            }
-        }
+    fun selectDailyForecast(day: DailyForecast) {
+        val date = try { LocalDate.parse(day.date) } catch (_: Exception) { return }
+        _selectedForecastDate.value = date
+        _selectedDailyForecast.value = day
+        val data = (_uiState.value as? WeatherUiState.Success)?.data ?: return
+        _selectedHourlyWeather.value = ForecastTime.hoursForDate(data, date).firstOrNull()
     }
 
     fun selectHour(hour: HourlyWeather?) {
@@ -380,13 +352,16 @@ if (BuildConfig.DEBUG) {
 
     fun searchCity(query: String) {
         searchJob?.cancel()
-        if (query.length < 2) {
-            _citySuggestions.value = emptyList()
+        _citySuggestions.value = emptyList()
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.length < 2) {
             return
         }
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
-            _citySuggestions.value = repository.searchCity(query)
+            val results = repository.searchCity(normalizedQuery)
+            coroutineContext.ensureActive()
+            _citySuggestions.value = results
         }
     }
 }

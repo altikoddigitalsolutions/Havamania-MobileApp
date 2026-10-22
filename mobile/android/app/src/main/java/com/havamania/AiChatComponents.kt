@@ -14,6 +14,9 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -85,7 +88,7 @@ fun ChatBubble(
     message: AltikodChatMessage,
     c: HavamaniaColors,
     onRetry: (String) -> Unit,
-    onActionClick: (AssistantAction) -> Unit
+    onActionClick: ((AssistantAction) -> Unit)?
 ) {
     val isUser = message.isUser
 
@@ -119,9 +122,9 @@ fun ChatBubble(
             }
         }
 
-        message.action?.let { action ->
+        message.action?.takeIf { onActionClick != null }?.let { action ->
             Spacer(modifier = Modifier.height(8.dp))
-            AssistantActionButton(action, c, onActionClick)
+            AssistantActionButton(action, c, { onActionClick?.invoke(it) })
         }
     }
 }
@@ -212,6 +215,7 @@ fun ChatInput(
             .background(c.surface)
             .padding(16.dp)
             .navigationBarsPadding()
+            .imePadding()
     ) {
         if (contextInfo != null) {
             Text(
@@ -230,7 +234,8 @@ fun ChatInput(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Asistan'a sor...") },
+                label = { Text("Asistana mesaj") },
+                maxLines = 5,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -247,7 +252,11 @@ fun ChatInput(
                         text = ""
                     }
                 },
-                enabled = text.isNotBlank() && !isSending
+                enabled = text.isNotBlank() && !isSending,
+                modifier = Modifier.semantics {
+                    contentDescription = "Mesaj gönder"
+                    if (isSending) stateDescription = "Yanıt bekleniyor"
+                }
             ) {
                 if (isSending) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -296,7 +305,7 @@ fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String
 
         features.forEach { (icon, title, prompt) ->
             Surface(
-                modifier = Modifier.weight(1f).height(100.dp).clickable { onFeatureClick(prompt) },
+                modifier = Modifier.weight(1f).heightIn(min = 100.dp).clickable { onFeatureClick(prompt) },
                 color = c.surface.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, c.border.copy(alpha = 0.1f))

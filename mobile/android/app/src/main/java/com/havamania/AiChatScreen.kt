@@ -38,6 +38,9 @@ fun AiChatScreen(
     historyViewModel: AiHistoryViewModel = viewModel(),
     themeViewModel: ThemeViewModel = viewModel()
 ) {
+    val historySaveState by historyViewModel.saveState.collectAsStateWithLifecycle()
+    val historyOwner by historyViewModel.detailOwner.collectAsStateWithLifecycle()
+    val savingHistory = historySaveState == ProfileSaveState.Saving
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
@@ -76,8 +79,18 @@ fun AiChatScreen(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    var showEndChatDialog by remember { mutableStateOf(false) }
-    var showExitConfirm by remember { mutableStateOf(false) }
+    var showEndChatDialog by remember(historyOwner) { mutableStateOf(false) }
+    var showExitConfirm by remember(historyOwner) { mutableStateOf(false) }
+    DisposableEffect(historyViewModel) {
+        onDispose { historyViewModel.cancelSave() }
+    }
+    LaunchedEffect(historySaveState) {
+        if (historySaveState == ProfileSaveState.Saved) {
+            viewModel.resetChat()
+            showEndChatDialog = false
+            historyViewModel.resetSaveState()
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -103,11 +116,11 @@ fun AiChatScreen(
                 actions = {
                     if (messages.isNotEmpty()) {
                         IconButton(onClick = { showEndChatDialog = true }) {
-                            Icon(Icons.Rounded.Save, null, tint = themeColors.accent)
+                            Icon(Icons.Rounded.Save, "Sohbeti kaydet", tint = themeColors.accent)
                         }
                     } else {
                         IconButton(onClick = onNavigateToHistory) {
-                            Icon(Icons.Rounded.History, null, tint = themeColors.textPrimary)
+                            Icon(Icons.Rounded.History, "Sohbet geçmişi", tint = themeColors.textPrimary)
                         }
                     }
                 }
@@ -212,19 +225,24 @@ fun AiChatScreen(
 
     if (showEndChatDialog) {
         HavamaniaDialog(
-            onDismissRequest = { showEndChatDialog = false },
+            onDismissRequest = { if (!savingHistory) showEndChatDialog = false },
             title = "Sohbeti Kaydet?",
-            text = "Bu sohbeti geçmişe kaydedip yeni bir sohbet başlatmak istiyor musun?",
-            confirmText = "KAYDET VE BİTİR",
+            text = when (val state = historySaveState) {
+                ProfileSaveState.Saving -> "Kayıt onayı bekleniyor…"
+                is ProfileSaveState.Failed -> state.message
+                else -> "Bu sohbeti geçmişe kaydedip yeni bir sohbet başlatmak istiyor musun?"
+            },
+            confirmText = if (historySaveState is ProfileSaveState.Failed) "TEKRAR DENE" else "KAYDET VE BİTİR",
+            confirmEnabled = !savingHistory,
+            dismissEnabled = !savingHistory,
             onConfirm = {
                 historyViewModel.addHistoryItem(
+                    id = conversationId,
                     title = messages.firstOrNull { it.isUser }?.text?.take(30) ?: "Hava Sohbeti",
                     summary = messages.lastOrNull { !it.isUser }?.text?.take(100) ?: "",
                     messages = messages,
                     cityName = currentWeatherData?.cityName
                 )
-                viewModel.resetChat()
-                showEndChatDialog = false
             }
         )
     }
@@ -235,7 +253,7 @@ fun AiChatScreen(
             title = "Çıkış Yap?",
             text = "Sohbeti kaydetmeden çıkmak istediğine emin misin?",
             confirmText = "ÇIK",
-            onConfirm = { showExitConfirm = false; onBack() }
+            onConfirm = { historyViewModel.resetSaveState(); showExitConfirm = false; onBack() }
         )
     }
 }

@@ -36,10 +36,16 @@ fun AiHistoryScreen(
     viewModel: AiHistoryViewModel = viewModel()
 ) {
     val historyItems by viewModel.historyItems.collectAsStateWithLifecycle()
+    val uploading by viewModel.uploading.collectAsStateWithLifecycle()
+    val uploadError by viewModel.uploadError.collectAsStateWithLifecycle()
+    val pendingCount = historyItems.count { it.pendingUpload }
+    val deleting by viewModel.deleting.collectAsStateWithLifecycle()
+    val deleteError by viewModel.deleteError.collectAsStateWithLifecycle()
+    val owner by viewModel.detailOwner.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var itemToDelete by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirm by remember(owner) { mutableStateOf(false) }
+    var itemToDelete by remember(owner) { mutableStateOf<String?>(null) }
 
     HavamaniaScreen(
         topBar = {
@@ -48,8 +54,8 @@ fun AiHistoryScreen(
                 onBack = onBack,
                 actions = {
                     if (historyItems.isNotEmpty()) {
-                        IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Rounded.DeleteSweep, null, tint = themeColors.textPrimary)
+                        IconButton(enabled = !deleting, onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Rounded.DeleteSweep, "Tüm sohbet geçmişini sil", tint = themeColors.textPrimary)
                         }
                     }
                 }
@@ -69,8 +75,26 @@ fun AiHistoryScreen(
                         AiHistoryCard(
                             item = item,
                             onClick = { onNavigateToChat(item.id) },
-                            onDelete = { itemToDelete = item.id }
+                            onDelete = { if (!deleting) itemToDelete = item.id }
                         )
+                    }
+                }
+            }
+            if (deleting || deleteError != null || pendingCount > 0 || uploadError != null) {
+                Surface(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(), color = themeColors.surface) {
+                    Column(Modifier.padding(16.dp)) {
+                        if (deleting) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                            Text("Silme onayı bekleniyor…", color = themeColors.textPrimary)
+                        } else if (deleteError != null) {
+                            Text(deleteError.orEmpty(), color = themeColors.textPrimary)
+                            TextButton(onClick = viewModel::retryDeletion) { Text("Tekrar dene") }
+                        } else {
+                            Text(uploadError ?: "$pendingCount sohbet için sunucu onayı bekleniyor.", color = themeColors.textPrimary)
+                            TextButton(enabled = !uploading, onClick = viewModel::retryPendingUploads) {
+                                Text(if (uploading) "Gönderiliyor…" else "Yeniden gönder")
+                            }
+                        }
                     }
                 }
             }
@@ -187,10 +211,10 @@ fun AiHistoryCard(
                 )
             }
 
-            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                 Icon(
                     Icons.Rounded.DeleteOutline,
-                    null,
+                    "Sohbeti sil",
                     tint = themeColors.textMuted.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp)
                 )

@@ -16,7 +16,6 @@ def migrate_push_tokens(connection):
 
     operations = Operations(MigrationContext.configure(connection))
     constraints = inspector.get_unique_constraints("push_tokens")
-    indexes = inspector.get_indexes("push_tokens")
     old_constraints = [c for c in constraints if set(c["column_names"]) == {"user_id", "platform"}]
     if old_constraints:
         convention = {"uq": "uq_%(table_name)s_%(column_0_name)s_%(column_1_name)s"}
@@ -24,6 +23,9 @@ def migrate_push_tokens(connection):
             for constraint in old_constraints:
                 name = constraint["name"] or "uq_push_tokens_" + "_".join(constraint["column_names"])
                 batch.drop_constraint(name, type_="unique")
+    # PostgreSQL drops the backing index with its UNIQUE constraint.
+    # Refresh metadata before removing independent legacy indexes.
+    indexes = inspect(connection).get_indexes("push_tokens")
     for index in indexes:
         if index.get("unique") and set(index["column_names"]) == {"user_id", "platform"}:
             operations.drop_index(index["name"], table_name="push_tokens")

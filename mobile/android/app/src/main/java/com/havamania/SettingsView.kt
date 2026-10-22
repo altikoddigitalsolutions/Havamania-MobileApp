@@ -20,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -466,7 +468,7 @@ private fun SettingsToggleRow(title: String, subtitle: String?, icon: ImageVecto
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
             }
         }
-        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
+        HavamaniaToggle(checked = checked, modifier = Modifier.semantics { contentDescription = title }, onCheckedChange = onCheckedChange)
     }
 }
 

@@ -81,3 +81,6 @@ test_backend_api.py
 
 # Kotlin compiler session cache
 mobile/android/.kotlin/
+
+# Isolated local database audit clusters (never production data)
+.local-tests/

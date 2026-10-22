@@ -179,33 +179,13 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                 wp.copy(weather = middleWeather.getOrNull(idx))
             }
 
-            // 4. Identify Hazards
-            val hazards = denseWithWeather.filter { it.weather?.risk != RouteRisk.OK }
-
-            // 5. Normal Adaptive Sampling (the "skeleton" of the timeline)
-            val normalIntermediate = RouteSampler.sample(routeResult.route)
-            val normalWithEtas = EtaCalculator.assignEtas(routeResult.route, normalIntermediate, depMillis)
-            val normalWithWeather = normalWithEtas.map { wp ->
-                // Find nearest weather from dense list to avoid extra network calls
-                val nearest = denseWithWeather.minByOrNull { GeoMath.haversineMeters(it.location, wp.location) }
-                wp.copy(weather = nearest?.weather)
-            }
-
-            // 6. Merge & Deduplicate (Strategic sampling)
-            val combined = (normalWithWeather + hazards).sortedBy { it.cumulativeDistanceMeters }
-            val finalWaypoints = mutableListOf<RouteWaypoint>()
-
-            combined.forEach { wp ->
-                // Use a larger threshold (50km) for normal points, but smaller (20km) to keep hazards
-                val threshold = if (wp.weather?.risk != RouteRisk.OK) 20_000.0 else 50_000.0
-                val tooClose = finalWaypoints.any {
-                    GeoMath.haversineMeters(it.location, wp.location) < threshold
+            // Keep location and ETA together with the weather that was actually sampled.
+            val normalWithWeather = RouteSampler.sample(routeResult.route).mapNotNull { point ->
+                denseWithWeather.minByOrNull {
+                    kotlin.math.abs(it.cumulativeDistanceMeters - point.cumulativeDistanceMeters)
                 }
-                if (!tooClose) finalWaypoints.add(wp)
-            }
-
-            // Limit total intermediate points to 7 to prevent overflow/noise
-            val limitedWaypoints = finalWaypoints.take(7)
+            }.distinctBy { it.cumulativeDistanceMeters }
+            val limitedWaypoints = RouteWaypointSelector.select(normalWithWeather, denseWithWeather)
 
             // 7. Resolve Location Names (only for final visible points)
             val geocodedWaypoints = limitedWaypoints.map { wp ->
@@ -217,6 +197,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             _isAnalyzed.value = true
 
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e("RouteVM", "Analysis failed", e)
 }

@@ -23,8 +23,10 @@ fun AiHistoryDetailScreen(
     onBack: () -> Unit,
     viewModel: AiHistoryViewModel = viewModel()
 ) {
-    val historyItems by viewModel.historyItems.collectAsStateWithLifecycle()
-    val item = remember(historyItems, itemId) { historyItems.firstOrNull { it.id == itemId } }
+    val state by viewModel.detailState.collectAsStateWithLifecycle()
+    val owner by viewModel.detailOwner.collectAsStateWithLifecycle()
+    LaunchedEffect(itemId, owner) { viewModel.loadDetail(itemId) }
+    val item = (state as? AiHistoryDetailState.Ready)?.item
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val scrollState = rememberScrollState()
@@ -75,7 +77,7 @@ fun AiHistoryDetailScreen(
                             message = msg,
                             c = themeColors,
                             onRetry = { _ -> },
-                            onActionClick = { _ -> }
+                            onActionClick = null
                         )
                     }
                 }
@@ -83,8 +85,20 @@ fun AiHistoryDetailScreen(
                 Spacer(modifier = Modifier.height(80.dp))
             }
         } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Text("Kayıt bulunamadı", color = themeColors.textPrimary)
+            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                when (state) {
+                    AiHistoryDetailState.Loading -> {
+                        CircularProgressIndicator()
+                        Text("Kayıt yükleniyor", color = themeColors.textPrimary)
+                    }
+                    AiHistoryDetailState.Failed -> {
+                        Text("Kayıt yüklenemedi. Bağlantını kontrol edip tekrar deneyebilirsin.", color = themeColors.textPrimary)
+                        TextButton(onClick = { viewModel.loadDetail(itemId) }) { Text("Tekrar dene") }
+                    }
+                    else -> Text("Kayıt bulunamadı", color = themeColors.textPrimary)
+                }
             }
         }
     }

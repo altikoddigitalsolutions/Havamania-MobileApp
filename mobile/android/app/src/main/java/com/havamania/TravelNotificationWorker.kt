@@ -49,6 +49,7 @@ class TravelNotificationWorker(
         val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
         plans.map { it.toDomain() }.forEach { plan ->
+            if (!canPublishFor(currentUid)) return Result.success()
             if (plan.isArchived) return@forEach
 
             val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
@@ -70,8 +71,11 @@ class TravelNotificationWorker(
                         repository = WeatherRepository.getInstance(application)
                     )
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     plan
                 }
+
+                if (!canPublishFor(currentUid)) return Result.success()
 
                 // Analiz güncellendiyse kaydet
                 if (updatedPlan != plan) {
@@ -98,6 +102,7 @@ class TravelNotificationWorker(
                     deduplicationKey = "travel_daily_${currentUid}_${plan.id}_$dateStr"
                 )
 
+                if (!canPublishFor(currentUid)) return Result.success()
                 notificationDao.insert(notificationItem)
                 showSystemNotification(notificationItem)
 
@@ -193,6 +198,7 @@ class TravelNotificationWorker(
     }
 
     private suspend fun checkAndSendRouteWeatherNotifications(plan: TravelPlan, context: Context): Boolean {
+        if (!canPublishFor(plan.userId)) return false
         val departureDateTime = plan.departureDateTime ?: return false
         val now = LocalDateTime.now()
         val hoursUntil = java.time.Duration.between(now, departureDateTime).toHours()
@@ -317,7 +323,12 @@ if (BuildConfig.DEBUG) {
         }
     }
 
+    private fun canPublishFor(uid: String): Boolean =
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == uid &&
+            !AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.pending
+
     private fun showSystemNotification(item: NotificationItem) {
+        if (!canPublishFor(item.userId)) return
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
             return
         }

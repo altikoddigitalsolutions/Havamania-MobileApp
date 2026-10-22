@@ -10,6 +10,7 @@ import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -33,6 +34,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = WeatherRepository.getInstance(application)
     private val database = WeatherDatabase.getDatabase(application)
     private val dao = database.weatherDao()
+    private val accountTasks = AccountTaskScope(viewModelScope) { currentUid }
 
     private val _messages = MutableStateFlow<List<AltikodChatMessage>>(emptyList())
     val messages: StateFlow<List<AltikodChatMessage>> = _messages.asStateFlow()
@@ -46,7 +48,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
-    private var currentJob: Job? = null
+    private val requestRunner = AssistantTaskRunner(viewModelScope, { currentUid }, { busy ->
+        _isLoading.value = busy
+        _isSending.value = busy
+    })
     var lastRequestId: String? = null
 
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
@@ -75,7 +80,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
-        currentJob?.cancel()
+        accountTasks.reset()
+        requestRunner.reset()
         fetchJob?.cancel()
         _isLoading.value = false
         _isSending.value = false
@@ -106,23 +112,32 @@ if (BuildConfig.DEBUG) {
     override fun onCleared() {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
+        accountTasks.close()
         weatherJob?.cancel()
         fetchJob?.cancel()
-        currentJob?.cancel()
+        requestRunner.reset()
+    }
+
+    private suspend fun ensureOwner(owner: String) {
+        kotlinx.coroutines.currentCoroutineContext().let { context ->
+            context[kotlinx.coroutines.Job]?.ensureActive()
+        }
+        if (owner != currentUid) throw kotlinx.coroutines.CancellationException("Account changed")
     }
 
     private fun loadActiveTravels(uid: String = currentUid) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        accountTasks.launch { owner ->
             if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "loadActiveTravels started for $uid")
             try {
-                val entities = dao.getUserTravelPlans(uid)
-                if (currentUid != uid) return@launch
+                val entities = dao.getUserTravelPlans(owner)
+                ensureOwner(owner)
                 val today = LocalDate.now()
                 val active = entities.map { it.toDomain() }.filter {
                     !it.isArchived && !it.endDate.isBefore(today)
                 }
                 _activeTravels.value = active
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("ASSISTANT_TRACE", "loadActiveTravels FAILED: ${e.message}", e)
 }
@@ -132,7 +147,7 @@ if (BuildConfig.DEBUG) {
 
     private fun observeWeatherState(uid: String) {
         weatherJob?.cancel()
-        weatherJob = viewModelScope.launch {
+        weatherJob = accountTasks.launch { owner ->
             if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "observeWeatherState started for $uid")
 
             val current = repository.currentWeatherState.value
@@ -146,6 +161,7 @@ if (BuildConfig.DEBUG) {
             }
 
             repository.currentWeatherState.collect { data ->
+                ensureOwner(owner)
                 _weatherData.value = data
                 if (data != null) {
                     _weatherUiState.value = WeatherUiState.Success(data)
@@ -156,26 +172,34 @@ if (BuildConfig.DEBUG) {
 
     private fun tryAutoFetch(uid: String) {
         fetchJob?.cancel()
-        fetchJob = viewModelScope.launch {
+        fetchJob = accountTasks.launch { owner ->
             if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "tryAutoFetch started for $uid")
             _weatherUiState.value = WeatherUiState.Loading
             try {
                 val defaultCity = kotlinx.coroutines.withTimeoutOrNull(3000) {
-                    ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
+                    ThemeManager.getDefaultCity(getApplication(), owner).firstOrNull()
                 }
 
+                ensureOwner(owner)
                 if (defaultCity != null) {
                     kotlinx.coroutines.withTimeout(10000) {
                         repository.getWeatherData(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
                             .collect {
+                                ensureOwner(owner)
+                                _weatherData.value = it
                                 _weatherUiState.value = WeatherUiState.Success(it)
                             }
                     }
                 } else {
                     _weatherUiState.value = WeatherUiState.NoCity
                 }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                ensureOwner(owner)
+                _weatherUiState.value = WeatherUiState.Error("Hava verisi isteği zaman aşımına uğradı.")
             } catch (e: Exception) {
-                _weatherUiState.value = WeatherUiState.Error(e.message ?: "Hava verisi alınamadı")
+                ensureOwner(owner)
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _weatherUiState.value = WeatherUiState.Error("Hava verisi alınamadı.")
             }
         }
     }
@@ -269,144 +293,52 @@ if (BuildConfig.DEBUG) {
     }
 
     fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false) {
-        if (isSending.value || userPrompt.isBlank()) return
-
-        // Local greeting handler to ensure positive first impression
-        val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
-        val isGreetingOnly = greetings.any { userPrompt.lowercase().trim() == it }
-
-        if (isGreetingOnly) {
-            viewModelScope.launch {
-                val userMsg = AltikodChatMessage(text = userPrompt, isUser = true)
-                _messages.value = _messages.value + userMsg
-                kotlinx.coroutines.delay(500)
-                val botMsg = AltikodChatMessage(
-                    text = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?",
-                    isUser = false
-                )
-                _messages.value = _messages.value + botMsg
-                _requestState.value = AssistantRequestState.SUCCESS
-            }
-            return
-        }
-
-        val isWeatherOrTrip = AiIntentParser.isWeatherQuery(userPrompt) || AiIntentParser.detectDate(userPrompt) != null
-        if (isWeatherOrTrip) {
-            viewModelScope.launch {
-                _isSending.value = true
+        if (userPrompt.isBlank()) return
+        val conversationId = currentConversationId
+        requestRunner.start(
+            onStart = {
                 _requestState.value = AssistantRequestState.LOADING
-                _isLoading.value = true
-
-                val userMsg = AltikodChatMessage(text = userPrompt, isUser = true)
-                _messages.value = _messages.value + userMsg
-                kotlinx.coroutines.delay(400)
-
-                val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName
-                val replyText = if (targetCity == null) {
-                    "Hangi şehir hakkında bilgi almak istediğinizi belirtir misiniz?"
-                } else {
-                    val targetDate = AiIntentParser.detectDate(userPrompt)
-                    val data = resolveCityWeather(targetCity)
-
-                    if (data == null) {
-                        "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
-                    } else if (targetDate != null) {
-                        val matchingDaily = data.dailyForecast.find { it.date == targetDate.toString() }
-                        val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
-                        val formattedDateStr = targetDate.format(formatter)
-
-                        if (matchingDaily != null) {
-                            val sunriseTime = data.sunriseTime?.let { try { java.time.LocalTime.parse(it) } catch(e: Exception) { null } }
-                            val sunsetTime = data.sunsetTime?.let { try { java.time.LocalTime.parse(it) } catch(e: Exception) { null } }
-                            val conditionName = WeatherUtils.getWeatherDisplayName(matchingDaily.weatherCode, java.time.LocalDateTime.now(), sunriseTime, sunsetTime)
-                            "$formattedDateStr tarihinde $targetCity şehrinde hava $conditionName bekleniyor. Sıcaklık ${matchingDaily.minTemp}°C / ${matchingDaily.maxTemp}°C civarında olacak." +
-                            (matchingDaily.precipitationProbability?.let { " Yağmur ihtimali %$it." } ?: "")
+                _messages.value = _messages.value + AltikodChatMessage(text = userPrompt, isUser = true)
+            },
+            operation = {
+                val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
+                val greeting = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?"
+                when {
+                    greetings.any { userPrompt.lowercase().trim() == it } -> greeting
+                    AiIntentParser.isWeatherQuery(userPrompt) || AiIntentParser.detectDate(userPrompt) != null -> {
+                        val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName
+                        if (targetCity == null) {
+                            "Hangi şehir hakkında bilgi almak istediğinizi belirtir misiniz?"
                         } else {
-                            "$formattedDateStr tarihi için henüz detaylı hava tahmini bulunmuyor. (Tahminler önümüzdeki 10 gün için geçerlidir)."
+                            val data = resolveCityWeather(targetCity)
+                            if (data == null) "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
+                            else AiWeatherReply.datedReply(userPrompt, data)
+                                ?: "${data.cityName} şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
                         }
-                    } else {
-                        "Bugün $targetCity şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
-                    }
-                }
-
-                val botMsg = AltikodChatMessage(text = replyText, isUser = false)
-                _messages.value = _messages.value + botMsg
-                _requestState.value = AssistantRequestState.SUCCESS
-                _isLoading.value = false
-                _isSending.value = false
-            }
-            return
-        }
-
-        currentJob?.cancel()
-        currentJob = viewModelScope.launch {
-            _isSending.value = true
-            _requestState.value = AssistantRequestState.LOADING
-            _isLoading.value = true
-
-            val userMsg = AltikodChatMessage(text = userPrompt, isUser = true)
-            _messages.value = _messages.value + userMsg
-
-            try {
-                val weatherCtx = buildWeatherContext(userPrompt, null)
-                val followUpCtx = buildFollowUpContext(null)
-                val toneInst = buildToneInstruction(assistantTone)
-
-                // P3.8.9 FORENSIC FIX: Send ONLY raw user prompt.
-                // Any extra context or structure causes business-level rejection on botId=6.
-                val finalPrompt = userPrompt
-
-                if (BuildConfig.DEBUG) {
-                    Log.d("ASSISTANT_DEBUG", "AI_REAL_REQUEST_START | botId=6 | input=[$userPrompt]")
-                }
-
-                val result = assistantRepository.getAssistantResponse(finalPrompt, currentConversationId)
-
-                when (result) {
-                    is AssistantResult.Success -> {
-                        val botMsg = AltikodChatMessage(text = result.content, isUser = false)
-                        _messages.value = _messages.value + botMsg
-                        _requestState.value = AssistantRequestState.SUCCESS
-                    }
-                    is AssistantResult.QuestionRejected -> {
-                        val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
-                        val isGreeting = greetings.any { userPrompt.lowercase().contains(it) }
-
-                        if (isGreeting) {
-                            val botMsg = AltikodChatMessage(
-                                text = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?",
-                                isUser = false
-                            )
-                            _messages.value = _messages.value + botMsg
-                            _requestState.value = AssistantRequestState.SUCCESS
-                        } else {
-                            handleError(Exception("Lütfen geçerli bir soru sorunuz."), userPrompt)
-                        }
-                    }
-                    is AssistantResult.HttpError -> {
-                        if (result.code == 429) {
-                            handleError(Exception("Çok fazla istek gönderildi."), userPrompt)
-                        } else {
-                            handleError(Exception("Asistan sunucusuna ulaşılamadı (Hata: ${result.code})."), userPrompt)
-                        }
-                    }
-                    is AssistantResult.NetworkError -> {
-                        handleError(Exception("İnternet bağlantısı sorunu."), userPrompt)
                     }
                     else -> {
-                        handleError(Exception("Asistan şu anda yanıt veremiyor."), userPrompt)
+                        // The API expects the original prompt; avoid unused context/network requests.
+                        when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId)) {
+                            is AssistantResult.Success -> result.content
+                            is AssistantResult.QuestionRejected -> {
+                                if (greetings.any { userPrompt.lowercase().contains(it) }) greeting
+                                else throw Exception("Lütfen geçerli bir soru sorunuz.")
+                            }
+                            is AssistantResult.HttpError -> throw Exception(
+                                if (result.code == 429) "Çok fazla istek gönderildi."
+                                else "Asistan sunucusuna ulaşılamadı (Hata: ${result.code}).")
+                            is AssistantResult.NetworkError -> throw Exception("İnternet bağlantısı sorunu.")
+                            else -> throw Exception("Asistan şu anda yanıt veremiyor.")
+                        }
                     }
                 }
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    Log.e("ASSISTANT_DEBUG", "SendMessage FATAL EXCEPTION: ${e.message}", e)
-}
-                handleError(e, userPrompt)
-            } finally {
-                _isLoading.value = false
-                _isSending.value = false
-            }
-        }
+            },
+            onSuccess = { reply ->
+                _messages.value = _messages.value + AltikodChatMessage(text = reply, isUser = false)
+                _requestState.value = AssistantRequestState.SUCCESS
+            },
+            onError = { handleError(it, userPrompt) }
+        )
     }
 
     private fun handleError(e: Exception, userPrompt: String) {
@@ -426,25 +358,27 @@ if (BuildConfig.DEBUG) {
     }
 
     fun resetChat() {
+        requestRunner.reset()
         _messages.value = emptyList()
         currentConversationId = java.util.UUID.randomUUID().toString()
         _requestState.value = AssistantRequestState.IDLE
     }
 
     fun loadConversation(conversationId: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val history = dao.getAiHistoryItem(conversationId, currentUid)
+        requestRunner.reset()
+        requestRunner.start(
+            onStart = { _requestState.value = AssistantRequestState.LOADING },
+            operation = { owner -> dao.getAiHistoryItem(conversationId, owner) },
+            onSuccess = { history ->
                 if (history != null) {
                     currentConversationId = conversationId
                     _messages.value = history.messages
                     _requestState.value = AssistantRequestState.SUCCESS
+                } else {
+                    _requestState.value = AssistantRequestState.ERROR
                 }
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    Log.e("AiChatVM", "Failed to load conversation $conversationId", e)
-}
-            }
-        }
+            },
+            onError = { _requestState.value = AssistantRequestState.ERROR }
+        )
     }
 }

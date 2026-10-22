@@ -30,6 +30,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
+    private val deleteAllRunner = AssistantTaskRunner(viewModelScope, { currentUid }, {}, 20_000)
     private var collectJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -37,6 +38,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
         }
+        deleteAllRunner.reset()
         _uiState.value = NotificationUiState(isLoading = true)
         didSeedInThisSession = false
         startCollectingNotifications(newUid)
@@ -52,6 +54,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         collectJob?.cancel()
+        deleteAllRunner.reset()
     }
 
     private fun startCollectingNotifications(uid: String) {
@@ -71,23 +74,7 @@ if (BuildConfig.DEBUG) {
                             Log.d("Notifications", "collected size=${list.size} for $uid")
                         }
 
-                        // If user is legacy, we might want to seed.
-                        // If user is authenticated, we start clean (size 0).
-                        if (list.isEmpty() && uid == "legacy") {
-                            if (BuildConfig.DEBUG) {
-                                Log.d("Notifications", "Legacy user list is empty. Forcing DefaultNotifications.")
-                            }
-                            updateStateWithList(DefaultNotifications.create(uid))
-
-                            if (!didSeedInThisSession) {
-                                didSeedInThisSession = true
-                                withContext(Dispatchers.IO) {
-                                    repository.seedInitialDataIfNeeded(getApplication(), uid)
-                                }
-                            }
-                        } else {
-                            updateStateWithList(list)
-                        }
+                        updateStateWithList(list)
                     }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -221,18 +208,15 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    fun deleteAllNotifications() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val uid = currentUid
+    fun deleteAllNotifications(onResult: (Boolean) -> Unit) {
+        deleteAllRunner.start(
+            operation = { uid ->
                 repository.deleteAll(uid)
                 com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(getApplication(), true, uid)
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    Log.e("NotificationVM", "Error in deleteAllNotifications", e)
-}
-            }
-        }
+            },
+            onSuccess = { clearSelection(); onResult(true) },
+            onError = { onResult(false) }
+        )
     }
 
     fun deleteTravelNotifications() {

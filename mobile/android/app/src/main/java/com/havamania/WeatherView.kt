@@ -242,16 +242,11 @@ fun BoxScope.WeatherSuccessContent(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    val displayTime by remember(selectedHourlyWeather) {
-        derivedStateOf {
-            selectedHourlyWeather?.time?.let {
-                try {
-                    val hourStr = if (it == "24:00") "0" else it.split(":")[0]
-                    LocalTime.of(hourStr.toInt(), 0)
-                } catch (e: Exception) { LocalTime.now() }
-            } ?: LocalTime.now()
-        }
-    }
+    val locationNow = ForecastTime.localNow(data.timezone)
+    val selectedSun = data.dailyForecast.firstOrNull { it.date == selectedForecastDate.toString() }
+    val sunriseTime = selectedSun?.sunriseTime
+    val sunsetTime = selectedSun?.sunsetTime
+    val displayTime = selectedHourlyWeather?.let { ForecastTime.parseHour(it) }?.toLocalTime() ?: locationNow.toLocalTime()
 
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf {
@@ -259,14 +254,14 @@ fun BoxScope.WeatherSuccessContent(
         }
     }
 
-    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) {
+    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast, locationNow, sunriseTime, sunsetTime) {
         derivedStateOf {
             val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
-            val sunrise = data.sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
-            val sunset = data.sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+            val sunrise = sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+            val sunset = sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
             val now = if (selectedHourlyWeather != null) {
-                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(LocalDate.now()) }
-            } else { java.time.LocalDateTime.now() }
+                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(selectedForecastDate) }
+            } else { locationNow }
             WeatherUtils.getWeatherDisplayName(code, now, sunrise, sunset)
         }
     }
@@ -349,8 +344,8 @@ fun BoxScope.WeatherSuccessContent(
                 time = displayTime,
                 latitude = data.latitude ?: 41.0082,
                 longitude = data.longitude ?: 28.9784,
-                sunriseTime = data.sunriseTime,
-                sunsetTime = data.sunsetTime,
+                sunriseTime = sunriseTime,
+                sunsetTime = sunsetTime,
                 parallaxOffset = scrollState.value * 0.15f,
                 modifier = Modifier.padding(horizontal = themeStyles.pagePadding)
             )
@@ -367,17 +362,7 @@ fun BoxScope.WeatherSuccessContent(
 
         // 3. HOURLY FORECAST
         EntranceAnimation(delayMillis = 250) {
-            val dateStr = selectedForecastDate.toString()
-            val today = LocalDate.now()
-            val currentHour = LocalTime.now().hour
-            val filteredHourly = remember(data.hourlyForecast, dateStr) {
-                data.hourlyForecast.filter { hour ->
-                    val isSelectedDay = hour.fullTime.startsWith(dateStr)
-                    if (isSelectedDay && selectedForecastDate == today) {
-                        try { val h = hour.time.split(":")[0].toInt(); h >= currentHour } catch (e: Exception) { true }
-                    } else isSelectedDay
-                }
-            }
+            val filteredHourly = ForecastTime.hoursForDate(data, selectedForecastDate)
 
             if (filteredHourly.isNotEmpty()) {
                 val hourlyWithSelection = remember(filteredHourly, selectedHourlyWeather) {
@@ -385,8 +370,8 @@ fun BoxScope.WeatherSuccessContent(
                 }
                 HourlyForecastRow(
                     items = hourlyWithSelection,
-                    sunriseTime = data.sunriseTime,
-                    sunsetTime = data.sunsetTime,
+                    sunriseTime = sunriseTime,
+                    sunsetTime = sunsetTime,
                     onItemSelect = { index -> onSelectHour(filteredHourly[index]) }
                 )
             }
@@ -409,10 +394,7 @@ fun BoxScope.WeatherSuccessContent(
 
         // 5. DAILY FORECAST
         EntranceAnimation(delayMillis = 450) {
-            val today = LocalDate.now()
-            val futureDaily = remember(data.dailyForecast) {
-                data.dailyForecast.filter { try { !LocalDate.parse(it.date).isBefore(today) } catch (e: Exception) { true } }
-            }
+            val futureDaily = ForecastTime.dailyFromToday(data)
             DailyForecastSection(
                 forecasts = futureDaily,
                 selectedDate = selectedForecastDate.toString(),
@@ -426,7 +408,7 @@ fun BoxScope.WeatherSuccessContent(
         EntranceAnimation(delayMillis = 550) {
             Column {
                 SectionLabel("HAVA DETAYLARI", Modifier.padding(horizontal = themeStyles.pagePadding + 8.dp))
-                WeatherDetailsPanel(data = data, modifier = Modifier.padding(horizontal = themeStyles.spacingMD))
+                WeatherDetailsPanel(data = data, sunriseTime = sunriseTime, sunsetTime = sunsetTime, solarNoon = ForecastSun.daylightMidpoint(sunriseTime, sunsetTime), modifier = Modifier.padding(horizontal = themeStyles.spacingMD))
             }
         }
 
