@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 import java.time.LocalDate
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 enum class TravelFilter { UPCOMING, PAST, ARCHIVED }
 
@@ -40,6 +41,11 @@ fun TravelPlannerScreen(
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val plans by viewModel.plans.collectAsStateWithLifecycle()
+    val uploadRetrying by viewModel.uploadRetrying.collectAsStateWithLifecycle()
+    val deletionRetrying by viewModel.deletionRetrying.collectAsStateWithLifecycle()
+    val uploadSyncError by viewModel.uploadSyncError.collectAsStateWithLifecycle()
+    val deletionSyncError by viewModel.deletionSyncError.collectAsStateWithLifecycle()
+    val retrying = uploadRetrying || deletionRetrying
     val pendingDeletions by viewModel.pendingDeletions.collectAsStateWithLifecycle()
     val pendingUploads by viewModel.pendingUploads.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -57,6 +63,12 @@ fun TravelPlannerScreen(
 
     val today by viewModel.today.collectAsStateWithLifecycle()
 
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            calendarDateChanges().collect { viewModel.refreshToday() }
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
@@ -70,8 +82,8 @@ fun TravelPlannerScreen(
     }
 
     // UI Events (Snackbar)
-    LaunchedEffect(Unit) {
-        viewModel.uiEvent.collect { event ->
+    LaunchedEffect(viewModel, snackbarHostState) {
+        collectSessionMessages(viewModel.sessionVersion, viewModel.uiEvent) { event ->
             if (event.startsWith("DUPLICATE_TRIP|")) {
                 snackbarHostState.showSnackbar(event.substringAfter("|"))
             } else {
@@ -232,15 +244,14 @@ fun TravelPlannerScreen(
                         else Modifier.fillMaxWidth()
                     )
             ) {
-                if (pendingUploads > 0 || pendingDeletions > 0) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        if (pendingUploads > 0) Text("$pendingUploads seyahat değişikliği eşitlenmeyi bekliyor.")
-                        if (pendingDeletions > 0) Text("$pendingDeletions seyahat silme işlemi tamamlanmayı bekliyor.")
-                        TextButton(onClick = { viewModel.retryPendingTripDeletions(); viewModel.retryPendingTripUploads() }, enabled = isOnline) {
-                            Text(if (isOnline) "Yeniden dene" else "Bağlantı bekleniyor")
-                        }
+                TripSyncStatusPanel(
+                    pendingUploads, pendingDeletions, retrying, isOnline,
+                    uploadSyncError, deletionSyncError,
+                    onRetry = {
+                        viewModel.retryPendingTripDeletions()
+                        viewModel.retryPendingTripUploads()
                     }
-                }
+                )
                 if (windowSize.isTablet || windowSize.isLargeTablet) {
                     // Tablet layout: Two columns for summary/calendar and trip list, with full-width rich guide below when expanded
                     Column(
@@ -280,7 +291,8 @@ fun TravelPlannerScreen(
                                 TravelCalendarStripe(
                                     selectedDate = selectedDate,
                                     onDateSelect = { selectedDate = it },
-                                    tripDates = tripDates
+                                    tripDates = tripDates,
+                                    today = today
                                 )
                             }
 
@@ -345,7 +357,8 @@ fun TravelPlannerScreen(
                         TravelCalendarStripe(
                             selectedDate = selectedDate,
                             onDateSelect = { selectedDate = it },
-                            tripDates = tripDates
+                            tripDates = tripDates,
+                                    today = today
                         )
                         Spacer(Modifier.height(themeStyles.spacingMD))
                     }

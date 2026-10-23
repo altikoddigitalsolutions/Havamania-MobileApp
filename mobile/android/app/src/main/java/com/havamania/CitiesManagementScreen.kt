@@ -31,6 +31,10 @@ fun CitiesManagementScreen(
 ) {
     val registeredCities by themeViewModel.registeredCities.collectAsStateWithLifecycle()
     val defaultCity by themeViewModel.defaultCity.collectAsStateWithLifecycle()
+    val searchStatus by weatherViewModel.citySearchStatus.collectAsStateWithLifecycle()
+    DisposableEffect(weatherViewModel) {
+        onDispose { weatherViewModel.searchCity("") }
+    }
     val citySuggestions by weatherViewModel.citySuggestions.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
@@ -52,6 +56,7 @@ fun CitiesManagementScreen(
             searchText, { searchText = it }, citySuggestions, registeredCities, defaultCity,
             onAdd = { themeViewModel.addCity(it); searchText = "" },
             onDelete = themeViewModel::removeCity, onSetDefault = themeViewModel::setDefaultCity,
+            searchStatus = searchStatus, onRetry = { weatherViewModel.searchCity(searchText) },
             modifier = Modifier.padding(padding)
         )
     }
@@ -62,7 +67,8 @@ internal fun CityManagementContent(
     query: String, onQueryChange: (String) -> Unit,
     suggestions: List<GeocodingResultDto>, cities: List<GeocodingResultDto>, defaultCity: GeocodingResultDto?,
     onAdd: (GeocodingResultDto) -> Unit, onDelete: (GeocodingResultDto) -> Unit,
-    onSetDefault: (GeocodingResultDto) -> Unit, modifier: Modifier = Modifier
+    onSetDefault: (GeocodingResultDto) -> Unit, modifier: Modifier = Modifier,
+    searchStatus: LocationSearchStatus = LocationSearchStatus.IDLE, onRetry: () -> Unit = {}
 ) {
     val colors = HavamaniaTheme.colors
     LazyColumn(
@@ -81,6 +87,7 @@ internal fun CityManagementContent(
             }
         }
         if (query.trim().length >= 2) {
+            item(key = "search-status") { LocationSearchFeedback(searchStatus, onRetry) }
             items(suggestions.take(5).distinctBy { it.id }, key = { "suggestion-${it.id}" }) { suggestion ->
                 HavamaniaGlassCard(onClick = { onAdd(suggestion) }, modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

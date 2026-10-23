@@ -667,7 +667,7 @@ fun TripListSection(
                     TravelPlanCard(
                         plan = plan,
                         today = today,
-                        isFocused = plan.id == focusId || plan.city.contains(highlight ?: "", ignoreCase = true),
+                        isFocused = isTripHighlighted(plan.id, plan.city, focusId, highlight),
                         onDelete = { onDelete(plan) },
                         onEdit = { onEdit(plan) },
                         onArchive = { onArchive(plan.id) },

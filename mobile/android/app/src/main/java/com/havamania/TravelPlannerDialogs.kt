@@ -58,6 +58,14 @@ fun AddTravelPlanDialog(
     var endDate by remember { mutableStateOf(editPlan?.endDate ?: startDate) }
     var departureTime by remember { mutableStateOf(editPlan?.departureTime) }
 
+    val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
+    val originSearchStatus by viewModel.originSearchStatus.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) {
+        viewModel.searchCity("")
+        viewModel.searchOrigin("")
+        onDispose { viewModel.searchCity(""); viewModel.searchOrigin("") }
+    }
+
     val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
     val originSuggestions by viewModel.originSuggestions.collectAsStateWithLifecycle()
 
@@ -110,6 +118,7 @@ fun AddTravelPlanDialog(
                             },
                             placeholder = "Şehir veya ilçe ara..."
                         )
+                        LocationSearchFeedback(citySearchStatus) { viewModel.searchCity(destinationQuery) }
                     }
 
                     Spacer(Modifier.height(20.dp))
@@ -137,6 +146,7 @@ fun AddTravelPlanDialog(
                             },
                             placeholder = "Nereden yola çıkacaksın?"
                         )
+                        LocationSearchFeedback(originSearchStatus) { viewModel.searchOrigin(originQuery) }
                     }
 
                     Spacer(Modifier.height(20.dp))

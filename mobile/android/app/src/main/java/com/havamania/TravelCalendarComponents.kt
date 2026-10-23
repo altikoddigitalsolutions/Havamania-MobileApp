@@ -16,6 +16,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,29 +40,30 @@ fun TravelCalendarStripe(
     selectedDate: LocalDate,
     onDateSelect: (LocalDate) -> Unit,
     tripDates: Set<LocalDate>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    today: LocalDate = LocalDate.now()
 ) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val listState = rememberLazyListState()
 
-    // Generate dates for the stripe (e.g., 30 days before and 90 days after today)
-    val today = remember { LocalDate.now() }
-    val dates = remember {
-        (-30..90).map { today.plusDays(it.toLong()) }
+    // Keep the window bounded even for a deep link years away from today.
+    var anchor by remember(today) { mutableStateOf(today) }
+    val windowAnchor = if (selectedDate.isBefore(anchor.minusDays(30)) ||
+        selectedDate.isAfter(anchor.plusDays(90))) selectedDate else anchor
+    val dates = remember(windowAnchor) {
+        (-30..90).map { windowAnchor.plusDays(it.toLong()) }
     }
 
-    LaunchedEffect(Unit) {
-        // Scroll to near today or selectedDate
-        val index = dates.indexOf(selectedDate).coerceAtLeast(0)
-        if (index > 3) {
-            listState.scrollToItem(index - 3)
-        }
+    LaunchedEffect(selectedDate, today, windowAnchor) {
+        anchor = windowAnchor
+        val index = dates.indexOf(selectedDate)
+        if (index >= 0) listState.scrollToItem(index)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale("tr"))).uppercase(),
+            text = selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.forLanguageTag("tr-TR"))).uppercase(Locale.forLanguageTag("tr-TR")),
             style = HavamaniaTheme.typography.sectionTitle,
             color = themeColors.textPrimary.copy(alpha = 0.6f),
             modifier = Modifier.padding(horizontal = themeStyles.pagePadding)
@@ -94,7 +102,7 @@ private fun CalendarDayItem(
     onClick: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
-    val dayName = date.format(DateTimeFormatter.ofPattern("EEE", Locale("tr"))).uppercase()
+    val dayName = date.format(DateTimeFormatter.ofPattern("EEE", Locale.forLanguageTag("tr-TR"))).uppercase(Locale.forLanguageTag("tr-TR"))
     val dayNumber = date.dayOfMonth.toString()
 
     Column(
@@ -111,6 +119,14 @@ private fun CalendarDayItem(
                 if (!isSelected && isToday) Modifier.border(1.dp, themeColors.accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                 else Modifier
             )
+            .semantics {
+                contentDescription = date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr-TR")))
+                selected = isSelected
+                stateDescription = listOfNotNull(
+                    if (isToday) "Bugün" else null,
+                    if (hasTrip) "Seyahat var" else null
+                ).joinToString(", ")
+            }
             .clickable { onClick() }
             .padding(vertical = 12.dp)
     ) {

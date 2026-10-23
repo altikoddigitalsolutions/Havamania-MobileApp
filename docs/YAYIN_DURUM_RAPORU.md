@@ -211,3 +211,80 @@ Görünür kuyruk turu doğrulaması: testDebugUnitTest ve assembleDebug başar�
 23 Ekim bekleyen silme görünümü: UID bazlı Room sayacı tamamlanmamış silmeleri gösteriyor. Seyahat ekranında yüklemelerden ayrı metin, iki kuyruğu çalıştıran ortak Yeniden dene eylemi var. Bağlantı geri geldiğinde silmeler de deneniyor; retry işi silmeleri sırayla bekliyor ve aynı retry çalışırken yeni iş başlatılmıyor. İzole cihaz testine A/B ve tamamlanan işaretin sayaçtan çıkması kontrolleri eklendi. Ayrıntılı kalıcı hata durumu ve çalışıyor düğme görünümü henüz açık; düğme çevrimdışıyken kapalı. Push yapılmadı.
 Bekleyen silme görünümü sonucu: birim testleri, debug/test APK derlemeleri ve tablette 4 izole veritabanı testi geçti. Yeni sayaç kontrolleri bu cihaz koşusuna dahil. Tam ekran UI, gerçek bağlantı kesintisi ve canlı Firebase testi yapılmadı. git diff --check temiz; push yapılmadı.
 23 Ekim Git gönderimi: önceki turlardaki push yapılmadı notları o anki durumu belirtir. Profil sayaçları, Room 20→22 kalıcı seyahat yükleme/silme kuyrukları, süreç içi yazma/silme sıralaması, bekleyen işlem görünümü, yeniden deneme ve ilgili testler bu gönderime dahil edildi. Son doğrulama: birim testleri ve debug/test APK derlemeleri başarılı, tablette 4 izole veritabanı testi geçti. Açık canlı/UI kontrolleri aynı şekilde devam ediyor.
+23 Ekim eşitleme durumları: manuel/otomatik kuyruk denemesi sırasında Eşitleniyor metni ve pasif düğme eklendi. Yükleme/silme için ayrı StateFlow hata metinleri, yeniden denemede temizleme ve DAO okuma hatasında görünür hata eklendi. Hesap değişiminde durum sıfırlanıyor; retry finally blokları oturum epoch kontrolü yapıyor. UI ve gerçek ağ kesintisi cihaz testi açık. Doğrudan tek kayıt yazma yollarının tamamı henüz bu retry durum modeline dahil değil. Push yapılmadı.
+Eşitleme durumları turu sonucu: mevcut birim testleri ve assembleDebug başarılı; git diff --check temiz. Yeni UI/oturum durum davranışı için özel otomatik test ve cihaz testi bu tur yapılmadı; lint tekrarlanmadı. Push yapılmadı.
+23 Ekim özel eşitleme durum testleri: başlangıç/hata/bitiş için SyncAttemptState oturum bileti kontrolü eklendi. Önceki koruma yalnız retry finally/hata için vardı; gecikmiş başlangıç ve doğrudan silme hata yayını da aynı oturum kontrolüne bağlandı. İki yeni JVM testi eski oturumun yeni durumu başlatamamasını/bozamamasını ve hata metninin bitişten sonra yeniden denemeye kadar korunmasını kapsıyor. Doğrudan kayıt işlemlerinin tamamı, UI görsel ve canlı A→B testi hâlâ açık.
+Özel eşitleme durum testi sonucu: SyncAttemptStateTest dahil testDebugUnitTest ve assembleDebug başarılı. Eski oturum başlangıç/hata/bitiş koruması ve hatanın yeniden denemeye kadar korunması için iki yeni test geçti. Cihaz ve canlı hesap değişimi testi bu tur yapılmadı; lint tekrarlanmadı. Push yapılmadı.
+23 Ekim doğrudan seyahat yazma durumu: uploadTrip ortak eşitleme durumuna bağlandı; kayıt/düzenleme/arşiv/analiz yazmaları da durum ve hata yayımlıyor. SyncAttemptState aktif işlem sayısı kullanıyor; iç içe retry/yazma veya eşzamanlı yazmalarda ilk biten iş göstergeyi erken kapatmıyor. Aktif grup içinde yeni işlem önceki hatayı silmiyor. İki yeni özel test eklendi: örtüşen işlerin göstergesi/hata korunması ve oturum sıfırlama sonrası eski bitişler. UI cihaz doğrulaması ve gerçek ağ kesintisi açık; push yapılmadı.
+Doğrudan yazma durumu doğrulaması: testDebugUnitTest ve assembleDebug başarılı. SyncAttemptStateTest toplam 4 test (bu tur 2 yeni) geçti; hata ve örtüşen iş/oturum davranışı doğrulandı. UI ve canlı servis testi bu tur yapılmadı, lint çalıştırılmadı. Push yapılmadı.
+23 Ekim canlı tablet kontrolü: son debug APK veri silmeden kuruldu; WeatherPremiumActivity açıldı. İlk anlık kare boş açılış yüzeyi, sonraki kare normal Konum Seçin ekranı; bu kayıttan açılış süresi ölçülmedi. Takvimde 23 Ekim boş gün görünümü ve 21 Ekim seçimi görüntülendi. 21 Ekim altında kayıt işareti olmasına rağmen sağ panel Bu tarih için planlanmış seyahat yok gösterdi; filtre/işaret veri kapsamı tutarlılığı doğrulanacak yeni görsel bulgu olarak açık tutuldu. Mevcut hesapta bekleyen eşitleme görünmedi; yükleniyor/hata bileşenini test etmek için gerçek kayda yazı yapılmadı, bu UI durumları doğrulanmadı. Kanıtlar ignored .local-tests/travel-review.png ve travel-populated-review.png. Bu tur kod değişmedi; push yapılmadı.
+23 Ekim görsel bulgu düzeltmesi: önceki 21 Ekim kayıt işareti yorumu yanlıştı; işaret 22 Ekim altındaydı. Tablette 22 Ekim seçilince Batman seyahati açıldı (.local-tests/calendar-22-check.png). Filtre tutarsızlığı doğrulanmadı; önceki kayıt geri çekildi. Ayrı doğrulanmış hata: highlight null iken city.contains(boş metin) bütün kartları vurguluyordu. Boş/blank sorgu artık vurgulamıyor; açık hedef ID veya dolu eşleşen sorgu gerekiyor. İki regresyon testi eklendi.
+23 Ekim kart vurgusu doğrulaması: testDebugUnitTest ve assembleDebug başarılı; TripHighlightTest 2 test, 0 hata. Güncel APK mevcut veriler korunarak tablete kuruldu. Takvimde boş 23 Ekim ve kayıtlı 22 Ekim görüntülendi; Batman kartındaki gereksiz turuncu odak çerçevesi kalktı (.local-tests/highlight-check.png). Tüm ekran/tema/büyük yazı incelemesi tamamlanmış sayılmıyor. Sırada senkronizasyon bekleme/hata panelinin izole UI testleri ve takvim Türkçe büyük harf (EKIM → EKİM) tutarlılığı var. Bu tur push yapılmadı.
+
+## 23 Ekim — Senkronizasyon paneli ve Türkçe takvim
+- Takvim ay/gün başlıklarında büyük harf dönüşümü tr-TR ile yapılıyor: EKIM yerine EKİM.
+- Bekleyen gönderme/silme, işlem sürüyor ve hata durumları TripSyncStatusPanel bileşenine ayrıldı. Panel metin ve düğme renkleri uygulama temasını kullanıyor; değişiklikler erişilebilirlik canlı bölgesi olarak işaretlendi.
+- 137 JVM testi: 0 hata. testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı.
+- Samsung tablette 3 yeni izole Compose testi geçti: çevrimdışı ve işlem sürerken yeniden denemenin kapalı olması; %200 yazıda hata ve yeniden deneme erişimi, hata kaldırılınca panelin kaybolması; EKİM başlığı.
+- Bu testler Firebase çağrısı yapmaz; hata/success geçişi test durumuyla sağlanır. Gerçek ağ kesintisi, gerçek TalkBack, tüm temalar/telefonlar ve canlı Firebase doğrulanmış sayılmaz.
+- Sıradaki: takvim şeridinin gün değişimi ve tarih aralığı dışındaki seyahatlere yönlendirilmesi; ardından senkronizasyonun gerçek kesinti/hesap değişimi matrisi (yerel/izole testlerle).
+- Bu tur push yapılmadı; önceki çalışma değişiklikleri korundu.
+
+## 23 Ekim — Takvim tarih penceresi ve gün güncellemesi
+- Takvim şeridi ekranın ViewModel tarihini alıyor; uygulamaya dönüşte loadPlans ile güncellenen bugün artık ilk açılış değerinde kalmıyor.
+- Aralık dışı seçili tarih için pencere o tarihe taşınıyor; yıl farkından bağımsız 121 günlük sınırlı liste korunuyor. Seçim değiştiğinde ilgili gün görünür konuma kaydırılıyor.
+- Günlere tam Türkçe tarih, seçili durum, bugün ve seyahat var bilgileri için erişilebilirlik semantiği eklendi.
+- testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Tablette iki izole Compose testi geçti: Türkçe ay başlığı ve 320 dp alanda 2026 → 2030 → 2020 seçimi/gün bilgisinin yenilenmesi.
+- Sınır: testte bugün girdisi değiştirilir; cihaz saati değiştirilmedi. Ekran gece boyunca ön planda kalırsa otomatik gün yenileme henüz eklenmedi; sıradaki iş bu. Gerçek TalkBack ve tam bildirimden seyahate yönlendirme uçtan uca testi açık.
+- Bu tur push yapılmadı.
+
+## 23 Ekim — Ön planda otomatik gün yenileme
+- Seyahat ekranı RESUMED durumundayken sistem tarihini 60 saniyede bir kontrol eder; tarih değişimi en geç bir sonraki kontrolde bugün işaretine ve tarih tabanlı hesaplamalara iletilir.
+- Ekran duraklatıldığında/sahneden çıkıldığında coroutine iptal edilir. Dönüşte ilk okuma hemen yapılır. Kontrol, seyahat veritabanını veya ağı yeniden yüklemez; aynı tarih tekrar yayınlanmaz.
+- Gece yarısı/geri saat değişimi ve iptal-yeniden başlatma için kontrollü saat/tetikleyici kullanan iki JVM regresyon testi eklendi.
+- Kapsam sınırı: gerçek cihaz saati değiştirilmedi; gerçek gece yarısı/lifecycle uçtan uca testi ayrıca açık. Seçilen geçmiş tarih kullanıcı tercihi olarak korunur.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı; iki yeni tarih akışı testi geçti. Bu tur cihaz testi veya push yapılmadı. Sıradaki: yerel senkronizasyon kesintisi ve hesap değişimi senaryolarının eksik kapsamı.
+
+## 23 Ekim — Tekil silme durumu ve oturum izolasyonu
+- Tekil seyahat silme de SyncAttemptState işlem sayacına alındı. İşlem boyunca bekleme durumu açık; başarı/hata/iptalde finally ile kapanır. Kuyruk yeniden denemesiyle iç içe işlemlerde mevcut sayaç korunur.
+- Silme hatasının ikinci, oturum etiketi taşımayan geçici mesajı kaldırıldı. Hata, mevcut oturum nesliyle korunan panelde kalır; hesap değişiminde sıfırlanır.
+- Üç yerel coroutine regresyon testi: iptal sonrası bekleme durumunun kapanması ve yeni oturumda işlem; eski oturumdaki gecikmiş hata/tamamlanmanın yeni oturumu etkilememesi; bağlantı hatasının korunması ve yeniden denemede temizlenmesi.
+- Kapsam: durum yönetimi testidir; gerçek Firebase kesintisi, tüm ViewModel uçtan uca akışı veya çok cihazlı çatışma testi değildir. Diğer seyahat işlemlerindeki geçici mesajların oturum izolasyonu sıradaki kontroldür.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı; SyncAttemptStateTest toplam 7 test, 0 hata. Bu tur cihaz testi veya push yapılmadı.
+
+## 23 Ekim — Seyahat mesajları ve analiz iptali
+- Seyahat ViewModel mesajları yayınlanmadan önce coroutine iptali ve güncel UID kontrolünden geçiyor; A-B geçişinde ve iptal edilmiş A oturumuna geri dönüşte eski yayın engelleniyor.
+- Kaydetme/arşivleme/geri alma/not işlemlerindeki mükerrer bulut hata mesajları kaldırıldı. Yerel kayıt başarılıyken işlem tamamen başarısızmış gibi mesaj gösterilmiyor; bulut hatası kalıcı senkronizasyon panelinde kalıyor.
+- Analiz sonucu ve hata işlenmeden önce iptal kontrolü eklendi. Eski analiz finally bloğu yalnızca kendi Job kaydını kaldırır; aynı kimlikli yeni işi silemez.
+- Üç regresyon testi: farklı UID için yayın yok, güncel UID için yayın var, iptal yutulsa ve aynı UID geri gelse bile eski sonuç yayınlanmıyor.
+- Açık kapsam: daha önce ekrana teslim edilmiş snackbar mesajlarının hesap değişiminde kapatılması ve şehir önerisi sonuçlarının iptal sonrası korunması ayrıca incelenecek. Gerçek Firebase/cihaz uçtan uca hesap değişimi bu tur çalıştırılmadı.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı; AccountResultTest 3 test, 0 hata. Bu tur cihaz testi veya push yapılmadı.
+
+## 23 Ekim — Oturum değişiminde mesaj ve öneri temizliği
+- Seyahat ekranının mesaj koleksiyonu oturum sürümüne bağlandı. Oturum değişince çalışan showSnackbar çağrısı iptal edilir; sonraki oturumun mesajları yeni koleksiyonda alınır. Aynı UID ile yeniden giriş de yeni sürümdür.
+- Varış ve başlangıç şehri aramalarında yeni sorgu başlar başlamaz eski öneriler temizlenir. Ağdan dönen sonuçlar AccountResult iptal/UID kontrolünden sonra yayınlanır. Hesap değişimi her iki listeyi de temizler.
+- Yerel coroutine testi eski mesaj gösteriminin iptalini ve yeni mesajın alınmasını kontrol eder. Önceki AccountResult testleri geç sonuçlar için kullanılan ortak iptal/UID kontrolünü kapsar.
+- Sınır: gerçek Snackbar/cihaz ve Firebase hesap değişimi bu tur test edilmedi; gerçek arama servisi çağrılmadı. Sıradaki: şehir aramalarında hata/boş sonuç/yükleniyor durumlarının ayrımı ve UI geri bildirimi.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı. SessionMessagesTest 1 test, 0 hata. Bu tur push yapılmadı.
+
+## 23 Ekim — Seyahat konum araması durumları
+- Repository arama hatasını boş sonuç gibi gösteriyordu. Seyahat formu için hatayı ileten searchCityOrThrow yolu eklendi; diğer mevcut çağırıcıların davranışı bu tur değiştirilmedi.
+- Başlangıç/varış araması için IDLE/LOADING/RESULTS/EMPTY/ERROR ayrımı; 15 saniye bekleme sınırı, hata metni ve yeniden deneme eylemi eklendi. İptal normal hata olarak yayınlanmaz.
+- Form açılış/kapanışında aramalar ve eski durumlar temizlenir. Yeni sorgu ve hesap değişimi korumaları korunur.
+- Üç yerel test: boş yanıt ile ağ hatası ayrımı, sonuçların korunması, iptalin hata sonucuna çevrilmemesi.
+- Açık kapsam: gerçek arama servisi ve cihazda klavye/büyük yazı ile yeni geri bildirimlerin görsel kontrolü. Diğer şehir yönetimi aramalarının hata/boş sonuç ayrımı ayrıca incelenecek.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı; LocationSearchStatusTest 3 test, 0 hata. Bu tur cihaz testi veya push yapılmadı.
+
+## 23 Ekim — Şehir yönetimi arama durumları ve cihaz testleri
+- WeatherViewModel şehir araması da hatayı ileten repository yoluna geçti. Aranıyor/sonuç/boş/hata ayrımı ve 15 saniye sınırı ortak arama işlevinden geliyor. İptal kontrolü korunuyor; hesap değişiminde durum sıfırlanıyor.
+- Şehir yönetiminde ortak geri bildirim ve yeniden deneme eylemi gösteriliyor; ekrandan çıkışta arama iptal edilip sonuçlar temizleniyor.
+- testDebugUnitTest, assembleDebug, assembleDebugAndroidTest başarılı. Samsung tablette iki izole Compose testi geçti: durum geçişleri/yeniden deneme; 320 dp x 300 dp görünüm ve %200 yazıda yeniden denemeye kaydırarak erişim.
+- Gerçek servis veya kullanıcı verisi değiştirilmedi. Küçük görünüm testi gerçek klavye testi değildir. Seyahat formunun gerçek klavyeyle görsel kontrolü ve tüm tema matrisi açık.
+- Sıradaki: ana hava ekranındaki konum arama penceresine aynı durum geri bildiriminin bağlanması; gerçek klavye ile tam form kontrolü.
+- Bu tur push yapılmadı.
+
+## 23 Ekim — Ana hava ekranı konum penceresi
+- Kısa/boş sorgular ViewModel'e iletiliyor; eski önerilerin ekranda kalması engellendi. Pencere kapanınca arama temizleniyor.
+- Yükleniyor/boş/hata ve yeniden deneme ortak geri bildirimi bağlandı. Başlık, etiketli arama alanı ve sonuçlar tek LazyColumn içinde; IME boşluğu ve büyük yazı için kaydırma sağlandı. Tekrarlı sonuç kimlikleri eleniyor; seçili konum vurgusu korunuyor.
+- JVM testleri ve debug/test APK derlemesi başarılı. İlk izole cihaz testi Compose IME inset kontrolünde 5 saniye zaman aşımına uğradı; klavye erişimi henüz doğrulanmış sayılmadı. Test açık klavye isteği ve Android rootWindowInsets görünürlüğüyle yeniden hazırlanıyor.
+- Son doğrulama: test kurulumunda açık klavye isteği ve rootWindowInsets IME görünürlük kontrolü sonrası cihaz testi geçti (1/1). %200 yazı, 320 dp genişlik, gerçek klavye görünürlüğü ve yeniden denemeye kaydırıp basma doğrulandı. İlk başarısız koşu gizlenmedi. Tam ModalBottomSheet ve seyahat formu görsel matrisi ayrıca açık. Sıradaki: seyahat ekleme formunun gerçek klavye ve büyük yazıda alan/düğme erişimi. Push yapılmadı.

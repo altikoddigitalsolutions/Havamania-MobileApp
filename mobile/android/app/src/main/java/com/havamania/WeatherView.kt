@@ -55,6 +55,7 @@ fun HomeScreen(
     val selectedHourlyWeather by viewModel.selectedHourlyWeather.collectAsStateWithLifecycle()
     val selectedForecastDate by viewModel.selectedForecastDate.collectAsStateWithLifecycle()
     val selectedDailyForecast by viewModel.selectedDailyForecast.collectAsStateWithLifecycle()
+    val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
     val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
     val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
     val profile = (profileState as? ProfileState.Success)?.profile
@@ -89,11 +90,10 @@ fun HomeScreen(
     var showCitySwitcher by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    LaunchedEffect(searchText) {
-        if (searchText.length >= 2) {
-            viewModel.searchCity(searchText)
-        }
+    LaunchedEffect(searchText, showCitySwitcher) {
+        viewModel.searchCity(if (showCitySwitcher) searchText else "")
     }
+
 
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
@@ -149,64 +149,23 @@ fun HomeScreen(
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textMuted.copy(0.2f)) }
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
-                    Text(
-                        "Şehir Seç",
-                        style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    HavamaniaTextField(
-                        value = searchText,
-                        onValueChange = { searchText = it },
-                        placeholder = "Şehir ara...",
-                        leadingIcon = Icons.Rounded.Search
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 400.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(citySuggestions, key = { it.id }) { suggestion ->
-                            val currentData = (uiState as? WeatherUiState.Success)?.data
-                            val isSelected = currentData?.cityName == suggestion.getSafeCity() && currentData?.districtName == suggestion.getSafeDistrict()
-
-                            Surface(
-                                onClick = {
-                                    viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
-                                    themeViewModel.setDefaultCity(suggestion)
-                                    showCitySwitcher = false
-                                    searchText = ""
-                                },
-                                color = if (isSelected) themeColors.accent.copy(alpha = 0.1f) else Color.Transparent,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            suggestion.getSafeDistrict() ?: suggestion.name,
-                                            style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                            color = if (isSelected) themeColors.accent else themeColors.textPrimary
-                                        )
-                                        Text(
-                                            suggestion.getSafeCity(),
-                                            style = HavamaniaTheme.typography.bodySmall,
-                                            color = themeColors.textMuted
-                                        )
-                                    }
-                                    if (isSelected) Icon(Icons.Rounded.Check, contentDescription = "Seçili", tint = themeColors.accent)
-                                }
-                            }
-                        }
+                WeatherCitySearchContent(
+                    query = searchText,
+                    onQueryChange = { searchText = it },
+                    suggestions = citySuggestions,
+                    status = citySearchStatus,
+                    onRetry = { viewModel.searchCity(searchText) },
+                    isSelected = { suggestion ->
+                        val data = (uiState as? WeatherUiState.Success)?.data
+                        data?.cityName == suggestion.getSafeCity() && data?.districtName == suggestion.getSafeDistrict()
+                    },
+                    onSelect = { suggestion ->
+                        viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
+                        themeViewModel.setDefaultCity(suggestion)
+                        showCitySwitcher = false
+                        searchText = ""
                     }
-                }
+                )
             }
         }
 

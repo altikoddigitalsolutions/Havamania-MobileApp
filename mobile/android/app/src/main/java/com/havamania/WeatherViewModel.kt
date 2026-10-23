@@ -73,6 +73,8 @@ class WeatherViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _citySearchStatus = MutableStateFlow(LocationSearchStatus.IDLE)
+    val citySearchStatus = _citySearchStatus.asStateFlow()
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
@@ -110,6 +112,7 @@ class WeatherViewModel(
         locationJob?.cancel()
         searchJob?.cancel()
         _isRefreshing.value = false
+        _citySearchStatus.value = LocationSearchStatus.IDLE
         _citySuggestions.value = emptyList()
         currentUserInterests = emptySet()
         currentUserAboutMe = null
@@ -352,16 +355,19 @@ if (BuildConfig.DEBUG) {
 
     fun searchCity(query: String) {
         searchJob?.cancel()
+        _citySearchStatus.value = LocationSearchStatus.IDLE
         _citySuggestions.value = emptyList()
         val normalizedQuery = query.trim()
         if (normalizedQuery.length < 2) {
             return
         }
+        _citySearchStatus.value = LocationSearchStatus.LOADING
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
-            val results = repository.searchCity(normalizedQuery)
+            val result = fetchLocationSuggestions { repository.searchCityOrThrow(normalizedQuery) }
             coroutineContext.ensureActive()
-            _citySuggestions.value = results
+            _citySuggestions.value = result.items
+            _citySearchStatus.value = result.status
         }
     }
 }

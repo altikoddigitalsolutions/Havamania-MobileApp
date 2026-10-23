@@ -59,6 +59,9 @@ class WeatherRepository(
     /**
      * Şehir arama fonksiyonu
      */
+    suspend fun searchCityOrThrow(query: String): List<GeocodingResultDto> =
+        apiService.searchCity(cityName = query).results ?: emptyList()
+
     suspend fun searchCity(query: String): List<GeocodingResultDto> {
         return try {
             val response = apiService.searchCity(cityName = query)
