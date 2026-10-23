@@ -46,6 +46,16 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
             initialValue = true
         )
 
+    private val _confirmedEmptyOwner = MutableStateFlow<String?>(null)
+    val confirmedEmptyOwner = _confirmedEmptyOwner.asStateFlow()
+
+    private val _pendingDeletions = MutableStateFlow(0)
+    val pendingDeletions = _pendingDeletions.asStateFlow()
+
+    private val _pendingUploads = MutableStateFlow(0)
+    val pendingUploads = _pendingUploads.asStateFlow()
+    private var uploadRetryJob: kotlinx.coroutines.Job? = null
+
     private val _plans = MutableStateFlow<List<TravelPlan>>(emptyList())
     val plans: StateFlow<List<TravelPlan>> = _plans.asStateFlow()
 
@@ -74,15 +84,38 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed. New UID: $newUid")
         analysisJobs.values.forEach { it.cancel() }
         analysisJobs.clear()
+        _confirmedEmptyOwner.value = null
+        _pendingDeletions.value = 0
+        accountTasks.launch { uid ->
+            dao.pendingTripDeletionCount(uid).collect { count ->
+                if (uid == currentUid) _pendingDeletions.value = count
+            }
+        }
+        _pendingUploads.value = 0
+        accountTasks.launch { uid ->
+            dao.pendingTripUploadCount(uid).collect { count ->
+                if (uid == currentUid) _pendingUploads.value = count
+            }
+        }
         _plans.value = emptyList()
         _isLoading.value = true
         loadPlansForUid(newUid)
         observeFirestoreTrips(newUid)
+        retryPendingTripDeletions()
+        retryPendingTripUploads()
     }
 
     init {
         auth.addAuthStateListener(authListener)
         seedInitialDataIfNeeded()
+        viewModelScope.launch {
+            networkMonitor.isOnline.distinctUntilChanged().collect { online ->
+                if (online) {
+                    retryPendingTripDeletions()
+                    retryPendingTripUploads()
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -97,7 +130,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         if (uid == "legacy") return
 
         firestoreListener = db.collection("users").document(uid).collection("trips")
-            .addSnapshotListener { snapshot, e ->
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, e ->
                 if (currentUid != uid) return@addSnapshotListener
                 if (e != null) {
 if (BuildConfig.DEBUG) {
@@ -107,7 +140,6 @@ if (BuildConfig.DEBUG) {
                 }
 
                 if (snapshot != null) {
-                    val isFromCache = snapshot.metadata.isFromCache
                     accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
                         try {
                             val entities = snapshot.documents.mapNotNull { doc ->
@@ -123,19 +155,16 @@ if (BuildConfig.DEBUG) {
                             }
 
                             entities.forEach { dao.insertTravelPlan(it) }
-
-                            if (!isFromCache) {
-                                val localEntities = dao.getAllTravelPlans(uid)
-                                val remoteIds = entities.map { it.id }.toSet()
-                                localEntities.forEach { local ->
-                                    if (!remoteIds.contains(local.id) && !local.isDemo) {
-                                        val ageMs = System.currentTimeMillis() - local.createdAt
-                                        if (ageMs > 60000) {
-                                            dao.deleteTravelPlan(local.id, uid)
-                                        }
-                                    }
-                                }
+                            if (uid == this@TravelViewModel.currentUid &&
+                                !snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
+                                _confirmedEmptyOwner.value = if (snapshot.isEmpty) uid else null
                             }
+
+
+                            // Remote absence is not proof of deletion: local trips may still
+                            // be waiting for upload. Reconciliation requires persisted sync
+                            // acknowledgements/tombstones, not the age of a local record.
+
                         } catch (ex: Exception) {
                             if (ex is kotlinx.coroutines.CancellationException) throw ex
 if (BuildConfig.DEBUG) {
@@ -244,10 +273,10 @@ if (BuildConfig.DEBUG) {
 
                 if (updatedPlan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY && isNewAnalysis) {
                     val entity = updatedPlan.toEntity()
-                    dao.insertTravelPlan(entity)
+                    dao.saveLocalTrip(entity)
                     if (currentUid != "legacy") {
                         try {
-                            db.collection("users").document(currentUid).collection("trips").document(updatedPlan.id).set(entity).await()
+                            uploadTrip(entity, currentUid)
                         } catch (e: Exception) {
                             if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
@@ -343,12 +372,11 @@ if (BuildConfig.DEBUG) {
             }
 
             val entity = finalPlan.toEntity()
-            dao.insertTravelPlan(entity)
+            dao.saveLocalTrip(entity)
 
             if (currentUid != "legacy") {
                 try {
-                    db.collection("users").document(currentUid).collection("trips")
-                        .document(entity.id).set(entity).await()
+                    uploadTrip(entity, currentUid)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
@@ -366,19 +394,69 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    fun deletePlan(id: String) {
-        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
-            dao.deleteTravelPlan(id, currentUid)
-            if (currentUid != "legacy") {
-                try {
-                    db.collection("users").document(currentUid).collection("trips")
-                        .document(id).delete().await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                        Log.e(TAG, "Firestore delete failed", e)
-}
-                    _uiEvent.emit("Şu anda seyahat buluttan silinemedi.")
+    private suspend fun uploadTrip(entity: TravelPlanEntity, uid: String) {
+        TripMutationGate.run {
+            check(uid == currentUid && entity.userId == uid) { "Trip owner changed" }
+            check(!dao.hasTripDeletion(uid, entity.id)) { "Trip deletion already requested" }
+            val latest = dao.getTravelPlanByIdRaw(entity.id) ?: return@run
+            check(latest.userId == uid)
+            val revision = dao.pendingTripUploadVersion(uid, entity.id) ?: return@run
+            if (latest.updatedAt != revision) return@run
+            kotlinx.coroutines.withTimeout(30_000) {
+                db.collection("users").document(uid).collection("trips")
+                    .document(entity.id).set(latest).await()
+                dao.acknowledgeTripUpload(uid, entity.id, revision)
+            }
+        }
+    }
+
+    fun deletePlan(id: String) = deletePlanForOwner(id, currentUid)
+
+    private fun deletePlanForOwner(id: String, owner: String): kotlinx.coroutines.Job {
+        return accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+            if (currentUid != owner) return@launch
+            try {
+                TripMutationGate.run {
+                dao.enqueueTripDeletion(TripDeletionRequest(currentUid, id))
+                deleteTripWithAcknowledgement(
+                    remoteDelete = {
+                        if (currentUid != "legacy") {
+                            db.collection("users").document(currentUid).collection("trips")
+                                .document(id).delete().await()
+                        }
+                    },
+                    localDelete = { dao.completeTripDeletion(currentUid, id) }
+                )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+                if (BuildConfig.DEBUG) Log.e(TAG, "Trip deletion failed", e)
+                _uiEvent.emit("Seyahat silme işlemi doğrulanamadı. Bağlantını kontrol edip tekrar dene.")
+            }
+        }
+    }
+
+    private var deletionRetryJob: kotlinx.coroutines.Job? = null
+
+    @Synchronized fun retryPendingTripDeletions() {
+        if (deletionRetryJob?.isActive == true) return
+        deletionRetryJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) { uid ->
+            dao.pendingTripDeletions(uid).forEach { request -> deletePlanForOwner(request.recordId, uid).join() }
+        }
+    }
+
+    @Synchronized fun retryPendingTripUploads() {
+        if (uploadRetryJob?.isActive == true) return
+        uploadRetryJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) { uid ->
+            dao.pendingTripUploads(uid).forEach { request ->
+                if (!dao.hasTripDeletion(uid, request.recordId)) {
+                    val entity = dao.getTravelPlanByIdRaw(request.recordId)
+                    if (entity != null && entity.userId == uid) {
+                        try { uploadTrip(entity, uid) } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+                            _uiEvent.emit("Bekleyen seyahatler henüz eşitlenemedi. Tekrar deneyebilirsin.")
+                        }
+                    }
                 }
             }
         }
@@ -427,10 +505,10 @@ if (BuildConfig.DEBUG) {
             val updated = plan.copy(isArchived = true, archivedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
-            dao.insertTravelPlan(entity)
+            dao.saveLocalTrip(entity)
             if (currentUid != "legacy") {
                 try {
-                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                    uploadTrip(entity, currentUid)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
@@ -448,10 +526,10 @@ if (BuildConfig.DEBUG) {
             val updated = plan.copy(isArchived = false, archivedAt = null, updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
-            dao.insertTravelPlan(entity)
+            dao.saveLocalTrip(entity)
             if (currentUid != "legacy") {
                 try {
-                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                    uploadTrip(entity, currentUid)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
@@ -469,10 +547,10 @@ if (BuildConfig.DEBUG) {
             val updated = plan.copy(userNote = note, userRating = rating, updatedAt = System.currentTimeMillis())
             val entity = updated.toEntity()
 
-            dao.insertTravelPlan(entity)
+            dao.saveLocalTrip(entity)
             if (currentUid != "legacy") {
                 try {
-                    db.collection("users").document(currentUid).collection("trips").document(id).set(entity).await()
+                    uploadTrip(entity, currentUid)
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
@@ -491,9 +569,9 @@ if (BuildConfig.DEBUG) {
             if (legacyPlans.isNotEmpty()) {
                 legacyPlans.forEach { entity ->
                     val newEntity = entity.copy(id = UUID.randomUUID().toString(), userId = currentUid)
-                    dao.insertTravelPlan(newEntity)
+                    dao.saveLocalTrip(newEntity)
                     try {
-                        db.collection("users").document(currentUid).collection("trips").document(newEntity.id).set(newEntity).await()
+                        uploadTrip(newEntity, currentUid)
                     } catch (e: Exception) {
                         if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {

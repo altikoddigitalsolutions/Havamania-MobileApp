@@ -195,6 +195,8 @@ class AccountDeletionManager private constructor(private val app: Application) {
         weather.clearAllTravelPlans(uid)
         weather.clearAllAiHistory(uid)
         weather.clearHistoryDeletions(uid)
+        weather.clearTripDeletions(uid)
+        weather.clearTripUploads(uid)
         weather.clearAllWeatherCache()
         WeatherRepository.getInstance(app).clearCurrentWeather()
         NotificationDatabase.getDatabase(app).notificationDao().deleteAll(uid)

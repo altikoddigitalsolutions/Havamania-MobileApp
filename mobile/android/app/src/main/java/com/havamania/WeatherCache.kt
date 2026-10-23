@@ -270,10 +270,12 @@ interface WeatherDao {
 
     @Transaction
     suspend fun insertTravelPlan(plan: TravelPlanEntity) {
+        if (hasTripDeletion(plan.userId, plan.id)) return
         val existing = getTravelPlanByIdRaw(plan.id)
         if (existing != null && existing.userId != plan.userId) {
             return
         }
+        if (pendingTripUploadVersion(plan.userId, plan.id) != null) return
         insertTravelPlanRaw(plan)
     }
 
@@ -379,6 +381,59 @@ interface WeatherDao {
     @Query("DELETE FROM ai_history WHERE id = :id AND userId = :uid AND updatedAt <= :removedUpdatedAt")
     suspend fun deleteAiHistoryIfUnchanged(id: String, uid: String, removedUpdatedAt: Long)
 
+    @Query("SELECT COUNT(*) FROM trip_deletions WHERE userId = :uid AND completed = 0")
+    fun pendingTripDeletionCount(uid: String): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM trip_uploads WHERE userId = :uid AND NOT EXISTS (SELECT 1 FROM trip_deletions d WHERE d.userId = :uid AND d.recordId = trip_uploads.recordId)")
+    fun pendingTripUploadCount(uid: String): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT revision FROM trip_uploads WHERE userId = :uid AND recordId = :id")
+    suspend fun pendingTripUploadVersion(uid: String, id: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun enqueueTripUpload(request: TripUploadRequest)
+
+    @Query("SELECT * FROM trip_uploads WHERE userId = :uid")
+    suspend fun pendingTripUploads(uid: String): List<TripUploadRequest>
+
+    @Query("DELETE FROM trip_uploads WHERE userId = :uid AND recordId = :id AND revision = :revision")
+    suspend fun acknowledgeTripUpload(uid: String, id: String, revision: Long)
+
+    @Query("DELETE FROM trip_uploads WHERE userId = :uid")
+    suspend fun clearTripUploads(uid: String)
+
+    @Transaction
+    suspend fun saveLocalTrip(plan: TravelPlanEntity) {
+        if (hasTripDeletion(plan.userId, plan.id)) return
+        val old = getTravelPlanByIdRaw(plan.id)
+        if (old != null && old.userId != plan.userId) return
+        val revision = maxOf(plan.updatedAt, (old?.updatedAt ?: 0) + 1)
+        insertTravelPlanRaw(plan.copy(updatedAt = revision))
+        if (plan.userId != "legacy") enqueueTripUpload(TripUploadRequest(plan.userId, plan.id, revision))
+    }
+
+    @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id)")
+    suspend fun hasTripDeletion(uid: String, id: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun enqueueTripDeletion(request: TripDeletionRequest)
+
+    @Query("SELECT * FROM trip_deletions WHERE userId = :uid AND completed = 0")
+    suspend fun pendingTripDeletions(uid: String): List<TripDeletionRequest>
+
+    @Query("UPDATE trip_deletions SET completed = 1 WHERE userId = :uid AND recordId = :id")
+    suspend fun acknowledgeTripDeletion(uid: String, id: String)
+
+    @Transaction
+    suspend fun completeTripDeletion(uid: String, id: String) {
+        deleteTravelPlan(id, uid)
+        pendingTripUploadVersion(uid, id)?.let { acknowledgeTripUpload(uid, id, it) }
+        acknowledgeTripDeletion(uid, id)
+    }
+
+    @Query("DELETE FROM trip_deletions WHERE userId = :uid")
+    suspend fun clearTripDeletions(uid: String)
+
     @Query("DELETE FROM ai_history WHERE userId = :uid")
     suspend fun clearAllAiHistory(uid: String)
 }
@@ -386,7 +441,13 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class], version = 20, exportSchema = false)
+@Entity(tableName = "trip_deletions", primaryKeys = ["userId", "recordId"])
+data class TripDeletionRequest(val userId: String, val recordId: String, val completed: Boolean = false)
+
+@Entity(tableName = "trip_uploads", primaryKeys = ["userId", "recordId"])
+data class TripUploadRequest(val userId: String, val recordId: String, val revision: Long)
+
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class], version = 22, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -472,6 +533,18 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS trip_uploads (userId TEXT NOT NULL, recordId TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(userId, recordId))")
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS trip_deletions (userId TEXT NOT NULL, recordId TEXT NOT NULL, completed INTEGER NOT NULL, PRIMARY KEY(userId, recordId))")
+            }
+        }
+
         val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("CREATE TABLE IF NOT EXISTS ai_history_deletions (userId TEXT NOT NULL, recordId TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(userId, recordId))")
@@ -485,7 +558,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
+                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
                 .build()
                 INSTANCE = instance
                 instance

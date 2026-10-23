@@ -38,6 +38,9 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    private val _confirmedEmptyOwner = MutableStateFlow<String?>(null)
+    val confirmedEmptyOwner = _confirmedEmptyOwner.asStateFlow()
+
     private val _historyItems = MutableStateFlow<List<AiHistoryEntity>>(emptyList())
     val historyItems: StateFlow<List<AiHistoryEntity>> = _historyItems.asStateFlow()
 
@@ -114,6 +117,7 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         _deleteError.value = null
         _detailOwner.value = newUid
         clearEpoch++
+        _confirmedEmptyOwner.value = null
         _historyItems.value = emptyList()
         observeFirestoreHistory(newUid)
         loadHistoryForUid(newUid)
@@ -167,6 +171,7 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                             // Cache/latency-compensated events cannot establish server absence.
                             if (!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
                                 dao.reconcileAiHistory(uid, items, snapshot.documents.map { it.id }.toSet())
+                                _confirmedEmptyOwner.value = if (snapshot.isEmpty) uid else null
                             }
 
                         }

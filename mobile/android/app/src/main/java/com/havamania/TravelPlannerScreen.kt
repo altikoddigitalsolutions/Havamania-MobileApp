@@ -40,6 +40,8 @@ fun TravelPlannerScreen(
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val plans by viewModel.plans.collectAsStateWithLifecycle()
+    val pendingDeletions by viewModel.pendingDeletions.collectAsStateWithLifecycle()
+    val pendingUploads by viewModel.pendingUploads.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 
@@ -230,6 +232,15 @@ fun TravelPlannerScreen(
                         else Modifier.fillMaxWidth()
                     )
             ) {
+                if (pendingUploads > 0 || pendingDeletions > 0) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        if (pendingUploads > 0) Text("$pendingUploads seyahat değişikliği eşitlenmeyi bekliyor.")
+                        if (pendingDeletions > 0) Text("$pendingDeletions seyahat silme işlemi tamamlanmayı bekliyor.")
+                        TextButton(onClick = { viewModel.retryPendingTripDeletions(); viewModel.retryPendingTripUploads() }, enabled = isOnline) {
+                            Text(if (isOnline) "Yeniden dene" else "Bağlantı bekleniyor")
+                        }
+                    }
+                }
                 if (windowSize.isTablet || windowSize.isLargeTablet) {
                     // Tablet layout: Two columns for summary/calendar and trip list, with full-width rich guide below when expanded
                     Column(

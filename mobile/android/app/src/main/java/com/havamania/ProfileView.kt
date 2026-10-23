@@ -62,6 +62,8 @@ fun ProfileScreen(
 
     val aiHistoryItems by aiHistoryViewModel.historyItems.collectAsStateWithLifecycle()
     val travelPlans by travelViewModel.plans.collectAsStateWithLifecycle()
+    val emptyTripsOwner by travelViewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
+    val emptyHistoryOwner by aiHistoryViewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
 
     var showComingSoonDialog by remember { mutableStateOf(false) }
     var comingSoonTitle by remember { mutableStateOf("") }
@@ -134,8 +136,8 @@ fun ProfileScreen(
                 aboutMe = aboutMe,
                 stats = mapOf(
                     "İlgi" to userInterests.size.toString(),
-                    "Rota" to travelPlans.count { !it.isDemo }.toString(),
-                    "Analiz" to aiHistoryItems.size.toString()
+                    "Rota" to profileCountLabel(travelPlans.count { !it.isDemo }, owner != null && emptyTripsOwner == owner),
+                    "Analiz" to profileCountLabel(aiHistoryItems.size, owner != null && emptyHistoryOwner == owner)
                 ),
                 onAvatarClick = {
                     if (!uploadProgress) photoPickerLauncher.launch("image/*")
