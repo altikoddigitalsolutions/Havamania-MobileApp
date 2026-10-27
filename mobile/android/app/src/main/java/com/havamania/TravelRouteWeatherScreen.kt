@@ -29,7 +29,6 @@ import java.time.LocalDateTime
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
@@ -541,13 +540,11 @@ private fun RouteContent(
 
         Spacer(Modifier.height(16.dp))
 
-        val tripStatus = remember(t) {
-            TravelStatusResolver.getStatus(t.startDate, t.endDate)
-        }
+        val now = java.time.Instant.now()
+        val tripStatus = TravelStatusResolver.getStatus(t.startDate, t.endDate, now.atZone(ZoneId.systemDefault()).toLocalDate())
         val isPast = tripStatus == TravelStatus.PAST
         val departureDateTime = t.departureDateTime
-        val now = LocalDateTime.now()
-        val isWeatherReady = departureDateTime != null && !isPast && ChronoUnit.HOURS.between(now, departureDateTime) <= 48
+        val isWeatherReady = TravelStatusResolver.isRouteWeatherEligible(t, now)
 
         if (isPast) {
             RoutePastTripCard(t, colors)

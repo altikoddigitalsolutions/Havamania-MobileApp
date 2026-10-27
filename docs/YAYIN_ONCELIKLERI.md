@@ -1,6 +1,25 @@
-# Android yayın kontrol listesi — 22 Ekim 2026
+# Android yayın kontrol listesi — 27 Ekim 2026
 
 Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi bütün başlığı kapatmaz. Kullanıcı tercihi: yerel doğrulama; canlı dağıtım, gerçek hesap silme veya satın alma yapılmaz. Ayrıntılı son denetim: [22 Ekim raporu](YAYIN_DENETIMI_2026-10-22.md).
+
+## 27 Ekim güncel durum
+
+Ana listedeki işaretler sayıldı: **59 geniş madde, 22 tamamlanan, 37 açık**. Aşağıdaki yerel düzeltmeler geniş canlı/cihaz matrislerini otomatik kapatmaz. Eski tarihlerdeki test sayıları tarihsel kayıttır.
+
+| Alan | Güncel kanıt ve açık sınır |
+|---|---|
+| Seyahat senkronizasyonu | UID/sürüm bazlı kalıcı gönderme/silme takibi, yeniden deneme ve görünür durumlar eklendi. Kapalı uygulamada iş yürütme, çok cihaz çatışması ve canlı entegrasyon açık. |
+| Yerel yükleme | Tek Room akışı, iptal/UID koruması, IO dönüşümü ve hata/yeniden deneme eklendi. Gerçek bozuk veritabanı/oturum entegrasyonu açık. |
+| Seyahat formu | Koordinat doğrulaması, dar/büyük yazı tarih yerleşimi, kaydedilebilir taslak ve üst düzenleme bağlamı eklendi. Gerçek Activity recreate ve ayrı debug sürecinin ölümü test edildi; üretim navigasyonu/Auth/Room yeniden açılış matrisi açık. |
+| Arama ve UI | Boş/yükleme/hata ayrımı, eski sonuç temizliği ve yeniden deneme eklendi; seçili bileşenlerde klavye/%200 yazı testleri var. Bütün ekranlar, temalar, yatay ve TalkBack matrisi açık. |
+| Hesap silme / güvenlik / Firebase | Yerel kanıtlar önceki kayıtlarda; gerçek silinebilir hesap, canlı kurallar/backend bağlantısı ve güvenlik dağıtımı açık. |
+| Backend migration | Önceki yerel PostgreSQL doğrulaması geçerli kayıt; üretim sürümü/yedek/staging provası açık. Bu devamda yeniden koşulmadı. |
+| Hava / rota / kişiselleştirme | Önceki alt düzeltmeler korunuyor. 10 gün/48 saat, saat dilimleri, risk/eksik veri ve karşılaştırmalı kişiselleştirme matrisi açık. |
+| Üretim / mağaza / release | Avatar/Blaze, yasal metinler, Play Console, servis kapasitesi, imzalı R8 AAB, gerçek 16 KB ve Play iç test açık. |
+
+Son tamamlanmış Android JVM koşusu: **160 test, 0 hata**; debug derleme başarılı. Cihaz sonuçları tarih/senaryo bazında [yayın durum raporunda](YAYIN_DURUM_RAPORU.md); farklı turları toplayarak tam uygulama testi sonucu çıkarılmaz. Önceki backend/kurallar/PostgreSQL/lint sayıları bu devamda yeniden doğrulanmış sayılmaz. 27 Ekim Git gönderim kapsamı: `4c919c0` sonrasındaki form/taslak, süreç yeniden açılışı, yerel yükleme ve 48 saat düzeltmeleri ile testleri. Tarihsel tur sonlarındaki push notları o turun durumudur.
+
+Mevcut yerel sıra: yükleme hata panelinin cihaz doğrulaması → hava verisinin 10 gün/48 saat sınırları ve eksik veri davranışı → kalan dayanıklılık/UI matrisleri. Canlı ortam ve mağaza bağımlılıkları açık tutulur. Ayrıntılı tarihsel kayıt aşağıdadır.
 
 ## 1. Hesap silme ve veri temizliği — AÇIK
 

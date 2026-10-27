@@ -1,18 +1,25 @@
 # Havamania — Yayına hazırlık durum raporu
 
-Güncelleme: 22 Ekim 2026. Hedef: önce Android / Google Play.
+Güncelleme: 27 Ekim 2026. Hedef: önce Android / Google Play.
 
 Canlı ekran bulguları, düzeltmeler ve açık varyantlar: [Canlı görsel denetim](CANLI_GORSEL_DENETIM.md).
 
-## Son geniş denetim
+## Son yerel doğrulama özeti — 27 Ekim
 
-[Kapsamlı kalite raporu](KAPSAMLI_KALITE_DENETIMI_2026-10-22.md): 20 kategori, 5 kodla doğrulanmış bug, 1 UI riski ve 1 iyileştirme. Son koşu: 125 JVM + 16 cihaz + 64 backend + 4 PostgreSQL + 4 Firebase kural testi başarılı; 187 lint uyarısı açık. Ayrıntılı sonuçlar bu dosyanın sonunda.
+- Android JVM: **160 test geçti**, debug APK derlendi. Sonraki cihaz koşuları bu dosyanın sonunda senaryolarıyla kayıtlıdır.
+- Gerçek Activity recreate: 2 izole test; ayrı debug sürecinin ölümü/yeniden açılışı: 1 betik senaryosu geçti. Üretim navigasyonu/Auth/Room uçtan uca süreç ölümü açık.
+- Önceki backend, PostgreSQL, Firebase kuralları ve lint sonuçları bu devamda yeniden koşulmadı.
+- Ana liste: **59 geniş madde, 22 tamamlanan, 37 açık**. Bu sayılar doğrulanmış hata adedi değildir. Yayın onayı, imzalı release ve canlı matrisler açık.
+
+## Önceki geniş denetim — 22 Ekim
+
+[Kapsamlı kalite raporu](KAPSAMLI_KALITE_DENETIMI_2026-10-22.md): 20 kategori, 5 kodla doğrulanmış bug, 1 UI riski ve 1 iyileştirme. O tarihteki koşu: 125 JVM + 16 cihaz + 64 backend + 4 PostgreSQL + 4 Firebase kural testi başarılı; 187 lint uyarısı açık. Ayrıntılı sonuçlar bu dosyanın sonunda.
 
 ## Kısa durum
 
 Ana kontrol listesinde **59 geniş madde: 22 tamamlandı, 37 açık**. Canlı görsel ekran denetimi durum varyantlarıyla genişletildi; tüm kod tabanının erişilebilirlik/tekrar denetimi ayrı açık madde eklendi. Bu sayı hata adedi değildir: tek bir açık madde çok sayıda cihaz/servis senaryosu içerir. Aşağıdaki alt düzeltmeler geniş matrisi tamamen kapatmadığı için sayı otomatik artırılmaz. Uygulama henüz yayına hazır olarak onaylanmadı.
 
-Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. Son bildirim ve canlı görsel denetim düzeltmeleri bu tur Git gönderimine dahil edildi.
+Çalışma kapsamı: yerel testler. Canlı hesap silme, üretim dağıtımı ve mağazaya gönderim yapılmadı. 27 Ekim Git gönderim kapsamına `4c919c0` sonrasındaki form/taslak, süreç ve yerel yükleme, koordinat ve 48 saat düzeltmeleri ile testleri alındı. Tarihsel turlardaki “Push yapılmadı” notları ilgili turun durumunu anlatır.
 
 ## Çözülen problemler
 
@@ -35,7 +42,7 @@ Ana kontrol listesinde **59 geniş madde: 22 tamamlandı, 37 açık**. Canlı g�
 | Şehir kartları — bu tur | Yabancı konuma Türkiye yazılması, isimsiz varsayılan/sil eylemleri | Gerçek ülke alanı ve erişilebilir eylem adları |
 | Bildirimler — bu tur | Silme/okundu eylemine yalnızca kaydırarak erişim | Ekran okuyucu için özel sil/okundu/seç eylemleri ve durum semantiği; cihazda TalkBack doğrulaması açık |
 
-## Doğrulama durumu
+## Önceki doğrulama durumu
 
 - Önceki tamamlanmış Android koşusu: **111 birim testi**, debug derleme ve lint başarılı; **0 lint hatası, 194 uyarı, 1 ipucu**.
 - Önceki son Samsung SM-T500 / Android 12 koşusu: **12 cihaz testi geçti**. 2 SQLite migration, 2 Firebase model, 8 izole Compose testi. Bu tur tablet testi çalıştırılmadı.
@@ -43,7 +50,7 @@ Ana kontrol listesinde **59 geniş madde: 22 tamamlandı, 37 açık**. Canlı g�
 - Önceki cihaz testlerindeki geçici Activity başlatma hataları ve test temasındaki ekran boyutu eksikliği ayrıntılı denetim günlüğünde kayıtlı; başarılı tekrarlar ilk hataları silmez.
 - Kullanıcının 14:56:30–32 boş tablet ekranı görüntüleri izole auth testiyle eşleşiyor. Bu, normal uygulamanın açılışının ayrıca doğrulandığı anlamına gelmez. Yeni tablet testi öncesi haber verilecek.
 
-## Sırada ne var?
+## Önceki turdaki iş sırası — tarihsel kayıt
 
 | Öncelik | İş | Tamamlanma ölçütü / bağımlılık |
 |---|---|---|
@@ -288,3 +295,80 @@ Doğrudan yazma durumu doğrulaması: testDebugUnitTest ve assembleDebug başar�
 - Yükleniyor/boş/hata ve yeniden deneme ortak geri bildirimi bağlandı. Başlık, etiketli arama alanı ve sonuçlar tek LazyColumn içinde; IME boşluğu ve büyük yazı için kaydırma sağlandı. Tekrarlı sonuç kimlikleri eleniyor; seçili konum vurgusu korunuyor.
 - JVM testleri ve debug/test APK derlemesi başarılı. İlk izole cihaz testi Compose IME inset kontrolünde 5 saniye zaman aşımına uğradı; klavye erişimi henüz doğrulanmış sayılmadı. Test açık klavye isteği ve Android rootWindowInsets görünürlüğüyle yeniden hazırlanıyor.
 - Son doğrulama: test kurulumunda açık klavye isteği ve rootWindowInsets IME görünürlük kontrolü sonrası cihaz testi geçti (1/1). %200 yazı, 320 dp genişlik, gerçek klavye görünürlüğü ve yeniden denemeye kaydırıp basma doğrulandı. İlk başarısız koşu gizlenmedi. Tam ModalBottomSheet ve seyahat formu görsel matrisi ayrıca açık. Sıradaki: seyahat ekleme formunun gerçek klavye ve büyük yazıda alan/düğme erişimi. Push yapılmadı.
+
+## 27 Ekim — Seyahat formu büyük yazı ve konum tutarlılığı
+- Form gerçek ViewModel bağlantısından ayrılarak izole TravelPlanForm olarak test edilebilir hale getirildi; üretimde aynı ViewModel verileri/callbackleri bağlanıyor. Form köküne IME boşluğu eklendi.
+- Hedef konumu değiştirme açıldığında eski seçim temizleniyor; öneriden yeni seçim yapılmadan eski koordinatlarla kayıt engelleniyor. Dolu kalkış alanı da öneri seçimi gerektiriyor ve açıklayıcı hata gösteriyor.
+- Düzenlemede kalkış metni silindiğinde originCity ile birlikte originLatitude/originLongitude temizleniyor. Kullanılmayan iki yerel alan kaldırıldı; konum düzenleme ikonuna erişilebilir açıklama eklendi.
+- testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Samsung tablette üç izole form testi geçti: %200 yazıda metin girip/sildikten sonra kaydet düğmesine erişim; hedef kilidi açılınca kaydın engellenmesi; mevcut kalkış temizlenince koordinatların da null olması.
+- Testler yalnızca onSave çıktısını yakalar; gerçek Firebase veya yerel seyahat kaydı oluşturmaz. Bu tur testinde IME görünürlüğü ayrıca assert edilmedi; önceki konum arama testinin gerçek klavye sonucu tam seyahat formuna genellenmez. Telefon/yatay/tema ve tam görsel matris açık.
+- Sıradaki: form taslağının ekran yeniden oluşturulmasında korunması ve tarih alanlarının dar ekran/büyük yazı yerleşimi. Push yapılmadı.
+
+## 27 Ekim — Form içeriği saved-state ve tarih yerleşimi
+- Form içindeki seçimler, metinler, kilit durumu, seyahat türü, başlangıç/bitiş ve saat rememberSaveable kullanıyor. Seçili konum DTO'su JSON, tarihler epochDay olarak kaydediliyor. Aktif oturum değişince form key ile yeniden oluşturuluyor.
+- Tarih alanları 400 dp altı genişlikte veya fontScale > 1.3 olduğunda alt alta; geniş normal yazıda yan yana gösteriliyor.
+- İlk derleme eksik serialization extension importu nedeniyle başarısız oldu; import düzeltildi ve kontroller tekrar başlatıldı.
+- Önemli açık kapsam: bu adım form içeriğinin saved-state geri yüklemesidir. Üst TravelPlannerScreen showAddDialog/planToEdit/prefillPlan hâlâ remember kullanıyor; gerçek Activity yeniden oluşumunda formun açık kalması ve düzenleme bağlamının korunması sonraki adımda tamamlanmalı. Süreç ölümü sonrası uçtan uca taslak tamamlandı denemez.
+- Sonuç: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Tablette 2/2 izole test geçti: selected konum/koordinatlarının StateRestorationTester sonrası korunması ve 280 dp genişlik/%200 yazıda tarihlerin dikey yerleşimi. Gerçek Activity/süreç yeniden oluşturma testi değildir. Sıradaki üst ekran form açılış/düzenleme bağlamı korumasıdır. Push yapılmadı.
+
+## 27 Ekim — Üst ekran seyahat düzenleme bağlamı
+- TravelPlannerScreen form açıklığı, düzenlenen kayıt kimliği ve küçük başlangıç parametrelerini UID'ye bağlı saved-state bağlamında saklıyor. Analiz/geçmiş yükleri Bundle'a kopyalanmıyor; düzenlenen kayıt kimlik ve sahip UID ile güncel listeden çözülüyor.
+- Düzenlenen seyahat henüz yüklenmediyse yeni kayıt formuna düşmek yerine yüklenme/yeniden deneme/kapat penceresi gösteriliyor.
+- Başlangıç parametrelerinin işlendiği bilgisi ve ön doldurma kayıt kimliği korunuyor; yeniden oluşturma aynı parametreyle formu yeniden başlatmıyor. Form kapanınca bağlam temizleniyor.
+- UID değişince veya mevcut çalışma sırasında oturum nesli değişince form kapanıyor. İlk ViewModel auth başlatması, geri yüklenen aynı kullanıcı taslağını sıfırlamamalı; saved-state anahtarı bu nedenle geçici oturum sayacı yerine UID kullanıyor.
+- İki izole cihaz testi eklendi: üst bağlam + iç form taslağı geri yükleme ve kullanıcı değişiminde kapanma; ön doldurma kimliği/işlenmiş başlangıç bilgisi korunması.
+- Açık kapsam: gerçek Activity recreate ve süreç ölümü/Room yükleme yarışı uçtan uca cihaz testi. Ek inceleme adayı: başlangıç parametresinden açılan ön doldurma akışında konumun gerçek koordinatla doğrulanması.
+- Doğrulama: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Samsung tablette iki yeni izole test 2/2 geçti. Bunlar StateRestorationTester ile Compose saved-state testidir; gerçek Activity recreate/süreç ölümü testi değildir. Sıradaki ön doldurma akışının gerçek koordinat doğrulaması ve yükleme gecikmesinde düzenleyici entegrasyonudur. Push yapılmadı.
+
+## 27 Ekim — Ön doldurulan konum doğrulaması
+- Ön doldurma yeni seyahat akışı olarak açıkça işaretleniyor; şehir adı geldi diye hedef kilitlenmiyor ve (0,0) ile düzenleme/kayıt yapılamıyor. İlk arama şehir adıyla başlıyor; öneriden seçim gerekli. Ön doldurma kimliği/tarih/tür korunuyor.
+- UI ve TravelViewModel.savePlan için ortak koordinat doğrulaması: sonlu değerler, enlem/boylam sınırları, iki ekseni birlikte sıfır olmayan konum. Tek eksende sıfır geçerli. Dolu kalkış adı için de çözümlenmiş koordinatlar gerekli.
+- Kalkış kaldırılırken originDistrict de temizleniyor; yeni seçimde ilçe bilgisi kayda aktarılıyor.
+- Üç JVM regresyon testi eklendi: eksik/geçersiz/sıfır çift koordinat, geçerli tek sıfır ekseni ve opsiyonel kalkış doğrulaması. Bir cihaz testi ön doldurmayı seçimsiz kaydetmenin engellenmesini, seçim sonrası gerçek koordinatların ve kayıt kimliğinin korunmasını kapsıyor.
+- Bu akışta (0,0) uygulamanın eski çözümlenmemiş konum işaretidir. Mevcut hatalı kayıtlar otomatik değiştirilmedi; düzenlemede yeni konum seçimi gerektirir. Gerçek geocoding/Firebase çağrısı test edilmedi.
+- Koordinat turu doğrulaması: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Ön doldurulan formun gerçek koordinat seçimi cihaz testi 1/1 geçti. Test form çıktısını yakalar; Firebase'e kayıt yapmaz.
+
+## 27 Ekim — Düzenleyicide geciken/eksik veri ve UID kontrolü
+- Üretimdeki düzenleyici yükleme/eksik kayıt davranışı TravelEditorHost bileşenine taşındı. Düzenleme kimliği varsa kayıt gelmeden yeni seyahat formu açılmaz. Kayıt çözümlemesi hem kimlik hem UID ile yapılır; farklı sahip bağlamı gösterilmez.
+- Kaydet callback'i aktif Firebase UID'sini tekrar kontrol eder; ekrandaki eski formun hesabı değişmişse kayıt başlatılmaz.
+- İki izole UI testi eklendi: yükleme → başka kullanıcının aynı kimlikli kaydı → doğru kaydın gelmesi → kaydın kaybolması ve farklı sahibin form bağlamının gizlenmesi.
+- Gerçek Room/Firebase gecikmesi ve süreç ölümü uçtan uca senaryoları bu testlerin kapsamı dışındadır.
+- Sonuç: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı; tablette geciken/eksik veri ve sahip izolasyonu testleri 2/2 geçti. Koordinat turuyla birlikte bu devamda 3 yeni cihaz senaryosu geçti. Sıradaki gerçek Activity yeniden oluşturma entegrasyonu; Firebase/Room gecikmesi ve süreç ölümü testi açık. Push yapılmadı.
+
+## 27 Ekim — Gerçek Activity yeniden oluşturma testi
+- Debug kaynağına dışa kapalı TravelEditorTestActivity eklendi; gerçek form/düzenleyici ve sabit yerel veri kullanır. ViewModel, repository veya hesap işlemi çağırmaz. Release kaynaklarına dahil değildir.
+- ActivityScenario.recreate kullanan iki cihaz testi eklendi: açık düzenleyici ve yazılmış taslak; seçilen kalkış konumunun koordinatlarıyla korunması. Bunlar StateRestorationTester yerine Android Activity'yi yeniden oluşturur.
+- Süreç öldürme/yeniden başlatma, gerçek uygulama navigasyonu ve Firebase/Room yeniden yükleme bu fixture testinin kapsamı değildir.
+- Sonuç: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Samsung tablette TravelEditorRecreationTest 2/2 geçti: gerçek Activity recreate sonrası açık form/yazılı taslak ve seçilmiş kalkış koordinatları korundu. Bu tur yeni üretim hatası doğrulanmadı; mevcut düzeltmelerin daha güçlü doğrulaması eklendi. Sıradaki süreç ölümü/yeniden açılışın izole doğrulanması ve tam uygulama yükleme entegrasyonu. Push yapılmadı.
+
+## 27 Ekim — İzole süreç ölümü testi hazırlığı
+- Ayrı :editor_test süreci ve ayrı görev kimliği kullanan debug-only TravelEditorProcessDeathActivity eklendi. Giriş Android DUMP izni ile korunuyor; normal uygulamalar açamaz. Mevcut Activity recreate test ekranı varsayılan süreçte kalıyor.
+- tools/test_trip_editor_process_death.py yerel test betiği: formu açar, taslak yazar, arka plana alır, yalnızca PID'si doğrulanan test sürecini run-as ile kapatır ve tutulan test görevini yeniden açar. Veri temizleme veya pakete force-stop uygulanmaz.
+- Başarı ölçütleri: yeni PID, savedInstanceState restored=true kaydı ve aynı taslağın EditText içinde görünmesi. Bu test gerçek üretim Activity/Firebase/Room entegrasyonu yerine gerçek formun izole süreçteki saved-state davranışını ölçer.
+- İlk gerçek süreç koşusu açma düğmesini bulamadan durdu. Crash kaydı ikinci süreçte MainApplication → TravelNotificationWorker.schedule → WorkManager başlatılmamış hatasını doğruladı. MainApplication otomatik başlangıç işleri varsayılan süreçle sınırlandı (API 28+ getProcessName, eski API ActivityManager PID çözümü); yeniden derleme/test başlatıldı. Ana süreçte aynı crash gözlemlendi denmiyor.
+- Sonuç: testDebugUnitTest ve assembleDebug başarılı. Gerçek izole süreç testi geçti: old_pid=6979, new_pid=7139, draft_restored=true, saved_instance_state=true. Testte üretim verisi kaydedilmedi/temizlenmedi.
+- Ara koşular: WorkManager ikincil süreç açılış hatası düzeltildikten sonra sinyal numarasıyla toybox kill komutları tablette Unknown signal hatası verdi. Varsayılan sonlandırma komutuyla süreç tamamen sonlandırıldı ve PID yokluğu doğrulandı; ardından yeni PID ve saved-state geri yüklemesi birlikte doğrulandı. Başarısız hazırlık koşuları tamamlanmış test sayılmadı.
+- Kapsam sınırı: aynı gerçek formun ayrı debug sürecinde Android saved-state geri yüklenmesi doğrulandı. Üretim navigasyonu/Firebase Auth yeniden başlatma, Room kayıt yüklemesi ve API 23–27 süreç adı fallback'i bu koşuda test edilmedi.
+- Sıradaki: tam uygulama oturum başlatma/yerel veri yükleme entegrasyonu ve son yayın kontrol listesinin güncellenmesi. Push yapılmadı.
+
+## 27 Ekim — Yerel seyahat yükleme akışının birleştirilmesi
+- Aynı listeyi güncelleyen tek seferlik DAO sorgusu kaldırıldı. Açılış/ekrana dönüş/yeniden deneme aynı Room dinleyicisini yeniler; önceki dinleyici iptal edilir.
+- DAO erişimi ve domain dönüşümü flow içinde, IO dispatcher üzerinde çalışır. Veri/hata yayınları UI dispatcher'da ortak iptal/UID kontrolüyle yapılır. Okuma/dönüşüm hatası yakalanır, son başarılı liste korunur, isLoading kapanır ve yeniden yükle eylemi gösterilir.
+- Boş seedPlans listesiyle çalışan ve çağrısı yalnızca init'te olan eski seyahat seed rutini kaldırıldı; kullanıcı kayıtlarını değiştiren işlem yapılmadı.
+- Dört yerel coroutine testi: okuma hatası/son veriyi koruma/yeniden deneme; eski hesap verisi ve hatasının yayınlanmaması; iptalin kullanıcı hatası olmaması; bozuk tarih dönüşümünde kısmi liste yayınlanmaması.
+- Kapsam: Room adaptörünü kullanan ortak gözlem protokolünün yerel testidir; gerçek bozuk kullanıcı veritabanı oluşturulmadı, canlı Auth/Firestore/Room uçtan uca arızası yapılmadı. Yerel yükleme hatası UI erişimi ve ana yayın listesiyle kalan kapsam uzlaştırması sırada.
+- Doğrulama: testDebugUnitTest ve assembleDebug başarılı. AccountDataObserverTest 4/4 geçti. Bu tur cihaz testi veya canlı hata senaryosu çalıştırılmadı. Push yapılmadı.
+
+## 27 Ekim — Yerel yükleme paneli ve yayın listesi uzlaştırması
+- Yerel yükleme paneli erişilebilir canlı bölgeyle ayrıldı. Hata → yeniden deneme/yükleniyor → hata veya başarı geçişi gösteriliyor; işlem sürerken düğme kapalı, başarıda panel kalkıyor.
+- testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. Samsung tablette 1 izole Compose testi geçti: 280 dp/%200 yazı, koyu→açık tema, kaydırarak yeniden deneme, işlem sırasında kapalı eylem, başarıda panelin kaybolması. Gerçek DB arızası/TalkBack/kontrast ölçümü değildir.
+- Ana kontrol listesi checkbox sayımı: 59 toplam, 22 tamamlanan, 37 açık; geniş maddeler otomatik kapatılmadı. Her iki belgenin başı 27 Ekim kanıtıyla güncellendi; eski test sayıları ve önceki iş sırası tarihsel kayıt olarak işaretlendi.
+- Sonraki yerel sıra: hava verisi 10 gün/48 saat sınırları ve eksik veri davranışı; dayanıklılık/UI matrisleri devam eder. Canlı Firebase/backend, hesap silme, avatar/Blaze, yasal sayfalar, Play Console ve imzalı release konuları açık. Push yapılmadı.
+
+## 27 Ekim — Rota hava analizi 48 saat sınırı
+- Tam saate yuvarlama 48 saat 59 dakika öncesini kabul ediyordu; bildirim kontrolü kalkıştan sonraki ilk saati de 0 saat gibi görebiliyordu. Ortak Instant/Duration kontrolü tam [0,48 saat] aralığını kullanıyor.
+- Rota ekranı ve ViewModel analiz başlangıcı aynı uygunluk kontrolüne bağlandı; bildirim kontrolü ortak kalkış öncesi pencereyi kullanıyor. Devam eden seyahatlere erişim mevcut ürün davranışı olarak korunuyor; kalkış sonrası yeni rota-hazır bildirimi uygun sayılmıyor.
+- Saat dilimi dönüşümü kalkış için cihazın mevcut ZoneId'siyle, süre karşılaştırması Instant üzerinden yapılıyor; yaz saati geçişinde 48 yerel saat ile geçen süre karışmıyor.
+- Dört regresyon testi: tam sınır/+1 nanosaniye/+59 dakika; şimdi/geçmiş kalkış; Berlin sonbahar DST 49 saat örneği; yaklaşan/devam eden/geçmiş/saatsiz seyahat uygunluğu.
+- Açık kapsam: 10 gün kuralı, eksik günlük veri/kod varsayımları, konum saat dilimi ve cihaz saat dilimi ayrımı; rota ekranının hiç etkileşim olmadan sınır anında otomatik yenilenmesi. Bu tur gerçek API/bildirim veya DST cihaz saati değiştirilmedi.
+- Doğrulama: ilk derlemede bildirim gün etiketi için Instant.format kullanımı tür hatası verdi; aynı andan LocalDateTime gün etiketi üretilerek düzeltildi. Son testDebugUnitTest ve assembleDebug başarılı, RouteWeatherWindowTest 4/4 geçti. Gerçek bildirim/API veya cihaz DST testi yapılmadı. 10 gün/eksik hava kodunun açık hava varsayımı sonraki düzeltmedir. Push yapılmadı.

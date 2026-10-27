@@ -152,6 +152,240 @@ class SharedComponentAccessibilityTest {
         compose.runOnIdle { assertEquals(1, retries) }
     }
 
+    @Test fun travelFormSaveRemainsReachableWithLargeTextAfterTyping() {
+        var saved: TravelPlan? = null
+        val date = java.time.LocalDate.now().plusDays(2)
+        val plan = TravelPlan(city = "Ankara", startDate = date, endDate = date, latitude = 39.9, longitude = 32.8)
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                TestTheme {
+                    TravelPlanForm(plan, emptyList(), emptyList(), LocationSearchStatus.IDLE,
+                        LocationSearchStatus.IDLE, false, {}, {}, {}, { saved = it })
+                }
+            }
+        }
+        compose.onNode(hasSetTextAction()).performScrollTo().performClick().performTextInput("test")
+        compose.onNodeWithText("DEĞİŞİKLİKLERİ KAYDET").performScrollTo().assertIsNotEnabled()
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextClearance()
+        compose.onNodeWithText("DEĞİŞİKLİKLERİ KAYDET").performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals("Ankara", saved?.city); assertEquals(null, saved?.originLatitude) }
+    }
+
+    @Test fun clearingExistingOriginAlsoClearsCoordinates() {
+        var saved: TravelPlan? = null
+        val date = java.time.LocalDate.now().plusDays(2)
+        val plan = TravelPlan(city = "Ankara", startDate = date, endDate = date,
+            latitude = 39.9, longitude = 32.8, originCity = "İstanbul", originLatitude = 41.0, originLongitude = 29.0)
+        compose.setContent {
+            TestTheme { TravelPlanForm(plan, emptyList(), emptyList(), LocationSearchStatus.IDLE,
+                LocationSearchStatus.IDLE, false, {}, {}, {}, { saved = it }) }
+        }
+        compose.onAllNodesWithContentDescription("Konumu değiştir")[1].performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).performTextClearance()
+        compose.onNodeWithText("DEĞİŞİKLİKLERİ KAYDET").performScrollTo().performClick()
+        compose.runOnIdle {
+            org.junit.Assert.assertNotNull(saved)
+            assertEquals(null, saved?.originCity)
+            assertEquals(null, saved?.originLatitude)
+            assertEquals(null, saved?.originLongitude)
+        }
+    }
+
+    @Test fun unlockingDestinationRequiresNewSelection() {
+        val date = java.time.LocalDate.now().plusDays(2)
+        val plan = TravelPlan(city = "Ankara", startDate = date, endDate = date, latitude = 39.9, longitude = 32.8)
+        compose.setContent {
+            TestTheme {
+                TravelPlanForm(plan, emptyList(), emptyList(), LocationSearchStatus.IDLE,
+                    LocationSearchStatus.IDLE, false, {}, {}, {}, {})
+            }
+        }
+        compose.onNodeWithContentDescription("Konumu değiştir").performClick()
+        compose.onNodeWithText("DEĞİŞİKLİKLERİ KAYDET").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test fun travelFormRestoresSelectedDestinationAndCoordinates() {
+        val restoration = StateRestorationTester(compose)
+        var saved: TravelPlan? = null
+        val suggestion = GeocodingResultDto(id = 123, name = "Ankara", latitude = 39.9, longitude = 32.8, country = "Türkiye")
+        restoration.setContent {
+            TestTheme {
+                TravelPlanForm(null, listOf(suggestion), emptyList(), LocationSearchStatus.RESULTS,
+                    LocationSearchStatus.IDLE, false, {}, {}, {}, { saved = it })
+            }
+        }
+        compose.onNodeWithText("Ankara").performScrollTo().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("Ankara").assertIsDisplayed()
+        compose.onNodeWithText("SEYAHATİ OLUŞTUR").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle {
+            org.junit.Assert.assertNotNull(saved)
+            assertEquals("Ankara", saved?.city)
+            assertEquals(39.9, saved!!.latitude, 0.00001)
+            assertEquals(32.8, saved!!.longitude, 0.00001)
+        }
+    }
+
+    @Test fun narrowLargeFontTravelDatesStackVertically() {
+        val date = java.time.LocalDate.of(2026, 10, 30)
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                TestTheme {
+                    Box(Modifier.width(280.dp)) {
+                        TravelDateFields(date, date.plusDays(1), {}, {},
+                            java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale.forLanguageTag("tr-TR")))
+                    }
+                }
+            }
+        }
+        val start = compose.onNodeWithText("30 Ekim 2026").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val end = compose.onNodeWithText("31 Ekim 2026").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(end.top >= start.bottom)
+    }
+
+    @Test fun restoredEditorKeepsOpenTripAndDraftButAccountChangeClosesIt() {
+        val restoration = StateRestorationTester(compose)
+        var owner by mutableStateOf("A:1")
+        var editorState: MutableState<TravelEditorContext>? = null
+        val date = java.time.LocalDate.now().plusDays(2)
+        val plan = TravelPlan(id = "trip-123", city = "Ankara", startDate = date, endDate = date,
+            latitude = 39.9, longitude = 32.8)
+        restoration.setContent {
+            val state = rememberTravelEditor(owner)
+            SideEffect { editorState = state }
+            if (state.value.open) {
+                TestTheme {
+                    TravelPlanForm(plan, emptyList(), emptyList(), LocationSearchStatus.IDLE,
+                        LocationSearchStatus.IDLE, false, {}, {}, {}, {})
+                }
+            }
+        }
+        compose.runOnIdle { editorState!!.value = editorState!!.value.edit(plan.id) }
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("Korunan kalkış taslağı")
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            org.junit.Assert.assertTrue(editorState!!.value.open)
+            assertEquals("trip-123", editorState!!.value.editId)
+        }
+        compose.onNode(hasSetTextAction()).performScrollTo().assertTextContains("Korunan kalkış taslağı")
+        compose.runOnIdle { owner = "B:2" }
+        compose.onNodeWithText("DEĞİŞİKLİKLERİ KAYDET").assertDoesNotExist()
+        compose.runOnIdle { org.junit.Assert.assertFalse(editorState!!.value.open) }
+    }
+
+    @Test fun prefilledEditorRestoresStableIdentityAndConsumedLaunch() {
+        val restoration = StateRestorationTester(compose)
+        var editorState: MutableState<TravelEditorContext>? = null
+        restoration.setContent {
+            val state = rememberTravelEditor("A:1")
+            SideEffect { editorState = state }
+        }
+        compose.runOnIdle {
+            editorState!!.value = TravelEditorContext("A:1", open = true, initialHandled = true,
+                prefillCity = "Ankara", prefillType = "VACATION", prefillDate = "2026-11-01", prefillId = "stable-id")
+        }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            val restored = editorState!!.value
+            assertEquals("stable-id", restored.prefill()!!.id)
+            assertEquals("Ankara", restored.prefill()!!.city)
+            org.junit.Assert.assertTrue(restored.initialHandled)
+            org.junit.Assert.assertFalse(restored.close().open)
+            org.junit.Assert.assertTrue(restored.close().initialHandled)
+        }
+    }
+
+    @Test fun prefilledCityNeedsSelectionAndSavesChosenCoordinates() {
+        var saved: TravelPlan? = null
+        val date = java.time.LocalDate.now().plusDays(2)
+        val prefill = TravelPlan(id = "prefill-id", city = "Ankara", startDate = date, endDate = date)
+        val suggestion = GeocodingResultDto(id = 123, name = "Ankara", latitude = 39.9, longitude = 32.8, country = "Türkiye")
+        compose.setContent {
+            TestTheme { TravelPlanForm(prefill, listOf(suggestion), emptyList(), LocationSearchStatus.RESULTS,
+                LocationSearchStatus.IDLE, false, {}, {}, {}, { saved = it }, requireDestinationSelection = true) }
+        }
+        compose.onNodeWithText("SEYAHATİ OLUŞTUR").performScrollTo().assertIsNotEnabled()
+        compose.onNode(hasSetTextAction() and hasText("Ankara")).performScrollTo()
+        // The text field and suggestion both contain the name; click the selectable row.
+        compose.onNode(hasText("Ankara") and hasClickAction() and !hasSetTextAction()).performScrollTo().performClick()
+        compose.onNodeWithText("SEYAHATİ OLUŞTUR").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle {
+            org.junit.Assert.assertNotNull(saved)
+            assertEquals("prefill-id", saved!!.id)
+            assertEquals(39.9, saved!!.latitude, 0.00001)
+            assertEquals(32.8, saved!!.longitude, 0.00001)
+        }
+    }
+
+    @Test fun editorWaitsForOwnedTripAndNeverFallsBackToCreation() {
+        val date = java.time.LocalDate.now().plusDays(2)
+        val owned = TravelPlan(id = "trip-id", userId = "A", city = "Ankara", startDate = date, endDate = date)
+        var plans by mutableStateOf(emptyList<TravelPlan>())
+        var loading by mutableStateOf(true)
+        var retries = 0
+        compose.setContent {
+            TestTheme {
+                TravelEditorHost(TravelEditorContext("A", open = true, editId = "trip-id"), plans, "A", loading,
+                    { retries++ }, {}) { plan, _ -> androidx.compose.material3.Text("Düzenlenen: ${plan?.city}") }
+            }
+        }
+        compose.onNodeWithText("Seyahat yükleniyor…").assertIsDisplayed()
+        compose.onNodeWithText("Yeniden dene").assertIsNotEnabled()
+        compose.runOnIdle { loading = false; plans = listOf(owned.copy(userId = "B", city = "Başka hesap")) }
+        compose.onNodeWithText("Seyahat bulunamadı veya henüz yüklenemedi.").assertIsDisplayed()
+        compose.onNodeWithText("Düzenlenen: Başka hesap").assertDoesNotExist()
+        compose.onNodeWithText("Yeniden dene").performClick()
+        compose.runOnIdle { assertEquals(1, retries); plans = plans + owned }
+        compose.onNodeWithText("Düzenlenen: Ankara").assertIsDisplayed()
+        compose.runOnIdle { plans = emptyList() }
+        compose.onNodeWithText("Düzenlenen: null").assertDoesNotExist()
+        compose.onNodeWithText("Seyahat bulunamadı veya henüz yüklenemedi.").assertIsDisplayed()
+    }
+
+    @Test fun editorIgnoresContextFromDifferentOwner() {
+        compose.setContent {
+            TestTheme {
+                TravelEditorHost(TravelEditorContext("A", open = true), emptyList(), "B", false, {}, {}) { _, _ ->
+                    androidx.compose.material3.Text("Eski form")
+                }
+            }
+        }
+        compose.onNodeWithText("Eski form").assertDoesNotExist()
+    }
+
+    @Test fun localTripRetryRemainsAccessibleAndTracksLoadingAcrossThemes() {
+        var error by mutableStateOf<String?>("Seyahatler cihazdan yüklenemedi. Yeniden deneyin.")
+        var loading by mutableStateOf(false)
+        var theme by mutableStateOf(AppTheme.DARK)
+        var retries = 0
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                TestTheme(theme) {
+                    androidx.compose.foundation.layout.Column(
+                        Modifier.width(280.dp).height(260.dp).verticalScroll(rememberScrollState())
+                    ) {
+                        TripLoadStatusPanel(error, loading) { retries++; error = null; loading = true }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Seyahatleri yeniden yükle").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Yükleniyor…").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals(1, retries)
+            theme = AppTheme.LIGHT
+            loading = false
+            error = "Seyahatler cihazdan yüklenemedi. Yeniden deneyin."
+        }
+        compose.onNodeWithText("Seyahatleri yeniden yükle").performScrollTo().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(2, retries); loading = false; error = null }
+        compose.onNodeWithText("Seyahatleri yeniden yükle").assertDoesNotExist()
+        compose.onNodeWithText("Seyahatler yükleniyor…").assertDoesNotExist()
+    }
+
     @Test fun sharedButtonPreservesTurkishSentenceCase() {
         compose.setContent { TestTheme { HavamaniaPrimaryButton("İzinleri yönet", {}) } }
         compose.onNodeWithText("İzinleri yönet").assertIsDisplayed()
@@ -278,8 +512,8 @@ class SharedComponentAccessibilityTest {
 }
 
 @Composable
-private fun TestTheme(content: @Composable () -> Unit) {
-    val colors = ThemeFactory.createColors(AppTheme.DARK)
+private fun TestTheme(theme: AppTheme = AppTheme.DARK, content: @Composable () -> Unit) {
+    val colors = ThemeFactory.createColors(theme)
     CompositionLocalProvider(
         LocalHavamaniaColors provides colors,
         LocalHavamaniaTypography provides ThemeFactory.createTypography(colors)

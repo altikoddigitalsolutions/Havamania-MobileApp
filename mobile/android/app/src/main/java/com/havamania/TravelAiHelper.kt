@@ -100,7 +100,7 @@ object TravelAiHelper {
         val prefs = personalization?.weatherPreferences ?: WeatherPreferences()
         val isPersonalizationActive = personalization?.personalizationEnabled ?: true
 
-        val windowDays = TRIP_ANALYSIS_WINDOW_DAYS // Use the constant (now 15)
+        val windowDays = TRIP_ANALYSIS_WINDOW_DAYS
 
         if (daysUntilTrip > windowDays) {
             return when (tone) {

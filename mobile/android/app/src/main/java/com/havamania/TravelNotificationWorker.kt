@@ -200,10 +200,10 @@ class TravelNotificationWorker(
     private suspend fun checkAndSendRouteWeatherNotifications(plan: TravelPlan, context: Context): Boolean {
         if (!canPublishFor(plan.userId)) return false
         val departureDateTime = plan.departureDateTime ?: return false
-        val now = LocalDateTime.now()
-        val hoursUntil = java.time.Duration.between(now, departureDateTime).toHours()
-
-        if (hoursUntil > 48 || hoursUntil < 0) return false
+        val nowInstant = Instant.now()
+        val now = nowInstant.atZone(ZoneId.systemDefault()).toLocalDateTime()
+        val departureInstant = departureDateTime.atZone(ZoneId.systemDefault()).toInstant()
+        if (!TravelStatusResolver.isWithinRouteWeatherWindow(departureInstant, nowInstant)) return false
 
         val notificationDao = NotificationDatabase.getDatabase(context).notificationDao()
         val weatherDao = WeatherDatabase.getDatabase(context).weatherDao()

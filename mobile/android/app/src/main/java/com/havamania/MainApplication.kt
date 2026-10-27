@@ -13,6 +13,16 @@ class MainApplication : Application() {
         android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
     }
 
+    // Firebase/WorkManager automatic initialization belongs to the default process.
+    // Secondary processes must not schedule work through its uninitialized instance.
+    val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
+        Application.getProcessName()
+    } else {
+        val manager = getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        manager.runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
+    }
+    if (processName != packageName) return
+
     // Configure Crashlytics collection policy (auto-init handled by FirebaseInitProvider)
     try {
         com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)

@@ -69,6 +69,8 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _loadError = MutableStateFlow<String?>(null)
+    val loadError = _loadError.asStateFlow()
 
     private val _citySearchStatus = MutableStateFlow(LocationSearchStatus.IDLE)
     val citySearchStatus = _citySearchStatus.asStateFlow()
@@ -134,7 +136,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         auth.addAuthStateListener(authListener)
-        seedInitialDataIfNeeded()
         viewModelScope.launch {
             networkMonitor.isOnline.distinctUntilChanged().collect { online ->
                 if (online) {
@@ -205,43 +206,25 @@ if (BuildConfig.DEBUG) {
 
     private var plansJob: kotlinx.coroutines.Job? = null
 
-    private fun loadPlansForUid(uid: String) {
+    @Synchronized private fun loadPlansForUid(uid: String) {
         plansJob?.cancel()
-        plansJob = accountTasks.launch launch@ { currentUid ->
-            dao.getAllTravelPlansFlow(uid).collect { entities ->
-                if (uid != this@TravelViewModel.currentUid) return@collect
-                val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
+        _isLoading.value = true
+        _loadError.value = null
+        plansJob = accountTasks.launch launch@ { owner ->
+            if (owner != uid) return@launch
+            val source = flow { emitAll(dao.getAllTravelPlansFlow(uid)) }
+                .map { entities -> entities.map { it.toDomain() }.sortedBy { it.startDate } }
+                .flowOn(kotlinx.coroutines.Dispatchers.IO)
+            observeAccountData(source, uid, { this@TravelViewModel.currentUid }, onData = { domainPlans ->
                 _plans.value = domainPlans
-                checkAndTriggerAutoAnalysis(domainPlans)
                 _isLoading.value = false
-            }
-        }
-    }
-
-
-    fun seedInitialDataIfNeeded(force: Boolean = false) {
-        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
-            if (currentUid != "legacy" && !force) {
-                loadPlans()
-                return@launch
-            }
-
-            _isLoading.value = true
-            val hasSeeded = ThemeManager.getHasSeededTrips(getApplication(), currentUid).first()
-            val entities = if (force) emptyList() else dao.getAllTravelPlans(currentUid)
-
-            if (entities.isEmpty() && (!hasSeeded || force)) {
-                if (force) dao.clearAllTravelPlans(currentUid)
-
-                if (currentUid == "legacy") {
-                    val seedPlans = emptyList<TravelPlan>()
-                    seedPlans.forEach { plan ->
-                        dao.insertTravelPlan(plan.toEntity())
-                    }
-                }
-                ThemeManager.saveHasSeededTrips(getApplication(), true, currentUid)
-            }
-            loadPlans()
+                _loadError.value = null
+                checkAndTriggerAutoAnalysis(domainPlans)
+            }, onError = { error ->
+                if (BuildConfig.DEBUG) Log.e(TAG, "Local trip loading failed", error)
+                _isLoading.value = false
+                _loadError.value = "Seyahatler cihazdan yüklenemedi. Yeniden deneyin."
+            })
         }
     }
 
@@ -251,16 +234,7 @@ if (BuildConfig.DEBUG) {
 
     fun loadPlans() {
         refreshToday()
-        val uid = currentUid
-        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
-            _isLoading.value = true
-            val entities = dao.getAllTravelPlans(uid)
-            if (this@TravelViewModel.currentUid != uid) return@launch
-            val domainPlans = entities.map { it.toDomain() }.sortedBy { it.startDate }
-            _plans.value = domainPlans
-            _isLoading.value = false
-            checkAndTriggerAutoAnalysis(domainPlans)
-        }
+        loadPlansForUid(currentUid)
     }
 
     private val analysisJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
@@ -363,6 +337,10 @@ if (BuildConfig.DEBUG) {
 
         accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             if (plan.userId != "legacy" && plan.userId != currentUid) return@launch
+            tripLocationError(plan)?.let {
+                emitAccountMessage(currentUid, it)
+                return@launch
+            }
             val todayVal = _today.value
             val now = LocalDateTime.now()
 

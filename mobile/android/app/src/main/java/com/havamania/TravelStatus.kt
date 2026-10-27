@@ -1,8 +1,9 @@
 package com.havamania
 
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
+import java.time.Instant
+import java.time.ZoneId
+import java.time.Duration
 
 enum class TravelStatus {
     PAST,
@@ -24,15 +25,16 @@ object TravelStatusResolver {
         }
     }
 
-    fun isRouteWeatherEligible(plan: TravelPlan, now: LocalDateTime = LocalDateTime.now()): Boolean {
-        val today = now.toLocalDate()
-        val status = getStatus(plan.startDate, plan.endDate, today)
+    fun isWithinRouteWeatherWindow(departure: Instant, now: Instant): Boolean {
+        val untilDeparture = Duration.between(now, departure)
+        return !untilDeparture.isNegative && untilDeparture <= Duration.ofHours(48)
+    }
 
+    fun isRouteWeatherEligible(plan: TravelPlan, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean {
+        val status = getStatus(plan.startDate, plan.endDate, now.atZone(zone).toLocalDate())
         if (status == TravelStatus.PAST) return false
-
-        val departure = plan.departureDateTime ?: return false
-        val hoursUntil = ChronoUnit.HOURS.between(now, departure)
-
-        return (status == TravelStatus.ONGOING) || (hoursUntil in 0..48)
+        val departure = plan.departureDateTime?.atZone(zone)?.toInstant() ?: return false
+        // Existing ongoing-trip access is retained; pre-departure access is exactly 48 elapsed hours.
+        return status == TravelStatus.ONGOING || isWithinRouteWeatherWindow(departure, now)
     }
 }

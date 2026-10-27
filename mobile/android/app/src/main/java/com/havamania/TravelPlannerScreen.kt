@@ -49,12 +49,18 @@ fun TravelPlannerScreen(
     val pendingDeletions by viewModel.pendingDeletions.collectAsStateWithLifecycle()
     val pendingUploads by viewModel.pendingUploads.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 
     var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    var planToEdit by remember { mutableStateOf<TravelPlan?>(null) }
-    var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
+    val session by viewModel.sessionVersion.collectAsStateWithLifecycle()
+    val editorUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
+    var editor by rememberTravelEditor(editorUid)
+    var previousSession by remember { mutableStateOf(session) }
+    LaunchedEffect(session, editorUid) {
+        if (previousSession != 0L && previousSession != session) editor = TravelEditorContext(editorUid)
+        previousSession = session
+    }
 
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
@@ -114,7 +120,7 @@ fun TravelPlannerScreen(
     var selectedDate by remember { mutableStateOf(today) }
 
     LaunchedEffect(initialCity, initialTripType, initialStartDate) {
-        if (initialCity != null) {
+        if (initialCity != null && !editor.initialHandled) {
             val start = try {
                 if (initialStartDate != null) LocalDate.parse(initialStartDate) else LocalDate.now()
             } catch(e: Exception) { LocalDate.now() }
@@ -125,15 +131,9 @@ fun TravelPlannerScreen(
                 if (initialTripType != null) TripType.valueOf(initialTripType) else TripType.VACATION
             } catch(e: Exception) { TripType.VACATION }
 
-            prefillPlan = TravelPlan(
-                city = initialCity,
-                tripType = type,
-                startDate = start,
-                endDate = start,
-                latitude = 0.0,
-                longitude = 0.0
-            )
-            showAddDialog = true
+            editor = editor.copy(open = true, initialHandled = true,
+                prefillCity = initialCity, prefillType = type.name, prefillDate = start.toString(),
+                prefillId = java.util.UUID.randomUUID().toString())
         }
     }
 
@@ -218,7 +218,7 @@ fun TravelPlannerScreen(
                 onBack = onBack,
                 actions = {
                     IconButton(
-                        onClick = { showAddDialog = true },
+                        onClick = { editor = editor.create() },
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
@@ -244,6 +244,7 @@ fun TravelPlannerScreen(
                         else Modifier.fillMaxWidth()
                     )
             ) {
+                TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
                 TripSyncStatusPanel(
                     pendingUploads, pendingDeletions, retrying, isOnline,
                     uploadSyncError, deletionSyncError,
@@ -311,9 +312,9 @@ fun TravelPlannerScreen(
                                     isLoading = isLoading && plans.isEmpty(),
                                     onFilterChange = { selectedFilter = it },
                                     selectedDate = selectedDate,
-                                    onAddClick = { showAddDialog = true },
+                                    onAddClick = { editor = editor.create() },
                                     onDelete = { deleteConfirmPlan = it },
-                                    onEdit = { planToEdit = it; showAddDialog = true },
+                                    onEdit = { editor = editor.edit(it.id) },
                                     onArchive = { viewModel.archiveTrip(it) },
                                     onUnarchive = { viewModel.unarchiveTrip(it) },
                                     onShowDetail = { planForSummary = it },
@@ -391,9 +392,9 @@ fun TravelPlannerScreen(
                         isLoading = isLoading && plans.isEmpty(),
                         onFilterChange = { selectedFilter = it },
                         selectedDate = selectedDate,
-                        onAddClick = { showAddDialog = true },
+                        onAddClick = { editor = editor.create() },
                         onDelete = { deleteConfirmPlan = it },
-                        onEdit = { planToEdit = it; showAddDialog = true },
+                        onEdit = { editor = editor.edit(it.id) },
                         onArchive = { viewModel.archiveTrip(it) },
                         onUnarchive = { viewModel.unarchiveTrip(it) },
                         onShowDetail = { planForSummary = it },
@@ -412,20 +413,19 @@ fun TravelPlannerScreen(
         }
     }
 
-    if (showAddDialog) {
+    TravelEditorHost(
+        context = editor, plans = plans, owner = editorUid, loading = isLoading,
+        onRetry = { viewModel.loadPlans() }, onDismiss = { editor = editor.close() }
+    ) { basePlan, requireSelection ->
         AddTravelPlanDialog(
             viewModel = viewModel,
-            editPlan = planToEdit ?: prefillPlan,
-            onDismiss = {
-                showAddDialog = false
-                planToEdit = null
-                prefillPlan = null
-            },
+            editPlan = basePlan,
+            requireDestinationSelection = requireSelection,
+            onDismiss = { editor = editor.close() },
             onSave = { plan ->
-                viewModel.savePlan(plan)
-                showAddDialog = false
-                planToEdit = null
-                prefillPlan = null
+                val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
+                if (editor.owner == activeUid) viewModel.savePlan(plan)
+                editor = editor.close()
             }
         )
     }

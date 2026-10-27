@@ -10,6 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,39 +42,63 @@ fun AddTravelPlanDialog(
     viewModel: TravelViewModel,
     editPlan: TravelPlan? = null,
     onDismiss: () -> Unit,
-    onSave: (TravelPlan) -> Unit
+    onSave: (TravelPlan) -> Unit,
+    requireDestinationSelection: Boolean = false
+) {
+    val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
+    val originSearchStatus by viewModel.originSearchStatus.collectAsStateWithLifecycle()
+    val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
+    val originSuggestions by viewModel.originSuggestions.collectAsStateWithLifecycle()
+    val processing by viewModel.isLoading.collectAsStateWithLifecycle()
+    val session by viewModel.sessionVersion.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) {
+        viewModel.searchCity(""); viewModel.searchOrigin("")
+        onDispose { viewModel.searchCity(""); viewModel.searchOrigin("") }
+    }
+    key(session) {
+        TravelPlanForm(editPlan, citySuggestions, originSuggestions, citySearchStatus, originSearchStatus,
+            processing, viewModel::searchCity, viewModel::searchOrigin, onDismiss, onSave, requireDestinationSelection)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+internal fun TravelPlanForm(
+    editPlan: TravelPlan?,
+    citySuggestions: List<GeocodingResultDto>, originSuggestions: List<GeocodingResultDto>,
+    citySearchStatus: LocationSearchStatus, originSearchStatus: LocationSearchStatus,
+    isProcessingState: Boolean,
+    onCitySearch: (String) -> Unit, onOriginSearch: (String) -> Unit,
+    onDismiss: () -> Unit, onSave: (TravelPlan) -> Unit,
+    requireDestinationSelection: Boolean = false
 ) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
-    var cityName by remember { mutableStateOf(editPlan?.city ?: "") }
-    var districtName by remember { mutableStateOf(editPlan?.district ?: "") }
-    var destinationPick by remember { mutableStateOf<GeocodingResultDto?>(null) }
-    var originPick by remember { mutableStateOf<GeocodingResultDto?>(null) }
+    val locationSaver = remember { Saver<GeocodingResultDto?, String>(
+        save = { Json.encodeToString(it) }, restore = { Json.decodeFromString(it) }
+    ) }
+    val dateSaver = remember { Saver<LocalDate, Long>(save = { it.toEpochDay() }, restore = { LocalDate.ofEpochDay(it) }) }
+    var destinationPick by rememberSaveable(editPlan?.id, stateSaver = locationSaver) { mutableStateOf<GeocodingResultDto?>(null) }
+    var originPick by rememberSaveable(editPlan?.id, stateSaver = locationSaver) { mutableStateOf<GeocodingResultDto?>(null) }
 
-    var destinationQuery by remember { mutableStateOf(editPlan?.city ?: "") }
-    var originQuery by remember { mutableStateOf(editPlan?.originCity ?: "") }
+    var destinationQuery by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan?.city ?: "") }
+    var originQuery by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan?.originCity ?: "") }
 
-    var destinationLocked by remember { mutableStateOf(editPlan != null) }
-    var originLocked by remember { mutableStateOf(editPlan?.originCity != null) }
+    var destinationLocked by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan != null && !requireDestinationSelection && hasResolvedTripCoordinates(editPlan.latitude, editPlan.longitude)) }
+    var originLocked by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan?.originCity != null) }
 
-    var tripType by remember { mutableStateOf(editPlan?.tripType ?: TripType.VACATION) }
-    var startDate by remember { mutableStateOf(editPlan?.startDate ?: LocalDate.now()) }
-    var endDate by remember { mutableStateOf(editPlan?.endDate ?: startDate) }
-    var departureTime by remember { mutableStateOf(editPlan?.departureTime) }
+    var tripType by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan?.tripType ?: TripType.VACATION) }
+    var startDate by rememberSaveable(editPlan?.id, stateSaver = dateSaver) { mutableStateOf(editPlan?.startDate ?: LocalDate.now()) }
+    var endDate by rememberSaveable(editPlan?.id, stateSaver = dateSaver) { mutableStateOf(editPlan?.endDate ?: startDate) }
+    var departureTime by rememberSaveable(editPlan?.id) { mutableStateOf(editPlan?.departureTime) }
 
-    val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
-    val originSearchStatus by viewModel.originSearchStatus.collectAsStateWithLifecycle()
-    DisposableEffect(viewModel) {
-        viewModel.searchCity("")
-        viewModel.searchOrigin("")
-        onDispose { viewModel.searchCity(""); viewModel.searchOrigin("") }
+    val editingExisting = editPlan != null && !requireDestinationSelection
+    LaunchedEffect(editPlan?.id, requireDestinationSelection) {
+        if (requireDestinationSelection && destinationPick == null) onCitySearch(destinationQuery)
     }
 
-    val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
-    val originSuggestions by viewModel.originSuggestions.collectAsStateWithLifecycle()
-
-    val displayFormatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr")) }
+    val displayFormatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr-TR")) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -81,10 +110,10 @@ fun AddTravelPlanDialog(
                 .background(themeColors.surface),
             color = themeColors.surface
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().imePadding()) {
                 // Header
                 HavamaniaTopBar(
-                    title = if (editPlan != null) "Seyahati Düzenle" else "Yeni Seyahat",
+                    title = if (editingExisting) "Seyahati Düzenle" else "Yeni Seyahat",
                     onBack = onDismiss
                 )
 
@@ -101,14 +130,14 @@ fun AddTravelPlanDialog(
                         LockedLocationCard(
                             title = destinationQuery,
                             subtitle = if (editPlan?.district != null) "${editPlan.district}, ${editPlan.city}" else "Hedef Belirlendi",
-                            onUnlock = { destinationLocked = false }
+                            onUnlock = { destinationLocked = false; destinationPick = null }
                         )
                     } else {
                         LocationSearchField(
                             query = destinationQuery,
                             onQueryChange = {
                                 destinationQuery = it
-                                viewModel.searchCity(it)
+                                onCitySearch(it)
                             },
                             suggestions = citySuggestions,
                             onSelect = {
@@ -118,7 +147,7 @@ fun AddTravelPlanDialog(
                             },
                             placeholder = "Şehir veya ilçe ara..."
                         )
-                        LocationSearchFeedback(citySearchStatus) { viewModel.searchCity(destinationQuery) }
+                        LocationSearchFeedback(citySearchStatus) { onCitySearch(destinationQuery) }
                     }
 
                     Spacer(Modifier.height(20.dp))
@@ -129,14 +158,14 @@ fun AddTravelPlanDialog(
                         LockedLocationCard(
                             title = originQuery,
                             subtitle = "Kalkış Belirlendi",
-                            onUnlock = { originLocked = false }
+                            onUnlock = { originLocked = false; originPick = null }
                         )
                     } else {
                         LocationSearchField(
                             query = originQuery,
                             onQueryChange = {
                                 originQuery = it
-                                viewModel.searchOrigin(it)
+                                onOriginSearch(it)
                             },
                             suggestions = originSuggestions,
                             onSelect = {
@@ -146,7 +175,7 @@ fun AddTravelPlanDialog(
                             },
                             placeholder = "Nereden yola çıkacaksın?"
                         )
-                        LocationSearchFeedback(originSearchStatus) { viewModel.searchOrigin(originQuery) }
+                        LocationSearchFeedback(originSearchStatus) { onOriginSearch(originQuery) }
                     }
 
                     Spacer(Modifier.height(20.dp))
@@ -169,28 +198,11 @@ fun AddTravelPlanDialog(
                     Spacer(Modifier.height(20.dp))
 
                     // 4. Dates
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            SectionLabel("BAŞLANGIÇ")
-                            DateSelectionField(
-                                date = startDate,
-                                onDateChange = {
-                                    val diff = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate)
-                                    startDate = it
-                                    endDate = it.plusDays(diff.coerceAtLeast(0L))
-                                },
-                                formatter = displayFormatter
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            SectionLabel("BİTİŞ")
-                            DateSelectionField(
-                                date = endDate,
-                                onDateChange = { endDate = it },
-                                formatter = displayFormatter
-                            )
-                        }
-                    }
+                    TravelDateFields(startDate, endDate, onStartChange = {
+                        val diff = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate)
+                        startDate = it
+                        endDate = it.plusDays(diff.coerceAtLeast(0L))
+                    }, onEndChange = { endDate = it }, formatter = displayFormatter)
 
                     Spacer(Modifier.height(20.dp))
 
@@ -219,9 +231,23 @@ fun AddTravelPlanDialog(
                         !startDate.isBefore(LocalDate.now())
                     }
 
-                    val hasDestination = destinationPick != null || (editPlan != null && destinationLocked && destinationQuery.isNotBlank())
-                    val isFormValid = hasDestination && !startDate.isAfter(endDate) && isFutureOrPresent
-                    val isProcessingState by viewModel.isLoading.collectAsStateWithLifecycle()
+                    val hasDestination = destinationLocked && destinationQuery.isNotBlank() &&
+                        hasResolvedTripCoordinates(destinationPick?.latitude ?: editPlan?.latitude,
+                            destinationPick?.longitude ?: editPlan?.longitude) &&
+                        (destinationPick != null || editingExisting)
+                    val hasValidOrigin = originQuery.isBlank() || (originLocked &&
+                        hasResolvedTripCoordinates(originPick?.latitude ?: editPlan?.originLatitude,
+                            originPick?.longitude ?: editPlan?.originLongitude))
+                    val isFormValid = hasDestination && hasValidOrigin && !startDate.isAfter(endDate) && isFutureOrPresent
+
+                    if (!hasDestination) {
+                        Text("Hedef konumunu arama önerilerinden seçin.", color = themeColors.error,
+                            style = HavamaniaTheme.typography.caption)
+                    }
+                    if (!hasValidOrigin) {
+                        Text("Kalkış noktasını önerilerden seçin veya alanı boş bırakın.",
+                            color = themeColors.error, style = HavamaniaTheme.typography.caption)
+                    }
 
                     if (!isFutureOrPresent) {
                         Spacer(Modifier.height(8.dp))
@@ -234,7 +260,7 @@ fun AddTravelPlanDialog(
                     }
 
                     HavamaniaPrimaryButton(
-                        text = if (editPlan != null) "DEĞİŞİKLİKLERİ KAYDET" else "SEYAHATİ OLUŞTUR",
+                        text = if (editingExisting) "DEĞİŞİKLİKLERİ KAYDET" else "SEYAHATİ OLUŞTUR",
                         enabled = isFormValid && !isProcessingState,
                         isLoading = isProcessingState,
                         onClick = {
@@ -243,20 +269,22 @@ fun AddTravelPlanDialog(
                                     city = if (destinationPick != null) destinationPick!!.name else destinationQuery,
                                     district = if (destinationPick != null) destinationPick!!.district else editPlan.district,
                                     originCity = if (originQuery.isBlank()) null else (originPick?.name ?: originQuery),
+                                    originDistrict = if (originQuery.isBlank()) null else if (originPick != null) originPick!!.district else editPlan.originDistrict,
                                     tripType = tripType,
                                     startDate = startDate,
                                     endDate = endDate,
                                     departureTime = departureTime,
                                     latitude = destinationPick?.latitude ?: editPlan.latitude,
                                     longitude = destinationPick?.longitude ?: editPlan.longitude,
-                                    originLatitude = originPick?.latitude ?: editPlan.originLatitude,
-                                    originLongitude = originPick?.longitude ?: editPlan.originLongitude
+                                    originLatitude = if (originQuery.isBlank()) null else originPick?.latitude ?: editPlan.originLatitude,
+                                    originLongitude = if (originQuery.isBlank()) null else originPick?.longitude ?: editPlan.originLongitude
                                 )
                             } else {
                                 TravelPlan(
                                     city = destinationPick!!.name,
                                     district = destinationPick!!.district,
                                     originCity = if (originQuery.isBlank()) null else originPick?.name,
+                                    originDistrict = if (originQuery.isBlank()) null else originPick?.district,
                                     tripType = tripType,
                                     startDate = startDate,
                                     endDate = endDate,
@@ -279,6 +307,30 @@ fun AddTravelPlanDialog(
 }
 
 @Composable
+internal fun TravelDateFields(
+    start: LocalDate, end: LocalDate, onStartChange: (LocalDate) -> Unit,
+    onEndChange: (LocalDate) -> Unit, formatter: DateTimeFormatter
+) {
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    val startContent: @Composable () -> Unit = {
+        Column { SectionLabel("BAŞLANGIÇ"); DateSelectionField(start, onStartChange, formatter) }
+    }
+    val endContent: @Composable () -> Unit = {
+        Column { SectionLabel("BİTİŞ"); DateSelectionField(end, onEndChange, formatter) }
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth < 400.dp || fontScale > 1.3f) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { startContent(); endContent() }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.weight(1f)) { startContent() }
+                Box(Modifier.weight(1f)) { endContent() }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LockedLocationCard(title: String, subtitle: String, onUnlock: () -> Unit) {
     val colors = HavamaniaTheme.colors
     Surface(
@@ -295,7 +347,7 @@ private fun LockedLocationCard(title: String, subtitle: String, onUnlock: () -> 
                 Text(subtitle, style = HavamaniaTheme.typography.bodySmall, color = colors.textMuted)
             }
             IconButton(onClick = onUnlock) {
-                Icon(Icons.Rounded.Edit, null, tint = colors.accent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Edit, "Konumu değiştir", tint = colors.accent, modifier = Modifier.size(20.dp))
             }
         }
     }

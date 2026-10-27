@@ -146,6 +146,11 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         val routeResult = _routeState.value as? RouteResult.Success ?: return
         val depMillis = _departureMillis.value ?: return
 
+        if (!TravelStatusResolver.isRouteWeatherEligible(plan)) {
+            _errorMessage.value = "Bu seyahatin güzergâh hava analizi henüz kullanılamıyor. Kalkış tarihini ve saatini kontrol edin."
+            return
+        }
+
         _isAnalyzing.value = true
         try {
             // 1. Denser sampling for thorough risk analysis
