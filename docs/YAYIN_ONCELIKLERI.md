@@ -17,7 +17,7 @@ Ana listedeki işaretler sayıldı: **59 geniş madde, 22 tamamlanan, 37 açık*
 | Hava / rota / kişiselleştirme | Önceki alt düzeltmeler korunuyor. 10 gün/48 saat, saat dilimleri, risk/eksik veri ve karşılaştırmalı kişiselleştirme matrisi açık. |
 | Üretim / mağaza / release | Avatar/Blaze, yasal metinler, Play Console, servis kapasitesi, imzalı R8 AAB, gerçek 16 KB ve Play iç test açık. |
 
-Son tamamlanmış Android JVM koşusu: **160 test, 0 hata**; debug derleme başarılı. Cihaz sonuçları tarih/senaryo bazında [yayın durum raporunda](YAYIN_DURUM_RAPORU.md); farklı turları toplayarak tam uygulama testi sonucu çıkarılmaz. Önceki backend/kurallar/PostgreSQL/lint sayıları bu devamda yeniden doğrulanmış sayılmaz. 27 Ekim Git gönderim kapsamı: `4c919c0` sonrasındaki form/taslak, süreç yeniden açılışı, yerel yükleme ve 48 saat düzeltmeleri ile testleri. Tarihsel tur sonlarındaki push notları o turun durumudur.
+Son tamamlanmış Android JVM koşusu: **183 test, 0 hata**; debug derleme başarılı. Cihaz sonuçları tarih/senaryo bazında [yayın durum raporunda](YAYIN_DURUM_RAPORU.md); farklı turları toplayarak tam uygulama testi sonucu çıkarılmaz. Önceki backend/kurallar/PostgreSQL/lint sayıları bu devamda yeniden doğrulanmış sayılmaz. 27 Ekim Git gönderim kapsamı: `4c919c0` sonrasındaki form/taslak, süreç yeniden açılışı, yerel yükleme ve 48 saat düzeltmeleri ile testleri. Tarihsel tur sonlarındaki push notları o turun durumudur.
 
 Mevcut yerel sıra: yükleme hata panelinin cihaz doğrulaması → hava verisinin 10 gün/48 saat sınırları ve eksik veri davranışı → kalan dayanıklılık/UI matrisleri. Canlı ortam ve mağaza bağımlılıkları açık tutulur. Ayrıntılı tarihsel kayıt aşağıdadır.
 
@@ -220,3 +220,5 @@ Kullanıcının 20 kategorili raporu KAPSAMLI_KALITE_DENETIMI_2026-10-22.md dosy
 
 ## Kalıcı silme devam kaydı
 Room 19→20, kullanıcı/kimlik bazlı bekleyen ve tamamlanmış silme işaretleri; yeniden açılışta yüklemeden önce silme; aynı süreçte paylaşılan işlem kilidi eklendi. Canlı kesinti/çok cihaz ve arka plan yürütmesi açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. 22/45 tamamlanan, 23 açık geniş madde.
+
+27 Ekim yeni Git gönderim kapsamı: `7599ac9` sonrasındaki eksik hava verisi, risk/sıcaklık özeti, saat dilimi/zaman etiketi, konum değişimi temizliği ve sürüm koşullu analiz yazıları ile testleri. Son JVM koşusu 183 test başarılı; tarihsel “Push yapılmadı” notları ilgili turun durumudur. Saat dilimi bilinmeyen ilk açılış ve takvim filtreleri açık kalır.

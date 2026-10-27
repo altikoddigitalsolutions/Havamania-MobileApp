@@ -6,7 +6,7 @@ Canlı ekran bulguları, düzeltmeler ve açık varyantlar: [Canlı görsel dene
 
 ## Son yerel doğrulama özeti — 27 Ekim
 
-- Android JVM: **160 test geçti**, debug APK derlendi. Sonraki cihaz koşuları bu dosyanın sonunda senaryolarıyla kayıtlıdır.
+- Android JVM: **183 test geçti**, debug APK derlendi. Sonraki cihaz koşuları bu dosyanın sonunda senaryolarıyla kayıtlıdır.
 - Gerçek Activity recreate: 2 izole test; ayrı debug sürecinin ölümü/yeniden açılışı: 1 betik senaryosu geçti. Üretim navigasyonu/Auth/Room uçtan uca süreç ölümü açık.
 - Önceki backend, PostgreSQL, Firebase kuralları ve lint sonuçları bu devamda yeniden koşulmadı.
 - Ana liste: **59 geniş madde, 22 tamamlanan, 37 açık**. Bu sayılar doğrulanmış hata adedi değildir. Yayın onayı, imzalı release ve canlı matrisler açık.
@@ -372,3 +372,53 @@ Doğrudan yazma durumu doğrulaması: testDebugUnitTest ve assembleDebug başar�
 - Dört regresyon testi: tam sınır/+1 nanosaniye/+59 dakika; şimdi/geçmiş kalkış; Berlin sonbahar DST 49 saat örneği; yaklaşan/devam eden/geçmiş/saatsiz seyahat uygunluğu.
 - Açık kapsam: 10 gün kuralı, eksik günlük veri/kod varsayımları, konum saat dilimi ve cihaz saat dilimi ayrımı; rota ekranının hiç etkileşim olmadan sınır anında otomatik yenilenmesi. Bu tur gerçek API/bildirim veya DST cihaz saati değiştirilmedi.
 - Doğrulama: ilk derlemede bildirim gün etiketi için Instant.format kullanımı tür hatası verdi; aynı andan LocalDateTime gün etiketi üretilerek düzeltildi. Son testDebugUnitTest ve assembleDebug başarılı, RouteWeatherWindowTest 4/4 geçti. Gerçek bildirim/API veya cihaz DST testi yapılmadı. 10 gün/eksik hava kodunun açık hava varsayımı sonraki düzeltmedir. Push yapılmadı.
+
+## 27 Ekim — Eksik günlük veri ve 10 günlük hazırlık sınırı
+- Seyahat snapshot üretimi ayrıldı: istenen kalan günlerin tamamı ve her gün için geçerli hava kodu/sıcaklık/yağış olasılığı/rüzgâr gerekir. Eksik kod 0 (açık hava) yapılmaz; NaN/Infinity, ters sıcaklık, yanlış olasılık, bozuk tarih, yinelenen tarih ve eksik günler reddedilir. Devam eden seyahatte geçmiş günler yerine bugünden itibaren kalan tarihler kullanılır.
+- Yetersiz veride yeni AI/konfor analizi üretilmez. Worker analiz hatasında veya kısmi/eski veri durumunda o seyahat için “güncel analiz hazır” bildirimi göndermez. Eski kayıtlar ve geçmiş snapshotlar otomatik değiştirilmez.
+- Analiz/geocoding catch bloklarında dış coroutine iptali yeniden yükseltilir; yerel timeout hata olarak işlenebilir.
+- Hazırlık uygunluğu ortak tarih kontrolüne taşındı; 10. gün dahil, 11. gün hariç, geçmiş ve ters tarih aralığı uygun değil. Engine, ViewModel ve günlük bildirim yolu bunu kullanıyor. Bu kural sağlayıcıdan istenen gün sayısıyla aynı kavram değildir: mevcut ana hava isteği 10, seyahat isteği 16 gün; bu tur sağlayıcı kapasitesi/ürün ufuk kararı değiştirilmedi.
+- Beş regresyon testi eklendi: eksik/bilinmeyen hava kodu, tam/eksik/yinelenen tarih kapsamı, geçersiz sıcaklık ve eksik risk alanları, yalnızca istenen günlerin özeti, 10/11 gün sınırı.
+- Açık kapsam: seyahat özetinde baskın hava kodunun nadir kritik riski gölgelemesi, konum/cihaz saat dilimi ayrımı, eski snapshotın ekrandaki tazelik işareti, sağlayıcı/ana ekran/asistan tahmin ufku ve gerçek API/bildirim entegrasyonu.
+- Sonuç: testDebugUnitTest ve assembleDebug başarılı; TripForecastSnapshotTest 5/5 geçti. Gerçek API/bildirim veya cihaz hava senaryosu bu tur çalıştırılmadı. Sıradaki seyahat özetindeki nadir kritik hava riskinin çoğunluk koduyla gizlenmesi. Push yapılmadı.
+
+## 27 Ekim — Nadir kritik hava kodlarının korunması
+- Seyahat özeti kodları sıklıktan önce risk grubuna göre sıralar; nadir fırtına, donan yağış, kar ve şiddetli sağanak güneşli çoğunluğun arkasında kalmaz. Sis/yağmur/çiseleme de açık hava çoğunluğunda kaybolmaz. Aynı grupta sıklık ve kodla deterministik sıralama yapılır.
+- Birden fazla risk etiketi tek conditionSummary içinde korunur; benzer kodların aynı etiketi tekrar etmesi önlenir. Bu etiketler cihazın gündüz/gecesinden bağımsızdır.
+- Asistan hava özetinde riskler tüm tonlarda açıkça aktarılır; kar/donan yağış için “harika/elverişli hava” gibi çelişkili olumlu metin engellenir. Kişiselleştirme risk özetini bastırmaz.
+- Beş yeni test geçti: tek fırtına günü; eşzamanlı kar/donan yağış/fırtına/sis; açık çoğunluğunda dikkat koşulları; tüm tonlarda kar/buzlanma; sağlayıcı sırasından bağımsızlık.
+
+## 27 Ekim — Tahmin metninde veri dayanağı
+- Sıcaklığın yüksek olması artık açık/güneşli veya yüksek UV kanıtı gibi anlatılmıyor. UV sayısı yalnızca geçerli UV verisi varsa aktarılıyor; kişiselleştirme kapalıyken de veri bildirimi korunuyor.
+- Geçmiş özetinde analiz kayıt sayısı yağışlı/güneşli gün adedi yapılmıyor (mevcut bilinmiyor işareti -1). Sıcaklık güneşli hava kanıtı sayılmıyor; eksik yağış olasılığı “düşük” diye sunulmuyor.
+- İki metin hatası düzeltildi: görünür yemek önerisindeki “and ardından” ve sıcak hava metnindeki “güneşer”; kullanılmayan tercih değişkeni kaldırıldı.
+- Açık kapsam: günlük sıcaklık uçları, rüzgâr/UV uçları ve sayısal konfor skorunun riskle birlikte görsel sunumu; konum saat dilimi ve eski snapshot tazeliği. Gerçek API/bildirim/cihaz görsel senaryosu bu tur çalıştırılmadı.
+- Sonuç: testDebugUnitTest ve assembleDebug başarılı; TripWeatherCodeSummaryTest 5/5, TravelAdviceEvidenceTest 3/3 geçti. Yeni risk/metin senaryoları JVM testleridir. Sıradaki günlük sıcaklık uçları ve konfor skorunun risk göstergesiyle karışmaması. Push yapılmadı.
+
+## 27 Ekim — Sıcaklık uçları ve konfor/risk sunumu
+- Yeni snapshotlar minTemp/maxTemp içinde dönem boyunca görülen en düşük/en yüksek tahmini tutar; günlük min/max orta değerlerinin dönem ortalaması yeni nullable averageTemperature alanına alınır. Konfor hesabı ve analiz ortalaması bu alanı kullanır; eski snapshotlar önceki hesapla okunur. Room JSON dönüştürücüsü yeni alanı destekler; tablo migration'ı gerekmez.
+- Eski snapshotlarda min/max ortalanmış olabileceğinden averageTemperature alanı olmayan kaydı gerçek dönem uçları diye etiketlemiyoruz. Yeni kayıtta <=0°C veya >30°C gibi mevcut ürün eşikleri metinde tam aralıkla korunur; ortalama olumluysa bile aralık gizlenmez.
+- Kart ve rehber yüksek skordan açık/güneşli/elverişli hava üretmez; snapshot risk metni veya kayıtlı analiz özeti gösterilir. Etiket KONFOR SKORU, değer n/100; risk varsa göstergenin yeşil olmasını engelleyen uyarı rengi kullanılır. Gösterge %200 yazıda büyür, metin sütunu genişlikle sınırlanır.
+- Üç JVM testi: tek soğuk/sıcak günün korunması ve önceki konfor ortalaması; eski/yeni JSON uyumu; yüksek skordan uydurma hava sonucu çıkarılmaması. Bir cihaz testi 320 dp/%200 yazıda 96/100 puanla fırtına uyarısının birlikte görünmesini kontrol eder.
+- Açık kapsam: gerçek sağlayıcı/Firestore round-trip, tüm tema/cihaz/kontrast/TalkBack matrisi, konum saat dilimi ve eski snapshot tazeliği; konfor skoru güvenlik onayı olarak sunulmaz. Tarih aralığı dışındaki günlerin etkisi önceki snapshot testinde ayrıdır.
+- Sonuç: testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. TripTemperatureExtremesTest 3/3; tablette yüksek konfor/fırtına kartı 1/1 geçti. Sonraki yerel inceleme konum saat dilimi ve snapshot tazeliği. Tüm hava doğruluğu matrisi kapanmadı. Push yapılmadı.
+
+## 27 Ekim — Snapshot zamanı ve sağlayıcı saat dilimi
+- ForecastSnapshot.generatedAt varsayılanı 0 oldu; timestamp taşımayan eski JSON kayıtları artık okunurken bugünün zamanını almaz. Yeni snapshot üretimi gerçek analiz anını açıkça yazar; sağlayıcının geçerli ZoneId'si nullable timezone alanında korunur.
+- API yanıtından sonra kalan seyahat günleri ve 10 gün kontrolü sağlayıcının konum tarihine göre yeniden hesaplanır. Geçersiz saat dilimi yeni snapshot için hata olur; sessiz UTC tahmini yapılmaz. Bu ek kontrol pencere dışındaki bir tarihi hazır analize dönüştürmez.
+- Kart ve rehber analiz tarih/saatini açık ZoneId ile gösterir. Önceki konum günündeki analiz, bilinmeyen zaman/saat dilimi ve cihaz saatinin ilerisindeki timestamp ayrı metin taşır. Saat dilimi bilinmiyorsa zaman açık UTC etiketiyle sunulur; yerel gün hakkında hüküm verilmez.
+- Bu etiket analiz üretim zamanıdır; sağlayıcının model yayın zamanı/gerçek veri yaşı değildir. Otomatik son kullanım/TTL kararı ve etkisiz açık ekranda zaman etiketinin periyodik yenilenmesi açık.
+- Önemli kalan kapsam: Engine API öncesi, ViewModel otomatik analiz ve kart kilidi ilk uygunluk kontrolleri hâlâ cihaz tarihini kullanıyor. Sağlayıcı konumuna göre tam ilk-açılış pencere düzeltmesi tamamlanmadı. Rota kalkış saat dilimi varış hava saat dilimiyle karıştırılmamalı; ayrıca ele alınacak.
+- Dört yerel test: Tokyo/Los Angeles aynı an farklı gün; konum tarihine göre kalan gün ve metadata; konum gece yarısında analiz etiketi; eski/bilinmeyen/gelecek timestamp. Gerçek API, cihaz saati veya tüm görsel matris bu tur çalıştırılmadı.
+- Sonuç: testDebugUnitTest ve assembleDebug başarılı. TripForecastTimeTest 4/4 geçti. Bu tur cihaz/API testi yapılmadı. Sıradaki API öncesi uygunluk/kart kilidi saat dilimi ve konum değişiminde eski snapshot bağlamının temizlenmesi. Push yapılmadı.
+
+## 27 Ekim — Konum/tarih değişimi ve geç analiz sürümü
+- Konum (ad/ilçe/koordinat), dönem veya seyahat türü değişince eski üretilmiş hava/AI metinleri, konfor skoru, snapshot/saat dilimi ve analiz geçmişi temizlenir; kullanıcının notu/puanı, kayıt kimliği ve sahibi korunur. Başlangıç/kalkış saati değişimi günlük varış tahminini korur, rota özetini temizler.
+- Aynı temizleme form çıktısında ve savePlan'ın mevcut yerel kayda karşı kontrolünde uygulanır. Form kaydında mevcut analiz işi iptal edilir; kaydetmeden sonra ikinci bir manuel analiz başlatmak yerine Room akışının otomatik analizi kullanılır.
+- DAO'ya işlem içinde UID/sürüm/silme işareti kontrolüyle analiz kaydı eklendi. Geç gelen eski analiz düzenlenmiş kaydı geri yazamaz; başarılı kayıt yeni revizyonu döndürür. Worker günlük/rota analizi de bu kontrolü kullanır. Bildirim sonrası takip alanı sürüm koşullu SQL ile güncellenir; tüm eski nesne tekrar yazılmaz.
+- Snapshot'ta geçerli konum saat dilimi varsa API öncesi Engine, ViewModel otomatik uygunluk, kart kilidi ve Worker uygunluğu bu konumun gününü kullanır. Saat dilimi henüz bilinmeyen ilk kayıt/legacy akışlarında cihaz günü fallback'i hâlâ açık kapsamdır. Takvim filtreleri/rota kalkış saat dilimi ve canlı bildirim yayımlama yarışı ayrıca doğrulanmalıdır.
+- Üç JVM testi: konum/dönem/tür değişiminde temizleme ve kullanıcı içeriği; kalkış/başlangıçta yalnızca rota temizliği; değişmeyen kayıt ve bilinen konum tarihi. Cihaz testi ayrı in-memory SQLite'ta eski analiz, UID, yeni analiz, koşullu bildirim takibi ve silme işareti sınırlarını kapsar.
+- Ek kontrol: Worker rota özeti yazısı da sürüm koşuluna taşındı; son revizyon bildirim takip güncellemesine aktarılır. Analiz iş haritasındaki form kaydı kaynaklı iptal Main.immediate üzerinde yapılır. Bu son kaynaklar için derleme/test paketi yeniden doğrulanıyor. Canlı sistem bildirimini yayınlama ile eşzamanlı düzenleme arasındaki uçtan uca yarış tamamen kapandı sayılmaz.
+- Sonuç: son kaynaklarla testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı. TripForecastInvalidationTest 3/3; Samsung üzerinde TripAnalysisRevisionTest 1/1 geçti (ayrı in-memory SQLite; ekran/hesap verisi kullanılmadı). Sıradaki bilinmeyen saat diliminde ilk uygunluk ve takvim filtrelerinin konum gününe uyumu. Canlı bildirim/API/Firestore veya tüm UI matrisi test edilmedi. Push yapılmadı.
+
+27 Ekim yeni Git gönderim kapsamı: `7599ac9` sonrasındaki eksik hava verisi, risk/sıcaklık özeti, saat dilimi/zaman etiketi, konum değişimi temizliği ve sürüm koşullu analiz yazıları ile testleri. Son JVM koşusu 183 test başarılı; tarihsel “Push yapılmadı” notları ilgili turun durumudur. Saat dilimi bilinmeyen ilk açılış ve takvim filtreleri açık kalır.

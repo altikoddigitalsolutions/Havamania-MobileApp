@@ -412,6 +412,17 @@ interface WeatherDao {
         if (plan.userId != "legacy") enqueueTripUpload(TripUploadRequest(plan.userId, plan.id, revision))
     }
 
+    @Transaction
+    suspend fun saveTripAnalysisIfVersion(plan: TravelPlanEntity, expectedVersion: Long): Long? {
+        val current = getTravelPlanByIdRaw(plan.id) ?: return null
+        if (current.userId != plan.userId || current.updatedAt != expectedVersion || hasTripDeletion(plan.userId, plan.id)) return null
+        saveLocalTrip(plan)
+        return getTravelPlanByIdRaw(plan.id)?.updatedAt
+    }
+
+    @Query("UPDATE travel_plans SET lastDailyNotificationDate = :date WHERE id = :id AND userId = :uid AND updatedAt = :revision")
+    suspend fun markTripDailyNotification(uid: String, id: String, revision: Long, date: String): Int
+
     @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id)")
     suspend fun hasTripDeletion(uid: String, id: String): Boolean
 

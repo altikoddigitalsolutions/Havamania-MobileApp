@@ -244,9 +244,9 @@ if (BuildConfig.DEBUG) {
         plans.forEach { plan ->
             if (plan.isArchived) return@forEach
 
-            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
-            val isWithinWindow = daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS
-            val isOver = todayVal.isAfter(plan.endDate)
+            val planToday = tripAnalysisToday(plan, todayVal)
+            val isWithinWindow = TravelStatusResolver.isTripAnalysisEligible(plan.startDate, plan.endDate, planToday)
+            val isOver = planToday.isAfter(plan.endDate)
 
             if (isOver) return@forEach
 
@@ -279,7 +279,7 @@ if (BuildConfig.DEBUG) {
 
                 if (updatedPlan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY && isNewAnalysis) {
                     val entity = updatedPlan.toEntity()
-                    dao.saveLocalTrip(entity)
+                    dao.saveTripAnalysisIfVersion(entity, plan.updatedAt) ?: return@launch
                     if (currentUid != "legacy") {
                         try {
                             uploadTrip(entity, currentUid)
@@ -289,9 +289,6 @@ if (BuildConfig.DEBUG) {
                                 Log.e(TAG, "Analysis Firestore sync failed", e)
 }
                         }
-                    }
-                    _plans.value = _plans.value.map {
-                        if (it.id == plan.id) updatedPlan else it
                     }
                     emitAccountMessage(currentUid, "Seyahat önerileri güncellendi.")
                 } else if (updatedPlan.weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) {
@@ -341,7 +338,6 @@ if (BuildConfig.DEBUG) {
                 emitAccountMessage(currentUid, it)
                 return@launch
             }
-            val todayVal = _today.value
             val now = LocalDateTime.now()
 
             val depTime = parseDepartureTime(plan.departureTime)
@@ -376,12 +372,17 @@ if (BuildConfig.DEBUG) {
                 return@launch
             }
 
-            val finalPlan = if (plan.userId == "legacy" && currentUid != "legacy") {
+            val prepared = if (plan.userId == "legacy" && currentUid != "legacy") {
                 plan.copy(userId = currentUid, city = cityNameTrimmed, updatedAt = System.currentTimeMillis())
             } else {
                 plan.copy(city = cityNameTrimmed, updatedAt = System.currentTimeMillis())
             }
 
+            val previous = existing.firstOrNull { it.id == prepared.id }?.toDomain()
+            val finalPlan = previous?.let { invalidateChangedTripForecast(it, prepared) } ?: prepared
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                analysisJobs.remove(finalPlan.id)?.cancel()
+            }
             val entity = finalPlan.toEntity()
             dao.saveLocalTrip(entity)
 
@@ -396,11 +397,7 @@ if (BuildConfig.DEBUG) {
                 }
             }
 
-            val daysUntil = ChronoUnit.DAYS.between(todayVal, plan.startDate).toInt()
-            val isUpcoming = !plan.startDate.isBefore(todayVal)
-            if (isUpcoming && daysUntil <= TRIP_ANALYSIS_WINDOW_DAYS) {
-                analyzeTravelWeather(finalPlan)
-            }
+
         }
     }
 

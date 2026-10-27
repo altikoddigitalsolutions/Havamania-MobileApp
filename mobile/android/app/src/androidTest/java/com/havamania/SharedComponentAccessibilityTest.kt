@@ -386,6 +386,29 @@ class SharedComponentAccessibilityTest {
         compose.onNodeWithText("Seyahatler yükleniyor…").assertDoesNotExist()
     }
 
+    @Test fun highComfortScoreDoesNotHideStormWarningAtLargeFont() {
+        val day = java.time.LocalDate.now().plusDays(2)
+        val plan = TravelPlan(city = "Ankara", startDate = day, endDate = day,
+            analyses = listOf(TravelWeatherAnalysis(travelScore = 96, averageTemperature = 24.0)),
+            lastForecastSnapshot = ForecastSnapshot(weatherCode = 95, conditionSummary = "Gök gürültülü fırtına",
+                minTemp = 15.0, maxTemp = 24.0, averageTemperature = 19.5))
+        compose.setContent {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 2f)) {
+                TestTheme {
+                    androidx.compose.foundation.layout.Column(Modifier.width(320.dp).verticalScroll(rememberScrollState())) {
+                        TravelPlanCard(plan, day.minusDays(2), onDelete = {}, onEdit = {}, onArchive = {},
+                            onUnarchive = {}, onShowDetail = {}, onReanalyze = {})
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("gök gürültülü fırtına", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("96/100").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Konfor skoru: sıcaklık, yağış ve rüzgâr.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Harika bir hava", substring = true).assertDoesNotExist()
+    }
+
     @Test fun sharedButtonPreservesTurkishSentenceCase() {
         compose.setContent { TestTheme { HavamaniaPrimaryButton("İzinleri yönet", {}) } }
         compose.onNodeWithText("İzinleri yönet").assertIsDisplayed()

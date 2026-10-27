@@ -52,9 +52,10 @@ class TravelNotificationWorker(
             if (!canPublishFor(currentUid)) return Result.success()
             if (plan.isArchived) return@forEach
 
-            val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
-            val isOngoing = !today.isBefore(plan.startDate) && !today.isAfter(plan.endDate)
-            val isUpcoming = daysUntil in 0..10
+            val planToday = tripAnalysisToday(plan, today)
+            val daysUntil = ChronoUnit.DAYS.between(planToday, plan.startDate).toInt()
+            val isOngoing = !planToday.isBefore(plan.startDate) && !planToday.isAfter(plan.endDate)
+            val isUpcoming = daysUntil >= 0 && TravelStatusResolver.isTripAnalysisEligible(plan.startDate, plan.endDate, planToday)
 
             // Sadece yaklaşan veya devam eden seyahatler için günlük özet gönder
             if (isUpcoming || isOngoing) {
@@ -72,15 +73,18 @@ class TravelNotificationWorker(
                     )
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    plan
+                    return@forEach
                 }
 
+                if (updatedPlan.weatherAnalysisStatus != TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY ||
+                    updatedPlan.lastForecastSnapshot == null) return@forEach
                 if (!canPublishFor(currentUid)) return Result.success()
 
                 // Analiz güncellendiyse kaydet
-                if (updatedPlan != plan) {
-                    weatherDao.insertTravelPlan(updatedPlan.toEntity())
-                }
+                val analysisRevision = if (updatedPlan != plan) {
+                    weatherDao.saveTripAnalysisIfVersion(updatedPlan.toEntity(), plan.updatedAt) ?: return@forEach
+                } else plan.updatedAt
+                if (weatherDao.getTravelPlanByIdRaw(plan.id)?.updatedAt != analysisRevision) return@forEach
 
                 val travelData = buildNotificationData(updatedPlan, daysUntil)
                 val (title, message) = generateNotificationText(updatedPlan, daysUntil, isOngoing, travelData)
@@ -107,10 +111,11 @@ class TravelNotificationWorker(
                 showSystemNotification(notificationItem)
 
                 // Güzergâh bildirimi kontrolü
-                val routeNotificationSent = checkAndSendRouteWeatherNotifications(updatedPlan, application)
+                var finalRevision = analysisRevision
+                checkAndSendRouteWeatherNotifications(updatedPlan.copy(updatedAt = analysisRevision), application) { finalRevision = it }
 
-                // Bildirim gönderildi işaretle
-                weatherDao.insertTravelPlan(updatedPlan.copy(lastDailyNotificationDate = dateStr).toEntity())
+                // Update only tracking metadata, never overwrite the whole trip with an old copy.
+                weatherDao.markTripDailyNotification(currentUid, plan.id, finalRevision, dateStr)
             }
         }
 
@@ -197,7 +202,7 @@ class TravelNotificationWorker(
         return title to message
     }
 
-    private suspend fun checkAndSendRouteWeatherNotifications(plan: TravelPlan, context: Context): Boolean {
+    private suspend fun checkAndSendRouteWeatherNotifications(plan: TravelPlan, context: Context, onRevision: (Long) -> Unit): Boolean {
         if (!canPublishFor(plan.userId)) return false
         val departureDateTime = plan.departureDateTime ?: return false
         val nowInstant = Instant.now()
@@ -256,13 +261,14 @@ class TravelNotificationWorker(
             actionLabel = "Tahmini Aç"
         )
 
-        notificationDao.insert(notificationItem)
-        showSystemNotification(notificationItem)
-
-        weatherDao.insertTravelPlan(plan.copy(
+        val revision = weatherDao.saveTripAnalysisIfVersion(plan.copy(
             routeWeatherSummary = summary,
             lastRouteAnalysisAt = System.currentTimeMillis()
-        ).toEntity())
+        ).toEntity(), plan.updatedAt) ?: return false
+        onRevision(revision)
+        if (!canPublishFor(plan.userId)) return false
+        notificationDao.insert(notificationItem)
+        showSystemNotification(notificationItem)
 
         return true
     }

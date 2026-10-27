@@ -165,11 +165,12 @@ fun TravelPlanCard(
     onToggleGuide: ((TravelPlan) -> Unit)? = null
 ) {
     val themeColors = HavamaniaTheme.colors
-    val tripStatus = TravelStatusResolver.getStatus(plan.startDate, plan.endDate, today)
+    val planToday = tripAnalysisToday(plan, today)
+    val tripStatus = TravelStatusResolver.getStatus(plan.startDate, plan.endDate, planToday)
     val isPast = tripStatus == TravelStatus.PAST
     val isOngoing = tripStatus == TravelStatus.ONGOING
 
-    val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate)
+    val daysUntil = ChronoUnit.DAYS.between(planToday, plan.startDate)
     val isLocked = !isPast && !isOngoing && daysUntil > TRIP_ANALYSIS_WINDOW_DAYS
 
     val isArchived = plan.isArchived
@@ -295,16 +296,19 @@ fun TravelPlanCard(
                     )
                 } else if (latestAnalysis != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        WeatherScoreIndicator(latestAnalysis.travelScore)
+                        WeatherScoreIndicator(latestAnalysis.travelScore, plan.lastForecastSnapshot?.let(::tripWeatherWarning) != null)
                         Spacer(Modifier.width(16.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                text = RecommendationEngine.getShortWeatherSummaryFromAnalysis(latestAnalysis),
+                                text = plan.lastForecastSnapshot?.let(::tripWeatherWarning)
+                                    ?: RecommendationEngine.getShortWeatherSummaryFromAnalysis(latestAnalysis),
                                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                 color = themeColors.textPrimary
                             )
+                            Text(tripForecastTimeLabel(plan.lastForecastSnapshot),
+                                style = HavamaniaTheme.typography.caption, color = themeColors.textMuted)
                             Text(
-                                text = "Yolculuk için beklenen hava kalitesi.",
+                                text = "Konfor skoru: sıcaklık, yağış ve rüzgâr.",
                                 style = HavamaniaTheme.typography.caption,
                                 color = themeColors.textMuted
                             )
@@ -430,17 +434,12 @@ if (BuildConfig.DEBUG) {
         // HAVA ÖZETİ Section
         SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
         Spacer(Modifier.height(6.dp))
-        val weatherSummaryText = if (analysis != null && avgTemp != null && rainRisk != null) {
-            when {
-                rainRisk > 40 -> "Seyahat gününde hava yağışlı ve bulutlu geçebilir. Ortalama sıcaklık ${avgTemp}°C civarında bekleniyor."
-                avgTemp > 28 -> "Hava sıcak ve güneşli olacak. Sıcaklık ${avgTemp}°C seviyelerinde seyredecek."
-                avgTemp < 10 -> "Hava serin ve soğuk geçecek. Ortalama sıcaklık ${avgTemp}°C."
-                else -> "Hava genel olarak ılıman ve seyahat için elverişli. Ortalama sıcaklık ${avgTemp}°C civarında."
-            }
-        } else {
-            "Bu seyahat için henüz detaylı hava analizi yapılmadı. Tahminler hazır olduğunda burada görünecek."
-        }
+        val weatherSummaryText = plan.lastForecastSnapshot?.let(::tripWeatherWarning)
+            ?: analysis?.let { RecommendationEngine.getShortWeatherSummaryFromAnalysis(it) }
+            ?: "Bu seyahat için henüz detaylı hava analizi yapılmadı. Tahminler hazır olduğunda burada görünecek."
         Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
+        Text(tripForecastTimeLabel(plan.lastForecastSnapshot), style = HavamaniaTheme.typography.caption,
+            color = themeColors.textMuted)
 
         Spacer(Modifier.height(16.dp))
 
@@ -449,7 +448,7 @@ if (BuildConfig.DEBUG) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            MetricTile("SEYAHAT SKORU", scoreText, Icons.Rounded.Star, themeColors.warning, Modifier.weight(1f))
+            MetricTile("KONFOR SKORU", scoreText, Icons.Rounded.Star, themeColors.warning, Modifier.weight(1f))
             MetricTile("ORT. SICAKLIK", avgTempText, Icons.Rounded.Thermostat, themeColors.accent, Modifier.weight(1f))
             MetricTile("YAĞIŞ RİSKİ", rainRiskText, Icons.Rounded.WaterDrop, if ((rainRisk ?: 0) > 50) themeColors.error else themeColors.success, Modifier.weight(1f))
         }
@@ -581,24 +580,26 @@ private fun TripStatusBadge(status: TravelStatus, isArchived: Boolean, isToday: 
 }
 
 @Composable
-private fun WeatherScoreIndicator(score: Int) {
+private fun WeatherScoreIndicator(score: Int, hasRisk: Boolean = false) {
     val color = when {
+        hasRisk -> HavamaniaTheme.colors.warning
         score >= 80 -> Color(0xFF10B981)
         score >= 60 -> Color(0xFFFBBF24)
         else -> Color(0xFFEF4444)
     }
 
-    Box(contentAlignment = Alignment.Center) {
+    val indicatorSize = 40.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
+    Box(modifier = Modifier.size(indicatorSize), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
             progress = { score / 100f },
-            modifier = Modifier.size(40.dp),
+            modifier = Modifier.fillMaxSize(),
             color = color,
             strokeWidth = 4.dp,
             trackColor = color.copy(alpha = 0.1f),
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
         )
         Text(
-            text = "%$score",
+            text = "$score/100",
             style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black, fontSize = 10.sp),
             color = color
         )

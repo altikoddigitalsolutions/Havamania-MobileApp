@@ -25,6 +25,9 @@ object TravelStatusResolver {
         }
     }
 
+    fun isTripAnalysisEligible(start: LocalDate, end: LocalDate, today: LocalDate = LocalDate.now()): Boolean =
+        !end.isBefore(start) && !end.isBefore(today) && !start.isAfter(today.plusDays(TRIP_ANALYSIS_WINDOW_DAYS.toLong()))
+
     fun isWithinRouteWeatherWindow(departure: Instant, now: Instant): Boolean {
         val untilDeparture = Duration.between(now, departure)
         return !untilDeparture.isNegative && untilDeparture <= Duration.ofHours(48)

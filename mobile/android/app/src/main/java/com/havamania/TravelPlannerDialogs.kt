@@ -295,7 +295,7 @@ internal fun TravelPlanForm(
                                     originLongitude = originPick?.longitude
                                 )
                             }
-                            onSave(finalPlan)
+                            onSave(editPlan?.let { invalidateChangedTripForecast(it, finalPlan) } ?: finalPlan)
                         }
                     )
 

@@ -19,7 +19,7 @@ object TravelAiHelper {
         "istanbul" to CityDetails(
             description = "İki kıtanın birleştiği büyüleyici metropol",
             visitPlace = "Galata Kulesi civarındaki ara sokakları keşfedip vapurla karşıya geçmeyi unutma. Boğaz havası her zaman iyi gelir.",
-            localDish = "Karaköy'de taze bir balık ekmek and ardından meşhur bir baklava harika bir ikili olur.",
+            localDish = "Karaköy'de taze bir balık ekmek ve ardından meşhur bir baklava harika bir ikili olur.",
             localAdvice = "Beşiktaş'tan Ortaköy'e uzanan sahil şeridinde sabah yürüyüşü yapıp boğazın keyfini çıkar.",
             cityTip = "Vapur seyahatlerini gün batımına denk getirirsen İstanbul'un o eşsiz silüeti eşliğinde harika fotoğraflar yakalayabilirsin.",
             friendGreeting = "İstanbul seni o bitmek bilmeyen enerjisi ve büyüleyici manzarasıyla bekliyor."
@@ -97,7 +97,6 @@ object TravelAiHelper {
 
         // Kişiselleştirme Katmanı (Personalization Layer)
         val interests = personalization?.selectedInterests ?: emptyList()
-        val prefs = personalization?.weatherPreferences ?: WeatherPreferences()
         val isPersonalizationActive = personalization?.personalizationEnabled ?: true
 
         val windowDays = TRIP_ANALYSIS_WINDOW_DAYS
@@ -141,7 +140,7 @@ object TravelAiHelper {
                         code >= 95 -> "Hava biraz huysuz, fırtına çıkabilir! Rüzgar $windText civarında, dışarı çıkarken iki kere düşün canım."
                         code >= 80 -> "Sağanak yağmur geliyor, ıslanmaya hazır ol! Şemsiyeni sakın unutma tatlım."
                         precip > 60 -> "Gökyüzü biraz ağlamaklı, $formattedPrecip yağmur ihtimali var. Hazırlıklı ol!"
-                        maxTemp > 30 -> "Mis gibi yaz havası! $maxTemp° ile güneşin tadını çıkarabilirsin, tam gezmelik."
+                        maxTemp > 30 -> "Sıcaklık $maxTemp°C civarında olacak. Güncel hava koşullarını takip etmeni öneririm."
                         maxTemp < 10 -> "Hava biraz sert, buz gibi olacak. Sıkı giyinmeyi unutma!"
                         else -> "Tam gezmelik harika bir hava! $maxTemp° derece ve $cond gökyüzü seni bekliyor."
                     }
@@ -151,7 +150,7 @@ object TravelAiHelper {
                         code >= 95 -> "İlgili tarihlerde fırtına riski ve $windText hızında rüzgar öngörülmektedir. Tedbirli olunması tavsiye edilir."
                         code >= 80 -> "Kuvvetli sağanak yağış beklenmektedir. Olumsuz hava şartlarına karşı hazırlıklı olunmalıdır."
                         precip > 60 -> "Hava durumunun yağışlı geçeceği (%$precip) tahmin edilmektedir. Şemsiye bulundurulması önerilir."
-                        maxTemp > 30 -> "Sıcaklık değerlerinin $maxTemp° seviyelerinde seyredeceği ve açık bir gökyüzü beklendiği bildirilmiştir."
+                        maxTemp > 30 -> "Sıcaklık değerlerinin $maxTemp°C seviyelerinde seyretmesi beklenmektedir."
                         maxTemp < 10 -> "Düşük sıcaklık değerleri ($maxTemp°) ve serin hava koşulları hakim olacaktır."
                         else -> "Meteorolojik koşullar seyahat için elverişli olup, sıcaklık $maxTemp° civarında seyrecektir."
                     }
@@ -161,7 +160,7 @@ object TravelAiHelper {
                         code >= 95 -> "Fırtına riski, rüzgar $windText. Dikkatli ol."
                         code >= 80 -> "Sağanak yağışlı. Şemsiye al."
                         precip > 60 -> "Yağmurlu (%$precip). Önlem al."
-                        maxTemp > 30 -> "Sıcak ve açık ($maxTemp°)."
+                        maxTemp > 30 -> "Sıcak ($maxTemp°C)."
                         maxTemp < 10 -> "Soğuk ($maxTemp°). Kalın giyin."
                         else -> "Hava uygun ($maxTemp°, $cond)."
                     }
@@ -171,7 +170,7 @@ object TravelAiHelper {
                         code >= 95 -> "Troposferik instabilite: Fırtına olasılığı mevcuttur. Rüzgar vektörü $windText seviyesindedir."
                         code >= 80 -> "Presipitasyon zirvesi: Kuvvetli sağanak geçişleri öngörülmektedir. Termal konfor düşük."
                         precip > 60 -> "Atmosferik nem doygunluğu: $formattedPrecip olasılıkla yağış beklenmektedir. Görüş mesafesi etkilenebilir."
-                        maxTemp > 30 -> "Termal anomali: $maxTemp° sıcaklık ve yüksek UV radyasyonu mevcuttur. Hidrasyon kritiktir."
+                        maxTemp > 30 -> "Tahmin edilen en yüksek sıcaklık $maxTemp°C. Güncel hava koşulları takip edilmelidir."
                         maxTemp < 10 -> "Hipotermi riski: Sıcaklık $maxTemp°C civarındadır. İzolasyon sağlayan katmanlar önerilir."
                         else -> "Meteorolojik stabilite: Hava $maxTemp°C ve $cond durumdadır. Aktivite parametreleri için ideal."
                     }
@@ -181,12 +180,19 @@ object TravelAiHelper {
                         code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Rüzgar $windText hızına ulaşabilir. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
                         code >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
                         precip > 60 -> "Gideceğin tarihlerde gökyüzü biraz ağlamaklı görünüyor, $formattedPrecip yağmur ihtimali var. Hava yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
-                        maxTemp > 30 -> "$maxTemp° ile güneşer cömert olduğu, pırıl pırıl bir gökyüzü seni bekliyor. Tam bir yaz havası var, yağmur riski ise yok denecek kadar az."
-                        maxTemp < 10 -> "Hava biraz sert ve serin olacak, termometreler $maxTemp° civarında gezecek. Güneş yüzünü pek göstermeyebilir, kalın bir şeyler almanı öneririm."
+                        maxTemp > 30 -> "Sıcaklığın $maxTemp°C civarında olması bekleniyor. Diğer hava koşullarını güncel tahminden takip edebilirsin."
+                        maxTemp < 10 -> "Hava biraz sert ve serin olacak, termometreler $maxTemp° civarında gezecek. Kalın bir şeyler almanı öneririm."
                         windSpeed > 30 -> "Hava oldukça rüzgarlı ($windText) olacak. $maxTemp° sıcaklıkta bile esinti üşütebilir, rüzgar kesici bir şeyler almanı öneririm."
                         else -> "Tam gezmelik, harika bir hava seni bekliyor! $maxTemp° derece ve $cond gökyüzü seyahatine ayrı bir keyif katacak. Yağmur ihtimali $formattedPrecip."
                     }
                 }
+            }
+
+            // A rare hazardous day must not turn into an optimistic summary in any tone.
+            tripWeatherWarning(forecastSnapshot)?.let { weatherBlock = it }
+
+            forecastSnapshot.uvIndex?.takeIf { it.isFinite() && it > 5 }?.let { uv ->
+                weatherBlock += " Tahminde UV indeksi: $uv. Güncel uyarıları kontrol edin."
             }
 
             // Kişiselleştirilmiş Ek Bilgi (Personalized Extra Info)
@@ -196,11 +202,6 @@ object TravelAiHelper {
                 }
                 if (interests.any { it.contains("bisiklet", true) || it.contains("kis_surusu", true) } && windSpeed > 20) {
                     weatherBlock += " 🚲 Rüzgar hızı sürüşü biraz zorlaştırabilir."
-                }
-                if (prefs.uvSensitive || interests.contains("uv_hassasiyeti")) {
-                    if ((forecastSnapshot.uvIndex ?: 0.0) > 5) {
-                        weatherBlock += " 🧴 UV seviyesi yüksek, cildini korumayı unutma."
-                    }
                 }
                 if (interests.contains("cocuklar_icin") && maxTemp < 15) {
                     weatherBlock += " 👶 Minik gezginler için yedek katmanlar almayı unutma."
@@ -235,7 +236,7 @@ object TravelAiHelper {
                 if (interests.any { it.contains("kamp", true) }) packingBlock += " ⛺ Uyku tulumu ve matını kontrol etmeyi unutma."
                 if (interests.any { it.contains("koşu", true) }) packingBlock += " 🏃 En rahat koşu ayakkabılarını yanına almayı ihmal etme."
                 if (interests.any { it.contains("fotoğraf", true) }) packingBlock += " 📷 Yedek piller ve lens temizleme kiti hayat kurtarabilir."
-                if (maxTemp - minTemp > 10) packingBlock += " 🧥 Gün içindeki sıcaklık farkı fazla, hırka almanı öneririm."
+                if (maxTemp - minTemp > 10) packingBlock += " 🧥 Seyahat dönemindeki sıcaklık farkı fazla, hırka almanı öneririm."
             }
         } else {
             packingBlock = "Rahat bir yürüyüş ayakkabısı ve her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
@@ -243,7 +244,7 @@ object TravelAiHelper {
 
         val tripAdvice = when(tripType) {
             TripType.BUSINESS -> "İş görüşmeleri arasında kısa bir yürüyüş yapmak enerjini tazeler. Zihnini boşaltmak için yerel bir kahve durağına uğra."
-            TripType.VACATION -> "Telefonunu bir kenara bırakıp anın tadını çıkar. Bazen sadece izlemek and dinlemek en güzel hatıradır."
+            TripType.VACATION -> "Telefonunu bir kenara bırakıp anın tadını çıkar. Bazen sadece izlemek ve dinlemek en güzel hatıradır."
             else -> cityInfo.cityTip
         }
 
@@ -354,16 +355,19 @@ object TravelAiHelper {
         val latestRecorded = historicalData.last()
         val avgT = latestRecorded.averageTemperature.toInt()
         val avgScore = latestRecorded.travelScore
-        val rainRisk = latestRecorded.rainRiskPercent ?: 0
+        val rainRisk = latestRecorded.rainRiskPercent
 
         val weatherDesc = when {
-            rainRisk > 40 -> "yağışlı ve bulutlu"
-            avgT > 28 -> "sıcak ve güneşli"
+            avgT > 28 -> "sıcak"
             avgT < 10 -> "serin ve soğuk"
-            else -> "ılıman ve elverişli"
+            else -> "ılıman"
         }
 
-        val rainText = if (rainRisk > 20) "Planlama tahmininde yağış riski %$rainRisk olarak öngörülüyordu." else "Planlama tahmininde yağış riski düşüktü."
+        val rainText = when {
+            rainRisk == null -> "Kaydedilen analizde yağış olasılığı bilgisi bulunmuyor."
+            rainRisk > 20 -> "Planlama tahmininde yağış riski %$rainRisk olarak öngörülüyordu."
+            else -> "Planlama tahmininde yağış riski düşüktü."
+        }
 
         val summaryText = when(tone) {
             AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Planlama sırasında kaydedilen hava tahmininde hava genel olarak $weatherDesc idi ve ortalama sıcaklık ${avgT}°C civarında öngörülüyordu. $rainText"
@@ -375,8 +379,8 @@ object TravelAiHelper {
             averageTemp = avgT,
             minTemp = historicalData.map { it.averageTemperature }.minOrNull()?.toInt() ?: avgT,
             maxTemp = historicalData.map { it.averageTemperature }.maxOrNull()?.toInt() ?: avgT,
-            rainyDays = historicalData.count { (it.rainRiskPercent ?: 0) > 50 },
-            sunnyDays = historicalData.count { (it.rainRiskPercent ?: 100) < 20 },
+            rainyDays = -1,
+            sunnyDays = -1,
             cloudyDays = -1,
             riskDayText = "Arşivlenen analiz verileri kullanılıyor.",
             comfortScore = avgScore,
