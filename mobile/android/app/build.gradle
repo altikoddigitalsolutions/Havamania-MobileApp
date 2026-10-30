@@ -22,6 +22,7 @@ android {
     namespace "com.havamania"
 
     defaultConfig {
+        buildConfigField "boolean", "FCM_TOKEN_SYNC_ENABLED", "false"
         applicationId "com.havamania"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion

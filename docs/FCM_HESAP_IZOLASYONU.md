@@ -65,3 +65,29 @@ DELETE aynı metadata ve daha yeni revision ile son kullanıcıya bağlı unboun
 Kapsam/sınırlar: revision token hash başınadır; farklı/rotated tokenların aynı kuruluma ait eski kayıtlarını toplu emekliye ayırma ve geçersiz FCM token temizliği hâlâ açık. Farklı kurulumla aynı token için otomatik takeover yapılmaz; yeniden kurulum/kurtarma akışı doğrulanmalıdır. İstemci offline logout sonrası eski auth olmadan sunucuda unbind yapamaz; yerel alıcı çıkışta içerik göstermez fakat server/SDK token iptali ve retry politikası ayrıca tamamlanmalıdır.
 
 Sıradaki: gerçek Retrofit gateway ve WorkManager adaptörü, 401 refresh/409 conflict/429 backoff ve makbuz doğrulaması. Bunlar bitene kadar FCM auto-init ve FCM_OWNER_PROTOCOL_ENABLED kapalı kalır. Üretimde migration uygulanmadı ve gerçek token kaydı/gönderim yapılmadı.
+
+## 30 Ekim — Android Retrofit gönderim ve makbuz kontrolü
+
+BackendFcmService ile POST v1/devices/push-token sözleşmesi eklendi; mevcut Retrofit servis/factory bu arayüzü de sağlar. İstek platform=android, owner_protocol=1, token, installation_id ve revision gönderir. registerFcmTokenSnapshot fonksiyonu HTTP öncesi/sonrası oturum kontrolü yapar; yalnızca 200 ve birebir eşleşen kullanıcı, platform, token, kurulum, revision, protokol makbuzunu kabul eder. Boş kayıt kimliği reddedilir. Authorization ve token alanları nesne toString çıktısına yazılmaz. Coroutine iptali yutulmaz.
+
+Beklenen backend kullanıcı kimliği çağıran tarafından güvenilir mevcut oturumdan sağlanmalıdır. Fonksiyon kendisi yerel kuyruğu acknowledge etmez; syncPendingFcmToken'ın son UID/epoch/snapshot kontrolü korunmalıdır. Bu katman henüz üretim kuyruğuna veya WorkManager'a bağlanmadı. 401 refresh, 409 conflict ve 429 backoff kararları worker aşamasında ayrıca bağlanmalıdır; bu fonksiyon 200 dışı sonuçları başarı saymaz. Ağ hataları çağırana iletilir; kalıcı kuyruk çekirdeği bunları retry olarak işler.
+
+FCM auto-init ve FCM_OWNER_PROTOCOL_ENABLED hâlâ kapalı. Gerçek token alma/kayıt/gönderim yapılmadı; canlı FCM ve cihaz hesap geçişi matrisi hâlâ açık.
+
+Doğrulama: 4 yeni test dahil 240 Android JVM testi geçti (0 hata/başarısızlık); debug APK derlendi. Yeni testler eşleşen makbuz, 7 uyumsuz makbuz varyantı, HTTP öncesi/sırasında hesap değişimi ve iptali kapsar. HTTP bu testlerde sahtedir; cihaz/gerçek servis testi yapılmadı. Son değişiklikler push edilmedi.
+
+## 30 Ekim — WorkManager ve HTTP hata politikası (etkinleştirme kapalı)
+
+FcmTokenSyncWorker, uygulamanın tek journal nesnesini kullanarak kayıt gönderimini syncPendingFcmToken çekirdeğine bağlar. UID/epoch/silme ve snapshot kontrolü auth öncesinde/sonrasında ve makbuzdan sonra korunur. Beklenen backend UUID mevcut Firebase project/UID için sunucunun UUIDv5 sözleşmesinden türetilir; proje/kimlik sözleşmesinin canlı doğrulaması hâlâ gereklidir. İş verisine token veya auth bilgisi yazılmaz.
+
+- 401: aynı snapshot ile yalnızca bir force-refresh ve yeniden gönderim; hesap değişirse durur. İkinci 401, 403, 409 ve diğer kalıcı 4xx durumları pending kaydı acknowledge etmeden mevcut iş denemesini bitirir.
+- 429: saniye türünde Retry-After 1..86400 kabul edilir, eksik/geçersiz değerde 60 saniye. Sonraki gönderimin alt zaman sınırı journal'a kalıcı yazılır; yeniden açılış bu sınırı kaldırmaz. WorkManager exponential backoff nedeniyle daha geç çalışabilir.
+- Ağ/408/5xx: bağlantı koşullu WorkManager exponential retry (30 saniyeden başlar). İptal yutulmaz. Hatalı makbuz veya decode başarısı sayılmaz.
+- Tekil iş zincirinde APPEND_OR_REPLACE kullanılır; çalışan işin sonuna gelen yeni revision KEEP yüzünden kaybolmaz. Kalıcı HTTP hatasında worker Result.success döndürür ancak kayıt başarılı sayılmaz/acknowledge edilmez; Result.failure ile daha önce eklenmiş yeni hesap işlerinin iptal edilmesi önlenir.
+- Journal defer kaydı revision artırmaz; yeni UID/token revision'u eski bekleme süresini temizler. Eski snapshot yeni kaydın bekleme süresini veya ack durumunu değiştiremez.
+
+BuildConfig.FCM_TOKEN_SYNC_ENABLED=false varsayılanı hem planlama hem worker girişini kapatır. Manifest auto-init ve backend server flag de kapalı kalır. Hiçbir gerçek token isteği, kayıt veya FCM gönderimi yapılmadı.
+
+Açık yayın işleri: gerçek Worker/process-death/offline cihaz testi, sunucu kimlik eşlemesinin uçtan uca doğrulanması, ilk token alma ve rotation/reinstall kurtarma, çıkışta eski server kaydının unbind/iptali, conflict durumunun kullanıcı/operatör kurtarma akışı ve gerçek staging FCM teslimi. Bu çalışma bu engelleri kapatmaz.
+
+Son doğrulama: 6 yeni gateway/journal testi dahil 246 Android JVM testi geçti, debug APK derlendi; üretilen BuildConfig'te FCM_TOKEN_SYNC_ENABLED=false doğrulandı. Testlerde sahte HTTP/kimlik sağlayıcısı ve bellek diski kullanıldı. Gerçek CoroutineWorker/WorkManager süreç ölümü, auth ve AtomicFile cihaz testi henüz yapılmadı. Mevcut SDK/deprecation derleme uyarıları sürüyor; diff kontrolü temiz. Son değişiklikler push edilmedi.

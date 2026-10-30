@@ -5,6 +5,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from app.core.config import get_settings
+from app.core.telemetry_privacy import safe_error_event
 
 REQUEST_LATENCY = Histogram('request_latency_seconds', 'HTTP request latency', ['path', 'method'])
 REQUEST_COUNT = Counter('request_count_total', 'HTTP request count', ['path', 'method', 'status'])
@@ -15,7 +16,14 @@ CHATBOT_TIMEOUTS = Counter('chatbot_timeouts_total', 'Chatbot timeout count')
 def init_sentry() -> None:
     settings = get_settings()
     if settings.sentry_dsn_backend:
-        sentry_sdk.init(dsn=settings.sentry_dsn_backend, integrations=[FastApiIntegration()])
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn_backend,
+            integrations=[FastApiIntegration()],
+            send_default_pii=False,
+            max_request_body_size="never",
+            include_local_variables=False,
+            before_send=safe_error_event,
+        )
 
 
 def observe_request(path: str, method: str, status: int, elapsed_seconds: float) -> None:

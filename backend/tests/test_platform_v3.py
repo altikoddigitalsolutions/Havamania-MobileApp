@@ -16,6 +16,34 @@ from sqlalchemy import select
 from test_chatbot import _auth_header
 
 
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"current": {"temp_c": float("nan")}},
+        {"current": {"temp_c": float("inf")}},
+        {"timezone": "PRIVATE_INVALID_TIMEZONE"},
+        {"observed_at": "PRIVATE_INVALID_TIMESTAMP"},
+    ],
+)
+def test_invalid_weather_api_returns_safe_validation_without_platform_call(
+    client, connected_bridge, invalid
+):
+    headers, calls, _ = connected_bridge
+    payload = {"question": "PRIVATE_QUESTION", "context": {"weather_data": weather() | invalid}}
+    response = client.post(
+        "/v1/chatbot/ask",
+        headers={**headers, "Content-Type": "application/json"},
+        content=json.dumps(payload),
+    )
+    assert response.status_code == 422, response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert "PRIVATE_" not in response.text
+    errors = response.json()["detail"]
+    assert errors and all(set(error) <= {"loc", "msg", "type"} for error in errors)
+    assert calls == []
+    assert client.get("/v1/chatbot/usage", headers=headers).json()["used_messages_today"] == 0
+
+
 @pytest.mark.parametrize("completed", [False, True])
 @pytest.mark.parametrize("seconds_remaining", [-1, 0, 1])
 def test_replay_cleanup_respects_owner_and_exact_expiration(

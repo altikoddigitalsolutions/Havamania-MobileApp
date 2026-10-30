@@ -65,6 +65,12 @@ class AssistantWeatherData(WeatherPart):
             r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})", value
         ):
             raise ValueError("Timestamp must include an offset")
+        # fromisoformat normalizes offsets such as +03:99 into +04:39.
+        # Reject malformed clock components instead of silently changing the instant.
+        if not value.endswith("Z"):
+            offset = value[-6:]
+            if int(offset[1:3]) > 23 or int(offset[4:6]) > 59:
+                raise ValueError("Timestamp offset is invalid")
         datetime.fromisoformat(value)
         return value
 
@@ -85,6 +91,9 @@ class AssistantWeatherData(WeatherPart):
             if any(b - a != timedelta(days=1) for a, b in itertools.pairwise(days)):
                 raise ValueError("Forecast dates must be unique and consecutive")
             self.forecast = ordered
-        if len(json.dumps(self.model_dump(exclude_none=True), ensure_ascii=False).encode()) > 4096:
+        encoded = json.dumps(
+            self.model_dump(exclude_none=True), ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        if len(encoded) > 4096:
             raise ValueError("Weather snapshot exceeds 4096 bytes")
         return self

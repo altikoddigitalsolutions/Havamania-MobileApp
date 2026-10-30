@@ -62,3 +62,51 @@ Başarısız kaydın platform_payload alanı boşken güncel gövdeden yeniden i
 ## Ek doğrulama — fiziksel temizleme sınırı
 
 Tekrar kaydının tam replay_until anındaki geçersizlik ve temizleme koşulları eşitlendi (<=). Altı yeni senaryo: başarılı/yarım kalmış kayıtlar, süreden bir saniye önce/tam bitişte/bir saniye sonra. Başka owner ile temizleme veriyi değiştirmez; süresi dolmamış veri korunur. Süresi dolan gövde/yanıt temizlenirken kimlik ve parmak izi korunur. İlgili regresyon paketi 47/47, Ruff başarılı. Sunucuda periyodik temizleme görevinin kurulması hâlâ açık; testler bunun yerine geçmez.
+
+## Ek düzeltme — hava verisinde UTF-8 boyut sınırı
+
+Hava snapshot boyutu boşluksuz JSON'un UTF-8 bayt sayısıyla ölçülür. Önceki json.dumps varsayılan boşlukları sınıra dahil ederek, geçerli bir 4096 baytlık nesneyi gereksiz yere reddedebiliyordu. Null ve bilinmeyen alanlar ayıklandıktan sonra ölçüm yapılır. Yeni regresyonlar Türkçe/çok baytlı karakterlerle 4095 ve 4096 baytın kabulünü, 4097 baytın reddini ve null/bilinmeyen alanların bütçeye katılmamasını kapsar. Platformun canlı şema uygulaması ayrıca doğrulanmalıdır.
+
+Bu adımın doğrulaması: yeni 4 boyut testi ve platform v3 regresyonları dahil 40/40 geçti; Ruff başarılı. Android ve migration değişmedi; canlı çağrı yapılmadı.
+
+## Ek düzeltme — geçersiz saat farkını normalleştirmeme
+
+Python datetime.fromisoformat, +03:99 gibi geçersiz saat farklarını +04:39 olarak normalleştirebilir. Şemaya saat/dakika fark bileşenleri için açık kontrol eklendi; bu girdiler artık reddedilir. Geçerli Z, negatif farklar ve +05:45 gibi çeyrek saat farkları korunur; saniye kesri metni değiştirilmez. Bu düzeltme mevcut 4096 bayt sınırı çalışmasıyla aynı yerel değişiklik grubundadır. Geliştirme başlatma komutlarında değişiklik yapılmadı.
+
+Son doğrulama: 10 yeni saat farkı senaryosu ve önceki regresyonlar dahil 50/50 test geçti. Ruff/diff kontrolü başarılı; canlı çağrı ve push yapılmadı.
+
+## Ek düzeltme — güvenli istek doğrulama hataları
+
+API testlerinde NaN/Infinity hava değerlerinin FastAPI'nin varsayılan doğrulama cevabında JSON'a çevrilememesi ve diğer hatalarda giriş değerlerinin geri yansıtılması yeniden üretildi (4 test düzeltme öncesi başarısız). Asistan yollarına özel RequestValidationError handler eklendi: 422 cevabı yalnızca alan yolu, hata türü ve sabit mesaj içerir; input ve ctx serileştirilmez. no-store korunur. Diğer API yolları mevcut FastAPI handler'ına devredilir. Geçersiz istekte platform çağrısı yapılmaması ve kotanın değişmemesi regresyon kapsamındadır.
+
+Doğrulama: 4 yeni API regresyonu dahil ilgili paket 65/65 geçti; Ruff/diff kontrolü başarılı. Test HTTP'si sahte, canlı çağrı yapılmadı. Bu düzeltme ve son hava boyutu/saat kontrolleri henüz push edilmedi.
+
+## Ek düzeltme — köprü hatasının traceback gizliliği
+
+Sohbet köprüsünün güvenli BridgeError mesajı, alttaki transport/Pydantic hatasına açık exception chain ile bağlıydı. Bağlantı, timeout, okuma ve yanıt doğrulama hataları artık `from None` ile standart traceback'te alttaki özel detayları göstermez. Silme köprüsündeki mevcut davranışla tutarlıdır. Güvenli hata kodları, timeout sayacı ve yalnızca connect hatasındaki tek tekrar korunur.
+
+5 yeni senaryo dahil köprü regresyonları 39/39 geçti. Testler standart traceback metninde özel sentinel değerinin görünmediğini, cause zincirinin bastırıldığını ve çağrı sayılarını doğrular. Ruff/diff kontrolü başarılı. Bu, ham exception context'ini bellekten silmez; Sentry/altyapı tarafındaki body, local-variable ve log saklama ayarlarının canlı denetimi ayrıca açıktır. Gerçek servis çağrısı ve push yapılmadı.
+
+## Ek düzeltme — backend Sentry hata raporu gizliliği
+
+Sentry kurulumu artık send_default_pii=False, max_request_body_size=never ve include_local_variables=False kullanır. before_send filtresi hata raporunda request, user, breadcrumbs, extra, contexts, tags, logentry ve serbest mesaj alanlarını taşımaz. Exception değeri sabit mesajla değiştirilir; hata türü, modülü ve filename/function/lineno gibi stack konumu korunur. Frame vars ve kaynak bağlamı çıkarılır. Böylece rapor daha az ayrıntılıdır; teşhis hata türü ve kod konumuna dayanır.
+
+5 yeni test dahil ilgili gizlilik/köprü paketi 44/44 geçti. Kurulu Sentry SDK ile gerçek envelope üretimi de bellek içi Transport üzerinden doğrulandı; dış servis veya gerçek DSN kullanılmadı. DSN yokken SDK başlatılmaz. Girdi nesnesinin değişmediği de doğrulandı. Ruff/diff kontrolü başarılı.
+
+Bu koruma backend hata raporları içindir. Canlı Sentry projesi saklama/erişim ayarları, proxy/uygulama stdout logları ve ayrıca etkinleştirilebilecek transaction/profiling kanalları henüz uçtan uca denetlenmedi. Mevcut eski raporları silmez; dağıtım ve canlı doğrulama açıktır. Son yerel değişiklikler push edilmedi.
+
+## Ek kontrol — backend metrikleri
+
+Dinamik URL değerlerinin metrik etiketine girmemesi mevcut rota şablonu yaklaşımıyla korunuyor. Yeni düzeltme: standart dışı HTTP yöntemleri tek OTHER etiketine toplanır; rastgele yöntem isimleri ayrı Prometheus zaman serileri üretmez. Beklenmeyen Exception durumunda gecikme ve 500 sonucu bir kez kaydedilir, hata normal handler'a yeniden iletilir. İptal gibi BaseException durumları yakalanmaz.
+
+3 yeni middleware testi; dinamik/eksik yollar, 20 farklı özel yöntem ve 500 senaryosunu kapsar. Metrik endpoint erişimi ve Sentry testleriyle birlikte 10/10 geçti. Ruff başarılı. Ölçüm middleware'i testlerinde gerçek servis yoktur; stdout/proxy erişim loglarının canlı denetimi bu kontrolle kapanmaz. Son yerel değişiklikler push edilmedi.
+
+## Ek düzeltme — takip kimliği ve genel 500 logu
+
+X-Request-ID yalnızca tek başlık ve standart 36 karakter UUID ise korunur (büyük harf normalize edilir). Boş/uzun/kontrol karakterli/tekrarlı/serbest metin başlıkları yeni UUID ile değiştirilir. UUID olmayan eski serbest metin takip kimlikleri artık aynen yansıtılmaz; bu kimlik, asistanın request_id tekrar anahtarından ayrıdır.
+
+Genel 500 handler'ı artık ham exception mesajı veya zinciri loglamaz. Hata türü, takip kimliği, rota şablonu ve dosya adı/satır/fonksiyon bilgisi korunur; ham dinamik URL ve hata girdileri yazılmaz. 500 cevabı no-store ve mevcut takip kimliği başlığı içerir. Testteki özel exception/URL değerleri loga taşınmadı. Bu azaltılmış hata ayrıntısı, önceki Sentry filtresiyle tutarlıdır; ayrı altyapı/access loglarını değiştirmez.
+
+7 yeni takip testi + metrik/Sentry regresyonları 15/15 geçti. Tam backend koşusunun sonucu ayrıca kaydedilecektir. Canlı servis çağrısı yok; son yerel değişiklikler push edilmedi.
+
+Son tam backend doğrulaması: 247 geçti, ayrı PostgreSQL ortamı isteyen 13 test atlandı; 6 bağımlılık deprecation uyarısı kaldı. Bu adımda PostgreSQL audit yeniden çalıştırılmadı. Ruff ve diff kontrolü başarılı. Son yerel kaynak değişiklikleri push edilmedi.

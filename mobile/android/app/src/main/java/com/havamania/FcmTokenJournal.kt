@@ -13,7 +13,8 @@ internal interface FcmJournalStorage {
 
 @Serializable
 internal data class FcmTokenRegistration(val installationId: String, val revision: Long = 0,
-    val ownerUid: String? = null, val token: String? = null, val pending: Boolean = false) {
+    val ownerUid: String? = null, val token: String? = null, val pending: Boolean = false,
+    val retryNotBeforeEpochSeconds: Long = 0) {
     override fun toString() = "FcmTokenRegistration(revision=$revision, pending=$pending)"
 }
 
@@ -30,6 +31,7 @@ internal class FcmTokenJournal(private val storage: FcmJournalStorage) {
         require(record.ownerUid == null || !record.ownerUid!!.isBlank() && record.ownerUid != "legacy" && record.ownerUid!!.length <= 128)
         require(record.token?.none(Char::isISOControl) != false)
         require(!record.pending || (!record.ownerUid.isNullOrBlank() && record.token != null))
+        require(record.retryNotBeforeEpochSeconds >= 0)
     }
 
     @Synchronized fun snapshot(): FcmTokenRegistration = record
@@ -40,16 +42,23 @@ internal class FcmTokenJournal(private val storage: FcmJournalStorage) {
         if (record.ownerUid == ownerUid && record.token == token) return record
         check(record.revision < 9_007_199_254_740_991L)
         return commit(record.copy(revision = record.revision + 1, ownerUid = ownerUid, token = token,
-            pending = ownerUid != null && token != null))
+            pending = ownerUid != null && token != null, retryNotBeforeEpochSeconds = 0))
     }
 
     @Synchronized fun acknowledge(sent: FcmTokenRegistration): Boolean {
         if (record != sent || !record.pending) return false
-        commit(record.copy(pending = false))
+        commit(record.copy(pending = false, retryNotBeforeEpochSeconds = 0))
         return true
     }
 
     @Synchronized fun clearAccount(): FcmTokenRegistration = update(null, null)
+
+    @Synchronized fun deferRetry(sent: FcmTokenRegistration, nowSeconds: Long, delaySeconds: Long): Boolean {
+        require(nowSeconds >= 0 && delaySeconds in 1..86400 && nowSeconds <= Long.MAX_VALUE - delaySeconds)
+        if (record != sent || !record.pending) return false
+        commit(record.copy(retryNotBeforeEpochSeconds = nowSeconds + delaySeconds))
+        return true
+    }
 
     private fun commit(next: FcmTokenRegistration): FcmTokenRegistration {
         storage.write(json.encodeToString(next))

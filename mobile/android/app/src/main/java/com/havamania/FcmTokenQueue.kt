@@ -7,19 +7,29 @@ import com.google.firebase.auth.FirebaseAuth
 internal object FcmTokenQueue {
     private var journal: FcmTokenJournal? = null
     private fun journal(app: Application) = journal ?: FcmTokenJournal(AtomicFcmJournalStorage(app)).also { journal = it }
+    @Synchronized fun journalForSync(app: Application) = journal(app)
+
+    private fun schedule(app: Application, queue: FcmTokenJournal) {
+        if (queue.snapshot().pending) FcmTokenSyncWorker.schedule(app) else FcmTokenSyncWorker.cancel(app)
+    }
 
     @Synchronized fun reconcile(app: Application) {
         val queue = journal(app)
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null || AccountDeletionManager.getInstance(app).state.value.pending) queue.clearAccount()
         else queue.update(uid, queue.snapshot().token)
+        schedule(app, queue)
     }
 
     @Synchronized fun recordToken(app: Application, token: String) {
         val queue = journal(app)
         if (AccountDeletionManager.getInstance(app).state.value.pending) queue.clearAccount()
         else queue.update(FirebaseAuth.getInstance().currentUser?.uid, token)
+        schedule(app, queue)
     }
 
-    @Synchronized fun clearAccount(app: Application) { journal(app).clearAccount() }
+    @Synchronized fun clearAccount(app: Application) {
+        journal(app).clearAccount()
+        FcmTokenSyncWorker.cancel(app)
+    }
 }

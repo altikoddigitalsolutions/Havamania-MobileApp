@@ -70,21 +70,21 @@ class ChatbotBridgeClient:
                                   follow_redirects=False) as client:
                     response = client.post(f"{self.base_url}/ask", json=payload,
                                            headers={"Authorization": f"Bearer {self._api_key}"})
-            except httpx.ConnectError as exc:
+            except httpx.ConnectError:
                 if attempt == 0:
                     continue
-                raise BridgeError(503, "unavailable", "Asistana şu anda ulaşılamıyor.") from exc
-            except httpx.TimeoutException as exc:
+                raise BridgeError(503, "unavailable", "Asistana şu anda ulaşılamıyor.") from None
+            except httpx.TimeoutException:
                 mark_chatbot_timeout()
-                raise BridgeError(504, "timeout", "Asistan zamanında cevap veremedi.") from exc
-            except httpx.RequestError as exc:
-                raise BridgeError(503, "unavailable", "Asistana şu anda ulaşılamıyor.") from exc
+                raise BridgeError(504, "timeout", "Asistan zamanında cevap veremedi.") from None
+            except httpx.RequestError:
+                raise BridgeError(503, "unavailable", "Asistana şu anda ulaşılamıyor.") from None
             if response.status_code != 200:
                 self._raise_error(response)
             try:
                 reply = PlatformChatbotReply.model_validate(response.json())
-            except (ValueError, ValidationError) as exc:
-                raise BridgeError(502, "invalid_response", "Asistandan geçerli yanıt alınamadı.") from exc
+            except (ValueError, ValidationError):
+                raise BridgeError(502, "invalid_response", "Asistandan geçerli yanıt alınamadı.") from None
             conversation = metadata.get("conversation_id")
             if conversation and str(reply.conversation_id) != conversation:
                 raise BridgeError(502, "invalid_response", "Asistan sohbet kimliği doğrulanamadı.")

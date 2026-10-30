@@ -39,7 +39,7 @@ data class BackendChatbotAskResponse(
     val is_premium: Boolean
 )
 
-interface BackendChatbotService {
+interface BackendChatbotService : BackendFcmService {
     @GET("v1/chatbot/consent")
     suspend fun consent(@Header("Authorization") authorization: String): Response<AssistantConsentDocument>
 
