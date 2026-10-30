@@ -1,8 +1,9 @@
 import json
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine.url import make_url
 
@@ -21,7 +22,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
     weather_provider: str = "open_meteo"
     chatbot_base_url: str = "http://localhost:9000"
-    chatbot_timeout_seconds: int = 15
+    chatbot_api_key: SecretStr | None = Field(None, repr=False)
+    chatbot_timeout_seconds: int = Field(50, ge=1, le=60)
+    assistant_consent_version: int | None = Field(None, ge=1)
+    assistant_consent_text: str | None = None
+    assistant_health_consent_version: int | None = Field(None, ge=1)
+    assistant_health_consent_text: str | None = None
     chatbot_free_daily_limit: int = 10
     chatbot_premium_daily_limit: int = 100
     metrics_secret: str = "change-me"
@@ -34,7 +40,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
+        hide_input_in_errors=True
     )
 
     @field_validator("secret_key")
@@ -68,18 +75,26 @@ class Settings(BaseSettings):
 
     @field_validator("chatbot_base_url")
     @classmethod
-    def check_chatbot_base_url(cls, v: str, info: Any) -> str:
+    def check_chatbot_base_url(cls, value: str, info: Any) -> str:
+        parsed = urlsplit(value)
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username or parsed.password or parsed.query or parsed.fragment):
+            raise ValueError("Invalid CHATBOT_BASE_URL format")
         if info.data.get("app_env") == "production":
-            try:
-                parsed = make_url(v)
-                host = parsed.host
-                if host and host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-                    raise ValueError("CHATBOT_BASE_URL cannot use a loopback host in production environment")
-            except Exception as e:
-                if isinstance(e, ValueError):
-                    raise
-                raise ValueError("Invalid CHATBOT_BASE_URL format")
-        return v
+            if parsed.hostname.lower() in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
+                raise ValueError("CHATBOT_BASE_URL cannot use a loopback host in production environment")
+            if parsed.scheme != "https":
+                raise ValueError("CHATBOT_BASE_URL requires HTTPS in production")
+        return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def check_bridge_key(self):
+        key = self.chatbot_api_key.get_secret_value() if self.chatbot_api_key else ""
+        if key and (key != key.strip() or any(ord(char) < 33 for char in key)):
+            raise ValueError("CHATBOT_API_KEY contains invalid whitespace")
+        if self.app_env == "production" and not key:
+            raise ValueError("CHATBOT_API_KEY must be set in production")
+        return self
 
     @field_validator("cors_origins", mode="before")
     @classmethod

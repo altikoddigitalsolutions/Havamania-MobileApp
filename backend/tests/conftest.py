@@ -9,6 +9,7 @@ from app import models  # noqa: F401 -- register all SQLAlchemy model metadata
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.middleware.rate_limit import InMemoryRateLimitMiddleware
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
@@ -67,5 +68,24 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
+        # Tests share one ASGI app, but must not inherit another test's IP quota.
+        # Keep the limiter active inside each test; its own behavior is tested separately.
+        middleware = app.middleware_stack
+        while middleware is not None:
+            if isinstance(middleware, InMemoryRateLimitMiddleware):
+                middleware.hits.clear()
+                middleware._request_counter = 0
+            middleware = getattr(middleware, "app", None)
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def assistant_texts(monkeypatch):
+    from app.services import assistant_consent
+    settings = assistant_consent.settings
+    monkeypatch.setattr(settings, "assistant_consent_version", 2)
+    monkeypatch.setattr(settings, "assistant_consent_text", "Local test assistant consent; not legal production text.")
+    monkeypatch.setattr(settings, "assistant_health_consent_version", 2)
+    monkeypatch.setattr(settings, "assistant_health_consent_text", "Local test optional health consent; not production text.")
+    return settings

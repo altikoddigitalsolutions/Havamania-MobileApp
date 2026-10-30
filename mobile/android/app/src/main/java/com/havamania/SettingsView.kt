@@ -58,6 +58,10 @@ fun SettingsScreen(
     authViewModel: AuthViewModel = viewModel(),
     profileViewModel: ProfileViewModel = viewModel()
 ) {
+    val consentViewModel: AssistantConsentSettingsViewModel = viewModel()
+    val consentState by consentViewModel.consent.state.collectAsStateWithLifecycle()
+    AssistantConsentDialog(consentState, consentViewModel.consent::save, consentViewModel.consent::revoke,
+        consentViewModel.consent::open, consentViewModel.consent::dismiss)
     val scrollState = rememberScrollState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
@@ -182,6 +186,10 @@ fun SettingsScreen(
             // 5. Destek & Yasal
             SettingsGroupLabel("DESTEK VE YASAL")
             SettingsCard {
+                SettingsNavRow("Asistan izinleri", null, Icons.Rounded.PrivacyTip) {
+                    consentViewModel.consent.open()
+                }
+                SettingsDivider()
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
                     openLegal(LegalUrls.KVKK)
                 }

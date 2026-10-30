@@ -41,6 +41,10 @@ fun AiChatScreen(
     val historySaveState by historyViewModel.saveState.collectAsStateWithLifecycle()
     val historyOwner by historyViewModel.detailOwner.collectAsStateWithLifecycle()
     val savingHistory = historySaveState == ProfileSaveState.Saving
+    val consentState by viewModel.assistantConsent.state.collectAsStateWithLifecycle()
+    LaunchedEffect(consentState.allowed, consentState.visible) { viewModel.resumeAfterConsent() }
+    AssistantConsentDialog(consentState, viewModel.assistantConsent::save, viewModel::revokeAssistantConsent,
+        viewModel.assistantConsent::open, viewModel::dismissAssistantConsent)
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
@@ -114,6 +118,9 @@ fun AiChatScreen(
                     if (messages.isNotEmpty()) showExitConfirm = true else onBack()
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.assistantConsent.open() }) {
+                        Icon(Icons.Rounded.PrivacyTip, "Asistan izinleri", tint = themeColors.textPrimary)
+                    }
                     if (messages.isNotEmpty()) {
                         IconButton(onClick = { showEndChatDialog = true }) {
                             Icon(Icons.Rounded.Save, "Sohbeti kaydet", tint = themeColors.accent)
@@ -200,7 +207,7 @@ fun AiChatScreen(
                 ) {
                     items(items = messages, key = { it.id }) { message ->
                         ChatBubble(message, themeColors,
-                            onRetry = { viewModel.sendMessage(it, isRetry = true) },
+                            onRetry = { viewModel.sendMessage(it, isRetry = true, retryRequestId = message.retryRequestId) },
                             onActionClick = { action ->
                                 if (action.type == AssistantActionType.CREATE_TRAVEL_PLAN) {
                                     onNavigateToTravelCreate(action.city ?: "", action.startDate)
@@ -217,7 +224,7 @@ fun AiChatScreen(
             if (requestState == AssistantRequestState.ERROR && messages.isEmpty()) {
                 ErrorMessage(null) {
                     val lastUserMsg = messages.lastOrNull { it.isUser }
-                    if (lastUserMsg != null) viewModel.sendMessage(lastUserMsg.text, isRetry = true)
+                    if (lastUserMsg != null) viewModel.sendMessage(lastUserMsg.text, isRetry = true, retryRequestId = lastUserMsg.id)
                 }
             }
         }
@@ -237,7 +244,7 @@ fun AiChatScreen(
             dismissEnabled = !savingHistory,
             onConfirm = {
                 historyViewModel.addHistoryItem(
-                    id = conversationId,
+                    id = viewModel.currentConversationId,
                     title = messages.firstOrNull { it.isUser }?.text?.take(30) ?: "Hava Sohbeti",
                     summary = messages.lastOrNull { !it.isUser }?.text?.take(100) ?: "",
                     messages = messages,

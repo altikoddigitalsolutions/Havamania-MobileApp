@@ -76,7 +76,7 @@ fun AiHistoryDetailScreen(
                         ChatBubble(
                             message = msg,
                             c = themeColors,
-                            onRetry = { _ -> },
+                            onRetry = null,
                             onActionClick = null
                         )
                     }

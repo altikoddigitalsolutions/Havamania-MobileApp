@@ -18,7 +18,11 @@ data class AltikodChatMessage(
     @get:com.google.firebase.firestore.PropertyName("fallback")
     @set:com.google.firebase.firestore.PropertyName("fallback")
     var isFallback: Boolean = false,
+    val platformMessageId: String? = null,
+    val disclaimer: String? = null,
     val retryPrompt: String? = null,
+    val retryRequestId: String? = null,
+    val retryNotBefore: Long? = null,
     val action: AssistantAction? = null
 )
 

@@ -1,12 +1,12 @@
 package com.havamania
 
 import android.util.Log
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import java.io.IOException
 import java.net.SocketTimeoutException
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 class AiAssistantRepository(
@@ -23,16 +23,22 @@ class AiAssistantRepository(
 
     suspend fun getAssistantResponse(
         question: String,
-        sessionId: String
+        sessionId: String,
+        requestId: String,
+        consent: AssistantConsentDocument,
+        tone: String,
+        personalization: Boolean,
+        interests: List<String>,
+        context: AssistantClientContext
     ): AssistantResult = withContext(Dispatchers.IO) {
-        val requestId = UUID.randomUUID().toString()
 
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (currentUser == null) {
             return@withContext AssistantResult.ConfigurationError
         }
 
-        if (question.isBlank() || question.length > 4000) {
+        if (question.length > 4000) return@withContext AssistantResult.TooLong
+        if (question.isBlank()) {
             return@withContext AssistantResult.QuestionRejected
         }
 
@@ -43,7 +49,8 @@ class AiAssistantRepository(
         try {
             var token = try {
                 currentUser.getIdToken(false).await()?.token
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
                 null
             }
 
@@ -51,17 +58,26 @@ class AiAssistantRepository(
                 return@withContext AssistantResult.ConfigurationError
             }
 
-            val request = BackendChatbotAskRequest(question = question)
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
+            val request = BackendChatbotAskRequest(question = question, request_id = requestId,
+                consent_version = consent.version, health_consent = consent.health_accepted && personalization,
+                health_consent_version = consent.health?.version.takeIf { consent.health_accepted && personalization },
+                conversation_id = sessionId, tone = tone, personalization_enabled = personalization,
+                selected_interests = if (personalization) interests else null, context = context)
             var response = api.ask("Bearer $token", request)
 
             // Handle 401 token refresh (max 1 retry)
             if (response.code() == 401) {
                 try {
                     token = currentUser.getIdToken(true).await()?.token
-                } catch (e: Exception) {
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
                     token = null
                 }
                 if (!token.isNullOrBlank()) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
                     response = api.ask("Bearer $token", request)
                 }
             }
@@ -71,7 +87,7 @@ class AiAssistantRepository(
 if (BuildConfig.DEBUG) {
                     Log.e("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_FAILED | requestId=$requestId | httpCode=$code")
 }
-                return@withContext AssistantResult.HttpError(code)
+                return@withContext assistantHttpFailure(code, response.errorBody()?.string(), response.headers()["Retry-After"])
             }
 
             val body = response.body()
@@ -91,7 +107,10 @@ if (BuildConfig.DEBUG) {
                 return@withContext AssistantResult.QuestionRejected
             }
 
-            AssistantResult.Success(content)
+            if (body?.conversation_id != null && body.conversation_id != sessionId) {
+                return@withContext AssistantResult.ParseError
+            }
+            AssistantResult.Success(content, body?.message_id, body?.disclaimer)
 
         } catch (e: CancellationException) {
             throw e

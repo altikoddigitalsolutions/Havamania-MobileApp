@@ -22,9 +22,9 @@ internal class HistorySaveController(scope: CoroutineScope, owner: () -> String)
     }
 
     fun save(id: String? = null, persist: suspend (String, String) -> Unit) {
-        val recordId = attemptId ?: (id ?: UUID.randomUUID().toString()).also { attemptId = it }
+        val recordId = id ?: attemptId ?: UUID.randomUUID().toString()
         runner.start(
-            onStart = { mutableState.value = ProfileSaveState.Saving },
+            onStart = { attemptId = recordId; mutableState.value = ProfileSaveState.Saving },
             operation = { uid -> persist(uid, recordId) },
             onSuccess = { mutableState.value = ProfileSaveState.Saved },
             onError = { mutableState.value = ProfileSaveState.Failed(

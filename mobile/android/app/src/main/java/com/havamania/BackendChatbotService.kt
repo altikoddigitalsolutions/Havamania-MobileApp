@@ -15,18 +15,38 @@ import retrofit2.http.GET
 
 @Serializable
 data class BackendChatbotAskRequest(
-    val question: String
+    val question: String,
+    val request_id: String? = null,
+    val consent_version: Int? = null,
+    val health_consent: Boolean = false,
+    val health_consent_version: Int? = null,
+    val conversation_id: String? = null,
+    val mode: String = "genel",
+    val tone: String? = null,
+    val personalization_enabled: Boolean = false,
+    val selected_interests: List<String>? = null,
+    val context: AssistantClientContext? = null
 )
 
 @Serializable
 data class BackendChatbotAskResponse(
     val answer: String,
+    val conversation_id: String? = null,
+    val message_id: String? = null,
+    val disclaimer: String? = null,
     val used_messages_today: Int,
     val remaining_messages_today: Int,
     val is_premium: Boolean
 )
 
 interface BackendChatbotService {
+    @GET("v1/chatbot/consent")
+    suspend fun consent(@Header("Authorization") authorization: String): Response<AssistantConsentDocument>
+
+    @POST("v1/chatbot/consent")
+    suspend fun updateConsent(@Header("Authorization") authorization: String,
+        @Body request: AssistantConsentUpdate): Response<AssistantConsentUpdateResult>
+
     @GET("v1/account/deletion/availability")
     suspend fun deletionAvailability(): Response<AccountDeletionAvailability>
 
@@ -42,6 +62,9 @@ interface BackendChatbotService {
         @Body request: BackendChatbotAskRequest
     ): Response<BackendChatbotAskResponse>
 }
+
+@Serializable
+data class AssistantConsentUpdateResult(val assistant_accepted: Boolean, val health_accepted: Boolean)
 
 @Serializable
 data class AccountDeletionRequest(val continuation_key: String)
@@ -60,9 +83,12 @@ object BackendChatbotFactory {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         val client = OkHttpClient.Builder()
+            .callTimeout(75, java.util.concurrent.TimeUnit.SECONDS)
+            .addInterceptor { chain -> chain.proceed(chain.request().newBuilder()
+                .header("X-App-Version", BuildConfig.VERSION_NAME).build()) }
             .addInterceptor(logger)
-            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(65, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()

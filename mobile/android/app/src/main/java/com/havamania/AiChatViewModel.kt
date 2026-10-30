@@ -30,6 +30,21 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
     private val auth = FirebaseAuth.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    internal val assistantConsent = AssistantConsentController(viewModelScope, { currentUid })
+    private data class PendingConsentMessage(val prompt: String, val context: String?,
+        val retry: Boolean, val requestId: String?, val conversation: String, val owner: String)
+    private var pendingConsentMessage: PendingConsentMessage? = null
+
+    fun revokeAssistantConsent() { pendingConsentMessage = null; assistantConsent.revoke() }
+    fun dismissAssistantConsent() { pendingConsentMessage = null; assistantConsent.dismiss() }
+    fun resumeAfterConsent() {
+        if (!assistantConsent.state.value.allowed || assistantConsent.state.value.visible) return
+        val pending = pendingConsentMessage ?: return
+        pendingConsentMessage = null
+        if (pending.owner == currentUid && pending.conversation == currentConversationId) {
+            sendMessage(pending.prompt, pending.context, pending.retry, pending.requestId)
+        }
+    }
 
     private val repository = WeatherRepository.getInstance(application)
     private val database = WeatherDatabase.getDatabase(application)
@@ -51,7 +66,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val requestRunner = AssistantTaskRunner(viewModelScope, { currentUid }, { busy ->
         _isLoading.value = busy
         _isSending.value = busy
-    })
+    }, timeoutMillis = 75_000)
     var lastRequestId: String? = null
 
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
@@ -81,6 +96,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
         accountTasks.reset()
+        assistantConsent.reset()
+        pendingConsentMessage = null
+        if (newUid != "legacy") assistantConsent.load()
         requestRunner.reset()
         fetchJob?.cancel()
         _isLoading.value = false
@@ -113,6 +131,7 @@ if (BuildConfig.DEBUG) {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         accountTasks.close()
+        assistantConsent.close()
         weatherJob?.cancel()
         fetchJob?.cancel()
         requestRunner.reset()
@@ -232,79 +251,32 @@ if (BuildConfig.DEBUG) {
         return data
     }
 
-    private fun forecastBlock(data: WeatherData, label: String): String {
-        val daily = data.dailyForecast.take(3).joinToString(", ") {
-            "${it.date}: ${it.minTemp}/${it.maxTemp}C"
-        }
-        return "Forecast for $label: $daily"
-    }
-
-    private fun cityDataBlock(cityName: String): String? {
-        val info = TravelAiHelper.getCityDescription(cityName)
-        return if (info.contains("Keşfedilmeyi bekleyen")) null
-               else "About $cityName: $info"
-    }
-
-    private fun buildFollowUpContext(cityName: String?): String {
-        val sb = StringBuilder()
-        val trips = _activeTravels.value
-        if (trips.isNotEmpty()) {
-            sb.append("User's upcoming trips:\n")
-            trips.forEach { t ->
-                sb.append("- ${t.city} (${t.startDate} to ${t.endDate})")
-                t.weatherSummary?.let { sb.append(". Summary: $it") }
-                sb.append("\n")
-            }
-        }
-        return sb.toString()
-    }
-
-    private suspend fun buildWeatherContext(userPrompt: String, cityName: String?): String {
-        val sb = StringBuilder()
-        sb.append("Current time: ${java.time.LocalDateTime.now()}\n")
-
-        val targetCity = cityName ?: contextCity
-        if (targetCity != null) {
-            val data = resolveCityWeather(targetCity)
-            if (data != null) {
-                sb.append("Weather in ${data.cityName}: ${data.temperature}C, ${data.condition}\n")
-                if (userPrompt.contains("tahmin", true) || userPrompt.contains("yarın", true)) {
-                    sb.append(forecastBlock(data, targetCity))
-                }
-                contextCity = targetCity
-            }
-        } else {
-            _weatherData.value?.let { data ->
-                sb.append("Weather at user's location (${data.cityName}): ${data.temperature}C, ${data.condition}\n")
-            }
-        }
-
-        return sb.toString()
-    }
-
-    private fun buildToneInstruction(tone: AssistantTone): String {
-        return when (tone) {
-            AssistantTone.SAMIMI -> "Samimi, sıcak, neşeli ve arkadaş canlısı bir üslupla cevap ver. 'canım', 'tatlım' gibi ifadeler kullanabilirsin."
-            AssistantTone.RESMI -> "Ciddi, profesyonel, mesafeli ve bilgilendirici bir üslup kullan. Gereksiz samimiyetten kaçın."
-            AssistantTone.KISA_NET -> "Çok kısa, öz ve sadece istenen bilgiyi veren cevaplar üret. Cümleleri minimumda tut."
-            AssistantTone.DETAYLI_UZMAN -> "Meteorolojik terimler içeren, teknik detaylara giren, neden-sonuç ilişkisi kuran uzman bir dille cevap ver."
-            else -> "Dengeli, yardımcı ve nazik bir üslupla cevap ver."
-        }
-    }
-
-    fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false) {
+    fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false, retryRequestId: String? = null) {
         if (userPrompt.isBlank()) return
+        if (!isLocalAssistantPrompt(userPrompt) && !assistantConsent.state.value.allowed) {
+            pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, isRetry,
+                retryRequestId, currentConversationId, currentUid)
+            assistantConsent.load(showLoading = true)
+            return
+        }
+        if (isRetry && _messages.value.any { it.retryRequestId == retryRequestId &&
+                (it.retryNotBefore ?: 0L) > System.currentTimeMillis() }) return
+        val userMessage = assistantMessageForSend(_messages.value, userPrompt, isRetry, retryRequestId)
+            ?: return
         val conversationId = currentConversationId
+        var platformReply: AssistantResult.Success? = null
         requestRunner.start(
             onStart = {
                 _requestState.value = AssistantRequestState.LOADING
-                _messages.value = _messages.value + AltikodChatMessage(text = userPrompt, isUser = true)
+                _messages.value = _messages.value.filterNot {
+                    it.isFallback && it.retryRequestId == userMessage.id
+                } + if (isRetry) emptyList() else listOf(userMessage)
             },
-            operation = {
+            operation = { owner ->
                 val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
                 val greeting = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?"
                 when {
-                    greetings.any { userPrompt.lowercase().trim() == it } -> greeting
+                    greetings.any { userPrompt.lowercase(java.util.Locale.forLanguageTag("tr")).trim() == it } -> greeting
                     AiIntentParser.isWeatherQuery(userPrompt) || AiIntentParser.detectDate(userPrompt) != null -> {
                         val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName
                         if (targetCity == null) {
@@ -317,11 +289,34 @@ if (BuildConfig.DEBUG) {
                         }
                     }
                     else -> {
-                        // The API expects the original prompt; avoid unused context/network requests.
-                        when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId)) {
-                            is AssistantResult.Success -> result.content
+                        val personalized = ThemeManager.getPersonalizationEnabled(getApplication(), owner).first()
+                        val interests = if (personalized) ThemeManager.getUserInterests(getApplication(), owner)
+                            .first().sorted().take(20).map { it.take(50) } else emptyList()
+                        ensureOwner(owner)
+                        val context = assistantClientContext(AiIntentParser.detectCity(userPrompt) ?: contextCity,
+                            _weatherData.value, _activeTravels.value, personalized)
+                        when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId, userMessage.id,
+                            assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
+                            assistantTone.platformTone(), personalized, interests, context)) {
+                            is AssistantResult.ConsentRequired -> throw AssistantConsentRequiredException()
+                            is AssistantResult.DailyLimit -> throw TerminalAssistantException(
+                                "Günlük asistan hakkınız doldu. Limit yenilendiğinde tekrar kullanabilirsiniz.")
+                            is AssistantResult.RateLimited -> throw RateLimitedAssistantException(result.retryAfterSeconds)
+                            is AssistantResult.Unavailable -> throw Exception(
+                                "Asistan şu anda hizmet veremiyor. Lütfen daha sonra tekrar deneyin.")
+                            is AssistantResult.Timeout -> throw Exception(
+                                "Asistan zamanında cevap veremedi. İsteği tekrar kontrol edebilirsiniz.")
+                            is AssistantResult.DuplicateRequest -> throw TerminalAssistantException(
+                                "Bu istek sunucuya daha önce ulaştı. Yeniden işlenmedi. Önceki yanıt şu anda alınamıyor.")
+                            is AssistantResult.RequestExpired -> throw TerminalAssistantException(
+                                "İstek süresi doldu. İsterseniz yeni bir mesaj gönderebilirsiniz.")
+                            is AssistantResult.ConversationConflict -> throw TerminalAssistantException(
+                                "Bu sohbet kullanılamıyor. Lütfen yeni bir sohbet başlatın.")
+                            is AssistantResult.ModeDisabled -> throw TerminalAssistantException("Bu asistan modu şu anda kullanılamıyor.")
+                            is AssistantResult.TooLong -> throw TerminalAssistantException("Mesaj veya bağlam çok uzun. Lütfen kısaltın.")
+                            is AssistantResult.Success -> { platformReply = result; result.content }
                             is AssistantResult.QuestionRejected -> {
-                                if (greetings.any { userPrompt.lowercase().contains(it) }) greeting
+                                if (greetings.any { userPrompt.lowercase(java.util.Locale.forLanguageTag("tr")).contains(it) }) greeting
                                 else throw Exception("Lütfen geçerli bir soru sorunuz.")
                             }
                             is AssistantResult.HttpError -> throw Exception(
@@ -334,30 +329,44 @@ if (BuildConfig.DEBUG) {
                 }
             },
             onSuccess = { reply ->
-                _messages.value = _messages.value + AltikodChatMessage(text = reply, isUser = false)
+                _messages.value = _messages.value + AltikodChatMessage(text = reply, isUser = false,
+                    platformMessageId = platformReply?.messageId, disclaimer = platformReply?.disclaimer)
                 _requestState.value = AssistantRequestState.SUCCESS
             },
-            onError = { handleError(it, userPrompt) }
+            onError = {
+                if (it is AssistantConsentRequiredException) {
+                    pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, true,
+                        userMessage.id, conversationId, currentUid)
+                    _requestState.value = AssistantRequestState.IDLE
+                    assistantConsent.open()
+                } else handleError(it, userPrompt, userMessage.id)
+            }
         )
     }
 
-    private fun handleError(e: Exception, userPrompt: String) {
+    private fun handleError(e: Exception, userPrompt: String, requestId: String) {
         val errorText = e.message ?: "Bilinmeyen bir hata oluştu."
         _requestState.value = AssistantRequestState.ERROR
-        addErrorMessage(errorText, userPrompt)
+        val retryNotBefore = (e as? RateLimitedAssistantException)?.seconds?.let {
+            System.currentTimeMillis() + it * 1000
+        }
+        addErrorMessage(errorText, userPrompt, requestId.takeUnless { e is TerminalAssistantException }, retryNotBefore)
     }
 
-    private fun addErrorMessage(text: String, retryPrompt: String) {
+    private fun addErrorMessage(text: String, retryPrompt: String, requestId: String?, retryNotBefore: Long?) {
         val errorMsg = AltikodChatMessage(
             text = text,
             isUser = false,
             isFallback = true,
-            retryPrompt = retryPrompt
+            retryPrompt = retryPrompt.takeIf { requestId != null },
+            retryRequestId = requestId,
+            retryNotBefore = retryNotBefore
         )
         _messages.value = _messages.value + errorMsg
     }
 
     fun resetChat() {
+        pendingConsentMessage = null
         requestRunner.reset()
         _messages.value = emptyList()
         currentConversationId = java.util.UUID.randomUUID().toString()
@@ -365,6 +374,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun loadConversation(conversationId: String) {
+        pendingConsentMessage = null
         requestRunner.reset()
         requestRunner.start(
             onStart = { _requestState.value = AssistantRequestState.LOADING },

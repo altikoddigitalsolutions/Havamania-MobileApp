@@ -87,7 +87,7 @@ fun AssistantWeatherCard(data: WeatherData, c: HavamaniaColors) {
 fun ChatBubble(
     message: AltikodChatMessage,
     c: HavamaniaColors,
-    onRetry: (String) -> Unit,
+    onRetry: ((String) -> Unit)?,
     onActionClick: ((AssistantAction) -> Unit)?
 ) {
     val isUser = message.isUser
@@ -119,6 +119,25 @@ fun ChatBubble(
                 } else {
                     AssistantMessageContent(text = message.text, c = c)
                 }
+            }
+        }
+
+        message.disclaimer?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = c.textSecondary, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp).widthIn(max = 300.dp))
+        }
+        if (onRetry != null && message.isFallback && message.retryPrompt != null && message.retryRequestId != null) {
+            var retryReady by remember(message.id, message.retryNotBefore) {
+                mutableStateOf((message.retryNotBefore ?: 0L) <= System.currentTimeMillis())
+            }
+            LaunchedEffect(message.id, message.retryNotBefore) {
+                val waitMillis = ((message.retryNotBefore ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0)
+                if (waitMillis > 0) kotlinx.coroutines.delay(waitMillis)
+                retryReady = true
+            }
+            TextButton(enabled = retryReady, onClick = { onRetry(message.retryPrompt) }) {
+                Text(if (retryReady) "Tekrar dene" else "Lütfen bekleyin",
+                    color = if (retryReady) c.accent else c.textSecondary)
             }
         }
 

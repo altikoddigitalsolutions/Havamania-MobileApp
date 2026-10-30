@@ -52,4 +52,15 @@ class HistorySaveControllerTest {
         yield()
         assertEquals(ids[0], ids[1])
     }
+    @Test fun aNewExplicitConversationCannotReusePreviousCancelledConversationsId() = runBlocking {
+        val ids = mutableListOf<String>()
+        val controller = HistorySaveController(this) { "A" }
+        controller.save("first-conversation") { _, id -> ids += id }
+        yield()
+        controller.cancel()
+        controller.save("second-conversation") { _, id -> ids += id }
+        yield()
+        assertEquals(listOf("first-conversation", "second-conversation"), ids)
+        controller.reset()
+    }
 }

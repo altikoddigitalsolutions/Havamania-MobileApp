@@ -1,6 +1,18 @@
-# Android yayın kontrol listesi — 27 Ekim 2026
+# Android yayın kontrol listesi — 30 Ekim 2026
 
 Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi bütün başlığı kapatmaz. Kullanıcı tercihi: yerel doğrulama; canlı dağıtım, gerçek hesap silme veya satın alma yapılmaz. Ayrıntılı son denetim: [22 Ekim raporu](YAYIN_DENETIMI_2026-10-22.md).
+
+## 30 Ekim son devam — Platform ask sözleşmesi
+
+Sunucu anahtarı/HTTPS koruması, konuşma kimliği, ton, sınırlı şehir/hava/seyahat bağlamı ve ilgi alanı opt-out/temizleme davranışı eklendi. Sohbet kaydı aktif UUID’yi koruyor; cevap metadata/uyarısı saklanıyor. Son yerel kanıt: **112 backend testi**, 6 atlanan PostgreSQL testi; **203 Android JVM testi**, debug derleme ve Ruff başarılı. Bu tur cihaz/PG yeniden koşulmadı. Ayrıntılı güncel sözleşme: ASISTAN_PLATFORM_KOPRUSU.md.
+
+Sıradaki yerel işler: platform rıza metni adaptörü ve hesap silme işine platform verisi silme/yeniden deneme. Gerçek anahtar, canlı ortam, hukuki onay, profil Firebase–SQL senkronizasyonu ve mağaza/release bağımlılıkları açık. Yayın öncesi backend yapılandırması/0014–0015 ve onaylanmış metinler birlikte doğrulanmalı. Bu alt düzeltmeler geniş maddeleri otomatik kapatmaz.
+
+## 30 Ekim son devam — Android asistan izinleri
+
+Asistan ve Ayarlar’a sunucu rıza metni, ayrı isteğe bağlı sağlık kutusu, geri çekme ve 428/409 yeniden onay akışı bağlandı. Hesap değişiminde bellek/bekleyen soru temizleniyor; onay sunucudan doğrulanıyor. Android **196 JVM testi**, debug/test paketi derlemesi ve tablette **2 izole ekran testi** geçti (koyu %200 yazı, açık tema/sağlık olmadan kabul). Backend rıza alt paketi **11 test** ve Ruff geçti. Önceki 95 backend / 6 PostgreSQL sonucu önceki turun kanıtıdır; bu tur genel backend/PG yeniden koşulmadı.
+
+Geniş maddeler kapanmadı. Sonraki yerel iş: platform köprüsü sunucu anahtarı ve güncel istek/yanıt sözleşmesi; konuşma kimliği, ton ve şehir/hava/seyahat bağlamı. Onaylanmış hukuki metin, gerçek Firebase/backend/platform testi ve mağaza/release bağımlılıkları hâlâ açık. Canlı dağıtım veya gerçek hesapta onay değişikliği yapılmadı. Ayrıntılar ASISTAN_RIZA_SOZLESMESI.md ve YAYIN_DURUM_RAPORU.md içinde.
 
 ## 27 Ekim güncel durum
 
@@ -222,3 +234,17 @@ Kullanıcının 20 kategorili raporu KAPSAMLI_KALITE_DENETIMI_2026-10-22.md dosy
 Room 19→20, kullanıcı/kimlik bazlı bekleyen ve tamamlanmış silme işaretleri; yeniden açılışta yüklemeden önce silme; aynı süreçte paylaşılan işlem kilidi eklendi. Canlı kesinti/çok cihaz ve arka plan yürütmesi açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. 22/45 tamamlanan, 23 açık geniş madde.
 
 27 Ekim yeni Git gönderim kapsamı: `7599ac9` sonrasındaki eksik hava verisi, risk/sıcaklık özeti, saat dilimi/zaman etiketi, konum değişimi temizliği ve sürüm koşullu analiz yazıları ile testleri. Son JVM koşusu 183 test başarılı; tarihsel “Push yapılmadı” notları ilgili turun durumudur. Saat dilimi bilinmeyen ilk açılış ve takvim filtreleri açık kalır.
+
+## 30 Ekim 2026 — Asistan entegrasyonu devamı
+
+Asistan köprüsünde hata cevabının başarılı sayılması ve hak tüketimi düzeltildi; ConnectError dışındaki otomatik tekrarlar kaldırıldı. Yerel backend: 77 geçti, 4 atlandı; Ruff geçti. Bu alt düzeltme ana listedeki geniş maddeleri kapatmaz. Platform sözleşmesi, sunucu rızası/veri minimizasyonu, hesap silme bağlantısı, atomik kota/istek tekilleştirme ve Android bağlam/sohbet/ton akışı açık. Detaylar YAYIN_DURUM_RAPORU.md içindeki 30 Ekim kaydında. Canlı test yapılmadı.
+
+30 Ekim devam: paralel kota için atomik koşullu SQL rezervasyonu ve hata iadesi eklendi; normal/premium ortak akış. Backend 79 geçti, 4 atlandı; 16 paralel yerel SQLite istek/3 hak testi geçti. Kalıcı request_id, süreç çökmesi kurtarması, tekrar gönderim tekilleştirme ve PostgreSQL eşzamanlılık doğrulaması açık; ana madde kapanmadı.
+
+30 Ekim kalıcı istek devamı: 0014 migration ile UID/request_id unique kayıt, atomik kota+istek yazımı ve süresi geçen rezervasyonun tek sefer iadesi eklendi. Backend 82 geçti, 5 atlandı; ayrı yerel PostgreSQL denetimi 5 geçti. Mobil request_id/tekrar akışı, platform idempotency ve sonuç kurtarma, rıza/veri minimizasyonu açık. 0014 üretime uygulanmadı; sıradaki Android sabit mesaj kimliği ve 409 davranışı.
+
+30 Ekim Android devamı: kullanıcı mesajı UUID'si request_id olarak gönderiliyor; tekrar aynı kimlikle, kullanıcı balonu çoğaltılmadan yapılır. 409 duplicate/expired ayrı açıklama ve terminal davranış; hata balonunda yeniden deneme düğmesi eklendi, salt okunur geçmiş dışlandı. Dört yeni testle ilk JVM koşusu 187/0 hata ve debug derleme başarılı. Canlı/tablet görsel kontrol, platform sonuç kurtarma ve kaydedilmemiş sohbet süreç ölümü açık. Sıradaki kota 429 ve Android hata ayrımı; yayın öncesi backend+0014 gerekir.
+
+30 Ekim hata sözleşmesi devamı: yerel günlük kota 429 daily_limit; genel hız sınırı 429 rate_limited ve Retry-After. Android kota/hız sınırı/servis/zaman aşımı ayrımı ve bekleme sırasında kapalı tekrar düğmesi eklendi. Backend 84 geçti, 5 atlandı; Ruff temiz. Platformun kendi 428/429 aktarımı, UTC/İstanbul geçişi, canlı/tablet matrisi açık. Sıradaki sunucu rıza kaydı ve sağlık verisi minimizasyonu.
+
+30 Ekim rıza devamı: 0015 ile sunucuda rıza+audit, GET/POST consent, sürüm/hash doğrulaması ve onaysız profil sağlık alanının çıkarılması eklendi. Metin yoksa 503, güncel onay yoksa 428; otomatik onay yok. Backend 95 geçti, 6 atlandı; ayrı PostgreSQL 6 geçti. Yeni sözleşme ASISTAN_RIZA_SOZLESMESI.md. Android rıza/onay ekranı henüz bağlanmadığı için bu backend aşaması tek başına yayımlanmamalı. Sıradaki Android ayrı onay/geri çekme ve 428/409 akışı; canlı/hukuki/platform bağımlılıkları açık.

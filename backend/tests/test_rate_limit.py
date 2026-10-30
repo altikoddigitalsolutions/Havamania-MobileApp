@@ -1,3 +1,4 @@
+import json
 import time
 
 import pytest
@@ -51,4 +52,7 @@ async def test_current_client_is_still_rate_limited():
     request = Request({"type": "http", "client": ("192.0.2.1", 1234)})
     assert (await middleware.dispatch(request, next_handler)).status_code == 200
     assert (await middleware.dispatch(request, next_handler)).status_code == 200
-    assert (await middleware.dispatch(request, next_handler)).status_code == 429
+    response = await middleware.dispatch(request, next_handler)
+    assert response.status_code == 429
+    assert json.loads(response.body)["error"] == "rate_limited"
+    assert 1 <= int(response.headers["Retry-After"]) <= 60

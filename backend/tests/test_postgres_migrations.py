@@ -67,7 +67,7 @@ def test_empty_postgres_matches_models_and_repeated_upgrade(pg_schema):
         columns = {c["name"] for c in inspector.get_columns(name)}
         assert set(table.columns.keys()) <= columns, name
     with engine.connect() as c:
-        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0013_profile_fields"
+        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0015_assistant_consent"
 
 
 def test_upgrade_preserves_data_removes_old_unique_constraint_and_cascades(pg_schema):
@@ -118,3 +118,83 @@ def test_legacy_standalone_unique_index_is_removed(pg_schema):
     with engine.begin() as c:
         c.execute(text("INSERT INTO push_tokens (id,user_id,platform,token) VALUES ('p2','u','android','token-2')"))
         assert c.scalar(text("SELECT count(*) FROM push_tokens")) == 2
+
+
+def test_durable_chatbot_quota_and_duplicate_requests(pg_schema):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.models.user import User
+    from app.services.chatbot_usage import ChatbotUsageService, DuplicateChatbotRequest
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    service = ChatbotUsageService()
+    with Session(engine) as db:
+        user = User(email="quota@example.invalid", password_hash="unused")
+        db.add(user)
+        db.commit()
+        uid = user.id
+
+    def reserve(_):
+        with Session(engine) as db:
+            return service.reserve_request(db, uid, 3, str(uuid4()))
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        records = list(pool.map(reserve, range(16)))
+    accepted = [record for record in records if record]
+    assert len(accepted) == 3
+    with Session(engine) as db:
+        assert service.get_or_create_today_usage(db, uid).message_count == 3
+        assert service.finish_request(db, accepted[0], success=False)
+        assert not service.finish_request(db, accepted[0], success=False)
+        request_id = str(uuid4())
+        assert service.reserve_request(db, uid, 3, request_id)
+        with pytest.raises(DuplicateChatbotRequest):
+            service.reserve_request(db, uid, 3, request_id)
+        assert service.get_or_create_today_usage(db, uid).message_count == 3
+
+    # Identical request IDs racing on separate connections may call the model once.
+    with Session(engine) as db:
+        service.finish_request(db, accepted[1], success=False)
+    shared_id = str(uuid4())
+
+    def same_request(_):
+        with Session(engine) as db:
+            try:
+                return service.reserve_request(db, uid, 3, shared_id)
+            except DuplicateChatbotRequest:
+                return "duplicate"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(same_request, range(8)))
+    assert outcomes.count("duplicate") == 7
+    assert sum(value not in (None, "duplicate") for value in outcomes) == 1
+
+
+def test_postgres_consent_upsert_audit_and_account_cascade(pg_schema, assistant_texts):
+    from app.models.assistant_consent import AssistantConsent, AssistantConsentEvent
+    from app.models.user import User
+    from app.schemas.chatbot import AssistantConsentUpdate
+    from app.services.assistant_consent import current_documents, save_consent
+    from sqlalchemy import delete, func, select
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    with Session(engine) as db:
+        user = User(email="consent@example.invalid", password_hash="unused")
+        db.add(user)
+        db.commit()
+        uid = user.id
+        assistant, health = current_documents()
+        save_consent(db, uid, AssistantConsentUpdate(assistant_accepted=True, consent_version=2,
+            consent_hash=assistant["hash"], health_accepted=True, health_consent_version=2,
+            health_consent_hash=health["hash"]))
+        save_consent(db, uid, AssistantConsentUpdate(assistant_accepted=False))
+        assert not db.get(AssistantConsent, uid, populate_existing=True).health_accepted
+        assert db.scalar(select(func.count()).select_from(AssistantConsentEvent)) == 2
+        db.execute(delete(User).where(User.id == uid))
+        db.commit()
+        assert db.get(AssistantConsent, uid) is None
+        assert db.scalar(select(func.count()).select_from(AssistantConsentEvent)) == 0
