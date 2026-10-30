@@ -32,11 +32,13 @@ USER_ID = str(uuid5(NAMESPACE_URL, f"https://securetoken.google.com/{PROJECT}/{U
 @pytest.fixture
 def configured(monkeypatch, tmp_path):
     settings = SimpleNamespace(account_deletion_enabled=True, firebase_project_id=PROJECT,
-                               firebase_storage_bucket="test-bucket")
+                               firebase_storage_bucket="test-bucket", chatbot_base_url="https://platform.invalid/api/bridge")
     monkeypatch.setattr(service, "get_settings", lambda: settings)
     monkeypatch.setattr(service, "verify_firebase_token",
                         lambda *_: {"uid": UID, "auth_time": time.time()})
     monkeypatch.setattr(service, "AVATAR_DIR", tmp_path)
+    from app.services.chatbot_bridge import ChatbotBridgeClient
+    monkeypatch.setattr(ChatbotBridgeClient, "delete_user", Mock())
     return settings
 
 
@@ -197,3 +199,79 @@ def test_deletion_cascades_through_all_account_tables(db_session, configured):
     for model in (User, Profile, Location, NotificationPreference, PushToken,
                   RefreshToken, ChatbotUsageDaily, Subscription, Alert):
         assert db_session.scalars(select(model)).all() == []
+
+
+def test_platform_failure_preserves_job_and_identity_then_resumes(db_session, configured):
+    from sqlalchemy.orm import Session
+    db_session.add_all([User(id=USER_ID, email="delete@example.com", password_hash="unused"),
+                        User(id="other", email="keep@example.com", password_hash="unused")])
+    db_session.commit()
+    digest = service.prepare_deletion(db_session, KEY, "valid")
+    gateway = Mock()
+    platform = Mock()
+    platform.delete_user.side_effect = RuntimeError("local simulated timeout")
+    assert not service.execute_deletion(db_session, digest, lambda _: gateway, lambda: platform)
+    platform.delete_user.assert_called_once_with(USER_ID)
+    gateway.freeze.assert_called_once_with(UID)
+    gateway.remove_storage.assert_not_called()
+    gateway.remove_documents.assert_not_called()
+    gateway.remove_identity.assert_not_called()
+    assert db_session.get(User, USER_ID) is not None
+    assert db_session.get(AccountDeletion, digest).status == "pending"
+    # New database session represents a worker restart; no Firebase token needed.
+    platform.delete_user.side_effect = None
+    with Session(db_session.get_bind()) as resumed:
+        assert service.execute_deletion(resumed, digest, lambda _: gateway, lambda: platform)
+        assert resumed.get(User, USER_ID) is None
+        assert resumed.get(User, "other") is not None
+        job = resumed.get(AccountDeletion, digest)
+        assert job.status == "complete" and job.firebase_uid is None
+        platform.reset_mock()
+        assert service.execute_deletion(resumed, digest, lambda _: gateway, lambda: platform)
+        platform.delete_user.assert_not_called()
+
+
+def test_platform_is_retried_after_later_identity_failure(db_session, configured):
+    digest = service.prepare_deletion(db_session, KEY, "valid")
+    gateway, platform = Mock(), Mock()
+    gateway.remove_identity.side_effect = RuntimeError("local simulated failure")
+    assert not service.execute_deletion(db_session, digest, lambda _: gateway, lambda: platform)
+    gateway.remove_identity.side_effect = None
+    assert service.execute_deletion(db_session, digest, lambda _: gateway, lambda: platform)
+    assert platform.delete_user.call_count == 2
+    assert all(call.args == (USER_ID,) for call in platform.delete_user.call_args_list)
+
+
+@pytest.mark.parametrize("target", [None, "https://different.invalid/api/bridge"])
+def test_missing_or_changed_platform_target_cannot_run(db_session, configured, target):
+    digest = service.prepare_deletion(db_session, KEY, "valid")
+    job = db_session.get(AccountDeletion, digest)
+    if target is None:
+        job.platform_base_url = None  # Legacy job: target must be verified explicitly.
+        db_session.commit()
+    else:
+        configured.chatbot_base_url = target
+    firebase_factory, platform_factory = Mock(), Mock()
+    assert not service.execute_deletion(db_session, digest, firebase_factory, platform_factory)
+    firebase_factory.assert_not_called()
+    platform_factory.assert_not_called()
+    assert db_session.get(AccountDeletion, digest).status == "pending"
+
+
+def test_deletion_target_is_persisted_and_cleared_on_completion(db_session, configured):
+    digest = service.prepare_deletion(db_session, KEY, "valid")
+    job = db_session.get(AccountDeletion, digest)
+    assert job.backend_user_id == USER_ID
+    assert job.platform_base_url == configured.chatbot_base_url
+    assert service.execute_deletion(db_session, digest, lambda _: Mock(), lambda: Mock())
+    assert job.backend_user_id is None and job.platform_base_url is None
+
+
+def test_corrupt_job_identity_cannot_touch_external_services(db_session, configured):
+    digest = service.prepare_deletion(db_session, KEY, "valid")
+    db_session.get(AccountDeletion, digest).backend_user_id = "another-user"
+    db_session.commit()
+    firebase_factory, platform_factory = Mock(), Mock()
+    assert not service.execute_deletion(db_session, digest, firebase_factory, platform_factory)
+    firebase_factory.assert_not_called()
+    platform_factory.assert_not_called()

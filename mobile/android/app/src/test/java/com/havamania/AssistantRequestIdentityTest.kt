@@ -62,4 +62,16 @@ class AssistantRequestIdentityTest {
         assertEquals(AssistantResult.Timeout, assistantHttpFailure(504, null))
         assertEquals(AssistantResult.HttpError(401), assistantHttpFailure(401, null))
     }
+
+    @Test fun deletingAccountIsRecognizedFromBothBackendErrorShapes() {
+        listOf(
+            """{"error":"account_deletion_pending"}""",
+            """{"detail":{"error":"account_deletion_pending","message":"ignored"}}"""
+        ).forEach { body ->
+            assertEquals(AssistantResult.AccountDeletionPending, assistantHttpFailure(409, body))
+        }
+        assertEquals(AssistantResult.Unavailable,
+            assistantHttpFailure(503, """{"error":"account_deletion_pending"}"""))
+    }
+
 }

@@ -19,6 +19,7 @@ from app.schemas.profile import (
     ProfileResponse,
     ProfileUpdateRequest,
 )
+from app.services.account_access import require_active_account
 
 router = APIRouter()
 AVATAR_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "static", "avatars")
@@ -26,22 +27,26 @@ MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 
 def _ensure_profile(db: Session, user_id: str) -> Profile:
+    require_active_account(db, user_id)
     profile = db.get(Profile, user_id)
     if not profile:
         profile = Profile(user_id=user_id)
         db.add(profile)
         db.commit()
         db.refresh(profile)
+        require_active_account(db, user_id)
     return profile
 
 
 def _ensure_notification_preferences(db: Session, user_id: str) -> NotificationPreference:
+    require_active_account(db, user_id)
     prefs = db.get(NotificationPreference, user_id)
     if not prefs:
         prefs = NotificationPreference(user_id=user_id)
         db.add(prefs)
         db.commit()
         db.refresh(prefs)
+        require_active_account(db, user_id)
     return prefs
 
 
@@ -141,6 +146,7 @@ def create_location(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LocationResponse:
+    require_active_account(db, current_user.id)
     location = Location(
         user_id=current_user.id,
         label=payload.label,
@@ -305,6 +311,7 @@ def upload_avatar(
     )
     if not valid_signature:
         raise HTTPException(status_code=400, detail="Image content does not match its type")
+    profile = _ensure_profile(db, current_user.id)
     os.makedirs(AVATAR_DIR, exist_ok=True)
     file_name = f"{current_user.id}_{uuid4().hex}{file_ext}"
     file_path = os.path.join(AVATAR_DIR, file_name)
@@ -312,7 +319,6 @@ def upload_avatar(
     with open(file_path, "wb") as buffer:
         buffer.write(data)
 
-    profile = _ensure_profile(db, current_user.id)
     profile.avatar_url = f"/static/avatars/{file_name}"
     db.add(profile)
     db.commit()

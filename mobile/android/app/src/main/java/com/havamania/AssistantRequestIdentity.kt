@@ -4,6 +4,7 @@ import java.util.UUID
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonObject
 
 internal fun assistantMessageForSend(
     messages: List<AltikodChatMessage>, prompt: String, isRetry: Boolean, requestId: String?
@@ -15,9 +16,11 @@ internal fun assistantMessageForSend(
 
 internal fun assistantHttpFailure(status: Int, body: String?, retryAfter: String? = null): AssistantResult {
     val code = runCatching {
-        Json.parseToJsonElement(body.orEmpty()).jsonObject["error"]?.jsonPrimitive?.content
+        val root = Json.parseToJsonElement(body.orEmpty()).jsonObject
+        (root["error"] ?: (root["detail"] as? JsonObject)?.get("error"))?.jsonPrimitive?.content
     }.getOrNull()
     return when {
+        status == 409 && code == "account_deletion_pending" -> AssistantResult.AccountDeletionPending
         status == 409 && code == "conversation_conflict" -> AssistantResult.ConversationConflict
         status == 409 && code == "mode_disabled" -> AssistantResult.ModeDisabled
         status == 413 -> AssistantResult.TooLong

@@ -119,3 +119,50 @@ def test_response_cannot_switch_conversations_or_omit_safety_warning(monkeypatch
         ChatbotBridgeClient().ask("question", "user", conversation_id=str(uuid4()))
     with pytest.raises(BridgeError):
         ChatbotBridgeClient().ask("question", "user", conversation_id=conversation, mode="fly")
+
+
+@pytest.mark.parametrize("outcome", ["timeout", "connect", 401, 409, 429, 500, 302,
+    [], {}, {"deleted_conversations": True, "deleted_photos": 0},
+    {"deleted_conversations": 0, "deleted_photos": -1}])
+def test_delete_user_requires_confirmed_receipt(monkeypatch, outcome):
+    calls = []
+    def post(self, url, **kwargs):
+        calls.append(kwargs)
+        if outcome == "timeout":
+            raise httpx.ReadTimeout("PRIVATE_TEST_SECRET")
+        if outcome == "connect":
+            raise httpx.ConnectError("PRIVATE_TEST_SECRET")
+        if isinstance(outcome, int):
+            return httpx.Response(outcome, text="PRIVATE_TEST_SECRET")
+        return httpx.Response(200, json=outcome)
+    monkeypatch.setattr(httpx.Client, "post", post)
+    with pytest.raises(BridgeError) as error:
+        ChatbotBridgeClient().delete_user("server-user-id")
+    assert error.value.code == "deletion_pending"
+    assert error.value.__cause__ is None and error.value.__suppress_context__
+    assert "PRIVATE_TEST_SECRET" not in str(error.value)
+    assert len(calls) == 1
+
+
+def test_delete_user_sends_server_identity_and_accepts_repeated_empty_receipts(monkeypatch):
+    calls = []
+    def post(self, url, **kwargs):
+        assert url.endswith("/delete-user")
+        assert kwargs["json"] == {"user_id": "server-user-id"}
+        assert kwargs["headers"] == {"Authorization": "Bearer LOCAL_TEST_KEY"}
+        calls.append(kwargs)
+        return httpx.Response(200, json={"deleted_conversations": 0, "deleted_photos": 0})
+    monkeypatch.setattr(httpx.Client, "post", post)
+    bridge = ChatbotBridgeClient()
+    bridge.delete_user("server-user-id")
+    bridge.delete_user("server-user-id")
+    assert len(calls) == 2
+
+
+def test_delete_user_missing_key_never_calls_network(monkeypatch):
+    post = []
+    monkeypatch.setattr(httpx.Client, "post", lambda *a, **k: post.append(k))
+    with pytest.raises(BridgeError) as error:
+        ChatbotBridgeClient(api_key="").delete_user("server-user-id")
+    assert error.value.code == "not_configured"
+    assert post == []

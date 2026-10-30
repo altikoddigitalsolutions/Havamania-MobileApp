@@ -299,6 +299,8 @@ if (BuildConfig.DEBUG) {
                             assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
                             assistantTone.platformTone(), personalized, interests, context)) {
                             is AssistantResult.ConsentRequired -> throw AssistantConsentRequiredException()
+                            is AssistantResult.AccountDeletionPending -> throw TerminalAssistantException(
+                                "Hesap silme işlemi devam ediyor. Bu hesapla asistana yeni mesaj gönderilemez.")
                             is AssistantResult.DailyLimit -> throw TerminalAssistantException(
                                 "Günlük asistan hakkınız doldu. Limit yenilendiğinde tekrar kullanabilirsiniz.")
                             is AssistantResult.RateLimited -> throw RateLimitedAssistantException(result.retryAfterSeconds)

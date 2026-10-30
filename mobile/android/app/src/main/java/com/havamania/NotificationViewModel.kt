@@ -37,6 +37,13 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val actionTasks = AccountTaskScope(viewModelScope) { currentUid }
     private val actionMutex = kotlinx.coroutines.sync.Mutex()
     fun dismissActionError() { _actionError.value = null }
+    fun canOpenNotification(item: NotificationItem): Boolean {
+        val allowed = canOpenOwnedNotification(item.userId, auth.currentUser?.uid,
+            AccountDeletionManager.getInstance(getApplication()).state.value.pending) &&
+            _uiState.value.notifications.any { it.id == item.id && it.userId == item.userId }
+        if (!allowed) _actionError.value = "Bu bildirim mevcut hesap için kullanılamıyor."
+        return allowed
+    }
 
     private fun notificationAction(onSuccess: () -> Unit = {}, action: suspend (String) -> Unit) {
         actionTasks.launch { uid ->

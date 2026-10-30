@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.models.subscription import Subscription
+from app.services.account_access import require_active_account
 
 FREE_PLAN = "free"
 PREMIUM_MONTHLY = "premium_monthly"
@@ -12,6 +13,7 @@ ACTIVE_STATUSES = {"active", "grace"}
 
 
 def get_or_create_subscription(db: Session, user_id: str) -> Subscription:
+    require_active_account(db, user_id)
     subscription = db.query(Subscription).filter(Subscription.user_id == user_id).first()
     if subscription:
         return subscription
@@ -20,6 +22,7 @@ def get_or_create_subscription(db: Session, user_id: str) -> Subscription:
     db.add(subscription)
     db.commit()
     db.refresh(subscription)
+    require_active_account(db, user_id)
     return subscription
 
 

@@ -38,3 +38,9 @@ Yeni sohbet kaydında aktif konuşma UUID’si korunur. Kaydetme denetleyicisi �
 5. Hukuki metin/aktarım dayanağı, saklama ve mağaza beyanları; bütün UI/TalkBack/telefon/yatay matrisi.
 
 Son kanıt: backend 112 geçti, 6 PostgreSQL testi bu koşuda atlandı; Ruff temiz. Android 203 JVM testi ve debug derleme başarılı. Bu tur cihaz, genel lint ve PostgreSQL yeniden çalıştırılmadı; önceki rıza cihaz testleri bu yeni canlı köprü akışını doğrulamaz.
+
+30 Ekim: ASSISTANT_CONSENT_SOURCE=platform ile GET /consent kaynağı desteklenir. 15 saniye süreç içi önbellek; onay yazarken zorunlu yeniden yükleme; platform 428 yanıtında invalidasyon; hatada eski/local metne geri dönüş yok. Varsayılan configured korunur. Canlı metin ve bağlantı doğrulaması tamamlanmadan üretimde hazır kabul edilmez. Yerel hedefli paket: 52 test geçti.
+
+Hesap silme: POST /delete-user yalnızca server UUID ile çağrılır. Makbuz doğrulanmadan SQL/Firebase kimliği silinmez; hata durumunda mevcut kalıcı pending iş tekrar denenir. HTTP 200 negatif olmayan tamsayı deleted_conversations/deleted_photos zorunludur. Canlı idempotency ve eşzamanlı ask/silme doğrulanmadı; endpoint değişikliği bekleyen işler bitene kadar yapılmamalı.
+
+0016 sonrası: silme işi platform_base_url ve backend_user_id tutar. Hedef değişikliğinde işlem durur; eski işlerin NULL platform adresi doğrulanmadan otomatik tamamlanmaz. Ask ve prepare_deletion PostgreSQL kullanıcı satırını kilitleyerek gönderim/silme kabulünü sıralar; kabulden sonra account_deletion_pending (409) döner, model çağrılmaz. İşlemdeki eski ask geri çağrılamaz; silme onun bitmesini bekler. SQLite testleri gerçek satır kilidi kanıtı değildir; ayrı PostgreSQL 16 testi geçti. Android özel hata metni henüz açık.

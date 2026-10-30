@@ -1,6 +1,6 @@
 import json
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     chatbot_base_url: str = "http://localhost:9000"
     chatbot_api_key: SecretStr | None = Field(None, repr=False)
     chatbot_timeout_seconds: int = Field(50, ge=1, le=60)
+    assistant_consent_source: Literal["configured", "platform"] = "configured"
     assistant_consent_version: int | None = Field(None, ge=1)
     assistant_consent_text: str | None = None
     assistant_health_consent_version: int | None = Field(None, ge=1)

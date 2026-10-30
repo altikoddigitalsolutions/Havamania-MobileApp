@@ -14,6 +14,7 @@ from app.core.security import (
 )
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.services.account_access import require_active_account
 
 settings = get_settings()
 
@@ -31,6 +32,7 @@ def signup(db: Session, email: str, password: str, full_name: str | None) -> Use
 
 
 def _issue_tokens(db: Session, user_id: str) -> tuple[str, str]:
+    require_active_account(db, user_id)
     access_token = create_access_token(user_id)
     refresh_token = create_refresh_token(user_id)
 
@@ -85,6 +87,7 @@ def refresh(db: Session, refresh_token: str) -> tuple[str, str]:
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    require_active_account(db, user.id)
     token_record.revoked = True
     db.add(token_record)
     db.commit()

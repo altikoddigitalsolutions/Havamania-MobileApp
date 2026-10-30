@@ -9,6 +9,9 @@ import androidx.work.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Arka planda hava durumunu kontrol eden ve bildirim gönderen Worker
@@ -21,19 +24,25 @@ class WeatherNotificationWorker(
     override suspend fun doWork(): Result {
         val application = applicationContext as? android.app.Application ?: return Result.failure()
         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-        val uid = auth.currentUser?.uid ?: "legacy"
+        val uid = auth.currentUser?.uid ?: return Result.success()
+        if (!canPublishFor(uid)) return Result.success()
 
         val repository = WeatherRepository.getInstance(application)
         val database = NotificationDatabase.getDatabase(application)
         val notifRepo = NotificationRepository(database.notificationDao())
 
         try {
+            if (!com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(application, uid).first()) {
+                return Result.success()
+            }
             // 1. Fetch current weather for default city
             val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(application, uid).firstOrNull() ?: return Result.success()
 
             val weatherData = repository.getWeatherData(
                 defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.admin1
             ).firstOrNull() ?: return Result.retry()
+            currentCoroutineContext().ensureActive()
+            if (!canPublishFor(uid)) return Result.success()
 
             // 2. Check Smart Alerts
             val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(application, uid).first()
@@ -41,6 +50,8 @@ class WeatherNotificationWorker(
 
             // 3. Filter and Show Notifications (Business Rule 5: Deduplication)
             alerts.forEach { alert ->
+                currentCoroutineContext().ensureActive()
+                if (!canPublishFor(uid)) return Result.success()
                 val key = alert.deduplicationKey
                 val alreadyNotified = if (key.isNotEmpty()) {
                     database.notificationDao().existsWithKey(uid, key)
@@ -60,18 +71,28 @@ class WeatherNotificationWorker(
                         severity = if (alert.severity == AlertSeverity.CRITICAL) "HIGH" else "NORMAL",
                         deduplicationKey = if (key.isNotEmpty()) key else null
                     )
+                    currentCoroutineContext().ensureActive()
+                    if (!canPublishFor(uid)) return Result.success()
                     notifRepo.insert(notificationItem)
-                    showNotification(alert.title, alert.description)
+                    currentCoroutineContext().ensureActive()
+                    if (!canPublishFor(uid)) return Result.success()
+                    showNotification(uid, alert.title, alert.description)
                 }
             }
 
             return Result.success()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             return Result.retry()
         }
     }
 
-    private fun showNotification(title: String, message: String) {
+    private fun canPublishFor(uid: String): Boolean =
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == uid &&
+            !AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.pending
+
+    private fun showNotification(uid: String, title: String, message: String) {
+        if (!canPublishFor(uid)) return
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
             return
         }

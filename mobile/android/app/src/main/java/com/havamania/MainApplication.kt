@@ -23,6 +23,18 @@ class MainApplication : Application() {
     }
     if (processName != packageName) return
 
+    // Auth can change while no Activity is visible. Remove the previous account's
+    // visible notifications from the system tray as well as resetting UI state.
+    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    var notificationOwner = auth.currentUser?.uid
+    auth.addAuthStateListener { currentAuth ->
+        val nextOwner = currentAuth.currentUser?.uid
+        if (nextOwner != notificationOwner) {
+            notificationOwner = nextOwner
+            (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+        }
+    }
+
     // Configure Crashlytics collection policy (auto-init handled by FirebaseInitProvider)
     try {
         com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)

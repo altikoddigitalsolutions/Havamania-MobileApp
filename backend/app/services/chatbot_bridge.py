@@ -29,6 +29,27 @@ class ChatbotBridgeClient:
         self._api_key = api_key if api_key is not None else (
             settings.chatbot_api_key.get_secret_value() if settings.chatbot_api_key else "")
 
+    def delete_user(self, user_id: str) -> None:
+        """Idempotent endpoint; retry belongs to the durable account deletion job."""
+        if not self._api_key:
+            raise BridgeError(503, "not_configured", "Asistan bağlantısı henüz hazır değil.")
+        try:
+            with httpx.Client(timeout=httpx.Timeout(10, connect=3), follow_redirects=False) as client:
+                response = client.post(f"{self.base_url}/delete-user", json={"user_id": user_id},
+                                       headers={"Authorization": f"Bearer {self._api_key}"})
+            if response.status_code != 200:
+                raise ValueError("Deletion not confirmed")
+            body = response.json()
+            if not isinstance(body, dict) or any(
+                type(body.get(field)) is not int or body[field] < 0
+                for field in ("deleted_conversations", "deleted_photos")
+            ):
+                raise ValueError("Invalid deletion receipt")
+        except (httpx.RequestError, ValueError):
+            # No chained transport exception: deletion worker logs failures, and upstream
+            # errors may include credentials or sensitive response bodies.
+            raise BridgeError(503, "deletion_pending", "Asistan verilerinin silinmesi yeniden denenecek.") from None
+
     def ask(self, question: str, user_id: str, context: dict | None = None, **metadata) -> PlatformChatbotReply:
         if not self._api_key:
             raise BridgeError(503, "not_configured", "Asistan bağlantısı henüz hazır değil.")
@@ -88,6 +109,8 @@ class ChatbotBridgeClient:
         if status == 400:
             raise BridgeError(400, "invalid_request", "Asistan isteği geçerli değil.")
         if status == 428:
+            from app.services.platform_consent import platform_consent_provider
+            platform_consent_provider.invalidate()
             # Local consent metadata must be synchronized before requesting new acceptance.
             raise BridgeError(503, "consent_sync_required", "Asistan izin metni güncelleniyor. Daha sonra deneyin.")
         if status == 504:

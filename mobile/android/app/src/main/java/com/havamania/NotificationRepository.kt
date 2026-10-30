@@ -16,6 +16,7 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.insert(notification)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e(TAG, "Failed to insert notification", e)
 }

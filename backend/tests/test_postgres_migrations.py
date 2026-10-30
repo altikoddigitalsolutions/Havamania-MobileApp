@@ -67,7 +67,7 @@ def test_empty_postgres_matches_models_and_repeated_upgrade(pg_schema):
         columns = {c["name"] for c in inspector.get_columns(name)}
         assert set(table.columns.keys()) <= columns, name
     with engine.connect() as c:
-        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0015_assistant_consent"
+        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0017_push_deliveries"
 
 
 def test_upgrade_preserves_data_removes_old_unique_constraint_and_cascades(pg_schema):
@@ -198,3 +198,118 @@ def test_postgres_consent_upsert_audit_and_account_cascade(pg_schema, assistant_
         db.commit()
         assert db.get(AssistantConsent, uid) is None
         assert db.scalar(select(func.count()).select_from(AssistantConsentEvent)) == 0
+
+
+def test_legacy_deletion_migration_backfills_identity_but_never_guesses_target(pg_schema):
+    from uuid import NAMESPACE_URL, uuid5
+    engine, migrate = pg_schema
+    migrate("0015_assistant_consent")
+    with engine.begin() as c:
+        c.execute(text("INSERT INTO account_deletions (key_hash,firebase_uid,project_id,storage_bucket,status) "
+                       "VALUES (:key,'legacy-user','legacy-project','bucket','pending')"), {"key": "a" * 64})
+    migrate()
+    with engine.connect() as c:
+        row = c.execute(text("SELECT backend_user_id, platform_base_url FROM account_deletions")).one()
+        assert row.backend_user_id == str(uuid5(NAMESPACE_URL,
+            "https://securetoken.google.com/legacy-project/legacy-user"))
+        assert row.platform_base_url is None
+
+
+def test_postgres_ask_gate_serializes_deletion_acceptance(pg_schema, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+    from threading import Event
+    from types import SimpleNamespace
+    from uuid import NAMESPACE_URL, uuid5
+
+    from app.api.v1.routes.chatbot import _deletion_pending
+    from app.models.user import User
+    from app.services import account_deletion
+    from app.services.account_access import require_active_account
+    from fastapi import HTTPException
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    uid = str(uuid5(NAMESPACE_URL, "https://securetoken.google.com/test-project/firebase-user"))
+    with Session(engine) as db:
+        db.add(User(id=uid, email="deletion-race@example.invalid", password_hash="unused"))
+        db.commit()
+    monkeypatch.setattr(account_deletion, "get_settings", lambda: SimpleNamespace(
+        account_deletion_enabled=True, firebase_project_id="test-project",
+        firebase_storage_bucket="test-bucket", chatbot_base_url="https://platform.invalid/api/bridge"))
+    import time
+    monkeypatch.setattr(account_deletion, "verify_firebase_token",
+                        lambda *_: {"uid": "firebase-user", "auth_time": time.time()})
+    started = Event()
+
+    def accept_deletion():
+        with Session(engine) as db:
+            started.set()
+            return account_deletion.prepare_deletion(db, "e" * 64, "fake-token")
+
+    with Session(engine) as sending, ThreadPoolExecutor(max_workers=1) as pool:
+        require_active_account(sending, uid)
+        assert not _deletion_pending(sending, uid, lock=True)
+        future = pool.submit(accept_deletion)
+        try:
+            assert started.wait(3)
+            with pytest.raises(TimeoutError):
+                future.result(timeout=0.3)
+        finally:
+            sending.rollback()  # In-flight dispatch has ended; deletion may be accepted.
+        assert future.result(timeout=5)
+        assert _deletion_pending(sending, uid, lock=True)
+        with pytest.raises(HTTPException) as blocked:
+            require_active_account(sending, uid)
+        assert blocked.value.status_code == 409
+        sending.rollback()
+
+
+def test_postgres_parallel_push_queue_dispatches_once_per_device(pg_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import UTC, datetime, timedelta
+    from threading import Lock
+
+    from app.models.alert import Alert, AlertSeverity
+    from app.models.location import Location
+    from app.models.push_delivery import PushDelivery
+    from app.models.push_token import PushToken
+    from app.models.user import User
+    from app.services.push_service import PushService
+    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    now = datetime.now(UTC)
+    with Session(engine) as db:
+        db.add(User(id='push-owner', email='push@example.invalid', password_hash='unused'))
+        db.commit()
+        db.add(Location(id='push-location', user_id='push-owner', label='City', lat=1, lon=2))
+        db.add(PushToken(user_id='push-owner', platform='android', token='local-test-token'))
+        db.commit()
+        db.add(Alert(id='push-alert', location_id='push-location', severity=AlertSeverity.CRITICAL,
+                     title='Test', description='Test only', starts_at=now-timedelta(minutes=1),
+                     ends_at=now+timedelta(hours=1)))
+        db.commit()
+    calls = []
+    lock = Lock()
+    class Provider:
+        def send(self, **kwargs):
+            with lock:
+                calls.append(kwargs['token'])
+            return True
+    service = PushService(Provider())
+    def dispatch(_):
+        with Session(engine) as db:
+            return service.send_critical_alert(db, Alert(id='push-alert'))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(dispatch, range(16)))
+    assert sum(outcomes) == 1
+    assert calls == ['local-test-token']
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(PushDelivery)) == 1
+        assert db.scalar(select(PushDelivery.status)) == 'sent'
+        db.delete(db.get(User, 'push-owner'))
+        db.commit()
+        assert db.scalar(select(func.count()).select_from(PushDelivery)) == 0

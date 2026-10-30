@@ -99,7 +99,7 @@ class TravelNotificationWorker(
                     category = NotificationCategory.TRAVEL,
                     createdAt = System.currentTimeMillis(),
                     eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-                    deepLinkTarget = "havamania://app/calendar?focusId=${plan.id}",
+                    deepLinkTarget = "havamania://app/calendar?focusId=${Uri.encode(plan.id)}",
                     relatedTripId = plan.id,
                     actionLabel = "Analizi Gör",
                     travelData = travelData,
@@ -223,7 +223,7 @@ class TravelNotificationWorker(
                 message = "${plan.city} seyahatine 2 günden az kaldı. Yol boyunca beklenen hava koşullarını şimdi inceleyebilirsin.",
                 category = NotificationCategory.TRAVEL,
                 createdAt = System.currentTimeMillis(),
-                deepLinkTarget = "havamania://app/route/${plan.id}",
+                deepLinkTarget = "havamania://app/route/${Uri.encode(plan.id)}",
                 deduplicationKey = readyKey,
                 actionLabel = "Güzergâhı Gör"
             )
@@ -256,7 +256,7 @@ class TravelNotificationWorker(
             message = message,
             category = NotificationCategory.TRAVEL,
             createdAt = System.currentTimeMillis(),
-            deepLinkTarget = "havamania://app/route/${plan.id}",
+            deepLinkTarget = "havamania://app/route/${Uri.encode(plan.id)}",
             deduplicationKey = dailyKey,
             actionLabel = "Tahmini Aç"
         )
@@ -356,6 +356,9 @@ if (BuildConfig.DEBUG) {
             applicationContext,
             WeatherPremiumActivity::class.java
         ).apply {
+            action = NOTIFICATION_ACTION_PREFIX + item.userId + "." + item.id
+            putExtra(NOTIFICATION_OWNER, item.userId)
+            putExtra(NOTIFICATION_ID, item.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
 

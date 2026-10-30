@@ -6,6 +6,7 @@ from app.models.chatbot_usage_daily import ChatbotUsageDaily
 from app.models.location import Location
 from app.models.notification_preference import NotificationPreference
 from app.models.profile import Profile
+from app.models.push_delivery import PushDelivery
 from app.models.push_token import PushToken
 from app.models.refresh_token import RefreshToken
 from app.models.subscription import Subscription
@@ -23,6 +24,7 @@ __all__ = [
     "Location",
     "NotificationPreference",
     "Profile",
+    "PushDelivery",
     "PushToken",
     "RefreshToken",
     "Subscription",

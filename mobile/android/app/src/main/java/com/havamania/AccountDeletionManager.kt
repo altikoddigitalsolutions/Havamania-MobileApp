@@ -188,6 +188,7 @@ class AccountDeletionManager private constructor(private val app: Application) {
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     private suspend fun cleanLocalData(uid: String) {
         WorkManager.getInstance(app).cancelUniqueWork("travel_notifications_daily").await()
+        WorkManager.getInstance(app).cancelUniqueWork("WeatherDailyUpdateWork").await()
         val firestore = FirebaseFirestore.getInstance()
         firestore.terminate().await()
         firestore.clearPersistence().await()

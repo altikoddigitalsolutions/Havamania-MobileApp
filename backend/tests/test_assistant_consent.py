@@ -175,3 +175,35 @@ def test_acceptance_of_text_that_changed_since_display_is_rejected(client, conse
     })
     assert response.status_code == 409
     assert ask(client, headers).status_code == 428
+
+
+@pytest.mark.parametrize("during_reservation", [False, True])
+def test_pending_account_deletion_blocks_model_and_refunds(client, db_session, consent_setup, monkeypatch, during_reservation):
+    from app.models.account_deletion import AccountDeletion
+    headers, uid, calls, _ = consent_setup
+    assert accept(client, headers).status_code == 200
+
+    def mark(db):
+        db.add(AccountDeletion(key_hash="f" * 64, backend_user_id=uid, status="pending"))
+        db.commit()
+
+    if during_reservation:
+        original = route.chatbot_usage_service.reserve_request
+        def reserve_then_delete(db, *args):
+            result = original(db, *args)
+            mark(db)
+            return result
+        monkeypatch.setattr(route.chatbot_usage_service, "reserve_request", reserve_then_delete)
+    else:
+        mark(db_session)
+    response = ask(client, headers)
+    assert response.status_code == 409
+    assert response.json().get("error", response.json().get("detail", {}).get("error")) == "account_deletion_pending"
+    assert calls == []
+    assert (db_session.scalar(select(ChatbotUsageDaily.message_count)) or 0) == 0
+    other = signup(client, "not-deleting@example.com")
+    assert accept(client, other).status_code == 200
+    # Remove only the race hook, then prove A's marker cannot block B.
+    if during_reservation:
+        monkeypatch.setattr(route.chatbot_usage_service, "reserve_request", original)
+    assert ask(client, other).status_code == 200

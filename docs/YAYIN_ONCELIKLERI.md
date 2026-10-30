@@ -248,3 +248,20 @@ Asistan köprüsünde hata cevabının başarılı sayılması ve hak tüketimi 
 30 Ekim hata sözleşmesi devamı: yerel günlük kota 429 daily_limit; genel hız sınırı 429 rate_limited ve Retry-After. Android kota/hız sınırı/servis/zaman aşımı ayrımı ve bekleme sırasında kapalı tekrar düğmesi eklendi. Backend 84 geçti, 5 atlandı; Ruff temiz. Platformun kendi 428/429 aktarımı, UTC/İstanbul geçişi, canlı/tablet matrisi açık. Sıradaki sunucu rıza kaydı ve sağlık verisi minimizasyonu.
 
 30 Ekim rıza devamı: 0015 ile sunucuda rıza+audit, GET/POST consent, sürüm/hash doğrulaması ve onaysız profil sağlık alanının çıkarılması eklendi. Metin yoksa 503, güncel onay yoksa 428; otomatik onay yok. Backend 95 geçti, 6 atlandı; ayrı PostgreSQL 6 geçti. Yeni sözleşme ASISTAN_RIZA_SOZLESMESI.md. Android rıza/onay ekranı henüz bağlanmadığı için bu backend aşaması tek başına yayımlanmamalı. Sıradaki Android ayrı onay/geri çekme ve 428/409 akışı; canlı/hukuki/platform bağımlılıkları açık.
+
+30 Ekim devam: Platform izin metni adaptörü eklendi; canlı etkinleştirme açık. Onay yazımında güncel metin yeniden doğrulanır. Sırada platform delete-user ve kalıcı hesap silme entegrasyonu.
+
+30 Ekim devam: Platform delete-user mevcut kalıcı hesap silme işine bağlandı; 47 hedefli yerel test geçti. Sırada platform hedefini iş bazında sabitleme ve silme sırasında eşzamanlı asistan isteklerini engelleme incelemesi. Gerçek servis/Firebase ve worker dağıtımı açık.
+Son yerel backend sonucu: 136 geçti / 6 PostgreSQL testi atlandı. Bu sonuç canlı Firebase/platform silme doğrulaması değildir.
+
+30 Ekim son devam: silme işi platform URL'si ve UUID'ye bağlandı (0016); ask için kota öncesi/sonrası silme engeli ve PostgreSQL kullanıcı satır kilidi eklendi. 41 hedefli test + örtüşen 17 silme testi; ayrıca izole PostgreSQL 16 üzerinde 8 test geçti. Eski işlerin bilinmeyen platform hedefi operatör doğrulaması gerektirir. Sırada Android silme-hatası sunumu ve diğer backend yazma yollarında silme izolasyonu. Canlı/üretim işleri açık.
+
+30 Ekim son adım: Ortak backend hesap silme erişim engeli (profil/cihaz/abonelik/Firebase/login/refresh) ve Android asistan terminal hata metni eklendi. 144 backend + ayrı PostgreSQL 8 + Android JVM 204 geçti; debug APK derlendi. Son auth düzenlemesi için örtüşen 9 hedefli test de geçti. Sırada arka plan bildirim/iş üreticilerinin silme sırasında davranışı ve uygulama genelinde ortak silme-durumu sunumu. Canlı/mağaza engelleri kapanmadı.
+
+30 Ekim bildirim adımı: backend push/ingestion silme engeli, uyarı geçerliliği ve sahte demo uyarı üretiminin kaldırılması; eski Android hava worker UID/silme/izin ve coroutine iptal kontrolleri; silmede eski hava işinin iptali eklendi. 17 hedefli backend ve 205 Android JVM testi geçti; debug APK derlendi. Gerçek FCM/cihaz iş testi açık. Sırada tekrarlanan backend bildirimlerinin idempotency incelemesi ve uygulama genelinde silme/bildirim-hesap geçişleri.
+
+30 Ekim gönderim adımı: 0017 ile kalıcı Alert/kullanıcı/token-hash gönderim hakkı eklendi; tekrar kuyruk ve 16 paralel PostgreSQL çağrısı tek sağlayıcı denemesi yapar. 34 hedefli test ve PostgreSQL 9 geçti. Belirsiz/çökmüş gönderim körlemesine tekrarlanmaz; kayıp ihtimali ve SDK/cihaz exactly-once sınırı açık. Ayrıntı BILDIRIM_GONDERIM_SOZLESMESI.md. Sırada Android bildirim tıklama/hesap geçişi ve olay kimliğiyle güvenilir tekrar protokolü.
+Son arka plan test dosyası: 16 geçti; önceki hedefli paketle örtüşür. Android bu adımda değişmedi. Canlı migration ve FCM denemesi açık.
+
+30 Ekim Android bildirim adımı: PendingIntent UID/ID, cold/warm launch sahiplik kontrolü, hesap bazlı nav controller, auth değişiminde tray temizliği, bildirim merkezi güncel-kayıt kontrolü ve rota allowlist/ID encoding eklendi. Gerçek cihaz Activity/PendingIntent ve process-death kontrolü açık. Sırada token devri/gecikmiş FCM ve bildirim tıklaması cihaz matrisi; backend olay kimliği ve güvenilir tekrar sözleşmesi açık kalıyor.
+Android son doğrulama: 208 JVM testi geçti, debug APK derlendi. Bildirim tıklaması Activity/PendingIntent/hesap geçişi cihaz testi hâlâ açık; JVM policy testleri bunun yerine geçmez.

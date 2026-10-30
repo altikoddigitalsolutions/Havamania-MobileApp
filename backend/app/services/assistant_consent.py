@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.assistant_consent import AssistantConsent, AssistantConsentEvent
 from app.schemas.chatbot import AssistantConsentUpdate
+from app.services.platform_consent import platform_consent_provider
 
 settings = get_settings()
 
@@ -21,7 +22,11 @@ def document(version, text):
             "hash": sha256(text.encode("utf-8")).hexdigest()}
 
 
-def current_documents():
+def current_documents(force=False):
+    if settings.assistant_consent_source == "platform":
+        texts = platform_consent_provider.load(force=force)
+        return (document(texts.version, texts.text),
+                document(texts.health.version, texts.health.text) if texts.health else None)
     assistant = document(settings.assistant_consent_version, settings.assistant_consent_text)
     if assistant is None:
         raise HTTPException(503, "Assistant consent text is not configured")
@@ -53,7 +58,7 @@ def health_is_allowed(state, doc, request):
 def save_consent(db: Session, uid: str, payload: AssistantConsentUpdate):
     assistant, health = (None, None)
     if payload.assistant_accepted:
-        assistant, health = current_documents()
+        assistant, health = current_documents(force=True)
         if payload.consent_version != assistant["version"] or payload.consent_hash != assistant["hash"]:
             raise HTTPException(409, "Consent version changed; fetch the current text")
     if payload.health_accepted and (not payload.assistant_accepted or health is None

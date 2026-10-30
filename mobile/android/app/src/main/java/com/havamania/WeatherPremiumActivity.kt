@@ -1,6 +1,7 @@
 package com.havamania
 
 import android.os.Bundle
+import android.content.Intent
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,8 +37,36 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 
 class WeatherPremiumActivity : ComponentActivity() {
+    private var pendingNotificationLaunch by mutableStateOf<Intent?>(null)
+
+    private fun captureNotificationLaunch(incoming: Intent): Boolean {
+        if (incoming.action?.startsWith(NOTIFICATION_ACTION_PREFIX) != true &&
+            !incoming.hasExtra(NOTIFICATION_OWNER) && !incoming.hasExtra(NOTIFICATION_ID)) return false
+        val owner = incoming.getStringExtra(NOTIFICATION_OWNER)
+        val allowed = canOpenOwnedNotification(owner,
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+            AccountDeletionManager.getInstance(application).state.value.pending)
+        pendingNotificationLaunch = if (allowed && !incoming.getStringExtra(NOTIFICATION_ID).isNullOrBlank()) {
+            Intent(incoming).apply { action = Intent.ACTION_VIEW }
+        } else null
+        // NavHost must not consume this automatically before the owner check.
+        setIntent(Intent(incoming).apply {
+            data = null
+            action = Intent.ACTION_MAIN
+            removeExtra(NOTIFICATION_OWNER)
+            removeExtra(NOTIFICATION_ID)
+        })
+        return true
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (!captureNotificationLaunch(intent)) setIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        captureNotificationLaunch(intent)
 
         // Initialize MapLibre before any MapView is created
 if (BuildConfig.DEBUG) {
@@ -91,11 +120,25 @@ if (BuildConfig.DEBUG) {
                 val authState by authViewModel.authState.collectAsState()
                 val profileState by profileViewModel.profileState.collectAsState()
 
-                val navController = rememberNavController()
+                val navigationOwner = authViewModel.currentUser?.uid
+                val navController = key(navigationOwner) { rememberNavController() }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER_ROOT
 
                 var appState by remember { mutableStateOf("splash") }
+                LaunchedEffect(pendingNotificationLaunch, navigationOwner, appState, isReady, currentRoute, profileState) {
+                    val launch = pendingNotificationLaunch ?: return@LaunchedEffect
+                    if (!canOpenOwnedNotification(launch.getStringExtra(NOTIFICATION_OWNER), navigationOwner,
+                            deletionManager.state.value.pending)) {
+                        pendingNotificationLaunch = null
+                        return@LaunchedEffect
+                    }
+                    if (appState != "main" || !isReady) return@LaunchedEffect
+                    if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
+                            Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) return@LaunchedEffect
+                    pendingNotificationLaunch = null
+                    navController.handleDeepLink(launch)
+                }
 
                 // Splash Screen Minimum Duration Timer
                 LaunchedEffect(Unit) {

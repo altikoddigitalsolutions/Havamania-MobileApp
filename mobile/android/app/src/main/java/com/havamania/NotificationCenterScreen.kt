@@ -80,44 +80,16 @@ fun NotificationCenterScreen(
     // To prevent double clicks/crashes during rapid navigation
     val processingIds = remember { mutableStateListOf<String>() }
 
-    val handleNotificationClick = remember(onNavigateToDetail) {
-        { notification: NotificationItem ->
+    val handleNotificationClick = remember(onNavigateToDetail, viewModel) {
+        click@{ notification: NotificationItem ->
+            if (!viewModel.canOpenNotification(notification)) return@click
             if (!processingIds.contains(notification.id)) {
                 processingIds.add(notification.id)
                 viewModel.markAsRead(notification.id)
 
                 try {
-                    when (notification.actionType) {
-                        NotificationActionType.WEATHER_HOME,
-                        NotificationActionType.HOURLY_FORECAST,
-                        NotificationActionType.DAILY_FORECAST,
-                        NotificationActionType.UV_DETAIL,
-                        NotificationActionType.WEATHER_ALERT -> {
-                            onNavigateToDetail(Routes.WEATHER_ROOT, null)
-                        }
-                        NotificationActionType.TRAVEL_CALENDAR -> {
-                            onNavigateToDetail(Routes.CALENDAR_ROOT, null)
-                        }
-                        NotificationActionType.TRAVEL_DETAIL -> {
-                            val tripId = notification.targetId
-                            if (!tripId.isNullOrBlank()) {
-                                onNavigateToDetail("${Routes.CALENDAR_ROOT}?focusId=$tripId", mapOf("focusId" to tripId))
-                            } else {
-                                onNavigateToDetail(Routes.CALENDAR_ROOT, null)
-                            }
-                        }
-                        NotificationActionType.WEEKLY_SUMMARY -> {
-                            onNavigateToDetail(Routes.AI_ROOT, null)
-                        }
-                        NotificationActionType.APP_UPDATE -> {
-                            onNavigateToDetail(Routes.PROFILE_ROOT, null)
-                        }
-                        NotificationActionType.NONE -> {
-                            // If there's a deepLinkTarget as fallback
-                            notification.deepLinkTarget?.let { target ->
-                                 onNavigateToDetail(target, notification.relatedTripId?.let { mapOf("tripId" to it) })
-                            }
-                        }
+                    notificationDestination(notification)?.let { destination ->
+                        onNavigateToDetail(destination, null)
                     }
                 } catch (e: Exception) {
 if (BuildConfig.DEBUG) {

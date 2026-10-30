@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.models.user import User
+from app.services.account_access import require_active_account
 
 
 @lru_cache
@@ -40,6 +41,7 @@ def firebase_user(token: str, db: Session) -> User:
 
     # Bind identity to the verified project and UID, never to an email alone.
     user_id = str(uuid5(NAMESPACE_URL, f"https://securetoken.google.com/{project_id}/{uid}"))
+    require_active_account(db, user_id, allow_missing=True)
     user = db.get(User, user_id)
     if user:
         return user
@@ -54,7 +56,9 @@ def firebase_user(token: str, db: Session) -> User:
         db.rollback()
         existing = db.get(User, user_id)
         if existing:
+            require_active_account(db, user_id)
             return existing
         raise HTTPException(status_code=409, detail="Account linking is required") from exc
     db.refresh(user)
+    require_active_account(db, user_id)
     return user

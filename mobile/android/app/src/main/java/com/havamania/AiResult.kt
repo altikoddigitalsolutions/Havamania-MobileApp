@@ -4,6 +4,7 @@ sealed interface AssistantResult {
     data class Success(val content: String, val messageId: String? = null,
         val disclaimer: String? = null) : AssistantResult
     data object ConversationConflict : AssistantResult
+    data object AccountDeletionPending : AssistantResult
     data object ModeDisabled : AssistantResult
     data object TooLong : AssistantResult
     data object ConsentRequired : AssistantResult

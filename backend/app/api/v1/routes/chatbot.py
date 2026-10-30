@@ -4,12 +4,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user
 from app.dependencies.premium import require_premium_user
+from app.models.account_deletion import AccountDeletion
 from app.models.profile import Profile
 from app.models.user import User
 from app.schemas.chatbot import (
@@ -26,6 +28,20 @@ from app.services.subscription_service import get_or_create_subscription, is_pre
 
 router = APIRouter()
 settings = get_settings()
+
+
+def _deletion_pending(db: Session, user_id: str, lock=False) -> bool:
+    if lock and db.scalar(select(User.id).where(User.id == user_id).with_for_update()) is None:
+        return True
+    return db.scalar(select(AccountDeletion.key_hash).where(
+        AccountDeletion.backend_user_id == user_id, AccountDeletion.status == "pending"
+    ).limit(1)) is not None
+
+
+def _deletion_response():
+    return JSONResponse(status_code=409, content={
+        "error": "account_deletion_pending", "message": "Hesap silinirken asistan kullanılamaz."
+    })
 
 
 def _is_premium_user(user: User, db: Session) -> bool:
@@ -50,6 +66,9 @@ def ask_chatbot(
 def _ask(
     payload: ChatbotAskRequest, current_user: User, db: Session, is_premium: bool, app_version: str | None = None
 ) -> ChatbotAskResponse | JSONResponse:
+    user_id = current_user.id
+    if _deletion_pending(db, user_id, lock=True):
+        return _deletion_response()
     assistant_doc, health_doc = assistant_consent.current_documents()
     consent = assistant_consent.consent_state(db, current_user.id)
     if not assistant_consent.assistant_is_allowed(consent, assistant_doc) or (
@@ -92,6 +111,11 @@ def _ask(
         })
 
     try:
+        # reserve_request commits. Reacquire the user row lock before network I/O;
+        # prepare_deletion takes this same lock before committing its durable marker.
+        if _deletion_pending(db, user_id, lock=True):
+            chatbot_usage_service.finish_request(db, reservation, success=False)
+            return _deletion_response()
         # Re-read after quota commit: a withdrawal must not use an earlier ORM snapshot.
         assistant_doc, health_doc = assistant_consent.current_documents()
         consent = assistant_consent.consent_state(db, current_user.id)
