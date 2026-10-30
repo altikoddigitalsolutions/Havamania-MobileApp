@@ -7,12 +7,56 @@ import pytest
 from app.api.v1.routes import chatbot as route
 from app.models.chatbot_request import ChatbotRequest
 from app.schemas.assistant_weather import AssistantWeatherData
+from app.services import chatbot_replay
 from app.services.chatbot_bridge import ChatbotBridgeClient, settings
 from app.services.chatbot_clock import chatbot_day, chatbot_reset
 from pydantic import SecretStr, ValidationError
 from sqlalchemy import select
 
 from test_chatbot import _auth_header
+
+
+@pytest.mark.parametrize("completed", [False, True])
+@pytest.mark.parametrize("seconds_remaining", [-1, 0, 1])
+def test_replay_cleanup_respects_owner_and_exact_expiration(
+    client, connected_bridge, db_session, monkeypatch, completed, seconds_remaining
+):
+    headers, _, state = connected_bridge
+    state["timeout_once"] = not completed
+    request_id = str(uuid4())
+    response = client.post(
+        "/v1/chatbot/ask", headers=headers, json={"question": "Hava?", "request_id": request_id}
+    )
+    assert response.status_code == (200 if completed else 504)
+    db_session.expire_all()
+    record = db_session.scalar(
+        select(ChatbotRequest).where(ChatbotRequest.request_id == request_id)
+    )
+    now = int(chatbot_replay.time.time())
+    record.replay_until = now + seconds_remaining
+    db_session.commit()
+    owner = record.user_id
+    record_id = record.id
+    expected_payload = record.platform_payload
+    expected_reply = record.cached_reply
+    monkeypatch.setattr(chatbot_replay.time, "time", lambda: now)
+
+    chatbot_replay.purge_expired_replays(db_session, owner=str(uuid4()))
+    db_session.expire_all()
+    record = db_session.get(ChatbotRequest, record_id)
+    assert record.platform_payload == expected_payload
+    assert record.cached_reply == expected_reply
+
+    chatbot_replay.purge_expired_replays(db_session, owner=owner)
+    db_session.expire_all()
+    record = db_session.get(ChatbotRequest, record_id)
+    if seconds_remaining <= 0:
+        assert record.platform_payload is None and record.cached_reply is None
+    else:
+        assert record.platform_payload == expected_payload
+        assert record.cached_reply == expected_reply
+    # Keep the identity tombstone so old request IDs cannot become new calls.
+    assert record.request_id == request_id and record.input_hash is not None
 
 
 @pytest.mark.parametrize(

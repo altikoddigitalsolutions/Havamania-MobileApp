@@ -58,3 +58,7 @@ Zaman aşımında kalan istek ve tamamlanmış yanıt senaryoları ayrı regresy
 Başarısız kaydın platform_payload alanı boşken güncel gövdeden yeniden istek oluşturma kaldırıldı. Kayıt kullanıcı/istek kimliği, soru, konuşma, mod, ton, kişiselleştirme ve izin sürümleri ile eşleşmeli. Eksik veya tutarsız kayıt 409 request_expired ile kapanır; platform çağrısı ve yeni kota rezervasyonu yapılmaz. Tamamlanmış fakat eksik/geçersiz yanıt da sonsuz işleniyor veya sunucu hatası yerine aynı güvenli terminal durumuna geçer. Önceden başarılı işlem için tüketilen kota korunur.
 
 8 yeni bozuk kayıt senaryosu dahil ilgili backend paketi 41/41 geçti. Sağlam zaman aşımı tekrarları ve izin sürümü değişimi regresyonları da geçti. Ruff ve diff kontrolü başarılı. Android RequestExpired durumunu zaten terminal hata olarak işler. Migration ve Android kaynak değişikliği gerekmedi; canlı çağrı yapılmadı.
+
+## Ek doğrulama — fiziksel temizleme sınırı
+
+Tekrar kaydının tam replay_until anındaki geçersizlik ve temizleme koşulları eşitlendi (<=). Altı yeni senaryo: başarılı/yarım kalmış kayıtlar, süreden bir saniye önce/tam bitişte/bir saniye sonra. Başka owner ile temizleme veriyi değiştirmez; süresi dolmamış veri korunur. Süresi dolan gövde/yanıt temizlenirken kimlik ve parmak izi korunur. İlgili regresyon paketi 47/47, Ruff başarılı. Sunucuda periyodik temizleme görevinin kurulması hâlâ açık; testler bunun yerine geçmez.

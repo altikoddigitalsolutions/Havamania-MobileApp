@@ -641,3 +641,5 @@ Son tam doğrulama: backend 188 geçti / 13 PostgreSQL testi standart koşuda at
 30 Ekim — bozuk tekrar kayıtları: eksik gönderim gövdesinin yeniden oluşturulması kaldırıldı; yanlış kullanıcı/kimlik/soru/bağlam ve eksik-geçersiz kayıtlı yanıt güvenli request_expired sonucu verir. Ek model çağrısı veya kota tüketimi yok. 8 yeni senaryo dahil ilgili paket 41/41 geçti, Ruff/diff kontrolü temiz. Ayrıntı ASISTAN_PLATFORM_V3.md. Canlı bağlantı ve dağıtım açık; Git'e push yapılmadı.
 
 30 Ekim push öncesi son tam backend paketi: 203 geçti, opt-in PostgreSQL 13 normal koşuda atlandı (önceki ayrı PostgreSQL koşusu 13/13 başarılı). Altı bağımlılık deprecation uyarısı mevcut. Bu doğrulama canlı bağlantı onayı değildir.
+
+30 Ekim — temizlik devamı: tam süre sınırında tekrar kaydı temizliğinin <= kuralı düzeltildi. Başarılı/yarım kalan kayıtların süre öncesi/sınırı/sonrası ve owner filtresi altı senaryoyla doğrulandı; kimlik işareti korunur. İlgili paket 47/47 ve Ruff başarılı. Önceki birikmiş değişiklikler 796a02c ile origin/main'e gönderildi. Düzenli sunucu temizleme görevi ve canlı bağlantı testi açık.

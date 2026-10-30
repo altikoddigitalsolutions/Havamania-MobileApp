@@ -26,7 +26,7 @@ def request_fingerprint(payload, wire):
 
 def purge_expired_replays(db, owner=None):
     filters = [
-        ChatbotRequest.replay_until < int(time.time()),
+        ChatbotRequest.replay_until <= int(time.time()),
         ChatbotRequest.replay_until.is_not(None),
     ]
     if owner is not None:
