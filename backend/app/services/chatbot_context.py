@@ -23,6 +23,7 @@ def platform_context(payload, profile, allow_health):
             personal["health_sensitivities"] = profile.health_sensitivities[:500]
         if personal:
             context["profile"] = personal
-    if len(json.dumps(context, ensure_ascii=False).encode("utf-8")) > 8192:
+    non_weather = {key: value for key, value in context.items() if key != "weather_data"}
+    if len(json.dumps(non_weather, ensure_ascii=False).encode("utf-8")) > 8192:
         raise BridgeError(413, "too_large", "Asistan bağlamı çok uzun. Lütfen kısaltın.")
     return context

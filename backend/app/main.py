@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 from app.core.observability import init_sentry
+from app.middleware.assistant_privacy import AssistantPrivacyMiddleware
 from app.middleware.metrics import MetricsMiddleware
 from app.middleware.rate_limit import InMemoryRateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
@@ -22,6 +23,7 @@ app = FastAPI(title=settings.app_name, debug=settings.debug)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(AssistantPrivacyMiddleware, prefix=settings.api_v1_prefix)
 
 # CORS ayarları configuration üzerinden yönetilir
 app.add_middleware(

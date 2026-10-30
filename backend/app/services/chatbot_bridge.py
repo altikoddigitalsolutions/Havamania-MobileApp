@@ -1,5 +1,6 @@
 import json
 import logging
+from uuid import UUID, uuid4
 
 import httpx
 from pydantic import ValidationError
@@ -53,7 +54,14 @@ class ChatbotBridgeClient:
     def ask(self, question: str, user_id: str, context: dict | None = None, **metadata) -> PlatformChatbotReply:
         if not self._api_key:
             raise BridgeError(503, "not_configured", "Asistan bağlantısı henüz hazır değil.")
+        if metadata.get("personalization") is False:
+            context = {key: value for key, value in (context or {}).items() if key not in {"profile", "trips"}}
+            metadata.update(health_consent=False, health_consent_version=None)
         payload = {"question": question, "user_id": user_id, "context": context or {}, **metadata}
+        try:
+            payload["request_id"] = str(UUID(str(payload["request_id"]))) if payload.get("request_id") else str(uuid4())
+        except (ValueError, TypeError, AttributeError):
+            raise BridgeError(400, "invalid_request", "İstek kimliği geçerli değil.") from None
         if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > 32768:
             raise BridgeError(413, "too_large", "Asistan isteği çok uzun. Lütfen kısaltın.")
         for attempt in range(2):
@@ -101,9 +109,15 @@ class ChatbotBridgeClient:
             daily = code == "daily_limit"
             raise BridgeError(429, "daily_limit" if daily else "rate_limited",
                               "Günlük asistan sınırı doldu." if daily else "Lütfen kısa bir süre bekleyin.", retry)
-        if status == 409 and code in {"mode_disabled", "conversation_conflict"}:
-            # Never retry a conflict automatically: it can also indicate account deletion.
-            raise BridgeError(409, code, "Bu sohbet kullanılamıyor. Yeni bir sohbet başlatabilirsiniz.")
+        if status == 409 and code in {"mode_disabled", "conversation_conflict", "user_deleted", "request_in_progress"}:
+            messages = {"mode_disabled": "Bu asistan modu şu anda kullanılamıyor.",
+                "conversation_conflict": "Sohbet sahipliği veya modu uyuşmuyor. Yeni sohbet başlatın.",
+                "user_deleted": "Bu hesap için asistan erişimi silme nedeniyle kapalı.",
+                "request_in_progress": "İstek hâlâ işleniyor. Aynı istek kimliğiyle daha sonra kontrol edin."}
+            raise BridgeError(409, code, messages[code])
+        if status == 422:
+            safe_code = code if code in {"request_conflict", "request_id_conflict", "request_mismatch", "request_id_mismatch", "invalid_request"} else "request_conflict"
+            raise BridgeError(422, safe_code, "İstek içeriği veya istek kimliği doğrulanamadı. Yeni mesaj gönderebilirsiniz.")
         if status == 413:
             raise BridgeError(413, "too_large", "Mesaj veya bağlam çok uzun. Lütfen kısaltın.")
         if status == 400:

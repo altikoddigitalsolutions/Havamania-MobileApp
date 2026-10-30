@@ -23,6 +23,8 @@ class PushService:
         self.provider = provider or FCMApnsPushProvider()
 
     def send_critical_alert(self, db: Session, alert: Alert) -> int:
+        if getattr(self.provider, "owner_protocol_enabled", True) is False:
+            return 0  # Disabled rollout must not consume a durable dispatch claim.
         # Input alerts must already be committed. A dedicated session keeps the
         # pre-dispatch claim durable without committing the caller's unrelated work.
         bind = db.get_bind()
@@ -52,7 +54,8 @@ class PushService:
 
         owner = location.user_id
         tokens = [
-            (t.id, t.token) for t in db.query(PushToken).filter(PushToken.user_id == owner).all()
+            (t.id, t.token) for t in db.query(PushToken).filter(
+                PushToken.user_id == owner, PushToken.owner_protocol == 1).all()
         ]
         sent = 0
         for token_id, token_value in tokens:
@@ -89,6 +92,7 @@ class PushService:
                         PushToken.id == token_id,
                         PushToken.user_id == owner,
                         PushToken.token == token_value,
+                        PushToken.owner_protocol == 1,
                     )
                     .with_for_update()
                 )
@@ -105,6 +109,9 @@ class PushService:
                         token=token.token,
                         title=f"Kritik Hava Uyarısı: {current.title}",
                         body=current.description,
+                        owner_user_id=owner,
+                        event_id=alert_id,
+                        expires_at=current.ends_at,
                     )
                     if ok:
                         status = "sent"

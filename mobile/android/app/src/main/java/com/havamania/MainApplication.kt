@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.MainScope
 
 class MainApplication : Application() {
+  private val tokenQueueScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
   override fun onCreate() {
     super.onCreate()
@@ -30,8 +31,14 @@ class MainApplication : Application() {
     auth.addAuthStateListener { currentAuth ->
         val nextOwner = currentAuth.currentUser?.uid
         if (nextOwner != notificationOwner) {
+            NotificationSessionEpoch.changed()
             notificationOwner = nextOwner
             (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+        }
+        tokenQueueScope.launch {
+            try { FcmTokenQueue.reconcile(this@MainApplication) }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { android.util.Log.w("FCM", "Token queue could not be reconciled") }
         }
     }
 

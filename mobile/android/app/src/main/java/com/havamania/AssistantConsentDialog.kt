@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -23,13 +25,15 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
     if (!state.visible) return
     val colors = HavamaniaTheme.colors
     val doc = state.document
-    var health by remember(doc?.text_hash, doc?.health?.text_hash, doc?.accepted) {
+    val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.92f
+    var health by remember(doc?.text_hash, doc?.health?.text_hash, doc?.accepted, doc?.health_accepted, doc?.health_sync_required) {
         mutableStateOf(doc?.accepted == true && doc.health_accepted)
     }
     Dialog(onDismissRequest = { if (!state.busy) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = colors.surface, shape = MaterialTheme.shapes.large,
-            modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().fillMaxHeight(0.92f).padding(12.dp)) {
+            modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().heightIn(max = maxHeight)
+                .padding(12.dp).testTag("assistant_consent_dialog")) {
             Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
                 Text("Asistan izinleri", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
                 Column(Modifier.padding(vertical = 12.dp),
@@ -38,7 +42,13 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
                         color = colors.textSecondary)
                     if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    doc?.let {
+                    state.notice?.let { Text(it, color = colors.textPrimary) }
+                    if (state.withdrawalPending) Text(
+                        "İşlem tamamlanana kadar bu cihazdan uzak asistana gönderim durduruldu.", color = colors.textSecondary)
+                    if (doc?.health_sync_required == true && !state.withdrawalPending) Text(
+                        "Sağlık izninin sunucuda kaldırıldığı henüz doğrulanmadı. Bu cihaz profil sağlık bilgilerini göndermiyor. Seçimleri kaydederek yeniden deneyebilirsiniz.",
+                        color = colors.textSecondary)
+                    doc?.takeIf { state.notice == null && !state.withdrawalPending }?.let {
                         ConsentText(it.text)
                         it.health?.let { separate ->
                             HorizontalDivider()
@@ -57,17 +67,22 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (doc != null) Button(onClick = { onSave(health) }, enabled = !state.busy && doc.isValid(),
+                    if (state.notice != null) TextButton(onClick = onRetry, enabled = !state.busy,
+                        modifier = Modifier.fillMaxWidth()) { Text("İzinleri yeniden yönet")
+                    } else if (state.retry == ConsentRetry.REVOKE) Button(onClick = onRetry,
+                        enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("İzni geri çekmeyi tekrar dene")
+                    } else if (doc != null) Button(onClick = { onSave(health) }, enabled = !state.busy && doc.isValid(),
                         modifier = Modifier.fillMaxWidth()) {
                         Text(if (doc.accepted) "Seçimleri kaydet" else "Onayla ve devam et")
                     } else TextButton(onClick = onRetry, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                         Text("Tekrar dene")
                     }
-                    TextButton(onClick = onRevoke, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                    if (state.retry != ConsentRetry.REVOKE && state.notice == null) TextButton(onClick = onRevoke, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                         Text("Uzak asistan izinlerini geri çek")
                     }
                     TextButton(onClick = onDismiss, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                        Text("Vazgeç")
+                        Text(if (state.notice != null || state.withdrawalPending) "Kapat" else "Vazgeç")
                     }
                 }
             }

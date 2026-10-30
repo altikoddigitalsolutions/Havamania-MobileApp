@@ -67,7 +67,7 @@ def test_empty_postgres_matches_models_and_repeated_upgrade(pg_schema):
         columns = {c["name"] for c in inspector.get_columns(name)}
         assert set(table.columns.keys()) <= columns, name
     with engine.connect() as c:
-        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0017_push_deliveries"
+        assert c.scalar(text("SELECT version_num FROM alembic_version")) == "0019_chatbot_replay"
 
 
 def test_upgrade_preserves_data_removes_old_unique_constraint_and_cascades(pg_schema):
@@ -286,7 +286,7 @@ def test_postgres_parallel_push_queue_dispatches_once_per_device(pg_schema):
         db.add(User(id='push-owner', email='push@example.invalid', password_hash='unused'))
         db.commit()
         db.add(Location(id='push-location', user_id='push-owner', label='City', lat=1, lon=2))
-        db.add(PushToken(user_id='push-owner', platform='android', token='local-test-token'))
+        db.add(PushToken(owner_protocol=1, user_id='push-owner', platform='android', token='local-test-token'))
         db.commit()
         db.add(Alert(id='push-alert', location_id='push-location', severity=AlertSeverity.CRITICAL,
                      title='Test', description='Test only', starts_at=now-timedelta(minutes=1),
@@ -313,3 +313,161 @@ def test_postgres_parallel_push_queue_dispatches_once_per_device(pg_schema):
         db.delete(db.get(User, 'push-owner'))
         db.commit()
         assert db.scalar(select(func.count()).select_from(PushDelivery)) == 0
+
+
+def test_postgres_racing_token_registration_and_stale_unregister(pg_schema):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.api.v1.routes.devices import register_push_token, unregister_push_token
+    from app.models.push_token import PushToken
+    from app.models.user import User
+    from app.schemas.device import PushTokenRequest
+    from app.services.account_access import require_active_account
+    from sqlalchemy import func, select
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    with Session(engine) as db:
+        db.add_all([User(id=uid, email=uid+'@example.invalid', password_hash='unused') for uid in ('token-a', 'token-b')])
+        db.commit()
+    payload = PushTokenRequest(platform='android', token='parallel-test-token')
+    def register(index):
+        uid = 'token-a' if index % 2 else 'token-b'
+        with Session(engine) as db:
+            require_active_account(db, uid)
+            return register_push_token(payload, db.get(User, uid), db).id
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        ids = list(pool.map(register, range(16)))
+    assert len(set(ids)) == 1
+    with Session(engine) as stale:
+        # Cache A's token in an old ORM identity map, then move it to B.
+        user_a = stale.get(User, 'token-a')
+        register_push_token(payload, user_a, stale)
+        old_token = stale.scalar(select(PushToken))
+        assert old_token.user_id == 'token-a'
+        with Session(engine) as fresh:
+            register_push_token(payload, fresh.get(User, 'token-b'), fresh)
+        unregister_push_token(payload, user_a, stale)
+        with Session(engine) as verify:
+            assert verify.scalar(select(func.count()).select_from(PushToken)) == 1
+            assert verify.scalar(select(PushToken.user_id)) == 'token-b'
+
+
+def test_postgres_binding_revisions_race_and_preserve_unbind_tombstone(pg_schema):
+    from concurrent.futures import ThreadPoolExecutor
+    from hashlib import sha256
+
+    from app.api.v1.routes.devices import register_push_token, unregister_push_token
+    from app.models.push_token import PushToken
+    from app.models.push_token_binding import PushTokenBinding
+    from app.models.user import User
+    from app.schemas.device import PushTokenRequest
+    from app.services.account_access import require_active_account
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    with Session(engine) as db:
+        db.add_all([User(id=uid, email=uid+'@example.invalid', password_hash='unused') for uid in ('binding-a', 'binding-b')])
+        db.commit()
+    base = {'platform': 'android', 'token': 'binding-parallel-token', 'owner_protocol': 1,
+            'installation_id': '032985f1-b932-48d9-8540-be4ffb65f421'}
+    def register(revision):
+        uid = 'binding-b' if revision % 2 == 0 else 'binding-a'
+        with Session(engine) as db:
+            require_active_account(db, uid)
+            try:
+                response = register_push_token(PushTokenRequest(**base, revision=revision), db.get(User, uid), db)
+                return response.revision
+            except HTTPException as error:
+                assert error.status_code == 409
+                return None
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(register, range(1, 17)))
+    assert 16 in results
+    with Session(engine) as db:
+        digest = sha256(base['token'].encode()).hexdigest()
+        binding = db.get(PushTokenBinding, digest)
+        assert binding.revision == 16 and binding.user_id == 'binding-b' and binding.bound
+        assert db.scalar(select(PushToken.owner_protocol)) == 1
+        require_active_account(db, 'binding-b')
+        unregister_push_token(PushTokenRequest(**base, revision=17), db.get(User, 'binding-b'), db)
+    assert register(16) is None
+    with Session(engine) as db:
+        binding = db.get(PushTokenBinding, digest)
+        assert binding.revision == 17 and not binding.bound
+        assert db.scalar(select(PushToken)) is None
+        db.delete(db.get(User, 'binding-b'))
+        db.commit()
+        assert db.get(PushTokenBinding, digest) is None
+
+
+def test_binding_migration_preserves_legacy_as_incapable(pg_schema):
+    engine, migrate = pg_schema
+    migrate('0017_push_deliveries')
+    seed(engine)
+    migrate()
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT owner_protocol FROM push_tokens WHERE id='p'")) == 0
+        assert connection.scalar(text("SELECT count(*) FROM push_token_bindings")) == 0
+
+
+def test_postgres_platform_replay_parallel_requests_cache_once_and_expire(pg_schema, assistant_texts, monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Lock
+
+    from app.api.v1.routes import chatbot as route
+    from app.models.chatbot_request import ChatbotRequest
+    from app.models.chatbot_usage_daily import ChatbotUsageDaily
+    from app.models.user import User
+    from app.schemas.chatbot import AssistantConsentUpdate, ChatbotAskRequest, PlatformChatbotReply
+    from app.services.assistant_consent import current_documents, save_consent
+    from app.services.chatbot_replay import purge_expired_replays
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    engine, migrate = pg_schema
+    migrate()
+    uid = str(uuid4())
+    with Session(engine) as db:
+        db.add(User(id=uid, email='replay@example.invalid', password_hash='unused'))
+        db.commit()
+        doc, _ = current_documents()
+        save_consent(db, uid, AssistantConsentUpdate(assistant_accepted=True, consent_version=doc['version'], consent_hash=doc['hash']))
+    calls = []
+    lock = Lock()
+    class Platform:
+        def ask(self, **body):
+            with lock:
+                calls.append(body)
+            return PlatformChatbotReply(answer='One recorded reply', conversation_id=body['conversation_id'], message_id=uuid4())
+    monkeypatch.setattr(route, 'chatbot_bridge_client', Platform())
+    payload = ChatbotAskRequest(question='Test', request_id=uuid4(), conversation_id=uuid4())
+    def ask(_):
+        with Session(engine) as db:
+            result = route._ask(payload, db.get(User, uid), db, False)
+            return result.status_code if isinstance(result, JSONResponse) else 200
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        statuses = list(pool.map(ask, range(16)))
+    assert set(statuses) <= {200, 409} and 200 in statuses
+    assert len(calls) == 1
+    with Session(engine) as db:
+        assert db.scalar(select(ChatbotUsageDaily.message_count)) == 1
+        record = db.scalar(select(ChatbotRequest))
+        assert record.cached_reply['answer'] == 'One recorded reply'
+        assert record.platform_payload is None
+        record.replay_until = int(time.time()) - 1
+        db.commit()
+        purge_expired_replays(db)
+        db.refresh(record)
+        assert record.cached_reply is None and record.platform_payload is None
+        result = route._ask(payload, db.get(User, uid), db, False)
+        assert result.status_code == 409 and b'request_expired' in result.body
+        db.delete(db.get(User, uid))
+        db.commit()
+        assert db.scalar(select(ChatbotRequest)) is None

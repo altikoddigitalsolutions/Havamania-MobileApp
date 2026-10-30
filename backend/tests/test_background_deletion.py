@@ -21,7 +21,7 @@ def queued_alerts(db_session):
     db_session.commit()
     for uid in ('a', 'b'):
         db_session.add(Location(id='loc-' + uid, user_id=uid, label='City', lat=41, lon=29))
-        db_session.add(PushToken(user_id=uid, platform='android', token='token-' + uid))
+        db_session.add(PushToken(owner_protocol=1, user_id=uid, platform='android', token='token-' + uid))
     db_session.commit()
     for uid in ('a', 'b'):
         db_session.add(Alert(id='alert-' + uid, location_id='loc-' + uid, severity=AlertSeverity.CRITICAL,
@@ -126,7 +126,7 @@ def test_ambiguous_or_crashed_delivery_is_never_automatically_replayed(db_sessio
 def test_each_device_has_its_own_receipt_and_account_delete_cascades(db_session, queued_alerts):
     from app.models.push_delivery import PushDelivery
     a, _ = queued_alerts
-    db_session.add(PushToken(user_id='a', platform='android', token='second-token-a'))
+    db_session.add(PushToken(owner_protocol=1, user_id='a', platform='android', token='second-token-a'))
     db_session.commit()
     provider = Mock()
     provider.send.return_value = True
@@ -169,7 +169,7 @@ def test_reregistering_same_token_does_not_erase_dispatch_history(db_session, qu
     old = db_session.scalar(select(PushToken).where(PushToken.user_id == 'a'))
     db_session.delete(old)
     db_session.commit()
-    db_session.add(PushToken(user_id='a', platform='android', token='token-a'))
+    db_session.add(PushToken(owner_protocol=1, user_id='a', platform='android', token='token-a'))
     db_session.commit()
     assert service.send_critical_alert(db_session, a) == 0
     provider.send.assert_called_once()
@@ -210,3 +210,25 @@ def test_connection_bound_caller_cannot_roll_back_durable_dispatch_claim(db_sess
     assert db_session.scalar(select(PushDelivery.status)) == 'sent'
     assert service.send_critical_alert(db_session, a) == 0
     provider.send.assert_called_once()
+
+
+def test_disabled_owner_protocol_does_not_consume_dispatch_claim(db_session, queued_alerts):
+    from app.models.push_delivery import PushDelivery
+    a, _ = queued_alerts
+    provider = Mock()
+    provider.owner_protocol_enabled = False
+    assert PushService(provider).send_critical_alert(db_session, a) == 0
+    provider.send.assert_not_called()
+    assert db_session.scalar(select(func.count()).select_from(PushDelivery)) == 0
+
+
+def test_legacy_device_capability_never_receives_owner_bound_data(db_session, queued_alerts):
+    from app.models.push_delivery import PushDelivery
+    a, _ = queued_alerts
+    token = db_session.scalar(select(PushToken).where(PushToken.user_id == 'a'))
+    token.owner_protocol = 0
+    db_session.commit()
+    provider = Mock()
+    assert PushService(provider).send_critical_alert(db_session, a) == 0
+    provider.send.assert_not_called()
+    assert db_session.scalar(select(func.count()).select_from(PushDelivery)) == 0

@@ -44,7 +44,7 @@ fun AiChatScreen(
     val consentState by viewModel.assistantConsent.state.collectAsStateWithLifecycle()
     LaunchedEffect(consentState.allowed, consentState.visible) { viewModel.resumeAfterConsent() }
     AssistantConsentDialog(consentState, viewModel.assistantConsent::save, viewModel::revokeAssistantConsent,
-        viewModel.assistantConsent::open, viewModel::dismissAssistantConsent)
+        viewModel::retryAssistantConsent, viewModel::dismissAssistantConsent)
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()

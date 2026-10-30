@@ -187,6 +187,12 @@ class AccountDeletionManager private constructor(private val app: Application) {
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     private suspend fun cleanLocalData(uid: String) {
+        withContext(Dispatchers.IO) {
+            check(app.getSharedPreferences("assistant_local_privacy", Context.MODE_PRIVATE)
+                .edit().remove("withdraw_pending_$uid").remove("health_blocked_$uid")
+                .remove("health_revision_$uid").commit())
+        }
+        withContext(Dispatchers.IO) { FcmTokenQueue.clearAccount(app) }
         WorkManager.getInstance(app).cancelUniqueWork("travel_notifications_daily").await()
         WorkManager.getInstance(app).cancelUniqueWork("WeatherDailyUpdateWork").await()
         val firestore = FirebaseFirestore.getInstance()

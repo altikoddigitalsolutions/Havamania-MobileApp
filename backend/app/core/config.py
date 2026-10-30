@@ -21,9 +21,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/havamania"
     cors_origins: list[str] = Field(default_factory=list)
     weather_provider: str = "open_meteo"
-    chatbot_base_url: str = "http://localhost:9000"
+    chatbot_base_url: str = "https://havamania.com/api/bridge"
     chatbot_api_key: SecretStr | None = Field(None, repr=False)
     chatbot_timeout_seconds: int = Field(50, ge=1, le=60)
+    fcm_owner_protocol_enabled: bool = False
     assistant_consent_source: Literal["configured", "platform"] = "configured"
     assistant_consent_version: int | None = Field(None, ge=1)
     assistant_consent_text: str | None = None

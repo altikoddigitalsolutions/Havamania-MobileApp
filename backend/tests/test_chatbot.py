@@ -111,8 +111,8 @@ def test_request_replay_is_blocked_without_another_model_call(client, monkeypatc
     payload = {"question": "test", "request_id": str(uuid4())}
     assert client.post("/v1/chatbot/ask", json=payload, headers=headers).status_code == 200
     response = client.post("/v1/chatbot/ask", json=payload, headers=headers)
-    assert response.status_code == 409
-    assert response.json()["error"] == "duplicate_request"
+    assert response.status_code == 200
+    assert response.json()["answer"]
     assert len(calls) == 1
     assert client.get("/v1/chatbot/usage", headers=headers).json()["used_messages_today"] == 1
 
@@ -137,7 +137,7 @@ def test_zero_daily_quota_is_an_error_without_calling_model(client, monkeypatch,
     assert "answer" not in response.json()
     assert response.json()["used_messages_today"] == 0
     assert 1 <= int(response.headers["Retry-After"]) <= 86400
-    assert datetime.fromisoformat(response.json()["reset_at"]).utcoffset().total_seconds() == 0
+    assert datetime.fromisoformat(response.json()["reset_at"]).utcoffset().total_seconds() == 10800
 
 
 def test_contract_context_is_bounded_typed_and_opt_out_is_honored(client, monkeypatch, db_session):

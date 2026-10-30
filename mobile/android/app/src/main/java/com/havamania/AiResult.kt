@@ -5,6 +5,9 @@ sealed interface AssistantResult {
         val disclaimer: String? = null) : AssistantResult
     data object ConversationConflict : AssistantResult
     data object AccountDeletionPending : AssistantResult
+    data object AccountDeleted : AssistantResult
+    data object RequestInProgress : AssistantResult
+    data object RequestConflict : AssistantResult
     data object ModeDisabled : AssistantResult
     data object TooLong : AssistantResult
     data object ConsentRequired : AssistantResult

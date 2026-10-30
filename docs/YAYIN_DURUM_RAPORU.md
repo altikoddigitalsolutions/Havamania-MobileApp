@@ -557,3 +557,87 @@ Son ek test sonucu: arka plan dosyasında 16 test geçti (önceki 34 paketle ör
 - Saf JVM testleri A–B, çıkış, legacy, silme durumu, seyahat ID query enjeksiyonu ve bilinmeyen iç/dış rota hedeflerini kapsar. Gerçek Activity/PendingIntent/Compose yeniden oluşturma, açık/kapalı uygulama, process death, notification tray ve TalkBack testleri bu adımda cihazda yapılmadı. Eski kurulumdan UID taşımayan intent'lerin kaynağı geriye dönük bilinemez; rota Room sorgusu UID'ye bağlı kalır.
 - Ek sınır: Firebase tarafından önceden kabul edilmiş notification-payload bildiriminin hesap değiştikten sonra işletim sistemi tarafından gösterilmesi bu yerel tray temizliğiyle kesin engellenmez. FCM data/owner protokolü ve sunucudaki token devri uçtan uca doğrulama gerektirir. Bunlar kapatılmış sayılmaz.
 Son doğrulama: son kaynaklarla testDebugUnitTest ve assembleDebug başarılı; XML sonuçları 208 test, 0 failure/error/skipped. Bildirim navigasyonu için 3 yeni JVM testi var. Sistem bildirim URI'lerinde seyahat kimliği encoding de uygulandı. Backend bu adımda değişmedi; yeniden backend/PG testi çalıştırılmadı. Gerçek Activity/PendingIntent, NavHost durum geri yükleme ve eski ViewModel temizlenmesi cihaz matrisi açık.
+
+## 30 Ekim 2026 — Token devri yarışları ve eksik FCM istemcisi
+- /devices/push-token kayıt yolu token unique anahtarında atomik upsert kullanır. Aynı token için ilk kayıt yarışı 500'e dönüşmez; satır kimliği tekrar kayıtta sabittir ve sahiplik authenticated current_user üzerinden belirlenir.
+- DELETE artık eski ORM okumasına göre nesne silmez; kullanıcı/token koşulunu doğrudan SQL DELETE üzerinde değerlendirir. A'nın gecikmiş çıkışı, B'ye devredilmiş tokenı silemez. Gönderimdeki token satır kilidiyle kayıt devri de aynı satır üzerinde sıralanır.
+- 22 hedefli backend testi geçti. İzole PostgreSQL 16 audit 10 geçti: 16 paralel A/B token upsert tek satır/ID üretir; A'nın eski ORM cache'iyle unregister B'nin kaydını korur. Geçici sunucu kapatıldı. Ruff/diff temiz; Android/üretim/gerçek FCM testi yapılmadı; şema değişmedi.
+- Önemli tespit: aktif Kotlin modülünde firebase-messaging, FCM service ve backend token-kayıt çağrısı yok. WorkManager yerel bildirimleri bu açığı kapatmaz. Backend notification payload'ı eski hesaba ait gecikmiş içeriği OS üzerinden gösterebilir. Bu nedenle FCM hesap izolasyonu ve uçtan uca teslim yayın engeli olarak açık kaldı.
+- Eski A oturumunun geç kalmış REGISTER isteğinin B kaydını geri alması salt upsert ile çözülmüş değildir. İstemci session-generation/kayıt sıralama ve server capability/data-only owner/event protokolü gerekir. Hazırlanan docs/FCM_HESAP_IZOLASYONU.md uygulanacak tasarımı, test matrisini ve sınırları ayırır; tamamlanmış entegrasyon değildir.
+- Sıradaki: Kotlin FCM alıcı/token-kayıt entegrasyonunu ve hesap/olay kimliği taşıyan data mesaj sözleşmesini yerel testlerle uygulamak. Gerçek bildirim gönderimi mevcut yalnızca-yerel-test sınırının dışında kalır; staging ve ayrıca yetkilendirme gerektirir.
+
+## 30 Ekim 2026 — Kotlin FCM alıcısı, ilk aşama
+- firebase-messaging bağımlılığı ve exported=false service eklendi. Otomatik FCM başlatma manifestte kapalı; gerçek token alma/kaydetme veya mesaj gönderimi bu adımda yapılmaz.
+- Protokol-1 data zarfı mevcut Firebase oturumunun backend UUIDv5 kimliğiyle karşılaştırılır. Süre, UUID, 4 KiB boyut, metin sınırları ve tek izinli weather hedefi doğrulanır. Eski/başka hesap, legacy/çıkış ve pending silme reddedilir.
+- Hesap epoch'u A–B–A geçişini tanır. Room INSERT IGNORE ve hesap/olay primary key'i tekrar gösterimi engeller. Kayıt sırasında hesap değişirse eski kayıt kaldırılır. Gösterimde ana tercih, Android izni, süre ve oturum tekrar kontrol edilir; PendingIntent UID/ID ve sistem notification tag'i hesap/olay bazlıdır.
+- Callback yalnızca yerel kısa işler yapar (3 saniye); token/backend ağ çağrısı veya detached coroutine yoktur. Yeni saf JVM testleri zarf/kimlik/süre/bozuk veri, hesap değişimi, tekrar olay ve coroutine iptalini kapsar. Gerçek Room concurrency/Service/cihaz testi açık.
+- FCM_HESAP_IZOLASYONU.md güncellendi. Token kayıt kuyruğu, sunucunun data-only/capability geçişi, eski notification-payload engeli ve gerçek teslim henüz tamamlanmadı; özellik üretimde hazır sayılmaz. Sırada oturum sürümüne bağlı kalıcı token kayıt kuyruğu ve backend protokol eşleştirmesi var.
+Doğrulama: testDebugUnitTest + assembleDebug başarılı; XML'de 216 test / 0 failure/error/skipped. 8 yeni FCM zarf/persist testinin tamamı geçti. Birleşik manifestte exported=false ve firebase_messaging_auto_init_enabled=false doğrulandı. Gerçek FCM/Room cihaz concurrency ve token kayıt entegrasyonu açık; bu sonuç üretim etkinleştirmesi değildir.
+
+## 30 Ekim 2026 — Kalıcı token kuyruğu ve owner-bound FCM sunucu sözleşmesi
+- Yerel sürümlü token journal + AtomicFile/noBackup adaptörü eklendi. onNewToken/auth/hesap silme kuyruğa bağlandı; yalnızca yerel disk işlemi yapar. Token dönüşü, hesap değişimi, eski acknowledgement ve offline hata testleri eklendi; token logları redakte. Gerçek HTTP gateway ve WorkManager kaydı hâlâ bağlı değil.
+- Backend provider notification fallback yerine protokol-1 owner/event/expiry data mesajı üretir. UTF-16/emoji sınırları, boyut ve kimlik doğrulaması, kritik öncelik ve TTL var. FCM_OWNER_PROTOCOL_ENABLED=false varsayılanı SDK başlatma/gönderimi kapatır; kapalıyken dispatch claim tüketilmez. Üretim ayarı değiştirilmedi.
+- Ek Firebase hatası düzeltildi: named identity app default messaging app yerine kabul edilmiyor; default init yarışı kontrol ediliyor. Credential/token ayrıntıları hata loglarına taşınmıyor.
+- Backend full suite 168 geçti / 10 opt-in PostgreSQL atlandı; son TTL assertion'larıyla provider paketi ayrıca 9 geçti (örtüşür). Ruff temiz. Yeni SQL şeması/migration eklenmedi, PG bu adımda tekrar çalıştırılmadı.
+- Açık yayın engeli: server token kayıt revision/CAS tombstone ve capability sözleşmesi yok; eski REGISTER yarışı hâlâ açık. Legacy endpoint'e yeni kuyruk bağlanmadı. Sıradaki adım bu server sözleşmesi, ardından gerçek gateway/WorkManager retry ve cihaz matrisi. Auto-init/FCM rollout bu işler doğrulanmadan açılmamalı.
+
+## 30 Ekim 2026 — Backend token revision ve capability koruması
+- Önceki kuyruğun son AtomicFile doğrulaması da testDebugUnitTest/assembleDebug derlemesinden geçti. 222 JVM testi başarılı; Android'de bu son server adımı için yeni kaynak değişmedi.
+- 0018_push_token_bindings migration, user CASCADE'li token-hash/kurulum/revision/bound takibi ve PushToken owner_protocol default 0 eklendi. Eski cihazlar protokol-1 desteği var sayılmaz; gönderimden önce capability kontrol edilir.
+- POST/DELETE yeni metadata üçlüsünü strict doğrular. Aynı kurulum daha yüksek revision kabul eder; aynı sürüm yalnızca aynı kullanıcı/durum için idempotenttir. Eski REGISTER, başka kullanıcının geç UNREGISTER'ı, farklı kurulum ve legacy downgrade 409 döner. SQL conditional upsert + PostgreSQL transaction advisory lock birlikte kullanılır.
+- DELETE son sürümü unbound tombstone olarak korur; ilk POST'tan önce logout gelmesi de korunur. Account deletion CASCADE binding metadata'sını temizler. DML legacy guard ayrıca kayıt/silme anında değerlendirilir.
+- İlgili 26 yerel test ilk pakette geçti; son offline-unbind senaryosu full pakete dahil edildi. İzole PostgreSQL 16 audit 12 geçti: 16 paralel revision'da en yüksek revision/owner korunması, tombstone replay engeli, legacy migration capability 0 ve önceki migration/silme/gönderim yarışları dahil. Geçici sunucu kapatıldı. Son full backend: 173 geçti / 12 PostgreSQL testi normal pakette atlandı; aynı 12 test ayrı izole PostgreSQL audit ile geçti. Ruff ve diff kontrolü temiz.
+- docs/FCM_HESAP_IZOLASYONU.md sözleşme güncellendi. Gerçek gateway/WorkManager, makbuz doğrulama, offline logout/FCM token iptali, farklı token rotasyonu temizliği ve cihaz/reinstall matrisi açık. Native auto-init ve server FCM flag kapalı; canlı migration/POST/FCM yok.
+
+## 30 Ekim 2026 — Kullanıcı bildirimi: asistan izin ekranında tekrar hata
+
+Öncelik: P1, uzak asistanın yayın öncesi doğrulamasına eklendi. Token/FCM işleri bu maddeyi kapatmaz.
+
+Kullanıcı adımları: asistan ekranında sorun görülüyor; Tekrar dene aynı ilk duruma dönüyor; Uzak asistan izinlerini geri çek farklı bir ikinci duruma götürüyor. Screenshot_20261030-145617.jpg ve Screenshot_20261030-145625.jpg belirtilen Desktop yollarında bulunamadı; görseller ve hata yazıları doğrulanamadı. İkinci durumun başarı mı hata mı olduğu varsayılmadı.
+
+Kod incelemesi: AssistantConsentController.load tüm yükleme hatalarını aynı bağlantı mesajına çeviriyor. Repository 401 için bir kez token yeniliyor, 409'u stale sayıyor; diğer HTTP hatalarını ayırmıyor. Bu nedenle ağ kesintisi, yayınlanmamış endpoint (404), sunucu/izin metni yapılandırması (503) ve yetkilendirme sorunu kullanıcı açısından aynı görünebilir. Canlı neden doğrulanmadı; prod servise istek gönderilmedi. İzin metni alınmadan onay/uzak gönderimin engellenmesi korunmalıdır; hatayı geçmek için sahte metin/onay oluşturulmamalı.
+
+Sırası geldiğinde test/düzeltme:
+- Görseldeki gerçek hata metni ve cihaz zamanı ile adımları eşleştir; yeni görsel veya yazılı hata gerekir. Mevcut dosyalar görülemedi.
+- Yerel gateway testleri: 401+refresh, 403, 404, 409, 429, 503, timeout/offline ve tekrar deneme. busy durumu çözülmeli; başarısız istek sonsuz döngü yaratmamalı.
+- Hata sunumunu güvenli fakat ayırt edici yap: servis/metin hazır değilken kullanıcıyı sürekli internetini kontrol etmeye yönlendirme. Ham sunucu/credential ayrıntılarını gösterme.
+- İzin geri çekme: başarılı POST sonrası açık sonuç; başarısız POST'ta başarı gösterilmemesi; sunucuda metin eksik olsa bile geri çekmenin çalışması; tekrar açılışta server state false; A–B ve çift tıklama testleri.
+- Android/service sürüm eşleşmesi ve GET/POST /v1/chatbot/consent sözleşmesi. Canlı ortam kontrolü mevcut yalnızca-yerel-test sınırının dışında; ayrıca yetkilendirilmiş test ortamında yapılmalı.
+
+Durum: bildirildi ve kodda hata ayrımının eksikliği doğrulandı; görsel/gerçek neden ve düzeltme tamamlanmadı. Bu adımda uygulama kodu değiştirilmedi.
+
+### Aynı bildirimin görselleri doğrulandı — 30 Ekim 14:56
+Önceki dosya-yolu erişim sorunu sonrası görseller sohbet içinde görüldü. İlk görsel: Asistan izin metni alınamadı. Bağlantınızı kontrol edip tekrar deneyin. İkinci görsel: İzin geri çekilemedi. Lütfen tekrar deneyin. İkinci ekran başarı değildir; sunucuda izin geri çekildiği doğrulanmamıştır. İki işlem de hata veriyor; gerçek HTTP/network nedeni hâlâ bilinmiyor ve prod çağrısı yapılmadı.
+Ek doğrulanmış UI sorunu: kısa hata içeriği için tabletin neredeyse tamamını kaplayan boş pencere. Kaynakta AssistantConsentDialog Surface fillMaxHeight(0.92f) kullanıyor. Düzeltme sırasına içerik kadar büyüyen fakat uzun metin/büyük yazı/yatay kullanımda ekran sınırını aşmayan, kaydırılabilir diyalog eklendi; uzun metin erişilebilirliği korunmalı.
+Ek akış kontrolü: aynı dialogdaki Tekrar dene callback'i izin ekranını yeniden yüklemeye bağlı; geri çekme hatası sonrası kullanıcının geri çekmeyi yeniden denediğini sanmaması için işlem bazlı retry ve açıklayıcı düğme/test ayrımı ele alınmalı. Yalnızca metin yüklemesini yeniden denemek sunucudaki onayı geri çekmiş sayılmaz.
+Durum: P1 mevcut asistan izin problemi görsel kanıtla güncellendi. Hata ayrımı, yükleme/revoke retry ve tablet dialog düzeni tek takip maddesi altında; yeni mükerrer problem sayısı oluşturulmadı. Bu adımda kod değiştirilmedi veya test çalıştırılmadı; tanı ve sıra kaydı güncellendi.
+
+## 30 Ekim 2026 — P1 asistan izin ekranı: istemci düzeltmeleri
+
+Kullanıcı görsellerindeki iki hata ve boş tablet penceresi için:
+- HTTP 401/403/404/405/429/5xx, timeout, ağ ve geçersiz yanıt güvenli hata türlerine ayrıldı. Servis kullanılamıyorsa her durumda internet bağlantısı suçlanmıyor; ham response/credential ayrıntısı gösterilmiyor. 401 en fazla bir token yenilemesiyle denenir.
+- Tekrar dene artık işlem bazlı: metin yükleme hatasında metni yükler, geri çekme hatasında geri çekmeyi tekrarlar. İkincisi açıkça İzni geri çekmeyi tekrar dene diye adlandırılır. Ekranı yeniden açmak bekleyen geri çekmeyi otomatik POST etmez. Save stale-text akışında yeni metin için yeniden açık karar gerekir.
+- Geri çekme başarısızlığında eski accepted=true yerel olarak geri yüklenmez. UID bazlı, diske commit edilen pending withdrawal flag'i, yeni controller/uygulama açılışında önceki onayın otomatik kullanılmasını engeller. Başka hesabı etkilemez; HTTP'den önce yazılır; sadece doğrulanmış false/false POST yanıtı sonrası temizlenir. Disk hatasında POST yapılmaz. Hesap silme yerel temizliğine bu UID bayrağı dahil edildi.
+- AiAssistantRepository ilk gönderim ve 401 retry öncesinde yerel pending flag'i denetler. Asistan ekranında geri çekme, o ViewModel'in mevcut isteğini ve bekleyen prompt'u da iptal eder. Daha önce sunucuya iletilmiş verinin bu istemci kontrolüyle geri alınması garanti edilmez.
+- Başarılı geri çekme açık mesaj ve Kapat gösterir; başarısız işlemde başarı mesajı yoktur. Bekleyen durumda Kapat yalnızca ekranı kapatır, gizlilik niyetini iptal etmez. Başarı ekranında doğrudan yeniden Onayla düğmesi yerine İzinleri yeniden yönet vardır.
+- Dialog zorunlu %92 yükseklik yerine içeriğe göre ölçülür; maksimum yükseklik/kaydırma korunur. Büyük yazı/uzun metinde kontroller erişilebilir kalır.
+
+Doğrulama: 227 JVM testi ilk koşuda geçti. SM-T500 Android 12 üzerinde yalnızca sahte verili AssistantConsentDialogTest 4/4 geçti: kısa revoke hata penceresi geometri/düğmesi, açık başarı sonucu, koyu/büyük yazı ve açık/sağlık opsiyonel akış. Gerçek izin API'si, üretim ViewModel'i veya hesap izni bu fixture'larda çağrılmaz. Son reopen/no-auto-POST kontrolü dahil final birim/APK derlemesi başarılı; XML sonuçları 227 test, 0 failure/error/skipped.
+
+Kapanmayan P1 kısmı: cihazdaki gerçek servis hatasının HTTP/network nedeni henüz bilinmiyor. Yeni canlı istek gönderilmeden eski log buffer'ında yalnızca consent URL'si arandı, kayıt bulunmadı. Backend endpoint sürümü/auth/metin ayarları yetkilendirilmiş test ortamında doğrulanmalı; bu arayüz düzeltmesiyle asistan servisinin canlıda çalıştığı iddia edilmez. P1'in istemci kısmı düzeltiliyor, uçtan uca yayın doğrulaması açık. FCM gateway/WorkManager kuyruğu önceki sırasıyla korunur.
+Son paket durumu: final 227 JVM testi başarılı, debug APK derlendi ve adb install -r Success ile SM-T500'e güncellendi. Uygulama verisini temizleyen komut kullanılmadı; gerçek izin yükleme/geri çekme isteği bu adımda başlatılmadı. Tablet UI fixture sonuçları 4/4; backend kaynakları bu P1 adımında değiştirilmedi.
+
+## 30 Ekim — platform v3 / yapılandırılmış hava ve tekrar koruması
+
+Kesin weather_data şeması uygulandı. Yeni migration 0019_chatbot_replay; aynı kimlikle başarılı yanıtı yeniden kullanma, kayıp yanıtı aynı platform gövdesiyle sorgulama, İstanbul gününe göre atomik kota ve yeni hata durumları eklendi. Android debug derlemesi ve 236 JVM testi başarılı. İzole PostgreSQL 13/13; hedefli backend 77/77. Önceki sağlık gizliliği ek kontrolleri tablette 8/8 geçti. Gerçek platform/model çağrısı yapılmadı.
+
+Ayrıntılı sözleşme, kişisel veri içerebilen 24 saatlik tekrar kaydı ve fiziksel temizleme görevi, doğrulamalar ve canlıya geçiş engelleri: [ASISTAN_PLATFORM_V3.md](ASISTAN_PLATFORM_V3.md). Canlı anahtar/dağıtım, gerçek izin endpoint sorunu ve uçtan uca A–B testi açık. Firebase/FCM ve mağaza hazırlıkları önceki sırada korunuyor. Bu değişiklikler henüz Git'e gönderilmedi.
+Son tam doğrulama: backend 188 geçti / 13 PostgreSQL testi standart koşuda atlandı; ayrı PostgreSQL koşusu 13/13 başarılı. Ruff başarılı; 6 bağımlılık deprecation uyarısı kaldı.
+
+30 Ekim ek adım: asistan yollarının başarı/hata/kimlik ve doğrulama cevaplarına merkezi no-store koruması eklendi. Yeni platform hata kodları, hata sonrası kota iadesi ve request_in_progress sonrası aynı kimlikle başarılı yeniden deneme doğrulandı. İlgili backend regresyon paketi 65/65; Ruff ve diff kontrolü başarılı. Ayrıntı ASISTAN_PLATFORM_V3.md dosyasında. Canlı platform izin/sohbet doğrulaması, anahtarın sunucuya tanımlanması, migration ve düzenli tekrar kaydı temizleme görevi açık; Git'e push yapılmadı.
+
+30 Ekim — izin sürümü / tekrar kaydı: yeni metin kabulünden sonra eski sürümlü gönderim gövdesinin veya önbellek cevabının kullanılabilmesi engellendi. Asistan ve sağlık için çözümlenen izin sürümleri tekrar parmak izine dahil. Tamamlanan ve zaman aşımında kalan istekler için 2 regresyon senaryosu eklendi; ilgili backend paketi 33/33 başarılı, Ruff/diff kontrolü temiz. Eski kimlik yerine yeni mesaj gerekir; yeni kimlik güncel sürümle doğrulandı. Canlı çağrı ve push yapılmadı. Ayrıntı ASISTAN_PLATFORM_V3.md içinde.
+
+30 Ekim — bozuk tekrar kayıtları: eksik gönderim gövdesinin yeniden oluşturulması kaldırıldı; yanlış kullanıcı/kimlik/soru/bağlam ve eksik-geçersiz kayıtlı yanıt güvenli request_expired sonucu verir. Ek model çağrısı veya kota tüketimi yok. 8 yeni senaryo dahil ilgili paket 41/41 geçti, Ruff/diff kontrolü temiz. Ayrıntı ASISTAN_PLATFORM_V3.md. Canlı bağlantı ve dağıtım açık; Git'e push yapılmadı.
+
+30 Ekim push öncesi son tam backend paketi: 203 geçti, opt-in PostgreSQL 13 normal koşuda atlandı (önceki ayrı PostgreSQL koşusu 13/13 başarılı). Altı bağımlılık deprecation uyarısı mevcut. Bu doğrulama canlı bağlantı onayı değildir.

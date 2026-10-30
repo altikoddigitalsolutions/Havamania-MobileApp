@@ -20,6 +20,9 @@ internal fun assistantHttpFailure(status: Int, body: String?, retryAfter: String
         (root["error"] ?: (root["detail"] as? JsonObject)?.get("error"))?.jsonPrimitive?.content
     }.getOrNull()
     return when {
+        status == 409 && code == "user_deleted" -> AssistantResult.AccountDeleted
+        status == 409 && code == "request_in_progress" -> AssistantResult.RequestInProgress
+        status == 422 -> AssistantResult.RequestConflict
         status == 409 && code == "account_deletion_pending" -> AssistantResult.AccountDeletionPending
         status == 409 && code == "conversation_conflict" -> AssistantResult.ConversationConflict
         status == 409 && code == "mode_disabled" -> AssistantResult.ModeDisabled

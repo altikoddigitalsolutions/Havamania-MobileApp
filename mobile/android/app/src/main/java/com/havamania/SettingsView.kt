@@ -61,7 +61,7 @@ fun SettingsScreen(
     val consentViewModel: AssistantConsentSettingsViewModel = viewModel()
     val consentState by consentViewModel.consent.state.collectAsStateWithLifecycle()
     AssistantConsentDialog(consentState, consentViewModel.consent::save, consentViewModel.consent::revoke,
-        consentViewModel.consent::open, consentViewModel.consent::dismiss)
+        consentViewModel.consent::retry, consentViewModel.consent::dismiss)
     val scrollState = rememberScrollState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current

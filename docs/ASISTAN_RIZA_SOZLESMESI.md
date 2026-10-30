@@ -58,3 +58,10 @@ Cihaz teyidi: SM-T500 Android12 üzerinde iki saf diyalog testi geçti; koyu %20
 
 
 Platform ask devamı: anahtar/HTTPS, konuşma/ton/bağlam ve güvenli yanıt/hata eşleme kodu hazır. Canlı anahtar/metin adaptörü ve delete-user hâlâ açık; upstream 428 eski yerel metinle yeniden kabul döngüsüne sokulmaz, 503 consent_sync_required ile durur. Son sözleşme ve yayın sınırları ASISTAN_PLATFORM_KOPRUSU.md içinde. Son yerel genel kanıt 112 backend ve 203 Android JVM; bu sayılar canlı entegrasyon kanıtı değildir.
+
+## 30 Ekim — İstemci geri çekme niyeti ve hata UX'i
+Genel uzak asistan izni geri çekilirken WithdrawalTrackingConsentGateway önce UID bazlı SharedPreferences pending bayrağını IO'da commit eder, sonra POST eder. Başarı yalnızca assistant_accepted=false ve health_accepted=false yanıtıyla kabul edilir; ardından bayrak kaldırılır. Bozuk/missing yanıt, ağ veya disk hatası başarı göstermez. Yükleme ve yeniden onay pending bayrak varken durur; yeni controller bayrağı görür ve kullanıcıya geri çekme retry'si sunar. AiAssistantRepository normal ve 401 retry gönderiminden önce bu bayrağı kontrol eder. Hesap silme ilgili UID bayrağını temizler.
+
+Controller'da başarısız revoke önceki accepted=true durumunu geri getirmez. Dialog kısa içerikte doğal yüksekliğe, uzun içerikte ekran sınırı ve scroll'a sahiptir. Retry LOAD/REVOKE ayrılır; pending ekranını yeniden açmak otomatik POST yapmaz. Başarı açık mesajla bildirilir, onay yeniden yönetme ayrı eylemdir. 227 JVM ve 4 izole tablet dialog testi geçti; gerçek servis sürümü/auth/metin yapılandırması doğrulanmadı.
+
+Kapsam sınırı: önceden yola çıkmış istekler geri çağrılamaz. Eşzamanlı eski onay/geri çekme yazılarının sunucu sıralaması ve yalnızca sağlık onayını kaldırma kaydı başarısız olduğunda yerel hassas veri engeli ayrıca incelenmeli. Bu güncelleme genel geri çekme niyetini kapsar; tüm dağıtık yarışları çözdüğü iddia edilmez. Gerçek izin servisi bağlantısı P1 yayın kontrolünde açık kalır.

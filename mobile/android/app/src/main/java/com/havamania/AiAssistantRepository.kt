@@ -60,11 +60,15 @@ class AiAssistantRepository(
 
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
-            val request = BackendChatbotAskRequest(question = question, request_id = requestId,
+            var request = BackendChatbotAskRequest(question = question, request_id = requestId,
                 consent_version = consent.version, health_consent = consent.health_accepted && personalization,
                 health_consent_version = consent.health?.version.takeIf { consent.health_accepted && personalization },
                 conversation_id = sessionId, tone = tone, personalization_enabled = personalization,
                 selected_interests = if (personalization) interests else null, context = context)
+            if (AndroidAssistantWithdrawalStore().pending(currentUser.uid)) return@withContext AssistantResult.ConsentRequired
+            request = applyAssistantHealthPrivacy(request, AndroidAssistantWithdrawalStore().healthBlocked(currentUser.uid))
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
             var response = api.ask("Bearer $token", request)
 
             // Handle 401 token refresh (max 1 retry)
@@ -76,6 +80,10 @@ class AiAssistantRepository(
                     token = null
                 }
                 if (!token.isNullOrBlank()) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
+                    if (AndroidAssistantWithdrawalStore().pending(currentUser.uid)) return@withContext AssistantResult.ConsentRequired
+                    request = applyAssistantHealthPrivacy(request, AndroidAssistantWithdrawalStore().healthBlocked(currentUser.uid))
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     check(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == currentUser.uid)
                     response = api.ask("Bearer $token", request)

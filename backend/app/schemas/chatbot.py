@@ -3,11 +3,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
+from app.schemas.assistant_weather import AssistantWeatherData
+
 
 class AssistantClientContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
     city: str | None = Field(None, max_length=100)
     weather: str | None = Field(None, max_length=2000)
+    weather_data: AssistantWeatherData | None = None
     trips: str | None = Field(None, max_length=2000)
 
 

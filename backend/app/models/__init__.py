@@ -8,6 +8,7 @@ from app.models.notification_preference import NotificationPreference
 from app.models.profile import Profile
 from app.models.push_delivery import PushDelivery
 from app.models.push_token import PushToken
+from app.models.push_token_binding import PushTokenBinding
 from app.models.refresh_token import RefreshToken
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -26,6 +27,7 @@ __all__ = [
     "Profile",
     "PushDelivery",
     "PushToken",
+    "PushTokenBinding",
     "RefreshToken",
     "Subscription",
     "User",

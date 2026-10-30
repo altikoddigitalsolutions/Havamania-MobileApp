@@ -35,7 +35,12 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val retry: Boolean, val requestId: String?, val conversation: String, val owner: String)
     private var pendingConsentMessage: PendingConsentMessage? = null
 
-    fun revokeAssistantConsent() { pendingConsentMessage = null; assistantConsent.revoke() }
+    fun revokeAssistantConsent() { pendingConsentMessage = null; requestRunner.reset(); assistantConsent.revoke() }
+    fun retryAssistantConsent() {
+        if (assistantConsent.state.value.withdrawalPending || assistantConsent.state.value.retry == ConsentRetry.REVOKE) {
+            revokeAssistantConsent()
+        } else assistantConsent.retry()
+    }
     fun dismissAssistantConsent() { pendingConsentMessage = null; assistantConsent.dismiss() }
     fun resumeAfterConsent() {
         if (!assistantConsent.state.value.allowed || assistantConsent.state.value.visible) return
@@ -299,6 +304,12 @@ if (BuildConfig.DEBUG) {
                             assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
                             assistantTone.platformTone(), personalized, interests, context)) {
                             is AssistantResult.ConsentRequired -> throw AssistantConsentRequiredException()
+                            is AssistantResult.RequestInProgress -> throw Exception(
+                                "İsteğiniz hâlâ işleniyor. Biraz sonra aynı isteği tekrar kontrol edebilirsiniz.")
+                            is AssistantResult.AccountDeleted -> throw TerminalAssistantException(
+                                "Bu hesap için asistan erişimi silme nedeniyle kapalı.")
+                            is AssistantResult.RequestConflict -> throw TerminalAssistantException(
+                                "İstek içeriği veya kimliği doğrulanamadı. Yeni bir mesaj gönderebilirsiniz.")
                             is AssistantResult.AccountDeletionPending -> throw TerminalAssistantException(
                                 "Hesap silme işlemi devam ediyor. Bu hesapla asistana yeni mesaj gönderilemez.")
                             is AssistantResult.DailyLimit -> throw TerminalAssistantException(
