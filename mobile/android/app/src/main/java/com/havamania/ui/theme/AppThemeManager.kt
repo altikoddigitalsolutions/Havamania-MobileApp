@@ -228,19 +228,30 @@ object ThemeManager {
         }
     }
 
-    suspend fun saveUserName(context: Context, uid: String, name: String) = context.dataStore.edit { it[nameKey(uid)] = name }
+    private suspend fun Context.editProfilePreferences(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+        com.havamania.saveProfilePreferences(dataStore, {
+            val state = com.havamania.AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value
+            !state.pending && !state.busy
+        }, transform)
+    }
+    internal suspend fun saveProfileBasics(context: Context, uid: String, name: String, bio: String) =
+        context.editProfilePreferences { it[nameKey(uid)] = name; it[bioKey(uid)] = bio }
+    internal suspend fun savePersonalizationBasics(context: Context, uid: String, interests: Set<String>) =
+        context.editProfilePreferences { it[interestsKey(uid)] = interests.joinToString(","); it[onboardingCompletedKey(uid)] = true }
+
+    suspend fun saveUserName(context: Context, uid: String, name: String) = context.editProfilePreferences { it[nameKey(uid)] = name }
     fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
 
-    suspend fun saveUserBio(context: Context, uid: String, bio: String) = context.dataStore.edit { it[bioKey(uid)] = bio }
+    suspend fun saveUserBio(context: Context, uid: String, bio: String) = context.editProfilePreferences { it[bioKey(uid)] = bio }
     fun getUserBio(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[bioKey(uid)] ?: "" }
 
-    suspend fun saveUserImageUriByUid(context: Context, uid: String, path: String?) = context.dataStore.edit {
+    suspend fun saveUserImageUriByUid(context: Context, uid: String, path: String?) = context.editProfilePreferences {
         val key = imageUriKey(uid)
         if (path == null) it.remove(key) else it[key] = path
     }
     fun getUserImageUriByUid(context: Context, uid: String): Flow<String?> = context.dataStore.data.map { it[imageUriKey(uid)] }
 
-    suspend fun saveUserInterests(context: Context, uid: String, interests: Set<String>) = context.dataStore.edit {
+    suspend fun saveUserInterests(context: Context, uid: String, interests: Set<String>) = context.editProfilePreferences {
         it[interestsKey(uid)] = interests.joinToString(",")
     }
     fun getUserInterests(context: Context, uid: String): Flow<Set<String>> = context.dataStore.data.map {
@@ -248,7 +259,7 @@ object ThemeManager {
         if (str.isEmpty()) emptySet() else str.split(",").toSet()
     }
 
-    suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.dataStore.edit { it[aboutMeKey(uid)] = aboutMe }
+    suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.editProfilePreferences { it[aboutMeKey(uid)] = aboutMe }
     fun getUserAboutMe(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[aboutMeKey(uid)] ?: "" }
 
     private fun citySyncStore(context: Context): com.havamania.CitySyncStore =

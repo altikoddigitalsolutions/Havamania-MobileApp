@@ -112,23 +112,29 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 throw e
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _profileState.value = ProfileState.Error("Profil yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.")
+                publishAccountResult(uid, { auth.currentUser?.uid ?: "legacy" }) {
+                    if (profileWritesAllowed()) _profileState.value = ProfileState.Error("Profil yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.")
+                }
             }
         }
     }
 
     private suspend fun ensureRemoteProfile(uid: String) {
         val user = auth.currentUser?.takeIf { it.uid == uid } ?: return
-        createMissingAccountProfile(uid, { auth.currentUser?.uid }, ::profileWritesAllowed,
-            exists = { db.collection("users").document(uid)
-                .get(com.google.firebase.firestore.Source.SERVER).await().exists() },
-            create = {
-                db.collection("users").document(uid).set(UserProfile(
-                    uid = uid, email = user.email ?: "", name = user.displayName ?: "",
-                    createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
-                )).await()
-            })
+        val newProfile = UserProfile(
+            uid = uid, email = user.email ?: "", name = user.displayName ?: "",
+            createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
+        )
+        val document = db.collection("users").document(uid)
+        createMissingAccountProfile(uid, { auth.currentUser?.uid }, ::profileWritesAllowed) { isCurrent ->
+            db.runTransaction { transaction ->
+                stageMissingAccountProfile(isCurrent,
+                    exists = { transaction.get(document).exists() },
+                    create = { transaction.set(document, newProfile) })
+            }.await()
+        }
     }
+
 
     override fun onCleared() {
         super.onCleared()
@@ -154,14 +160,10 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     "bio" to finalBio,
                     "updatedAt" to System.currentTimeMillis()
                 )
-                db.collection("users").document(ownerUid).update(updates).await()
-                // Keep the Firebase user object captured before the first suspension.
-                user.updateProfile(com.google.firebase.auth.userProfileChangeRequest {
-                    displayName = finalName
-                }).await()
-                val context = getApplication<Application>()
-                ThemeManager.saveUserName(context, ownerUid, finalName)
-                ThemeManager.saveUserBio(context, ownerUid, finalBio)
+                runAccountProfileWrite(ownerUid, { auth.currentUser?.uid }, ::profileWritesAllowed,
+                    { db.collection("users").document(ownerUid).update(updates).await() },
+                    { user.updateProfile(com.google.firebase.auth.userProfileChangeRequest { displayName = finalName }).await() },
+                    { ThemeManager.saveProfileBasics(getApplication(), ownerUid, finalName, finalBio) })
             }
         }
     }
@@ -172,14 +174,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             val personalization = PersonalizationProfile(
                 uid = owner, selectedInterests = interests.toList(),
                 travelStyles = travelStyles.toList(), weatherPreferences = weatherPrefs)
-            db.collection("users").document(owner).update(mapOf(
-                "personalizationProfile" to personalization,
-                "onboardingCompleted" to true,
-                "updatedAt" to System.currentTimeMillis()
-            )).await()
-            val context = getApplication<Application>()
-            ThemeManager.saveUserInterests(context, owner, interests.toSet())
-            ThemeManager.saveOnboardingCompleted(context, owner, true)
+            runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed,
+                { db.collection("users").document(owner).update(mapOf(
+                    "personalizationProfile" to personalization,
+                    "onboardingCompleted" to true, "updatedAt" to System.currentTimeMillis()
+                )).await() },
+                { ThemeManager.savePersonalizationBasics(getApplication(), owner, interests.toSet()) })
         }
     }
 
@@ -188,8 +188,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         aboutMeRunner.start(
             onStart = { _aboutMeSaveState.value = ProfileSaveState.Saving },
             operation = { owner ->
-                db.collection("users").document(owner).update("aboutMe", aboutMe.trim(), "updatedAt", System.currentTimeMillis()).await()
-                ThemeManager.saveUserAboutMe(getApplication(), owner, aboutMe.trim())
+                runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed,
+                    { db.collection("users").document(owner).update("aboutMe", aboutMe.trim(), "updatedAt", System.currentTimeMillis()).await() },
+                    { ThemeManager.saveUserAboutMe(getApplication(), owner, aboutMe.trim()) })
             },
             onSuccess = { _aboutMeSaveState.value = ProfileSaveState.Saved },
             onError = { _aboutMeSaveState.value = ProfileSaveState.Failed("Kayıt onayı alınamadı. Metnin korundu; tekrar deneyebilirsin.") }
@@ -199,21 +200,26 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     fun toggleInterest(interestId: String, currentInterests: Set<String>) {
         val uid = auth.currentUser?.uid ?: return
         accountTasks.launch launch@ { ownerUid ->
+            if (uid != ownerUid) return@launch
             try {
                 val newList = currentInterests.toMutableList()
                 if (newList.contains(interestId)) newList.remove(interestId)
                 else newList.add(interestId)
 
-                db.collection("users").document(uid).update(
+                runAccountProfileWrite(ownerUid, { auth.currentUser?.uid }, ::profileWritesAllowed, {
+                db.collection("users").document(ownerUid).update(
                     "personalizationProfile.selectedInterests", newList,
                     "updatedAt", System.currentTimeMillis()
                 ).await()
+                })
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("ProfileVM", "Toggle interest failed", e)
 }
-                _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi.")
+                publishAccountResult(ownerUid, { auth.currentUser?.uid ?: "legacy" }) {
+                    if (profileWritesAllowed()) _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi.")
+                }
             }
         }
     }

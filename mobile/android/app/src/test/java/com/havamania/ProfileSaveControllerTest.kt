@@ -56,6 +56,32 @@ class ProfileSaveControllerTest {
         assertTrue(controller.state.value is ProfileSaveState.Failed)
     }
 
+    @Test fun oldCompletionCannotReplaceNewSaveAfterReset() = runBlocking {
+        for (fails in listOf(false, true)) {
+            val controller = ProfileSaveController()
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val old = launch {
+                controller.save("Old", "") { _, _ ->
+                    entered.complete(Unit); release.await()
+                    if (fails) throw java.io.IOException("test")
+                }
+            }
+            entered.await(); controller.reset()
+            controller.save("New", "") { _, _ -> }
+            release.complete(Unit); old.join()
+            assertEquals(ProfileSaveState.Saved, controller.state.value)
+        }
+    }
+
+    @Test fun cancellationDoesNotLeaveControllerSaving() = runBlocking {
+        val controller = ProfileSaveController()
+        val entered = CompletableDeferred<Unit>()
+        val work = launch { controller.save("A", "") { _, _ -> entered.complete(Unit); awaitCancellation() } }
+        entered.await(); work.cancelAndJoin()
+        assertEquals(ProfileSaveState.Idle, controller.state.value)
+    }
+
     @Test fun trimsAndBoundsUserInput() = runBlocking {
         val controller = ProfileSaveController()
         controller.save("  " + "a".repeat(60), "b".repeat(510) + "  ") { name, bio ->

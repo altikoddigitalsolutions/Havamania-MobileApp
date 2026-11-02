@@ -234,3 +234,31 @@ ThemeManager.saveProfileSnapshot içindeki atomik çoklu alan yazımı saveProfi
 İncelemede açık bırakılanlar: ayrı sunucu get ve set arasında çok istemci profil oluşturma yarışı (transaction/create-if-absent gerekir), profil geç hata yayınlarının UID kontrolü, tekil profil/tercih yazımları, avatar upload/silme, kişiselleştirme, seyahat/AI/notification depolarının tam silme matrisi. Başlamış uzak set isteği istemci guard'ıyla geri alınmaz; sunucu silme işareti/güvenlik kuralı doğrulaması açık. Gerçek Firebase veya hesap silme çalıştırılmadı. Son değişiklikler push edilmedi.
 
 Doğrulama: 5 yeni AccountProfileSync testi dahil 328 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. Testler silme öncesinde sıfır read/create, okuma sırasında silme/UID değişiminde sıfır create, yalnız doğrulanmış yoklukta oluşturma ve iptal sonrası create olmamasını kapsar. SM-T500 Android 12'de ProfileSnapshotDeletionDeviceTest + önceki şehir silme guard testi 2/2 geçti. Yeni test gerçek ayrı DataStore dosyasında UID-önek temizliği sonrası snapshot transform'unun çalışmamasını ve B verisinin korunmasını doğrular. Gerçek ThemeManager alan eşlemesi/Firebase profil oluşturma, gerçek hesap silme veya çok istemci transaction testi değildir.
+
+
+## Atomik profil oluşturma ve geç hata izolasyonu — 2 Kasım
+
+Önceki paket b69f579 ile main'e gönderildi. Bu bölüm sonraki, henüz push edilmemiş değişikliği açıklar.
+
+Profilin yokluğunu ayrı get ve ardından set ile doğrulayan yol kaldırıldı. Artık Firestore runTransaction içinde belge okunur ve yalnız mevcut değilse başlangıç profili stage edilir. SDK çatışmada transaction'ı yeniden çağırdığında varlık kontrolü tekrar yapılır; başka istemcinin oluşturduğu özelleştirilmiş profil varsayılan bilgilerle ezilmez. Timestamp/başlangıç nesnesi transaction dışında sabitlenir; callback içinde UI veya DataStore yan etkisi yoktur.
+
+createMissingAccountProfile aktif coroutine Job, UID ve silme busy/pending durumunu callback'in yeniden denemelerinde de kontrol eden canlı bir predicate sağlar. Transaction read öncesinde ve write stage öncesinde kontrol yapılır. İptal edilmiş eski oturum A→B→A dönse bile eski Job aktif olmadığından yazı hazırlayamaz. Başlamış server commit geri alınmış sayılmaz; sunucu silme kuralları halen gereklidir.
+
+Profil yükleme catch bloğundaki hata yayını UID/iptal kontrolünden ve silme izin kontrolünden geçer. Böylece geç hata yeni hesaba veya silme kurtarma ekranına yayınlanmaz. Önceki snapshot DataStore silme guard'ı korunur.
+
+Açık doğrulamalar: gerçek Firestore/emulator transaction çatışması ve güvenlik kuralları, gerçek offline/retry/silme matrisi. Yerel testteki atomik adaptör Mutex ile simüle edilir; bu sonuç canlı SDK transaction doğrulaması değildir. Sonraki kapsam tekil profil/tercih yazımları, avatar ve kişiselleştirme yollarının silme/hesap geçişi kontrolleridir. Son değişiklikler push edilmedi.
+
+Doğrulama: 331 Android JVM testi geçti (0 failure/error); debug APK derlendi. AccountProfileSync test paketi 5 eski testten 8 transaction/guard davranış testine güncellendi: silme/UID değişiminde staging olmaması, yalnız eksik belgede staging, iptal sonrası SDK retry callback'inin geçersizleşmesi, başka istemci commit'inden sonra mevcut profilin korunması, Mutex tabanlı sahte atomik adaptörde 20 istemciden tek create ve okuma hatasında sıfır write. Diğer UID/hata yayını ortak AccountResult testleriyle birlikte yeniden geçti. Bu koşuda cihaz veya gerçek Firebase/emulator testi çalıştırılmadı.
+
+
+## Tekil profil ve kişiselleştirme yazımları — 2 Kasım
+
+runAccountProfileWrite her aşamadan önce ve son aşamadan sonra coroutine/UID/silme kontrolü yapar. Ad-biyografi Firestore → yakalanmış Firebase Auth kullanıcı nesnesi → yerel önbellek zinciri, kişiselleştirme ve hakkımda kayıtları bu yola bağlandı. Bir uzak aşamadan sonra hesap değişir veya silme başlarsa sonraki Auth/DataStore aşaması çalışmaz ve işlem başarıyla bitmiş sayılmaz. Başlamış uzak yazım geri alınmış sayılmaz.
+
+Ad/biyografi yerel kaydı tek edit içinde; ilgi alanı/onboarding yerel kaydı da tek edit içinde tutulur. Tekil ad, bio, avatar URI, ilgi alanı ve hakkımda DataStore setter'ları silme guard'ını edit transform'unda kullanır. İlgi alanı toggle yolunda yakalanan UID ile AccountTaskScope sahibinin eşleşmesi kontrol edilir; uzak yazı sonrası iptal ve geç hata yayını korunur.
+
+ProfileSaveController'a reset generation kontrolü eklendi. Önceki işlem sonradan başarılı/hatalı dönse de yeni oturumun kayıt state'ini değiştiremez. Final başarı ve hata yayını öncesi iptal kontrol edilir; yerel timeout parent iptaliyle karıştırılmaz. Aynı generation iptalinde Saving temizlenir, eski generation iptali yenisinin durumunu temizlemez.
+
+Açık işler: avatar uzak upload/silme ve hata/log gizliliği, ilgi alanı toggle'ın stale UI listesiyle tüm alanı yazması (atomik alan/transaction), kişiselleştirme/hakkımda iptalinde özel UI durum matrisi, diğer tercih/depo setter'larının tam silme taraması ve canlı Firebase/Auth senaryoları. Önceki işlem kısmen sunucuya yazılmış olabilir; bu adım dağıtık atomik transaction değildir ve kalıcı profil retry kuyruğu sağlamaz. Son değişiklikler push edilmedi.
+
+Doğrulama: 4 yeni AccountProfileWrite ve 2 yeni ProfileSaveController testi dahil 337 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. Testler aşama sırası, uzak dönüşten sonra silmede sonraki yazının durması, son aşamada UID değişince başarı olmaması, NonCancellable dönüş sonrası iptal, reset sonrası eski başarı/hatanın yeni Saved'i ezmemesi ve iptalde Saving'in temizlenmesini kapsar. SM-T500 Android 12 üzerinde mevcut ProfileSnapshotDeletionDeviceTest 1/1 yeniden geçti; ayrı DataStore ve sahte silme bayrağı kullanıldı. Yeni Auth/Firestore zinciri gerçek Firebase veya tam ViewModel cihaz testi değildir; kullanıcı verisi değiştirilmedi.
