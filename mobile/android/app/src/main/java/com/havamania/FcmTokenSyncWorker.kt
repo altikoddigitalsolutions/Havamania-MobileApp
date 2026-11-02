@@ -15,34 +15,25 @@ class FcmTokenSyncWorker(context: Context, parameters: WorkerParameters) : Corou
         try {
             val app = applicationContext as Application
             val journal = FcmTokenQueue.journalForSync(app)
-            val desired = journal.snapshot()
-            if (!desired.pending) return Result.success()
-            if (desired.retryNotBeforeEpochSeconds > System.currentTimeMillis() / 1000) return Result.retry()
+            if (!journal.snapshot().pending) return Result.success()
             val auth = FirebaseAuth.getInstance()
             val user = auth.currentUser ?: return Result.success()
             val epoch = NotificationSessionEpoch.capture()
             val deletion = AccountDeletionManager.getInstance(app)
-            fun current() = auth.currentUser?.uid == desired.ownerUid && user.uid == desired.ownerUid &&
-                NotificationSessionEpoch.capture() == epoch && !deletion.state.value.pending && journal.snapshot() == desired
-            if (!current()) return Result.success()
             val project = FirebaseApp.getInstance().options.projectId?.takeIf { it.isNotBlank() } ?: return Result.success()
             val owner = firebaseBackendUserId(project, user.uid)
-            val service = BackendChatbotFactory.create()
-            var outcome = FcmGatewayResult(FcmGatewayAction.RETRY)
-            val sync = syncPendingFcmToken(journal, { auth.currentUser?.uid },
-                { NotificationSessionEpoch.capture() }, { deletion.state.value.pending }) { sent ->
-                outcome = sendFcmTokenWithAuth(service, sent, owner, { refresh ->
-                    if (!current()) null else user.getIdToken(refresh).await()?.token?.let { "Bearer $it" }
-                }, ::current)
-                outcome.action == FcmGatewayAction.APPLIED
+            val service by lazy { BackendChatbotFactory.create() }
+            val decision = runFcmSyncAttempt(journal,
+                { auth.currentUser?.uid?.takeIf { it == user.uid && NotificationSessionEpoch.capture() == epoch } },
+                { NotificationSessionEpoch.capture() }, { deletion.state.value.pending },
+                { System.currentTimeMillis() / 1000 }) { sent, current ->
+                sendFcmTokenWithAuth(service, sent, owner, { refresh ->
+                    if (!current()) null else fcmAuthorization { user.getIdToken(refresh).await()?.token }
+                }, current)
             }
-            if (sync != FcmSyncResult.RETRY) return Result.success()
-            // Finish this attempt without acknowledgement. Failing a prerequisite
-            // would also cancel a newer account's already-appended work.
-            if (outcome.action == FcmGatewayAction.STOP) return Result.success()
-            if (outcome.retryAfterSeconds > 0 && !journal.deferRetry(desired,
-                    System.currentTimeMillis() / 1000, outcome.retryAfterSeconds)) return Result.success()
-            return Result.retry()
+            // Success ends this job without cancelling newer appended jobs.
+            // Journal acknowledgement is handled separately by the sync core.
+            return if (decision == FcmWorkDecision.RETRY) Result.retry() else Result.success()
         } catch (error: CancellationException) { throw error }
         catch (_: Exception) { return Result.retry() }
     }

@@ -287,3 +287,49 @@ P1 asistan izin istemcisi: hata ayrımı, doğru işlem retry, başarısız revo
 FCM devamı: Android Retrofit kayıt/makbuz adaptörü ve 4 yeni test eklendi; 240 JVM ve debug APK başarılı. Sırada WorkManager ile UID/epoch bağlı auth/401 yenileme, 409/429 politikası ve cihaz testleri var. FCM etkinleştirme kapalı; bu adım uçtan uca senkronizasyonu tamamlamaz.
 
 FCM WorkManager devamı: planlama ve kalıcı retry çekirdeği kapalı flag arkasında uygulandı; 246 JVM testi ve APK başarılı. Sırada cihazda Worker/AtomicFile/process-death/offline doğrulaması, ilk token bootstrap/rotation ve server unbind-kurtarma var. Canlı rollout ve kimlik eşleşmesi kontrolü olmadan flag açılmayacak.
+
+2 Kasım FCM devamı: AtomicFile gerçek cihaz alt adımı 5/5 ve JVM 247/247 geçti; boyut/UTF-8/tutarlı metadata düzeltildi. Worker/process-death/offline cihaz matrisi hâlâ açık; gerçek güç kesintisi veya canlı FCM doğrulaması yapılmadı. İlk token bootstrap, rotation/reinstall, server unbind ve staging rollout sırası korunuyor.
+
+2 Kasım Worker kararları: 253 JVM ve cihazda 8 seçili test geçti. Kapalı flag gerçek WorkManager girişi doğrulandı; açık flag auth/HTTP, gerçek süreç ölümü/offline, retry deadline disk yazım hataları ve ilk token/unbind/rotation matrisi hâlâ açık. Son değişiklikler push edilmedi.
+
+2 Kasım retry/disk devamı: 429 deadline/ack yazımında önce/sonra hata enjeksiyonu yerelde düzeltildi; 260 JVM ve 9 seçili cihaz testi başarılı. Belirsiz sonuç için 24 saat + 3 dakika koruma vardır; FCM açılmadan bu gecikme/kurtarma politikası değerlendirilmeli. Gerçek süreç ölümü, saat değişimi, offline cihaz matrisi, ilk token/unbind/rotation ve canlı staging açık. Son değişiklikler push edilmedi.
+
+2 Kasım auth devamı: geçersiz kullanıcı SDK hatası ve kalıcı authRequired engeli eklendi; 264 JVM ve cihazda 11 seçili test başarılı. Kurtarma durumunun ayarlarda sunumu, ilk token alma, logout server unbind, gerçek saat/process-death/offline/staging matrisi açık. Son değişiklikler push edilmedi.
+
+2 Kasım kritik öncelik: önbellek düğmesinin yerel seyahatleri silmesi düzeltildi; 267 JVM ve 3 izole cihaz testi geçti. FCM yeniden giriş/kurtarma UI adımı açık tutuluyor. Ayarlar eylem-açıklama tutarlılığı incelemesi devam ediyor; son düzeltmeler push edilmedi.
+
+2 Kasım ayarlar devamı: desteklenmeyen İngilizce seçiminin çalışıyor gibi görünmesi düzeltildi; 269 JVM ve 4 seçili ayarlar UI testi geçti. Önbellek veri koruma testi önceki koşuda başarılı. Tam native çok dillilik/assistant language wire, bildirim kurtarma UI ve bildirim izin-açıklama kontrolleri açık. AYARLAR_KONTROL_RAPORU.md eklendi; son değişiklikler push edilmedi.
+
+2 Kasım bildirim ayarları: uygulama tercihi/sistem izni ayrımı ve Android 13 öncesi gerçek sistem kontrolü düzeltildi; 271 JVM ve 4 cihaz arayüz/lifecycle testi geçti. Android 13+ gerçek ret/kalıcı ret, OEM/kanal davranışı ve FCM auth kurtarma UI açık. Son değişiklikler push edilmedi.
+
+2 Kasım ayar dayanıklılığı: 20 tercih akışında okuma hatası ve 14 temel yazımda disk hatası/UID bağlı sonuç kontrolü eklendi. 277 JVM ve 2 izole tablet UI testi geçti. Sırada şehir/profil/bulut yazımları ve toplu sıfırlama hata/hesap izolasyonu, paylaşılan hava durumu temizliğinin geçiş etkisi incelemesi ve FCM auth kurtarma UI var. Canlı servis/mağaza yayın engelleri korunuyor; son değişiklikler push edilmedi.
+
+2 Kasım şehir işlemleri: aynı ThemeViewModel örneğindeki düzenlemeler sıraya alındı; disk sonrası UID/iptal kontrolleri, görünür işlem hatası ve varsayılan şehir silme engeli eklendi. 282 JVM ve 2 izole tablet UI testi geçti. Kalıcı şehir senkronizasyon kuyruğu/snapshot uzlaştırması, farklı ViewModel/cihaz eşzamanlılığı, profil gözlemcileri ve reset akışları açık; FCM auth kurtarma ve önceki yayın engelleri korunuyor. Son değişiklikler push edilmedi.
+
+2 Kasım şehir dinleyicisi izolasyonu: callback/disk/yayın aşamalarında UID, iptal ve dinleyici sürümü kontrolü eklendi; 288 JVM ve debug APK başarılı. Kalıcı şehir kuyruğu, aynı oturum snapshot uzlaştırması, offline retry, çok örnek/cihaz çatışmaları, profil/reset ve FCM kurtarma adımları açık. Bu adım canlı Firebase doğrulaması değildir; push edilmedi.
+
+2 Kasım kalıcı şehir kuyruğu: yerel listeyle atomik istenen durum/UUID kaydı, açılışta UID bağlı yeniden gönderme ve yalnız uzak yazı onayı+sunucu snapshot eşleşmesiyle temizleme eklendi. Uzak onay yerel düzenleme kilidini tutmuyor. 292 JVM ve tablette 1 izole kalıcı depolama testi geçti. Varsayılan şehir kuyruğu, snapshot sıralaması, çok örnek/cihaz çatışmaları, backoff/kalıcı hata ayrımı, WorkManager ve canlı offline/Firebase doğrulaması açık. Profil/reset, FCM kurtarma ve diğer yayın engelleri korunuyor; push edilmedi.
+
+2 Kasım snapshot sırası: her şehir dinleyicisi için tek tüketici ve yalnız son bekleyen snapshot'ı tutan sınırlı kanal eklendi. 295 JVM ve debug APK başarılı. Aynı dinleyicinin eski/yeni kayıtlarının birbirini geçmesi engellendi. Varsayılan konum kuyruğu, yerel düzenleme ile UI yayın sırası, çok örnek/cihaz çatışması, kontrollü retry ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım varsayılan konum: seçimle atomik UID/UUID gönderim kaydı, oturum açılışında retry ve yalnız onay+sunucu eşleşmesiyle temizleme eklendi. Eski profil bekleyen seçimi ezmez; şehir listesi sonradan gelince eşleştirme yinelenir. 295 mevcut JVM testi ve tablette 2 izole depolama testi geçti. Sırada aynı adlı konumlar için kimlik sözleşmesi, yerel/sunucu yayın yarışı, çok örnek/cihaz sırası, kontrollü retry, profil/reset ve FCM kurtarma var. Canlı Firebase/offline/mağaza engelleri açık; push edilmedi.
+
+2 Kasım konum yayın yarışı: şehir/varsayılan state için DataStore akışı tek kalıcı kaynak yapıldı; geciken metod dönüşlerinin doğrudan state yazımı kaldırıldı. Çağrılmayan resetCities/resetAllData kaldırıldı. 295 JVM ve tablette 4 izole depolama testi geçti. Yerel kararların kalıcı veriden atomik doğrulanması, çok örnek/cihaz gönderim sırası, konum kimliği sözleşmesi, kontrollü retry ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım atomik şehir kararları: ekleme/silme doğrulaması UI state'inden DataStore edit içine taşındı. Aynı kimlik, son/varsayılan/bulunmayan kayıt kontrolleri kalıcı veriden yapılır; reddedilen işlem kuyruk/uzak isteği değiştirmez. 295 JVM ve tablette 5 izole depolama testi geçti. Çok örnek/cihaz uzak yazım sırası, konum kimliği sözleşmesi, retry/backoff, canlı doğrulama, profil/temizlik ve FCM kurtarma maddeleri açık; push edilmedi.
+
+2 Kasım uzak gönderim sırası: aynı süreçte paylaşılan, sınırlı kilit tablosu ile şehir/varsayılan gönderimi sıraya alındı. Payload kilit alındıktan sonra yeniden okunur; onaylı değer tekrar gönderilmez. 299 JVM ve debug APK başarılı. Kontrollü retry/backoff, offline bekleyen görev birleştirme, çok cihaz sunucu protokolü, hesap silme yarışları, konum kimliği ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım offline gönderim talepleri: aynı oturum/kaynak için tek aktif eylem ve tek takip sinyali eklendi; hata/iptalde otomatik tekrar yok. Konum hata penceresine Eşitlemeyi tekrar dene eklendi; son kalıcı kuyruk okunur. 303 JVM ve tablette 4 izole UI testi geçti. Kalıcı backoff/jitter, hata sınıflaması, WorkManager, hesap silme/gönderim yarışı ve canlı offline/Firebase doğrulaması açık; push edilmedi.
+
+2 Kasım kalıcı retry: şehir/varsayılan kaydına UID/UUID bağlı hata kategorisi ve jitter'lı 30 sn→en çok 2250 sn bekleme eklendi. Bekleme/engelde ağ yok; auth oturum hazırlığı ve açık kullanıcı kurtarması ayrıldı. 307 JVM ve tablette 3 izole depolama testi geçti. Kuyrukta öğe bazlı devam, açıklayıcı bekleme/ret UI, disk hatası/saat matrisi, WorkManager ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım öğe bazlı devam: bekleme/engel/hata dönen şehir kaydı sonraki öğeyi durdurmuyor. Bekleme dakikası, auth ve sunucu reddi için güvenli açıklamalar eklendi. 312 JVM ve tablette 6 izole UI testi geçti. Hiç yanıt dönmeyen isteğin bekletmesi, toplu durum sunumu, retry disk hatası/saat garantileri, WorkManager ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım yanıtsız istek/disk güvenliği: gönderim öncesi UID/UUID CAS ile durable 2310 sn fence ve 60 sn yerel await timeout eklendi. Timeout onay değil; sonraki öğeye geçilebilir. Sonraki hata/onay disk yazımı başarısız olsa da fence korunur; belirsizlikte yaklaşık 39 dk bekleme maliyeti vardır. 316 JVM ve tablette 2 izole depolama testi geçti. Saat değişimi, gerçek SDK geç yanıt/offline, hesap silme yarışı ve WorkManager açık; push edilmedi.
+
+2 Kasım hesap silme/konum yarışı: pending/busy durumunda dispatcher read/send/ack/failure ve bütün CitySyncStore edit transform'ları engellendi; temizlik sonrası eski konum yazımları yerel anahtarları geri oluşturmuyor. 319 JVM ve tablette 2 izole depolama testi geçti. Başlamış uzak Firestore yazısının sunucuda reddi, diğer depoların tam yazım matrisi, saat değişimi/WorkManager ve canlı silme doğrulaması açık; push edilmedi.
+
+2 Kasım saat dayanıklılığı: şehir retry'si elapsedRealtime+boot kimliğiyle ölçülür; duvar saati aynı açılışta erken gönderim/uzun bekleme oluşturmaz. Reboot/eski metadata için UUID CAS ile sınırlı kalıcı bekleme yeniden kurulur. 323 JVM ve tablette 2 izole depolama testi geçti. Gerçek reboot/OEM matrisi, fallback UX, WorkManager, diğer depoların silme guard'ı ve canlı servis doğrulaması açık; push edilmedi.
+
+2 Kasım profil silme koruması: otomatik profil oluşturma sunucu yokluğu+UID/iptal/pending-busy kontrolüne bağlandı; profil snapshot DataStore transform'u silme sırasında yazmıyor. 328 JVM ve tablette 2 izole depolama testi geçti. Öncelikli sırada çok istemci profil oluşturmayı atomik/create-if-absent yapmak ve geç profil hata yayınını guard'lamak var; tekil profil/tercih, avatar, diğer depolar ve canlı silme matrisi açık. Push edilmedi.

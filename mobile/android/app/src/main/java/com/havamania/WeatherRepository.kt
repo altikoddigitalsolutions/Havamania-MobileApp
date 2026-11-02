@@ -56,6 +56,11 @@ class WeatherRepository(
         _currentWeatherState.value = null
     }
 
+    /** Clear downloaded weather only. Account records and visible data are not a cache. */
+    suspend fun clearAllCachedWeather() {
+        weatherDao.clearAllWeatherCache()
+    }
+
     /**
      * Şehir arama fonksiyonu
      */

@@ -1,5 +1,7 @@
 package com.havamania.ui.theme
 
+import com.havamania.withRetryClock
+
 import android.content.Context
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
@@ -19,6 +21,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 enum class AppTheme(val title: String) {
     AUTO("🤖 Otomatik"),
@@ -166,8 +169,13 @@ object ThemeManager {
         try { PressureUnit.valueOf(it[pressureUnitKey(uid)] ?: PressureUnit.HPA.name) } catch (e: Exception) { PressureUnit.HPA }
     }
 
-    suspend fun saveLanguage(context: Context, lang: String, uid: String) = context.dataStore.edit { it[languageKey(uid)] = lang }
-    fun getLanguage(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[languageKey(uid)] ?: "TR" }
+    suspend fun saveLanguage(context: Context, lang: String, uid: String) = context.dataStore.edit {
+        require(AppLanguageSupport.isSupported(lang)) { "Language is not available in the native UI" }
+        it[languageKey(uid)] = AppLanguageSupport.resolve(lang)
+    }
+    fun getLanguage(context: Context, uid: String): Flow<String> = context.dataStore.data.map {
+        AppLanguageSupport.resolve(it[languageKey(uid)] ?: "TR")
+    }
 
     suspend fun saveAssistantTone(context: Context, uid: String, tone: AssistantTone) = context.dataStore.edit { it[toneKey(uid)] = tone.name }
     fun getAssistantTone(context: Context, uid: String): Flow<AssistantTone> = context.dataStore.data.map {
@@ -202,7 +210,10 @@ object ThemeManager {
     suspend fun saveProfileSnapshot(context: Context, profile: com.havamania.UserProfile) {
         val uid = profile.uid
         require(uid.isNotBlank())
-        context.dataStore.edit { prefs ->
+        com.havamania.saveProfilePreferences(context.dataStore, writesAllowed = {
+            val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+            !state.pending && !state.busy
+        }) { prefs ->
             prefs[nameKey(uid)] = profile.name
             prefs[bioKey(uid)] = profile.bio
             prefs[aboutMeKey(uid)] = profile.aboutMe
@@ -240,39 +251,54 @@ object ThemeManager {
     suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.dataStore.edit { it[aboutMeKey(uid)] = aboutMe }
     fun getUserAboutMe(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[aboutMeKey(uid)] ?: "" }
 
+    private fun citySyncStore(context: Context): com.havamania.CitySyncStore =
+        com.havamania.CitySyncStore(context.dataStore, clock = { com.havamania.CitySyncClocks.capture(context) }) {
+            val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+            !state.pending && !state.busy
+        }
+
+    internal suspend fun refreshCitySyncClock(context: Context, uid: String, expected: com.havamania.CitySyncChange, defaultCity: Boolean) =
+        citySyncStore(context).refreshRetryClock(uid, expected, defaultCity)
+    internal suspend fun reserveCitySyncAttempt(context: Context, uid: String, expected: com.havamania.CitySyncChange, defaultCity: Boolean, now: Long) =
+        citySyncStore(context).reserveAttempt(uid, expected, defaultCity, now)
+    internal suspend fun recordCitySyncFailure(context: Context, uid: String, sent: com.havamania.CitySyncChange, error: Exception, defaultCity: Boolean) {
+        val clock = com.havamania.CitySyncClocks.capture(context)
+        val failed = com.havamania.citySyncAfterFailure(sent, com.havamania.citySyncFailure(error), clock.wall)
+        val replacement = if (failed.retryNotBefore > 0) failed.withRetryClock(clock, (failed.retryNotBefore - clock.wall).coerceAtLeast(0)) else failed
+        citySyncStore(context).recordFailure(uid, sent, replacement, defaultCity)
+    }
+    internal suspend fun releaseCitySyncBlocks(context: Context, uid: String, authOnly: Boolean) =
+        citySyncStore(context).releaseBlocks(uid, authOnly)
+
+    internal suspend fun recordDefaultCity(context: Context, uid: String, city: GeocodingResultDto) =
+        citySyncStore(context).recordDefaultCity(uid, city)
+    internal suspend fun pendingDefaultCity(context: Context, uid: String) =
+        citySyncStore(context).pendingDefaultCity(uid)
+    internal suspend fun acknowledgeDefaultCity(context: Context, uid: String, sent: com.havamania.CitySyncChange) =
+        citySyncStore(context).acknowledgeDefaultCity(uid, sent)
+    internal suspend fun mergeServerDefaultCity(context: Context, uid: String, name: String?, resolved: GeocodingResultDto?) =
+        citySyncStore(context).mergeServerDefaultCity(uid, name, resolved)
+
+    internal suspend fun recordCityChange(context: Context, uid: String, city: GeocodingResultDto, deleted: Boolean): Boolean =
+        citySyncStore(context).recordCityChange(uid, city, deleted)
+    internal suspend fun pendingCityChanges(context: Context, uid: String) =
+        citySyncStore(context).pendingCityChanges(uid)
+    internal suspend fun acknowledgeCityChange(context: Context, uid: String, sent: com.havamania.CitySyncChange) =
+        citySyncStore(context).acknowledge(uid, sent)
+    internal suspend fun mergeRemoteCities(context: Context, uid: String, remote: List<GeocodingResultDto>) =
+        citySyncStore(context).mergeRemoteCities(uid, remote)
+
     suspend fun saveRegisteredCities(context: Context, uid: String, cities: List<GeocodingResultDto>) = context.dataStore.edit {
         it[citiesKey(uid)] = Json.encodeToString(cities)
     }
-    fun getRegisteredCities(context: Context, uid: String): Flow<List<GeocodingResultDto>> = context.dataStore.data.map {
-        val str = it[citiesKey(uid)] ?: ""
-        if (str.isEmpty()) {
-            if (uid == "legacy") {
-                listOf(GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul"))
-            } else {
-                emptyList()
-            }
-        } else {
-            try { Json.decodeFromString(str) } catch(e: Exception) { emptyList() }
-        }
-    }
+    fun getRegisteredCities(context: Context, uid: String): Flow<List<GeocodingResultDto>> =
+        citySyncStore(context).observeCities(uid)
 
     suspend fun saveDefaultCity(context: Context, uid: String, city: GeocodingResultDto) = context.dataStore.edit {
         it[defaultCityKey(uid)] = Json.encodeToString(city)
     }
-    fun getDefaultCity(context: Context, uid: String): Flow<GeocodingResultDto?> = context.dataStore.data.map {
-        val str = it[defaultCityKey(uid)] ?: ""
-        if (str.isEmpty()) {
-            if (uid == "legacy") {
-                GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
-            } else {
-                null
-            }
-        } else {
-            try { Json.decodeFromString<GeocodingResultDto>(str) } catch(e: Exception) {
-                if (uid == "legacy") GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul") else null
-            }
-        }
-    }
+    fun getDefaultCity(context: Context, uid: String): Flow<GeocodingResultDto?> =
+        citySyncStore(context).observeDefaultCity(uid)
 
     // --- System / UI Config ---
     suspend fun saveLiveEffects(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[liveEffectsKey(uid)] = enabled }

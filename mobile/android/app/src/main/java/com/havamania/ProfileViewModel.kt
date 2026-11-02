@@ -85,6 +85,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         observeProfile(uid)
     }
 
+    private fun profileWritesAllowed(): Boolean {
+        val state = AccountDeletionManager.getInstance(getApplication()).state.value
+        return !state.pending && !state.busy
+    }
+
     private fun observeProfile(uid: String) {
         profileJob?.cancel()
         _profileState.value = userProfileRepository.profile.value
@@ -94,20 +99,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         profileJob = accountTasks.launch launch@ { ownerUid ->
             try {
             userProfileRepository.profile.collect { profile ->
-                if (auth.currentUser?.uid != uid) return@collect
+                if (auth.currentUser?.uid != uid || !profileWritesAllowed()) return@collect
                 if (profile != null && profile.uid == uid) {
                     _profileState.value = ProfileState.Success(profile)
                     ThemeManager.saveProfileSnapshot(getApplication(), profile)
                 } else {
                     _profileState.value = ProfileState.Loading
-                    // Handled if we need to create it
-                    val user = auth.currentUser
-                    if (user != null) {
-                        // Check once if it actually doesn't exist to avoid redundant checks
-                        db.collection("users").document(user.uid).get().await().also {
-                            if (!it.exists()) createNewProfile(user.uid)
-                        }
-                    }
+                    ensureRemoteProfile(uid)
                 }
             }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -119,26 +117,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun createNewProfile(uid: String) {
-        if (auth.currentUser?.uid != uid) return
-        val authName = auth.currentUser?.displayName ?: ""
-        val newProfile = UserProfile(
-            uid = uid,
-            email = auth.currentUser?.email ?: "",
-            name = authName,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
-        )
-        accountTasks.launch launch@ { ownerUid ->
-            try {
-                db.collection("users").document(uid).set(newProfile).await()
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    Log.e("ProfileVM", "Failed to create new profile", e)
-}
-            }
-        }
+    private suspend fun ensureRemoteProfile(uid: String) {
+        val user = auth.currentUser?.takeIf { it.uid == uid } ?: return
+        createMissingAccountProfile(uid, { auth.currentUser?.uid }, ::profileWritesAllowed,
+            exists = { db.collection("users").document(uid)
+                .get(com.google.firebase.firestore.Source.SERVER).await().exists() },
+            create = {
+                db.collection("users").document(uid).set(UserProfile(
+                    uid = uid, email = user.email ?: "", name = user.displayName ?: "",
+                    createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()
+                )).await()
+            })
     }
 
     override fun onCleared() {

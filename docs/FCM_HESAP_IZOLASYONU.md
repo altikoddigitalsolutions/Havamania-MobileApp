@@ -91,3 +91,55 @@ BuildConfig.FCM_TOKEN_SYNC_ENABLED=false varsayılanı hem planlama hem worker g
 Açık yayın işleri: gerçek Worker/process-death/offline cihaz testi, sunucu kimlik eşlemesinin uçtan uca doğrulanması, ilk token alma ve rotation/reinstall kurtarma, çıkışta eski server kaydının unbind/iptali, conflict durumunun kullanıcı/operatör kurtarma akışı ve gerçek staging FCM teslimi. Bu çalışma bu engelleri kapatmaz.
 
 Son doğrulama: 6 yeni gateway/journal testi dahil 246 Android JVM testi geçti, debug APK derlendi; üretilen BuildConfig'te FCM_TOKEN_SYNC_ENABLED=false doğrulandı. Testlerde sahte HTTP/kimlik sağlayıcısı ve bellek diski kullanıldı. Gerçek CoroutineWorker/WorkManager süreç ölümü, auth ve AtomicFile cihaz testi henüz yapılmadı. Mevcut SDK/deprecation derleme uyarıları sürüyor; diff kontrolü temiz. Son değişiklikler push edilmedi.
+
+## 2 Kasım 2026 — gerçek cihazda AtomicFile dayanıklılığı
+
+Kalıcı journal okuması 4096 UTF-8 baytla sınırlandı; sınırsız readText kaldırıldı. Yazma boyutu atomik işlem başlamadan kontrol edilir, büyük girdi eski dosyayı değiştirmez. Geçersiz UTF-8 artık yerine karakter koyularak kabul edilmez. Bozuk dosya yeni kurulum kimliğiyle sessizce sıfırlanmaz. Pending kayıt için revision>0 ve tamamlanmış kayıt için retryNotBefore=0 tutarlılığı doğrulanır.
+
+Depolama sınıfına izole test dosyası kabul eden constructor eklendi; uygulamanın üretim yolu noBackupFilesDir/fcm-token-queue.json olarak kalır. Testler target cache altında rastgele klasör kullanıp yalnızca kendi dosyalarını temizler; üretim journal'ını veya hesap verisini açmaz.
+
+Doğrulama:
+- 247 Android JVM testi geçti (1 yeni metadata tutarlılık testi dahil), 0 failure/error.
+- Debug APK ve androidTest APK derlendi.
+- SM-T500 / Android 12 üzerinde yalnızca FcmJournalStorageDeviceTest çalıştırıldı: 5/5 başarılı. Gerçek dosyadan yeniden açma + kalıcı bekleme + eski ack reddi, bitirilmemiş atomik yazmadan kurtarma, legacy .bak kurtarma, büyük dosya/girdi sınırı ve geçersiz UTF-8/JSON'da kimliği koruma kapsandı.
+- Yarım yazma, stream finishWrite çağrılmadan kapatılarak simüle edildi; gerçek uygulama süreç öldürme veya elektrik/güç kesintisi testi yapılmadı. WorkManager'ın yeniden başlatılması ve gerçek auth/HTTP/FCM entegrasyonu bu testlerin kapsamında değildir.
+- FCM senkronizasyon/auto-init bayrakları açılmadı. Test kodu gerçek token kaydı veya Firebase/HTTP çağrısı yapmaz. Backend kaynakları bu adımda değişmedi. Diff kontrolü temiz.
+
+Sırada: gerçek Worker/process-death/offline cihaz matrisi, ilk token bootstrap/rotation, logout server unbind ve kimlik/gerçek staging teslim doğrulaması. Son GitHub commit'i 07708d1; bu yeni değişiklikler henüz push edilmedi.
+
+## 2 Kasım 2026 — Worker karar katmanı ve cihaz testi
+
+Bekleme süresinin oturum sahipliğinden önce kontrol edilmesi düzeltildi. Başka hesaba ait veya silme bekleyen kayıt, gelecekteki retry deadline yüzünden tekrar planlanmaz; mevcut iş acknowledge olmadan biter. runFcmSyncAttempt ile karar katmanı ayrıldı; aynı üretim fonksiyonu hem Worker hem sahte gateway'li testlerde kullanılır. Worker'ın yakaladığı Firebase kullanıcı/epoch çifti korunur; yeni hesabın kimliği eski FirebaseUser nesnesiyle eşleştirilmez. HTTP istemcisi ihtiyaç oluşana kadar oluşturulmaz.
+
+6 yeni JVM testi: stale owner/silme ve gelecekteki deadline, auth/HTTP öncesi bekleme, yanıt zamanına göre kalıcı deadline, eski yanıtın yeni UID/revision'u değiştirememesi, kalıcı hata ile ack ayrımı, ağ hatası/iptal. Toplam Android JVM 253/253 geçti; uygulama ve test APK'ları derlendi.
+
+SM-T500 / Android 12 cihazında FcmWorkerLocalDeviceTest ve önceki AtomicFile paketi birlikte 8/8 geçti (3 yeni + 5 önceki test). Yeni cihaz testleri:
+- Gerçek WorkManager'a yalnızca testin UUID'sine ait iş verildi; FCM_TOKEN_SYNC_ENABLED=false iken Worker SUCCEEDED durumuna ulaştı. Üretim kuyruğu gönderilmedi; test sonunda yalnızca kendi iş kimliği iptal edildi.
+- Gerçek geçici dosyadan yeniden oluşturulan karar katmanı 429 süresinden önce sahte gönderimi çağırmadı, tam sınırda eşleşen sonuçla acknowledge etti.
+- Sahte UID/epoch değişiminde eski APPLIED yanıt yeni hesabın disk kaydını tamamlayamadı.
+
+Sınırlar: gerçek Firebase hesabı değiştirilmedi; HTTP ve ağ hatası testleri sahtedir. Cihazın Wi-Fi'si kapatılmadı, gerçek süreç öldürme/power-loss testi yapılmadı. Gerçek WorkManager testi kapalı flag dalını doğrular; açık flag ile auth/HTTP entegrasyonunu doğrulamaz. Retry deadline yazımında disk doluluğu/commit belirsizliği ve yeniden deneme politikası için hata enjeksiyonu kontrolü de sonraki dayanıklılık matrisinde açıktır. Üretim bayrakları kapalı kalır, push yapılmadı.
+
+## 2 Kasım 2026 — 429 sonrası disk yazımı ve belirsiz commit
+
+Disk yazım hatası enjeksiyonu önceki kodda erken yeniden gönderimi yeniden üretti: 429 sonrası defer kaydı yazılamayınca eski bellek/disk snapshot'ı hemen gönderilebilir kalıyordu. İlk regresyon testi düzeltme öncesinde başarısız oldu.
+
+runFcmSyncAttempt artık HTTP/auth gönderiminden önce aynı kurulum/revision için kalıcı reserveAttempt kaydı oluşturur. Bu yazım başarılı olmadan gönderim başlamaz. Daha sonraki deadline veya ack yazımı başarısız/sonucu belirsiz olsa da önceki koruma hem bellekte hem yeniden açılan journal'da kalır. Yeni hesap/token revision'u eski korumayı devralmaz. Başarılı makbuz pending ve süreyi temizler.
+
+Politika güncellemesi: deneme 180 saniye ile sınırlıdır; belirsiz sonuç koruması en yüksek kabul edilen Retry-After (86400 saniye) + deneme penceresi olarak 86580 saniyedir (24 saat 3 dakika). Bu ek pencere, bekleme başlığının yanıt geldiği anda başlamasını hesaba katar. Bilinen 429 kendi doğrulanmış süresini, bilinen 408/5xx ve HTTP öncesi kimlik edinme başarısızlığı 30 saniyeyi kaydeder. HTTP yanıtı alınamaması veya sonraki disk yazımının belirsizliği korumayı muhafaza eder. Yerel timeout retry olur; üst coroutine/Worker iptali yutulmaz. Timeout, sunucudaki işlemin durduğunu garanti etmez.
+
+Bu konservatif politika belirsiz bir ağ sonucunda FCM kaydını 24 saat 3 dakikaya kadar geciktirebilir; yeniden kayıt kullanılabilirliği ve kurtarma yolu canlı etkinleştirmeden önce değerlendirilmelidir. Önceki 'tüm ağ hataları kısa backoff ile yeniden gönderilir' açıklaması bu bölümle güncellenir. FCM bayrakları kapalıdır. Manuel cihaz saati değişimleri, gerçek süreç öldürme/güç kesintisi ve fiziksel disk doluluğu matrisi bu enjeksiyon testleriyle kapanmaz.
+
+Yeni JVM testleri yazım öncesi/sonrası hata, preflight başarısızlığında sıfır HTTP, belirsiz ack, kayıp yanıt sonrası aynı kimlikle süre sonunda devam, bilinen kısa backoff, geç gelen en yüksek Retry-After ve timeout senaryolarını kapsar. Yeni cihaz testi gerçek geçici AtomicFile üzerinde yazmadan önce veya commit'ten sonra IOException enjekte eder; üretim dosyası ve hesap verisi kullanılmaz. Son test sonuçları aşağıya eklenecektir.
+
+Nihai doğrulama: 7 yeni JVM testi dahil Android 260/260, 0 failure/error. SM-T500 Android 12 seçili cihaz paketi 9/9 (önceki 8 + gerçek geçici dosyada 1 hata-enjeksiyon testi). Debug/test APK derlendi; üretilen FCM_TOKEN_SYNC_ENABLED=false doğrulandı. Son ortak birim+cihaz Gradle koşusu başarılı, diff kontrolü temiz. Gerçek disk doldurma, süreç öldürme ve canlı servis çağrısı yapılmadı. Son değişiklikler push edilmedi.
+
+## 2 Kasım 2026 — kalıcı Firebase oturum hatası ve kurtarma
+
+FirebaseAuthInvalidUserException artık genel geçici hata gibi 30 saniyelik tekrar yoluna girmez. fcmAuthorization adaptörü bunu özel, sabit mesajlı FcmAuthRequiredException'a çevirir; SDK mesajı/cause taşınmaz. Gateway AUTH_REQUIRED sonucu üretir. HTTP 401 sonrası refresh aşamasında da aynı kontrol geçerlidir. HTTP 401'in tek başına kullanıcı silindiği varsayılmaz; ikinci 401 hâlâ STOP'tur (backend yapılandırma sorunu olabilir).
+
+Journal'da geriye uyumlu authRequired=false alanı eklendi. Kalıcı auth hatası pending kaydı başarı/ack olarak kapatmadan authRequired=true durumunu diske yazar. Worker/çekirdek/gateway aynı snapshot için yeniden auth veya HTTP başlatmaz; ack ve reserve/defer girişleri de engellidir. Yeni UID/token revision'u veya çıkış-giriş yeni kaydı durumu temizler. Sadece aynı UID/token ile uygulamayı açmak engeli kaldırmaz. Eski revision'un geç hata cevabı yeni hesabı işaretleyemez. Bu durumun yazımı başarısız olursa önceki kalıcı gönderim koruması uygulanmaya devam eder.
+
+Geçici auth ağ hataları RETRY/30 saniye davranışını korur. Kullanıcının gerçek oturumu kapatılmaz veya hesabı silinmez. Kalıcı engelin ayarlarda kullanıcıya sunumu ve yeniden giriş/kurtarma UX'i, token bootstrap ve canlı FCM rollout'u ile birlikte hâlâ açık yayın işleridir.
+
+Doğrulama: 4 yeni JVM testi dahil Android 264/264, debug ve test APK derlemesi başarılı. SM-T500 Android 12 üzerinde seçili paket 11/11 geçti (önceki 9 + 2 yeni). Gerçek SDK FirebaseAuthInvalidUserException sınıfı dört yerel hata koduyla oluşturularak adaptörün mesaj/cause temizliği doğrulandı; FirebaseAuth servisine bağlanılmadı. Diğer yeni cihaz testi ayrı geçici dosyada auth engelinin yeniden açılışta korunmasını ve yeni revision'da temizlenmesini doğruladı. Gerçek kullanıcı silme/devre dışı bırakma veya oturum açma yapılmadı. FCM flag açılmadı; diff kontrolü temiz. Son yerel değişiklikler push edilmedi.

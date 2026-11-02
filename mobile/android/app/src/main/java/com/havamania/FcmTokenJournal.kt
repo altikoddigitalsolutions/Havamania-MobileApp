@@ -14,7 +14,7 @@ internal interface FcmJournalStorage {
 @Serializable
 internal data class FcmTokenRegistration(val installationId: String, val revision: Long = 0,
     val ownerUid: String? = null, val token: String? = null, val pending: Boolean = false,
-    val retryNotBeforeEpochSeconds: Long = 0) {
+    val retryNotBeforeEpochSeconds: Long = 0, val authRequired: Boolean = false) {
     override fun toString() = "FcmTokenRegistration(revision=$revision, pending=$pending)"
 }
 
@@ -31,7 +31,10 @@ internal class FcmTokenJournal(private val storage: FcmJournalStorage) {
         require(record.ownerUid == null || !record.ownerUid!!.isBlank() && record.ownerUid != "legacy" && record.ownerUid!!.length <= 128)
         require(record.token?.none(Char::isISOControl) != false)
         require(!record.pending || (!record.ownerUid.isNullOrBlank() && record.token != null))
+        require(!record.pending || record.revision > 0)
         require(record.retryNotBeforeEpochSeconds >= 0)
+        require(record.pending || record.retryNotBeforeEpochSeconds == 0L)
+        require(!record.authRequired || (record.pending && record.retryNotBeforeEpochSeconds == 0L))
     }
 
     @Synchronized fun snapshot(): FcmTokenRegistration = record
@@ -42,21 +45,33 @@ internal class FcmTokenJournal(private val storage: FcmJournalStorage) {
         if (record.ownerUid == ownerUid && record.token == token) return record
         check(record.revision < 9_007_199_254_740_991L)
         return commit(record.copy(revision = record.revision + 1, ownerUid = ownerUid, token = token,
-            pending = ownerUid != null && token != null, retryNotBeforeEpochSeconds = 0))
+            pending = ownerUid != null && token != null, retryNotBeforeEpochSeconds = 0, authRequired = false))
     }
 
     @Synchronized fun acknowledge(sent: FcmTokenRegistration): Boolean {
-        if (record != sent || !record.pending) return false
+        if (record != sent || !record.pending || record.authRequired) return false
         commit(record.copy(pending = false, retryNotBeforeEpochSeconds = 0))
         return true
     }
 
     @Synchronized fun clearAccount(): FcmTokenRegistration = update(null, null)
 
+    @Synchronized fun reserveAttempt(sent: FcmTokenRegistration, nowSeconds: Long): FcmTokenRegistration? {
+        require(nowSeconds >= 0 && nowSeconds <= Long.MAX_VALUE - FCM_UNCERTAIN_RETRY_SECONDS)
+        if (record != sent || !record.pending || record.authRequired) return null
+        return commit(record.copy(retryNotBeforeEpochSeconds = nowSeconds + FCM_UNCERTAIN_RETRY_SECONDS))
+    }
+
     @Synchronized fun deferRetry(sent: FcmTokenRegistration, nowSeconds: Long, delaySeconds: Long): Boolean {
         require(nowSeconds >= 0 && delaySeconds in 1..86400 && nowSeconds <= Long.MAX_VALUE - delaySeconds)
-        if (record != sent || !record.pending) return false
+        if (record != sent || !record.pending || record.authRequired) return false
         commit(record.copy(retryNotBeforeEpochSeconds = nowSeconds + delaySeconds))
+        return true
+    }
+
+    @Synchronized fun requireAuthentication(sent: FcmTokenRegistration): Boolean {
+        if (record != sent || !record.pending) return false
+        commit(record.copy(authRequired = true, retryNotBeforeEpochSeconds = 0))
         return true
     }
 
@@ -67,7 +82,7 @@ internal class FcmTokenJournal(private val storage: FcmJournalStorage) {
     }
 }
 
-internal enum class FcmSyncResult { IDLE, APPLIED, SUPERSEDED, RETRY }
+internal enum class FcmSyncResult { IDLE, APPLIED, SUPERSEDED, RETRY, AUTH_REQUIRED }
 
 /** Gateway must verify the server's installation/revision/owner receipt before returning true. */
 internal suspend fun syncPendingFcmToken(journal: FcmTokenJournal, currentUid: () -> String?,
@@ -76,6 +91,7 @@ internal suspend fun syncPendingFcmToken(journal: FcmTokenJournal, currentUid: (
     val desired = journal.snapshot()
     val epoch = sessionEpoch()
     if (!desired.pending) return FcmSyncResult.IDLE
+    if (desired.authRequired) return FcmSyncResult.AUTH_REQUIRED
     fun current() = currentUid() == desired.ownerUid && !deletionPending() && sessionEpoch() == epoch &&
         journal.snapshot() == desired
     if (!current()) return FcmSyncResult.SUPERSEDED

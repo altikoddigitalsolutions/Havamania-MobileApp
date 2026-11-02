@@ -495,16 +495,6 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    fun clearAllPlans() {
-        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
-            val uid = currentUid
-            dao.clearAllTravelPlans(uid)
-            dao.clearAllWeatherCache()
-            ThemeManager.saveHasSeededTrips(getApplication(), true, uid)
-            _plans.value = emptyList()
-        }
-    }
-
     private var citySearchJob: kotlinx.coroutines.Job? = null
     private var originSearchJob: kotlinx.coroutines.Job? = null
 

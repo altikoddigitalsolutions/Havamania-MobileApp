@@ -12,6 +12,7 @@ import com.havamania.GeocodingResultDto
 import com.havamania.SaveResult
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -26,7 +27,24 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
     private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
 
+    private var citySyncRequests = com.havamania.CitySyncRequestGate()
+    private fun citySyncAllowed(): Boolean {
+        val state = com.havamania.AccountDeletionManager.getInstance(getApplication()).state.value
+        return !state.pending && !state.busy
+    }
+    private val cityMutationLock = kotlinx.coroutines.sync.Mutex()
+    private val _cityMutationError = MutableStateFlow(false)
+    val cityMutationError = _cityMutationError.asStateFlow()
+    private val _cityMutationErrorDetails = MutableStateFlow<String?>(null)
+    val cityMutationErrorDetails = _cityMutationErrorDetails.asStateFlow()
+    private fun reportCityError(error: Exception) {
+        _cityMutationErrorDetails.value = com.havamania.citySyncErrorText(error)
+        _cityMutationError.value = true
+    }
+
+    @Volatile private var citiesListenerVersion = 0L
     private var citiesListener: ListenerRegistration? = null
+    private var citiesSnapshotJob: kotlinx.coroutines.Job? = null
 
     private val _currentTheme = MutableStateFlow(AppTheme.DARK)
     val currentTheme: StateFlow<AppTheme> = _currentTheme.asStateFlow()
@@ -96,12 +114,16 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiEvent = MutableSharedFlow<String>()
     val uiEvent = _uiEvent.asSharedFlow()
+    private val _settingsIssue = MutableStateFlow<com.havamania.SettingsIssue?>(null)
+    internal val settingsIssue = _settingsIssue.asStateFlow()
+    fun dismissSettingsIssue() { _settingsIssue.value = null }
 
     private var settingsJob: kotlinx.coroutines.Job? = null
     private var profileSyncJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         accountTasks.reset()
+        citySyncRequests = com.havamania.CitySyncRequestGate()
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
 if (BuildConfig.DEBUG) {
@@ -113,6 +135,7 @@ if (BuildConfig.DEBUG) {
         loadSettings()
         observeFirestoreUserDoc(newUid)
         observeFirestoreCities(newUid)
+        prepareCitySyncRetry(authOnly = true)
     }
 
     init {
@@ -122,47 +145,48 @@ if (BuildConfig.DEBUG) {
     override fun onCleared() {
         super.onCleared()
         auth.removeAuthStateListener(authListener)
+        citiesListenerVersion++
+        citiesSnapshotJob?.cancel()
         citiesListener?.remove()
     }
 
     private fun observeFirestoreCities(uid: String) {
+        val listenerVersion = ++citiesListenerVersion
+        citiesSnapshotJob?.cancel()
         citiesListener?.remove()
         if (uid == "legacy") return
 
 if (BuildConfig.DEBUG) {
             Log.d("ThemeVM", "Starting Cities listener for $uid")
 }
+        val queue = com.havamania.CitySnapshotQueue<com.google.firebase.firestore.QuerySnapshot>()
+        citiesSnapshotJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) {
+            queue.consume { snapshot ->
+                try {
+                    val remoteCities = snapshot.documents.mapNotNull {
+                        it.toObject(com.havamania.GeocodingResultDto::class.java)
+                    }
+                    com.havamania.applyCitySnapshot(uid, listenerVersion,
+                        { this@ThemeViewModel.currentUid }, { citiesListenerVersion },
+                        save = { ThemeManager.mergeRemoteCities(getApplication(), uid, remoteCities) },
+                        publish = {})
+                } catch (ex: Exception) {
+                    if (ex is kotlinx.coroutines.CancellationException) throw ex
+                    com.havamania.publishAccountResult(uid, { this@ThemeViewModel.currentUid }) {
+                        reportCityError(ex)
+                    }
+                }
+            }
+        }.also { job -> job.invokeOnCompletion { queue.close() } }
         citiesListener = db.collection("users").document(uid).collection("cities")
-            .addSnapshotListener { snapshot, e ->
-                if (uid != currentUid) return@addSnapshotListener
-                if (e != null) {
-if (BuildConfig.DEBUG) {
-                        Log.w("ThemeVM", "Cities listen failed.", e)
-}
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, error ->
+                if (uid != currentUid || listenerVersion != citiesListenerVersion) return@addSnapshotListener
+                if (error != null) {
+                    reportCityError(error)
                     return@addSnapshotListener
                 }
-
-                if (snapshot != null) {
-                    accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
-                        try {
-                            val remoteCities = snapshot.documents.mapNotNull {
-                                it.toObject(com.havamania.GeocodingResultDto::class.java)
-                            }
-if (BuildConfig.DEBUG) {
-                                Log.d("ThemeVM", "Firestore cities received: ${remoteCities.size}")
-}
-
-                            if (remoteCities != _registeredCities.value) {
-                                ThemeManager.saveRegisteredCities(getApplication(), uid, remoteCities)
-                                _registeredCities.value = remoteCities
-                            }
-                        } catch (ex: Exception) {
-                            if (ex is kotlinx.coroutines.CancellationException) throw ex
-if (BuildConfig.DEBUG) {
-                                Log.e("ThemeVM", "Error parsing cities snapshot", ex)
-}
-                        }
-                    }
+                if (snapshot != null && !snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
+                    queue.offer(snapshot)
                 }
             }
     }
@@ -173,220 +197,228 @@ if (BuildConfig.DEBUG) {
 
         userProfileRepository.startObserving(uid)
 
-        profileSyncJob = accountTasks.launch launch@ { currentUid ->
-            userProfileRepository.profile.collect { profile ->
-                if (uid != this@ThemeViewModel.currentUid || profile?.uid != uid) return@collect
-                _isPremium.value = profile.isPremium
-                profile.let { p ->
-                    // Sync defaultCity
-                    val remoteDefaultCityName = p.defaultCity
-                    if (remoteDefaultCityName != _defaultCity.value?.name) {
-                        val cityToSet = _registeredCities.value.find { it.name == remoteDefaultCityName }
-                        if (cityToSet != null) {
-                            ThemeManager.saveDefaultCity(getApplication(), uid, cityToSet)
-                            _defaultCity.value = cityToSet
-                        }
+        profileSyncJob = accountTasks.launch {
+            launch {
+                userProfileRepository.profile.collect { profile ->
+                    if (uid == this@ThemeViewModel.currentUid && profile?.uid == uid) {
+                        _isPremium.value = profile.isPremium
                     }
                 }
             }
+            combine(userProfileRepository.serverDefaultCity, registeredCities) { remote, cities -> remote to cities }
+                .collect { (remote, cities) ->
+                    if (remote?.uid != uid) return@collect
+                    try {
+                        com.havamania.publishAccountResult(uid, { currentUid }) {
+                            ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
+                                cities.find { it.name == remote.name })
+                        }
+                    } catch (error: Exception) {
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        com.havamania.publishAccountResult(uid, { currentUid }) { reportCityError(error) }
+                    }
+                }
         }
     }
 
 
     fun loadSettings() {
         settingsJob?.cancel()
-        val uid = currentUid
-        settingsJob = accountTasks.launch { _ ->
-            launch { ThemeManager.getTheme(getApplication(), uid).collect { _currentTheme.value = it } }
-            launch { ThemeManager.getAnimationsEnabled(getApplication(), uid).collect { _animationsEnabled.value = it } }
-            launch { ThemeManager.getTempUnit(getApplication(), uid).collect { _tempUnit.value = it } }
-            launch { ThemeManager.getWindUnit(getApplication(), uid).collect { _windUnit.value = it } }
-            launch { ThemeManager.getPressureUnit(getApplication(), uid).collect { _pressureUnit.value = it } }
-            launch { ThemeManager.getLanguage(getApplication(), uid).collect { _language.value = it } }
+        _settingsIssue.value = null
+        settingsJob = accountTasks.launch { uid ->
+            loadSetting(uid, ThemeManager.getTheme(getApplication(), uid)) { _currentTheme.value = it }
+            loadSetting(uid, ThemeManager.getAnimationsEnabled(getApplication(), uid)) { _animationsEnabled.value = it }
+            loadSetting(uid, ThemeManager.getTempUnit(getApplication(), uid)) { _tempUnit.value = it }
+            loadSetting(uid, ThemeManager.getWindUnit(getApplication(), uid)) { _windUnit.value = it }
+            loadSetting(uid, ThemeManager.getPressureUnit(getApplication(), uid)) { _pressureUnit.value = it }
+            loadSetting(uid, ThemeManager.getLanguage(getApplication(), uid)) { _language.value = it }
+            loadSetting(uid, ThemeManager.getNotificationsEnabled(getApplication(), uid)) { _notificationsEnabled.value = it }
+            loadSetting(uid, ThemeManager.getPersonalizationEnabled(getApplication(), uid)) { _personalizationEnabled.value = it }
+            loadSetting(uid, ThemeManager.getAssistantTone(getApplication(), uid)) { _assistantTone.value = it }
+            loadSetting(uid, ThemeManager.getUserName(getApplication(), uid)) { _userName.value = it }
+            loadSetting(uid, ThemeManager.getUserBio(getApplication(), uid)) { _userBio.value = it }
+            loadSetting(uid, ThemeManager.getUserImageUriByUid(getApplication(), uid)) { _userImageUri.value = it }
+            loadSetting(uid, ThemeManager.getUserInterests(getApplication(), uid)) { _userInterests.value = it }
+            loadSetting(uid, ThemeManager.getUserAboutMe(getApplication(), uid)) { _userAboutMe.value = it }
+            loadSetting(uid, ThemeManager.getRegisteredCities(getApplication(), uid)) { _registeredCities.value = it }
+            loadSetting(uid, ThemeManager.getDefaultCity(getApplication(), uid)) { _defaultCity.value = it }
+            loadSetting(uid, ThemeManager.getLocationMode(getApplication(), uid)) { _locationMode.value = it }
+            loadSetting(uid, ThemeManager.getTiltEffectEnabled(getApplication(), uid)) { _tiltEffectEnabled.value = it }
+            loadSetting(uid, ThemeManager.getLiveEffects(getApplication(), uid)) { _liveEffectsEnabled.value = it }
+            loadSetting(uid, ThemeManager.getEffectIntensity(getApplication(), uid)) { intensityStr ->
+                _userEffectIntensity.value = try { com.havamania.WeatherEffectIntensity.valueOf(intensityStr) }
+                catch (_: IllegalArgumentException) { com.havamania.WeatherEffectIntensity.MEDIUM }
+            }
+        }
+    }
 
-            launch { ThemeManager.getNotificationsEnabled(getApplication(), uid).collect { _notificationsEnabled.value = it } }
-            launch { ThemeManager.getPersonalizationEnabled(getApplication(), uid).collect { _personalizationEnabled.value = it } }
-            launch { ThemeManager.getAssistantTone(getApplication(), uid).collect { _assistantTone.value = it } }
-            launch { ThemeManager.getUserName(getApplication(), uid).collect { _userName.value = it } }
-            launch { ThemeManager.getUserBio(getApplication(), uid).collect { _userBio.value = it } }
-            launch { ThemeManager.getUserImageUriByUid(getApplication(), uid).collect { _userImageUri.value = it } }
-            launch { ThemeManager.getUserInterests(getApplication(), uid).collect { _userInterests.value = it } }
-            launch { ThemeManager.getUserAboutMe(getApplication(), uid).collect { _userAboutMe.value = it } }
-            launch { ThemeManager.getRegisteredCities(getApplication(), uid).collect { _registeredCities.value = it } }
-            launch { ThemeManager.getDefaultCity(getApplication(), uid).collect { _defaultCity.value = it } }
-            launch { ThemeManager.getLocationMode(getApplication(), uid).collect { _locationMode.value = it } }
+    private fun <T> CoroutineScope.loadSetting(owner: String, source: Flow<T>, apply: (T) -> Unit) = launch {
+        com.havamania.observeAccountData(source, owner, { currentUid }, apply) {
+            _settingsIssue.value = com.havamania.SettingsIssue.LOAD
+        }
+    }
 
-            launch { ThemeManager.getTiltEffectEnabled(getApplication(), uid).collect { _tiltEffectEnabled.value = it } }
-            launch { ThemeManager.getLiveEffects(getApplication(), uid).collect { _liveEffectsEnabled.value = it } }
-            launch {
-                ThemeManager.getEffectIntensity(getApplication(), uid).collect { intensityStr ->
-                    _userEffectIntensity.value = try { com.havamania.WeatherEffectIntensity.valueOf(intensityStr) } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        com.havamania.WeatherEffectIntensity.MEDIUM
-                    }
-                }
+    private fun savePreference(write: suspend (String) -> Unit, onApplied: () -> Unit) {
+        accountTasks.launch { owner ->
+            com.havamania.publishAccountResult(owner, { currentUid }) { _settingsIssue.value = null }
+            com.havamania.persistAccountPreference(owner, { currentUid }, write, onApplied) {
+                _settingsIssue.value = com.havamania.SettingsIssue.SAVE
             }
         }
     }
 
     fun setTheme(theme: AppTheme) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveTheme(getApplication(), theme, uid)
-            _currentTheme.value = theme
-        }
+        savePreference({ uid -> ThemeManager.saveTheme(getApplication(), theme, uid) }) { _currentTheme.value = theme }
     }
 
     fun setAnimationsEnabled(enabled: Boolean) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveAnimationsEnabled(getApplication(), enabled, uid)
-            _animationsEnabled.value = enabled
-        }
+        savePreference({ uid -> ThemeManager.saveAnimationsEnabled(getApplication(), enabled, uid) }) { _animationsEnabled.value = enabled }
     }
 
     fun setTempUnit(unit: TemperatureUnit) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveTempUnit(getApplication(), unit, uid)
-            _tempUnit.value = unit
-        }
+        savePreference({ uid -> ThemeManager.saveTempUnit(getApplication(), unit, uid) }) { _tempUnit.value = unit }
     }
 
     fun setWindUnit(unit: WindSpeedUnit) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveWindUnit(getApplication(), unit, uid)
-            _windUnit.value = unit
-        }
+        savePreference({ uid -> ThemeManager.saveWindUnit(getApplication(), unit, uid) }) { _windUnit.value = unit }
     }
 
     fun setPressureUnit(unit: PressureUnit) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.savePressureUnit(getApplication(), unit, uid)
-            _pressureUnit.value = unit
-        }
+        savePreference({ uid -> ThemeManager.savePressureUnit(getApplication(), unit, uid) }) { _pressureUnit.value = unit }
     }
 
     fun setLanguage(lang: String) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveLanguage(getApplication(), lang, uid)
-            _language.value = lang
-        }
+        if (!AppLanguageSupport.isSupported(lang)) return
+        val supportedLanguage = AppLanguageSupport.resolve(lang)
+        savePreference({ uid -> ThemeManager.saveLanguage(getApplication(), supportedLanguage, uid) }) { _language.value = supportedLanguage }
     }
 
     fun setNotificationsEnabled(enabled: Boolean) {
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveNotificationsEnabled(getApplication(), currentUid, enabled)
-            _notificationsEnabled.value = enabled
-        }
+        savePreference({ uid -> ThemeManager.saveNotificationsEnabled(getApplication(), uid, enabled) }) { _notificationsEnabled.value = enabled }
     }
 
     fun setPersonalizationEnabled(enabled: Boolean) {
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.savePersonalizationEnabled(getApplication(), currentUid, enabled)
-            _personalizationEnabled.value = enabled
-        }
+        savePreference({ uid -> ThemeManager.savePersonalizationEnabled(getApplication(), uid, enabled) }) { _personalizationEnabled.value = enabled }
     }
 
     fun setAssistantTone(tone: AssistantTone) {
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveAssistantTone(getApplication(), currentUid, tone)
-            _assistantTone.value = tone
-        }
+        savePreference({ uid -> ThemeManager.saveAssistantTone(getApplication(), uid, tone) }) { _assistantTone.value = tone }
     }
 
     fun setUserImageUri(uri: String?) {
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveUserImageUriByUid(getApplication(), currentUid, uri)
-            _userImageUri.value = uri
+        savePreference({ uid -> ThemeManager.saveUserImageUriByUid(getApplication(), uid, uri) }) { _userImageUri.value = uri }
+    }
+
+    fun dismissCityMutationError() { _cityMutationError.value = false; _cityMutationErrorDetails.value = null }
+    fun retryCitySync() {
+        _cityMutationError.value = false
+        prepareCitySyncRetry(authOnly = false)
+    }
+
+    private fun prepareCitySyncRetry(authOnly: Boolean) {
+        accountTasks.launch { owner ->
+            try {
+                ThemeManager.releaseCitySyncBlocks(getApplication(), owner, authOnly)
+                retryPendingCityChanges()
+                retryPendingDefaultCity()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                com.havamania.publishAccountResult(owner, { currentUid }) { reportCityError(error) }
+            }
         }
+    }
+
+    private fun mutateCities(local: suspend (String) -> Boolean, remote: suspend (String) -> Unit) {
+        accountTasks.launch { owner ->
+            com.havamania.mutateAccountCities(cityMutationLock, owner, { currentUid },
+                local = { local(owner) },
+                remote = { if (owner != "legacy") remote(owner) },
+                onFailure = { reportCityError(it) })
+        }
+    }
+
+    private fun retryPendingCityChanges() {
+        accountTasks.launch { owner ->
+            if (owner == "legacy") return@launch
+            com.havamania.mutateAccountCities(cityMutationLock, owner, { currentUid },
+                local = { true }, remote = {
+                    com.havamania.runCitySyncBatch(
+                        ThemeManager.pendingCityChanges(getApplication(), owner), owner, { currentUid },
+                        send = { sendCityChange(owner, it.city.id) }, onFailure = ::reportCityError)
+                }, onFailure = { reportCityError(it) })
+        }
+    }
+
+    private suspend fun sendCityChange(uid: String, cityId: Long) =
+        citySyncRequests.run("$uid:city:$cityId") {
+        com.havamania.CitySyncDispatcher.sendLatest("$uid:city:$cityId", uid, { currentUid },
+            read = { ThemeManager.pendingCityChanges(getApplication(), uid).firstOrNull { it.city.id == cityId } },
+            send = { change ->
+                val document = db.collection("users").document(uid).collection("cities").document(cityId.toString())
+                if (change.deleted) document.delete().await() else document.set(change.city).await()
+            }, acknowledge = { ThemeManager.acknowledgeCityChange(getApplication(), uid, it) },
+            recordFailure = { sent, error -> ThemeManager.recordCitySyncFailure(getApplication(), uid, sent, error, false) },
+            reserve = { change, now -> ThemeManager.reserveCitySyncAttempt(getApplication(), uid, change, false, now) },
+            isAllowed = ::citySyncAllowed,
+            clock = { com.havamania.CitySyncClocks.capture(getApplication()) },
+            refreshClock = { ThemeManager.refreshCitySyncClock(getApplication(), uid, it, false) })
     }
 
     fun addCity(city: GeocodingResultDto) {
-        accountTasks.launch launch@ { currentUid ->
-            try {
-                val uid = currentUid
-                val current = _registeredCities.value.toMutableList()
-                if (current.none { it.id == city.id || (it.name == city.name && it.admin1 == city.admin1) }) {
-                    current.add(city)
-                    ThemeManager.saveRegisteredCities(getApplication(), uid, current)
-                    _registeredCities.value = current
-
-                    if (uid != "legacy") {
-                        db.collection("users").document(uid).collection("cities")
-                            .document(city.id.toString()).set(city)
-                            .await()
-                    }
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    Log.e("ThemeVM", "Failed to add city", e)
-}
-                _uiEvent.emit("Şehir şu anda kaydedilemedi.")
-            }
-        }
+        mutateCities(local = { uid ->
+            ThemeManager.recordCityChange(getApplication(), uid, city, deleted = false)
+        }, remote = { uid -> sendCityChange(uid, city.id) })
     }
 
     fun removeCity(city: GeocodingResultDto) {
-        accountTasks.launch launch@ { currentUid ->
-            try {
-                val uid = currentUid
-                val current = _registeredCities.value.toMutableList()
-                if (current.size > 1 && current.any { it.id == city.id }) {
-                    current.removeAll { it.id == city.id }
-                    ThemeManager.saveRegisteredCities(getApplication(), uid, current)
-                    _registeredCities.value = current
+        mutateCities(local = { uid ->
+            ThemeManager.recordCityChange(getApplication(), uid, city, deleted = true)
+        }, remote = { uid -> sendCityChange(uid, city.id) })
+    }
 
-                    if (_defaultCity.value?.id == city.id) {
-                        setDefaultCity(current.first())
-                    }
-
-                    if (uid != "legacy") {
-                        db.collection("users").document(uid).collection("cities")
-                            .document(city.id.toString()).delete()
-                            .await()
-                    }
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    Log.e("ThemeVM", "Failed to remove city", e)
-}
-                _uiEvent.emit("Şehir şu anda silinemedi.")
+    private fun retryPendingDefaultCity() {
+        accountTasks.launch { owner ->
+            if (owner == "legacy") return@launch
+            try { sendPendingDefaultCity(owner) }
+            catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                com.havamania.publishAccountResult(owner, { currentUid }) { reportCityError(error) }
             }
         }
+    }
+
+    private suspend fun sendPendingDefaultCity(uid: String) =
+        citySyncRequests.run("$uid:default-city") {
+        com.havamania.CitySyncDispatcher.sendLatest("$uid:default-city", uid, { currentUid },
+            read = { ThemeManager.pendingDefaultCity(getApplication(), uid) },
+            send = { change ->
+                db.collection("users").document(uid)
+                    .set(mapOf("defaultCity" to change.city.name), SetOptions.merge()).await()
+            }, acknowledge = { change ->
+                ThemeManager.acknowledgeDefaultCity(getApplication(), uid, change)
+                val remote = userProfileRepository.serverDefaultCity.value
+                if (remote?.uid == uid) {
+                    ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
+                        _registeredCities.value.find { it.name == remote.name })
+                }
+            }, recordFailure = { sent, error ->
+                ThemeManager.recordCitySyncFailure(getApplication(), uid, sent, error, true)
+            }, reserve = { change, now -> ThemeManager.reserveCitySyncAttempt(getApplication(), uid, change, true, now) }, isAllowed = ::citySyncAllowed,
+            clock = { com.havamania.CitySyncClocks.capture(getApplication()) },
+            refreshClock = { ThemeManager.refreshCitySyncClock(getApplication(), uid, it, true) })
     }
 
     fun setDefaultCity(city: GeocodingResultDto) {
-        accountTasks.launch launch@ { currentUid ->
-            try {
-                val uid = currentUid
-                ThemeManager.saveDefaultCity(getApplication(), uid, city)
-                _defaultCity.value = city
-
-                if (uid != "legacy") {
-                    db.collection("users").document(uid)
-                        .set(mapOf("defaultCity" to city.name), SetOptions.merge())
-                        .await()
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    Log.e("ThemeVM", "Failed to sync default city", e)
-}
-            }
-        }
+        mutateCities(local = { uid ->
+            ThemeManager.recordDefaultCity(getApplication(), uid, city)
+            true
+        }, remote = { uid ->
+            sendPendingDefaultCity(uid)
+        })
     }
 
     fun setLocationMode(mode: LocationMode) {
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveLocationMode(getApplication(), currentUid, mode)
-            _locationMode.value = mode
-        }
+        savePreference({ uid -> ThemeManager.saveLocationMode(getApplication(), uid, mode) }) { _locationMode.value = mode }
     }
 
     fun checkInitialLocationMode() {
@@ -406,47 +438,21 @@ if (BuildConfig.DEBUG) {
     }
 
     fun setTiltEffectEnabled(enabled: Boolean) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveTiltEffectEnabled(getApplication(), enabled, uid)
-            _tiltEffectEnabled.value = enabled
-        }
+        savePreference({ uid -> ThemeManager.saveTiltEffectEnabled(getApplication(), enabled, uid) }) { _tiltEffectEnabled.value = enabled }
     }
 
     fun setLiveEffectsEnabled(enabled: Boolean) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveLiveEffects(getApplication(), enabled, uid)
-            _liveEffectsEnabled.value = enabled
-        }
+        savePreference({ uid -> ThemeManager.saveLiveEffects(getApplication(), enabled, uid) }) { _liveEffectsEnabled.value = enabled }
     }
 
     fun setEffectIntensity(intensity: com.havamania.WeatherEffectIntensity) {
-        val uid = currentUid
-        accountTasks.launch launch@ { currentUid ->
-            ThemeManager.saveEffectIntensity(getApplication(), intensity.name, uid)
-            _userEffectIntensity.value = intensity
-        }
-    }
-
-    fun resetCities() {
-        accountTasks.launch launch@ { currentUid ->
-            val uid = currentUid
-            ThemeManager.clearRegisteredCities(getApplication(), uid)
-            _registeredCities.value = emptyList()
-            _defaultCity.value = null
-        }
-    }
-
-    fun resetAllData() {
-        accountTasks.launch launch@ { currentUid ->
-            val uid = currentUid
-            ThemeManager.resetAll(getApplication(), uid)
-            loadSettings()
-        }
+        savePreference({ uid -> ThemeManager.saveEffectIntensity(getApplication(), intensity.name, uid) }) { _userEffectIntensity.value = intensity }
     }
 
     fun clearLocalUserData() {
+        _cityMutationErrorDetails.value = null
+        _cityMutationError.value = false
+        _settingsIssue.value = null
         // Oturum kapatıldığında state temizlenir ama DataStore'daki kalıcı veri silinmez (talimat gereği)
         _isPremium.value = false
         _userName.value = ""

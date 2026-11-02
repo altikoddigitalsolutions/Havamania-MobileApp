@@ -38,7 +38,7 @@ internal suspend fun registerFcmTokenSnapshot(
     expectedBackendOwner: String, authorization: String,
     isCurrent: () -> Boolean
 ): Boolean {
-    if (!desired.pending || desired.ownerUid == null || desired.token == null ||
+    if (!desired.pending || desired.authRequired || desired.ownerUid == null || desired.token == null ||
         expectedBackendOwner.isBlank() || !authorization.startsWith("Bearer ") ||
         authorization.removePrefix("Bearer ").isBlank() || authorization.any(Char::isISOControl)
     ) return false

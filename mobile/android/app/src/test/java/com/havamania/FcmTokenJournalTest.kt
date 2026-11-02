@@ -7,6 +7,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FcmTokenJournalTest {
+    @Test fun inconsistentPendingAndRetryMetadataFailClosed() {
+        val id = java.util.UUID.randomUUID().toString()
+        for (body in listOf(
+            """{"installationId":"$id","revision":0,"ownerUid":"a","token":"local-test-token","pending":true}""",
+            """{"installationId":"$id","revision":1,"pending":false,"retryNotBeforeEpochSeconds":100}"""
+        )) {
+            val disk = Disk().apply { bytes = body }
+            try { FcmTokenJournal(disk); fail("Inconsistent metadata must be rejected") }
+            catch (_: IllegalArgumentException) { }
+            assertEquals(body, disk.bytes)
+        }
+    }
     private class Disk : FcmJournalStorage {
         var bytes: String? = null
         var fail = false

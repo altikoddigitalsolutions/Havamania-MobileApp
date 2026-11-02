@@ -29,6 +29,9 @@ fun CitiesManagementScreen(
     themeViewModel: ThemeViewModel = viewModel(),
     weatherViewModel: WeatherViewModel = viewModel()
 ) {
+    val cityMutationError by themeViewModel.cityMutationError.collectAsStateWithLifecycle()
+    val cityMutationErrorDetails by themeViewModel.cityMutationErrorDetails.collectAsStateWithLifecycle()
+    CityMutationErrorDialog(cityMutationError, themeViewModel::dismissCityMutationError, themeViewModel::retryCitySync, cityMutationErrorDetails)
     val registeredCities by themeViewModel.registeredCities.collectAsStateWithLifecycle()
     val defaultCity by themeViewModel.defaultCity.collectAsStateWithLifecycle()
     val searchStatus by weatherViewModel.citySearchStatus.collectAsStateWithLifecycle()

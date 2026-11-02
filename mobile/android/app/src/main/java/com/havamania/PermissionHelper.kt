@@ -29,7 +29,7 @@ object PermissionHelper {
     }
 
     fun hasNotificationPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val runtimeGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -37,6 +37,8 @@ object PermissionHelper {
         } else {
             true
         }
+        return notificationPostingAllowed(Build.VERSION.SDK_INT, runtimeGranted,
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
     }
 }
 
