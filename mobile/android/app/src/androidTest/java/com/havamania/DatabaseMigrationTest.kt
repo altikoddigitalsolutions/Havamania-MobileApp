@@ -43,7 +43,7 @@ class DatabaseMigrationTest {
                 VALUES ('old','owner','Title','Message','TRAVEL',123,0,'NONE')""")
         }
         val database = Room.databaseBuilder(context, NotificationDatabase::class.java, name)
-            .addMigrations(NotificationDatabase.MIGRATION_4_5, NotificationDatabase.MIGRATION_5_6).build()
+            .addMigrations(NotificationDatabase.MIGRATION_4_5, NotificationDatabase.MIGRATION_5_6, NotificationDatabase.MIGRATION_6_7).build()
         try {
             val rows = database.notificationDao().getAllNotifications("owner").first()
             assertEquals(1, rows.size)

@@ -182,7 +182,10 @@ object ThemeManager {
         try { AssistantTone.valueOf(it[toneKey(uid)] ?: AssistantTone.DENGELI.name) } catch (e: Exception) { AssistantTone.DENGELI }
     }
 
-    suspend fun saveNotificationsEnabled(context: Context, uid: String, enabled: Boolean) = context.dataStore.edit { it[notificationsKey(uid)] = enabled }
+    suspend fun saveNotificationsEnabled(context: Context, uid: String, enabled: Boolean) =
+        com.havamania.NotificationPreferenceGate.withLock {
+            context.dataStore.edit { it[notificationsKey(uid)] = enabled }
+        }
     fun getNotificationsEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[notificationsKey(uid)] ?: true }
 
     suspend fun savePersonalizationEnabled(context: Context, uid: String, enabled: Boolean) = context.dataStore.edit { it[personalizationEnabledKey(uid)] = enabled }

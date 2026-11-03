@@ -202,6 +202,7 @@ class AccountDeletionManager private constructor(private val app: Application) {
         weather.deleteAccountData(uid)
         WeatherRepository.getInstance(app).clearForAccountDeletion()
         NotificationDatabase.getDatabase(app).notificationDao().deleteAccountData(uid)
+        NotificationDeliveryRecovery.shared.discardOwner(uid)
         app.dataStore.edit { preferences ->
             preferences.asMap().keys.filter { it.name.startsWith("havamania:$uid:") }
                 .forEach { preferences.remove(it) }

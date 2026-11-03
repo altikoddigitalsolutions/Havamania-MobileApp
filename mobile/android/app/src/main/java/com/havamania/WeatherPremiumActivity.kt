@@ -37,7 +37,7 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 
 class WeatherPremiumActivity : ComponentActivity() {
-    private var pendingNotificationLaunch by mutableStateOf<Intent?>(null)
+    private var pendingNotificationLaunch by mutableStateOf<NotificationTapRequest?>(null)
 
     private fun captureNotificationLaunch(incoming: Intent): Boolean {
         if (incoming.action?.startsWith(NOTIFICATION_ACTION_PREFIX) != true &&
@@ -45,9 +45,9 @@ class WeatherPremiumActivity : ComponentActivity() {
         val owner = incoming.getStringExtra(NOTIFICATION_OWNER)
         val allowed = canOpenOwnedNotification(owner,
             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
-            AccountDeletionManager.getInstance(application).state.value.pending)
+            AccountDeletionManager.getInstance(application).state.value.let { it.pending || it.busy })
         pendingNotificationLaunch = if (allowed && !incoming.getStringExtra(NOTIFICATION_ID).isNullOrBlank()) {
-            Intent(incoming).apply { action = Intent.ACTION_VIEW }
+            NotificationTapRequest(owner!!, incoming.getStringExtra(NOTIFICATION_ID)!!, NotificationSessionEpoch.capture())
         } else null
         // NavHost must not consume this automatically before the owner check.
         setIntent(Intent(incoming).apply {
@@ -128,16 +128,25 @@ if (BuildConfig.DEBUG) {
                 var appState by remember { mutableStateOf("splash") }
                 LaunchedEffect(pendingNotificationLaunch, navigationOwner, appState, isReady, currentRoute, profileState) {
                     val launch = pendingNotificationLaunch ?: return@LaunchedEffect
-                    if (!canOpenOwnedNotification(launch.getStringExtra(NOTIFICATION_OWNER), navigationOwner,
-                            deletionManager.state.value.pending)) {
+                    if (launch.epoch != NotificationSessionEpoch.capture() ||
+                        !canOpenOwnedNotification(launch.owner, navigationOwner,
+                            deletionManager.state.value.let { it.pending || it.busy })) {
                         pendingNotificationLaunch = null
                         return@LaunchedEffect
                     }
                     if (appState != "main" || !isReady) return@LaunchedEffect
                     if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
                             Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) return@LaunchedEffect
+                    val destination = try {
+                        resolveNotificationTap(launch,
+                            { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+                            { deletionManager.state.value.let { it.pending || it.busy } },
+                            NotificationDatabase.getDatabase(application).notificationDao()::getVisibleNotification)
+                    } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                    catch (_: Exception) { null }
+                    if (pendingNotificationLaunch !== launch) return@LaunchedEffect
                     pendingNotificationLaunch = null
-                    navController.handleDeepLink(launch)
+                    if (destination != null) navController.navigate(destination) { launchSingleTop = true }
                 }
 
                 // Splash Screen Minimum Duration Timer

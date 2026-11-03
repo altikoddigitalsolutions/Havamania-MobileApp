@@ -67,7 +67,7 @@ class NotificationDeletionDeviceTest {
             }).build())
         helper.writableDatabase; helper.close()
         val db = Room.databaseBuilder(context, NotificationDatabase::class.java, name)
-            .addMigrations(NotificationDatabase.MIGRATION_5_6).build()
+            .addMigrations(NotificationDatabase.MIGRATION_5_6, NotificationDatabase.MIGRATION_6_7).build()
         try {
             val dao = db.notificationDao()
             assertEquals("Preserve", dao.getAllNotifications("a").first().single().message)

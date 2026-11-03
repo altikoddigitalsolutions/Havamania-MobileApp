@@ -10,6 +10,48 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WeatherLateResponseDeviceTest {
+    @Test fun accountRoundTripRejectsOldResponseAndColdFlow() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, WeatherDatabase::class.java).build()
+        try {
+            var owner: String? = "A"
+            var calls = 0
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val repo = WeatherRepository(api({ calls++; entered.complete(Unit); release.await(); response() }),
+                db.weatherDao(), currentOwner = { owner })
+            val cold = repo.getWeatherData(41.0, 29.0, "ColdA")
+            val old = async { repo.getWeatherData(41.0, 29.0, "OldA").toList() }
+            entered.await()
+            owner = "B"; repo.onAccountChanged(owner)
+            owner = "A"; repo.onAccountChanged(owner)
+            release.complete(Unit)
+            assertTrue(old.await().isEmpty()); assertTrue(cold.toList().isEmpty())
+            assertEquals(1, calls); assertNull(repo.currentWeatherState.value)
+            assertNull(db.weatherDao().getCachedWeather(weatherCacheKey("OldA", null, 41.0, 29.0)))
+            assertEquals(1, repo.getWeatherData(41.0, 29.0, "NewA").toList().size)
+            repo.onAccountChanged(owner); repo.onAccountChanged(owner)
+            assertEquals("NewA", repo.currentWeatherState.value?.cityName)
+            owner = null; repo.onAccountChanged(owner)
+            assertNull(repo.currentWeatherState.value)
+        } finally { db.close() }
+    }
+
+    @Test fun changedUidBlocksLateResponseBeforeAuthCallbackRuns() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, WeatherDatabase::class.java).build()
+        try {
+            var owner: String? = "A"
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val repo = WeatherRepository(api({ entered.complete(Unit); release.await(); response() }),
+                db.weatherDao(), currentOwner = { owner })
+            val old = async { repo.getWeatherData(41.0, 29.0, "Old").toList() }
+            entered.await(); owner = "B"
+            release.complete(Unit)
+            assertTrue(old.await().isEmpty()); assertNull(repo.currentWeatherState.value)
+            assertNull(db.weatherDao().getCachedWeather(weatherCacheKey("Old", null, 41.0, 29.0)))
+        } finally { db.close() }
+    }
+
     private fun api(fetch: suspend () -> OpenMeteoResponse): WeatherApiService {
         val unused = Proxy.newProxyInstance(WeatherApiService::class.java.classLoader,
             arrayOf(WeatherApiService::class.java)) { _, _, _ -> throw AssertionError("Unexpected API call") } as WeatherApiService

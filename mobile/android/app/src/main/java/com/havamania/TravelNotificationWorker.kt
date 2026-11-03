@@ -4,9 +4,7 @@ import kotlinx.coroutines.ensureActive
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -33,7 +31,15 @@ class TravelNotificationWorker(
 
     private var executionEpoch = Long.MIN_VALUE
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = try {
+        performWork()
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        Result.retry()
+    }
+
+    private suspend fun performWork(): Result {
         executionEpoch = NotificationSessionEpoch.capture()
         val application = applicationContext as android.app.Application
         if (AccountDeletionManager.getInstance(application).state.value.pending) return Result.success()
@@ -65,7 +71,10 @@ class TravelNotificationWorker(
             // Sadece yaklaşan veya devam eden seyahatler için günlük özet gönder
             if (isUpcoming || isOngoing) {
                 // Bugün bu seyahat için bildirim gönderildi mi?
-                if (plan.lastDailyNotificationDate == dateStr) return@forEach
+                if (plan.lastDailyNotificationDate == dateStr) {
+                    checkAndSendRouteWeatherNotifications(plan, application) { }
+                    return@forEach
+                }
 
                 // Önce analizi güncelle
                 val updatedPlan = try {
@@ -112,8 +121,10 @@ class TravelNotificationWorker(
                 )
 
                 if (!canPublishFor(currentUid)) return Result.success()
-                notificationDao.insert(notificationItem)
-                showSystemNotification(notificationItem)
+                val delivery = deliverLocalNotification(notificationItem, { notificationDao.reserveForDelivery(it) },
+                    notificationDao::delete, complete = { notificationDao.completeDelivery(it.userId, it.id) },
+                    recovery = NotificationDeliveryRecovery.shared, publish = ::showSystemNotification)
+                if (delivery == LocalNotificationDelivery.SKIPPED) return@forEach
 
                 // Güzergâh bildirimi kontrolü
                 var finalRevision = analysisRevision
@@ -223,7 +234,7 @@ class TravelNotificationWorker(
         if (!readySent) {
             val item = NotificationItem(
                 userId = plan.userId,
-                id = java.util.UUID.randomUUID().toString(),
+                id = notificationEventRecordId(plan.userId, "route_ready", readyKey),
                 title = "Güzergâh hava tahminin hazır 🌤️",
                 message = "${plan.city} seyahatine 2 günden az kaldı. Yol boyunca beklenen hava koşullarını şimdi inceleyebilirsin.",
                 category = NotificationCategory.TRAVEL,
@@ -232,9 +243,9 @@ class TravelNotificationWorker(
                 deduplicationKey = readyKey,
                 actionLabel = "Güzergâhı Gör"
             )
-            notificationDao.insert(item)
-            showSystemNotification(item)
-            return true
+            return deliverLocalNotification(item, { notificationDao.reserveForDelivery(it) },
+                notificationDao::delete, complete = { notificationDao.completeDelivery(it.userId, it.id) },
+                    recovery = NotificationDeliveryRecovery.shared, publish = ::showSystemNotification) == LocalNotificationDelivery.POSTED
         }
 
         val todayStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE)
@@ -256,7 +267,7 @@ class TravelNotificationWorker(
 
         val notificationItem = NotificationItem(
             userId = plan.userId,
-            id = java.util.UUID.randomUUID().toString(),
+            id = notificationEventRecordId(plan.userId, "route_daily", dailyKey),
             title = title,
             message = message,
             category = NotificationCategory.TRAVEL,
@@ -272,10 +283,9 @@ class TravelNotificationWorker(
         ).toEntity(), plan.updatedAt) ?: return false
         onRevision(revision)
         if (!canPublishFor(plan.userId)) return false
-        notificationDao.insert(notificationItem)
-        showSystemNotification(notificationItem)
-
-        return true
+        return deliverLocalNotification(notificationItem, { notificationDao.reserveForDelivery(it) },
+            notificationDao::delete, complete = { notificationDao.completeDelivery(it.userId, it.id) },
+                    recovery = NotificationDeliveryRecovery.shared, publish = ::showSystemNotification) == LocalNotificationDelivery.POSTED
     }
 
     private suspend fun performRouteWeatherAnalysis(plan: TravelPlan, context: Context): String? {
@@ -340,11 +350,11 @@ if (BuildConfig.DEBUG) {
             NotificationSessionEpoch.capture() == executionEpoch &&
             AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.let { !it.pending && !it.busy }
 
-    private suspend fun showSystemNotification(item: NotificationItem) {
-        if (NotificationDatabase.getDatabase(applicationContext).notificationDao().isDeletedAccountHash(accountOwnerHash(item.userId))) return
-        if (!canPublishFor(item.userId)) return
+    private suspend fun showSystemNotification(item: NotificationItem): Boolean {
+        if (NotificationDatabase.getDatabase(applicationContext).notificationDao().isDeletedAccountHash(accountOwnerHash(item.userId))) return false
+        if (!canPublishFor(item.userId)) return false
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
-            return
+            return false
         }
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "travel_notifications"
@@ -358,24 +368,7 @@ if (BuildConfig.DEBUG) {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse(item.deepLinkTarget),
-            applicationContext,
-            WeatherPremiumActivity::class.java
-        ).apply {
-            action = NOTIFICATION_ACTION_PREFIX + item.userId + "." + item.id
-            putExtra(NOTIFICATION_OWNER, item.userId)
-            putExtra(NOTIFICATION_ID, item.id)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            applicationContext,
-            item.id.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = notificationTapPendingIntent(applicationContext, item)
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -383,15 +376,17 @@ if (BuildConfig.DEBUG) {
             .setContentText(item.message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
 
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        postNotificationIfCurrent(item.userId, executionEpoch,
+        return postNotificationIfCurrent(item.userId, executionEpoch,
             { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
-            { !canPublishFor(item.userId) || !PermissionHelper.hasNotificationPermission(applicationContext) }) {
-            notificationManager.notify(item.id.hashCode(), notification)
+            { !canPublishFor(item.userId) || !PermissionHelper.canPostToChannel(applicationContext, channelId) },
+            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, item.userId).first() }) {
+            notificationManager.notify(notificationSystemTag(item), 0, notification)
         }
     }
 

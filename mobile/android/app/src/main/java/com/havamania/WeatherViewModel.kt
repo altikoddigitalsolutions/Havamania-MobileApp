@@ -117,7 +117,7 @@ class WeatherViewModel(
         currentUserInterests = emptySet()
         currentUserAboutMe = null
         currentPersonalization = null
-        repository.clearCurrentWeather()
+        repository.onAccountChanged(firebaseAuth.currentUser?.uid)
         _uiState.value = WeatherUiState.Loading
         _todayRecommendation.value = null
         _smartAlerts.value = emptyList()

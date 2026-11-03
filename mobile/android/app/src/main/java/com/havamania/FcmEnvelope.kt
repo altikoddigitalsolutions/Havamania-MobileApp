@@ -5,6 +5,8 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** Same UUIDv5 identity as backend Firebase authentication; project is local app config. */
 internal fun firebaseBackendUserId(project: String, uid: String): String {
@@ -55,7 +57,8 @@ internal object NotificationSessionEpoch {
 }
 
 internal suspend fun persistFcmRecord(uid: String, envelope: FcmEnvelope, ownsSession: () -> Boolean,
-    insert: suspend (NotificationItem) -> Long, delete: suspend (String, List<String>) -> Unit): NotificationItem? {
+    insert: suspend (NotificationItem) -> Long, delete: suspend (String, List<String>) -> Unit,
+    recovery: NotificationDeliveryRecovery? = null): NotificationItem? {
     currentCoroutineContext().ensureActive()
     if (!ownsSession()) return null
     val item = NotificationItem(id = "fcm_${uid}_${envelope.eventId}", userId = uid,
@@ -63,10 +66,57 @@ internal suspend fun persistFcmRecord(uid: String, envelope: FcmEnvelope, ownsSe
         severity = "HIGH", deduplicationKey = "fcm_${envelope.eventId}",
         actionType = NotificationActionType.WEATHER_HOME)
     if (insert(item) == -1L) return null
-    currentCoroutineContext().ensureActive()
-    if (!ownsSession()) {
-        delete(uid, listOf(item.id))
-        return null
+    var retained = false
+    var primaryFailure: Throwable? = null
+    try {
+        currentCoroutineContext().ensureActive()
+        if (!ownsSession()) return null
+        retained = true
+        return item
+    } catch (error: Throwable) {
+        primaryFailure = error
+        throw error
+    } finally {
+        if (!retained) cleanupNotificationPreservingFailure(primaryFailure) {
+            withContext(NonCancellable) {
+                if (recovery == null) delete(uid, listOf(item.id))
+                else recovery.runOrRemember(uid, item.id) { delete(uid, listOf(item.id)) }
+            }
+        }
     }
-    return item
+}
+
+/** Acknowledge a newly reserved event after the synchronous native post returns. */
+internal suspend fun deliverFcmRecord(
+    uid: String, envelope: FcmEnvelope, ownsSession: () -> Boolean,
+    insert: suspend (NotificationItem) -> Long,
+    delete: suspend (String, List<String>) -> Unit,
+    complete: suspend (NotificationItem) -> Unit = {},
+    recovery: NotificationDeliveryRecovery? = null,
+    publish: suspend (NotificationItem) -> Boolean
+): Boolean {
+    currentCoroutineContext().ensureActive()
+    recovery?.retryForOwner(uid)
+    val item = persistFcmRecord(uid, envelope, ownsSession, insert, delete, recovery) ?: return false
+    var posted = false
+    var primaryFailure: Throwable? = null
+    try {
+        posted = publish(item)
+        if (posted) withContext(NonCancellable) {
+            if (recovery == null) complete(item)
+            else recovery.runOrRemember(uid, item.id) { complete(item) }
+        }
+        return posted
+    } catch (error: Throwable) {
+        primaryFailure = error
+        throw error
+    } finally {
+        // This invocation owns only a newly inserted record; never erase a duplicate's record.
+        if (!posted) cleanupNotificationPreservingFailure(primaryFailure) {
+            withContext(NonCancellable) {
+                if (recovery == null) delete(uid, listOf(item.id))
+                else recovery.runOrRemember(uid, item.id) { delete(uid, listOf(item.id)) }
+            }
+        }
+    }
 }

@@ -19,11 +19,25 @@ import kotlinx.serialization.json.Json
 class WeatherRepository(
     private val apiService: WeatherApiService = NetworkModule.apiService,
     private val weatherDao: WeatherDao,
-    private val accessAllowed: () -> Boolean = { true }
+    private val accessAllowed: () -> Boolean = { true },
+    private val currentOwner: () -> String? = { null }
 ) {
     private val cacheWrites = Mutex()
     private val deletionEpoch = java.util.concurrent.atomic.AtomicLong()
-    private fun current(epoch: Long) = epoch == deletionEpoch.get() && accessAllowed()
+    private val stateGate = Any()
+    private var observedOwner = currentOwner()
+    private data class RequestSession(val epoch: Long, val owner: String?)
+    private fun current(session: RequestSession) =
+        session.epoch == deletionEpoch.get() && session.owner == currentOwner() && accessAllowed()
+
+    /** Idempotent across listeners; A -> B -> A invalidates the first A request. */
+    fun onAccountChanged(owner: String?) = synchronized(stateGate) {
+        if (owner != observedOwner) {
+            observedOwner = owner
+            deletionEpoch.incrementAndGet()
+            _currentWeatherState.value = null
+        }
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -38,10 +52,13 @@ class WeatherRepository(
             return INSTANCE ?: synchronized(this) {
                 INSTANCE?.let { return@synchronized it }
                 val database = WeatherDatabase.getDatabase(application)
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                 val instance = WeatherRepository(weatherDao = database.weatherDao(), accessAllowed = {
                     val state = AccountDeletionManager.getInstance(application).state.value
                     !state.pending && !state.busy
-                })
+                }, currentOwner = { auth.currentUser?.uid })
+                // Application-lifetime listener also fences requests with no Activity present.
+                auth.addAuthStateListener { instance.onAccountChanged(it.currentUser?.uid) }
                 INSTANCE = instance
                 instance
             }
@@ -65,21 +82,23 @@ class WeatherRepository(
     }
 
     fun clearCurrentWeather() {
-        _currentWeatherState.value = null
+        synchronized(stateGate) { _currentWeatherState.value = null }
     }
 
     /** Serialize deletion with writes already in progress; old requests stay fenced after recovery. */
     suspend fun clearForAccountDeletion() {
         cacheWrites.withLock {
-            deletionEpoch.incrementAndGet()
-            _currentWeatherState.value = null
+            synchronized(stateGate) {
+                deletionEpoch.incrementAndGet()
+                _currentWeatherState.value = null
+            }
             weatherDao.clearAllWeatherCache()
         }
     }
 
-    private suspend fun FlowCollector<WeatherData>.emitCurrent(data: WeatherData, epoch: Long) {
+    private suspend fun FlowCollector<WeatherData>.emitCurrent(data: WeatherData, epoch: RequestSession) {
         currentCoroutineContext().ensureActive()
-        val publish = cacheWrites.withLock {
+        val publish = synchronized(stateGate) {
             if (current(epoch)) { _currentWeatherState.value = data; true } else false
         }
         if (publish && current(epoch)) emit(data)
@@ -141,7 +160,7 @@ if (BuildConfig.DEBUG) {
         districtName: String? = null,
         forceRefresh: Boolean = false
     ): Flow<WeatherData> {
-        val epoch = deletionEpoch.get()
+        val epoch = synchronized(stateGate) { RequestSession(deletionEpoch.get(), currentOwner()) }
         return flow {
         if (!current(epoch)) return@flow
         val cacheKey = weatherCacheKey(cityName, districtName, lat, lon)

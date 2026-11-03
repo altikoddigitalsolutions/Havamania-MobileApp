@@ -462,7 +462,7 @@ if (BuildConfig.DEBUG) {
         _userInterests.value = emptySet()
         _defaultCity.value = null
         _registeredCities.value = emptyList()
-        repository.clearCurrentWeather()
+        repository.onAccountChanged(auth.currentUser?.uid)
 
     }
 }

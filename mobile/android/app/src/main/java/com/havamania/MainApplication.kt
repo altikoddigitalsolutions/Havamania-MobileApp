@@ -37,6 +37,16 @@ class MainApplication : Application() {
             }
         }
         tokenQueueScope.launch {
+            try {
+                // Release only interrupted reservations from an older app process. Do not replay stale payloads.
+                nextOwner?.let {
+                    NotificationDatabase.getDatabase(this@MainApplication).notificationDao().recoverInterruptedDeliveries(it)
+                    NotificationDeliveryRecovery.shared.retryForOwner(it)
+                }
+            }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { android.util.Log.w("NotificationRecovery", "Local delivery recovery could not complete") }
+            // A notification-database failure must not prevent independent token reconciliation.
             try { FcmTokenQueue.reconcile(this@MainApplication) }
             catch (error: kotlinx.coroutines.CancellationException) { throw error }
             catch (_: Exception) { android.util.Log.w("FCM", "Token queue could not be reconciled") }
