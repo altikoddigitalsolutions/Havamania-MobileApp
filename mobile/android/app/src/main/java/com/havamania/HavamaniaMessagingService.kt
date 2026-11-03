@@ -34,7 +34,7 @@ class HavamaniaMessagingService : FirebaseMessagingService() {
         val epoch = NotificationSessionEpoch.capture()
         val deletion = AccountDeletionManager.getInstance(application)
         fun ownsSession() = auth.currentUser?.uid == uid &&
-            NotificationSessionEpoch.capture() == epoch && !deletion.state.value.pending
+            NotificationSessionEpoch.capture() == epoch && deletion.state.value.let { !it.pending && !it.busy }
         val envelope = validatedFcmEnvelope(message.data, FirebaseApp.getInstance().options.projectId,
             uid, deletion.state.value.pending, System.currentTimeMillis() / 1000) ?: return
         try {
@@ -65,7 +65,11 @@ class HavamaniaMessagingService : FirebaseMessagingService() {
                         .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
                         .setContentIntent(pending).setAutoCancel(true).build()
                     currentCoroutineContext().ensureActive()
-                    if (ownsSession()) manager.notify(item.id, 0, notification)
+                    postNotificationIfCurrent(uid, epoch, { auth.currentUser?.uid },
+                        { !ownsSession() || System.currentTimeMillis() / 1000 >= envelope.expiresAt ||
+                            !PermissionHelper.hasNotificationPermission(applicationContext) }) {
+                        manager.notify(item.id, 0, notification)
+                    }
                 }
             }
         } catch (_: Exception) {

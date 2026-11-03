@@ -1,5 +1,7 @@
 package com.havamania
 
+import kotlinx.coroutines.ensureActive
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -29,7 +31,10 @@ class TravelNotificationWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
+    private var executionEpoch = Long.MIN_VALUE
+
     override suspend fun doWork(): Result {
+        executionEpoch = NotificationSessionEpoch.capture()
         val application = applicationContext as android.app.Application
         if (AccountDeletionManager.getInstance(application).state.value.pending) return Result.success()
         val weatherDb = WeatherDatabase.getDatabase(application)
@@ -322,6 +327,7 @@ class TravelNotificationWorker(
                 else -> "Güzergâh hava tahmininde önemli bir değişiklik yok. Yol boyunca koşullar uygun görünüyor."
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e("RouteWorker", "Route analysis failed", e)
 }
@@ -331,9 +337,11 @@ if (BuildConfig.DEBUG) {
 
     private fun canPublishFor(uid: String): Boolean =
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == uid &&
-            !AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.pending
+            NotificationSessionEpoch.capture() == executionEpoch &&
+            AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.let { !it.pending && !it.busy }
 
-    private fun showSystemNotification(item: NotificationItem) {
+    private suspend fun showSystemNotification(item: NotificationItem) {
+        if (NotificationDatabase.getDatabase(applicationContext).notificationDao().isDeletedAccountHash(accountOwnerHash(item.userId))) return
         if (!canPublishFor(item.userId)) return
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
             return
@@ -379,7 +387,12 @@ if (BuildConfig.DEBUG) {
             .setContentIntent(pendingIntent)
             .build()
 
-        notificationManager.notify(item.id.hashCode(), notification)
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        postNotificationIfCurrent(item.userId, executionEpoch,
+            { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            { !canPublishFor(item.userId) || !PermissionHelper.hasNotificationPermission(applicationContext) }) {
+            notificationManager.notify(item.id.hashCode(), notification)
+        }
     }
 
     private fun TravelPlanEntity.toDomain() = TravelPlan(

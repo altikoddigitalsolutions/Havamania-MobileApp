@@ -71,10 +71,11 @@ class TripDeletionPersistenceTest {
             try {
                 sqlite.execSQL("DROP TABLE trip_deletions")
                 sqlite.execSQL("DROP TABLE trip_uploads")
+                sqlite.execSQL("DROP TABLE weather_account_deletions")
                 sqlite.version = 20
             } finally { sqlite.close() }
             database = Room.databaseBuilder(context, WeatherDatabase::class.java, name)
-                .addMigrations(WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22).build()
+                .addMigrations(WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23).build()
             val dao = database.weatherDao()
             assertEquals("İzmir", dao.getTravelPlanByIdRaw("kept")?.city)
             dao.enqueueTripDeletion(TripDeletionRequest("A", "kept"))

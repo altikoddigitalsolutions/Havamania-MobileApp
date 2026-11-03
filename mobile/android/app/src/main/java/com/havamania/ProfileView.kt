@@ -169,7 +169,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(HavamaniaTheme.styles.spacingLG))
 
                 SectionHeader("HAVA TERCİHLERİ")
-                PremiumInterestsSection(userInterests) { profileViewModel.toggleInterest(it, userInterests) }
+                PremiumInterestsSection(userInterests) { profileViewModel.setInterestSelected(it, !userInterests.contains(it)) }
             }
 
             Spacer(modifier = Modifier.height(100.dp))

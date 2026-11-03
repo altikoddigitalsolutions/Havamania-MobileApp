@@ -39,9 +39,19 @@ internal fun validatedFcmEnvelope(data: Map<String, String>, project: String?, u
 }
 
 internal object NotificationSessionEpoch {
+    private val gate = Any()
     private val epoch = java.util.concurrent.atomic.AtomicLong()
     fun capture(): Long = epoch.get()
-    fun changed() { epoch.incrementAndGet() }
+    fun changed(clearVisible: () -> Unit = {}) = synchronized(gate) {
+        epoch.incrementAndGet()
+        clearVisible()
+    }
+    /** Only short synchronous OS post/cancel operations belong inside this gate. */
+    fun publish(owner: String, captured: Long, currentOwner: () -> String?, blocked: () -> Boolean,
+                post: () -> Unit): Boolean = synchronized(gate) {
+        if (owner != currentOwner() || captured != epoch.get() || blocked()) false
+        else { post(); true }
+    }
 }
 
 internal suspend fun persistFcmRecord(uid: String, envelope: FcmEnvelope, ownsSession: () -> Boolean,

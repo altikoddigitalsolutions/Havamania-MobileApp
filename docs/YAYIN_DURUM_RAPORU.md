@@ -892,3 +892,129 @@ ProfileSaveController'a reset generation kontrolü eklendi. Önceki işlem sonra
 Açık işler: avatar uzak upload/silme ve hata/log gizliliği, ilgi alanı toggle'ın stale UI listesiyle tüm alanı yazması (atomik alan/transaction), kişiselleştirme/hakkımda iptalinde özel UI durum matrisi, diğer tercih/depo setter'larının tam silme taraması ve canlı Firebase/Auth senaryoları. Önceki işlem kısmen sunucuya yazılmış olabilir; bu adım dağıtık atomik transaction değildir ve kalıcı profil retry kuyruğu sağlamaz. Son değişiklikler push edilmedi.
 
 Doğrulama: 4 yeni AccountProfileWrite ve 2 yeni ProfileSaveController testi dahil 337 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. Testler aşama sırası, uzak dönüşten sonra silmede sonraki yazının durması, son aşamada UID değişince başarı olmaması, NonCancellable dönüş sonrası iptal, reset sonrası eski başarı/hatanın yeni Saved'i ezmemesi ve iptalde Saving'in temizlenmesini kapsar. SM-T500 Android 12 üzerinde mevcut ProfileSnapshotDeletionDeviceTest 1/1 yeniden geçti; ayrı DataStore ve sahte silme bayrağı kullanıldı. Yeni Auth/Firestore zinciri gerçek Firebase veya tam ViewModel cihaz testi değildir; kullanıcı verisi değiştirilmedi.
+
+
+## Avatar işlemleri: çakışma, silme ve hata gizliliği — 3 Kasım
+
+Önceki profil paketi e8a4745 ile main'e gönderildi; bu avatar değişiklikleri henüz push edilmedi.
+
+Yükleme ve silme aynı AvatarMutationController/AssistantTaskRunner üzerinden yürür. Aynı ViewModel'de yalnız bir avatar işlemi çalışır; ikinci dokunma ayrı işlem başlatmaz. Auth değişimi ve ViewModel kapanışı runner'ı resetler; eski işin başarı/hata/finally sonucu yeni işlemin busy durumunu temizleyemez. Yükleme/silme aşamaları runAccountProfileWrite ile UID/iptal/silme kontrolünden geçer. Başarı sürümü yalnız son yerel kayıt ve final guard sonrasında güncellenir.
+
+Yüklemede işleme → Storage put → URL alma → Firestore URL → yerel URI sırası açık aşamalara ayrıldı. Upload await iptalinde Storage upload task'ına cancel çağrısı yapılır; uzakta tamamlanmış bir yazı geri alınmış sayılmaz. JPEG compress sonucu kontrol edilir ve bu akışın sonuç bitmap'i finally içinde recycle edilir. Ana thread'deki mükerrer URI açma kontrolü kaldırıldı; görsel hazırlama Default dispatcher'da kalır. Eski URI/bucket/path/download URL izleme logları ve görsel işleme exception stack logu kaldırıldı.
+
+Silme yalnız Storage ERROR_OBJECT_NOT_FOUND sonucunu idempotent başarı sayar. Yetki/kota/bağlantı gibi diğer hatalar yutulup Firestore URL'sinin temizlenmesine devam edilmez. Genel avatar hata mesajı raw localizedMessage içermez; yetki/hizmet/bağlantı/URI erişimi/bozuk görsel için sabit güvenli metinler kullanılır.
+
+Açık sınırlar: gerçek Firebase Storage upload/delete/402-kota/izin testi, iki ViewModel/cihaz arasında aynı sabit avatar dosyası çatışması, başlamış SDK işleminin uzak tamamlanması, Storage başarılı ama Firestore/yerel yazı başarısızsa orphan/eksik fotoğraf kurtarma kuyruğu, EXIF ayna yönleri ve büyük/bozuk görsel cihaz matrisi. Mevcut ara bitmap yaşam döngüsü ve tam görüntü performans benchmark'ı bu adımda tamamlanmadı. Hiçbir gerçek fotoğraf veya hesap üzerinde işlem yapılmadı.
+
+Doğrulama: 5 yeni AvatarMutationController testi dahil 342 Android JVM testi geçti (0 failure/error); debug APK derlendi. Testler eşzamanlı yükleme/silmenin reddini, reset sonrası eski işlemin yeni busy/success durumunu etkilememesini, silme sırasında başarı/hata bastırılmasını, oturumsuz/silinen kullanıcıda başlamamayı ve gizli URL/token içeren exception'ın sabit mesaja dönüşmesini kapsar. Sahte uzak işlem callback'leri kullanıldı. Bu koşuda cihaz, gerçek bitmap/URI, Firebase Storage veya gerçek fotoğraf yükleme/silme testi çalıştırılmadı.
+
+
+## Profil ilgi alanlarının atomik güncellenmesi — 3 Kasım
+
+Profil chip'inin toggleInterest(id, ekranListesi) yoluyla eski ekran listesini tüm alan olarak göndermesi kaldırıldı. UI artık açık selected=true/false niyeti iletir. Firestore transaction mevcut selectedInterests listesini okur; yalnız hedef kimlik eklenir/çıkarılır. SDK retry'sinde son liste yeniden okunur, farklı ilgi alanı değişiklikleri eski UI kopyasıyla ezilmez. Aynı seçme/kaldırma niyeti idempotenttir; tekrar seçme mükerrer eleman üretmez. Henüz UI'a yansımamış aynı chip'e tekrar dokunma, görünür duruma göre aynı niyet sayılır; iki kör tersine çevirme olarak oynatılmaz.
+
+Job/UID/silme guard'ı transaction okumasından önce ve write stage öncesinde korunur. Mevcut olmayan profil için update başarısız olur; profil bu yoldan otomatik oluşturulmaz. Bozuk türde uzak liste sessizce filtrelenip ezilmez. Kimlik boş/100 karakter üstü/virgüllü ise reddedilir; virgülle ayrılan yerel cache korunur. Ham hata logu kaldırıldı, UID/silme kontrollü sabit kullanıcı hatası korunur.
+
+Açık sınırlar: canlı/emulator transaction çatışması ve offline davranış, chip bazlı pending/optimistic UI, tam kişiselleştirme formunun bütün nesneyi yazmasıyla eşzamanlılık, ID katalog whitelist'i, diğer cihazlar ve avatar görsel hazırlama matrisi. Firestore transaction offline kalıcı kuyruk olarak sunulmaz; ağ hatasında mevcut hata yolu kullanılır. Bu ekler avatar değişiklikleriyle birlikte henüz push edilmedi.
+
+Doğrulama: 4 yeni InterestSelection testi dahil 346 Android JVM testi geçti (0 failure/error); debug APK derlendi. Yeni testler retry'de son listeyi birleştirme, tekrar edilen seçme/kaldırma niyetinin idempotentliği, hedef dışı tercihlerin korunması ve yerel cache'i bozabilecek ID'nin reddini kapsar. Saf liste politikası ve mevcut ortak guard testleri çalıştı; bu koşuda cihaz/UI, gerçek Firebase veya emulator transaction testi yapılmadı.
+
+
+## Avatar görsel hazırlama ve EXIF — 3 Kasım
+
+ProfileViewModel içindeki bitmap/stream yönetimi AvatarImageProcessor'a taşındı. Üretim prepareAvatarJpeg, Default dispatcher'da EXIF → sınırlar → örneklenmiş decode → yön → ölçek → JPEG aşamalarını yapar. Her InputStream use ile kapatılır. Çalışan bitmap'ler finally içinde recycle edilir; dönüş/yön/ölçek ayrı bitmap oluşturursa önceki sahip olunan bitmap serbest bırakılır. Dispatcher sınırından bitmap yerine yalnız JPEG ByteArray döner; iptal sırasında arada kalan sonuç bitmap'i sorumluluğu dışarı taşınmaz.
+
+Önceki yalnız 90/180/270 dönüşü yerine sekiz EXIF yönü (yatay/dikey ayna, transpose/transverse dahil) uygulanır. Decode örnekleme hedefi en uzun kenarda 1024 piksel; çıkış en uzun kenarda 512 piksel ve oranı korunur. Küçük görsel büyütülmez, aşırı dar kenar en az 1 piksel tutulur. Örnekleme hesabı Long aritmetik kullanır. Geçersiz görüntü sınırları reddedilir; sıkıştırma başarısızlığı başarıya çevrilmez. Aşamalar arasında iptal kontrolü vardır; native codec'in zorla anında durduğu iddia edilmez.
+
+Açık sınırlar: farklı cihaz/codec ve gerçek galeriden URI izin/mime matrisi, çok büyük/zararlı metadata ve fiziksel düşük bellek testi, HEIC/animasyon/şeffaf PNG politikası, gerçek fotoğraf yükleme ve performans benchmark'ı. Decode sample boyutu codec'e verilen istektir; tüm codec'ler için ölçülmüş sabit bellek tavanı iddia edilmez. Diğer avatar uzak senkronizasyon ve yayın engelleri korunur. Henüz push edilmedi.
+
+Doğrulama: 3 yeni AvatarImageSizing testi dahil 349 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. SM-T500 Android 12 üzerinde AvatarImageProcessorDeviceTest 4/4 geçti: sekiz yönün tümünde piksel dizilimi, 4096×2048 sentetik JPEG'in 512×256 hazırlanması ve üç stream'in kapanması, gerçek JPEG EXIF=6 etiketinin okunup 100×200→200×100 dönüşmesi, bozuk verinin reddi/akış kapanması. JVM testleri boyut sınırı, oran/küçük görseli büyütmeme, aşırı dar/Int.MAX_VALUE hesabı ve geçersiz sınırları kapsar. Gerçek kullanıcı fotoğrafı, gerçek galeriden izin, fiziksel düşük bellek veya Firebase upload testi yapılmadı.
+
+
+## Avatar metadata gizliliği ve başarısız stream kapanışı — 3 Kasım
+
+Hazırlanan JPEG kaynak dosyayı kopyalamaz; decode edilmiş pikseller yeniden sıkıştırılır. Bu adımda sentetik kaynak JPEG'e GPS enlem/boylam, cihaz üretici/model, sanatçı, açıklama, kullanıcı yorumu ve çekim zamanı eklenerek çıktıda seçili özel EXIF alanlarının taşınmaması cihaz testiyle doğrulanır. Tüm olası format/metadata/codec için evrensel temizleme garantisi iddia edilmez.
+
+Decode sonucu artık stream use bloğu kapanmadan owned working bitmap değişkenine atanır. Stream.close decode sonrasında IOException üretirse bitmap finally temizliğinin dışında kalmaz. Decode sonrasında yön dönüşünden önce ayrıca iptal kontrolü yapılır. Başarısız kapanış/iptal tamamlanmış JPEG gibi dönmez.
+
+Yeni fixture'lar üçüncü açılışta SecurityException (izin iptali benzetimi), decode stream kapanış hatası ve decode sonrası iptali kapsar. Gerçek Android galeri izni değiştirilmez; InputStream sağlayıcısı sahte erişim hatası üretir. Gerçek kullanıcı konumu/fotoğrafı kullanılmaz, Firebase'e gönderim yapılmaz.
+
+Açık işler: gerçek galeri URI/üretici/codec izin matrisi, XMP/IPTC/ICC ve farklı dosya türleri, kaynak URI içeriğinin üç okuma arasında değişmesi, fiziksel düşük bellek, Storage çok cihaz/orphan kurtarma ve diğer yayın engelleri. Henüz push edilmedi.
+
+Doğrulama: mevcut 349 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. SM-T500 Android 12'de AvatarImagePrivacyDeviceTest + önceki AvatarImageProcessorDeviceTest 8/8 geçti (4 yeni gizlilik/hata, 4 önceki görsel testi). Yeni testte kaynak özel EXIF alanlarının gerçekten bulunduğu kontrol edildikten sonra çıktıda hepsinin yokluğu ve PRIVATE_ işaretinin bulunmaması doğrulandı. Sahte izin kaybında sıfır JPEG, tüm açılmış stream'lerin kapanması, decode kapanış hatasında kısmi sonuç dönmemesi ve decode sonrası iptalde JPEG dönmemesi doğrulandı. Gerçek galeri izni değişmedi, gerçek fotoğraf veya Firebase kullanılmadı.
+
+
+## Avatar kaynağının tek açılışta sabitlenmesi — 3 Kasım
+
+EXIF/bounds/decode için aynı content URI'nin üç ayrı açılışı kaldırıldı. snapshotAvatarSource sağlayıcıyı bir kez açıp en fazla 20.000.000 baytlık kaynak görüntüsünü bellekte özel parçalarda tutar. İşleyicinin üç okuma geçişi artık bu aynı baytlardan yapılır; sağlayıcının sonraki açılışta farklı fotoğraf döndürmesi yön/boyut/decode uyumsuzluğu oluşturmaz. Sağlayıcının tek okuma sürerken kendi içeriğini atomik tuttuğu garantisi verilmez; yakalanan baytlar sonraki aşamalarda değişmez.
+
+Kaynak büyükse daha decode başlamadan AvatarSourceTooLargeException ve sabit 20 MB mesajı üretilir. Kaynak diske kopyalanmaz; GPS/yorum içeren orijinal için yeni kalıcı cache dosyası oluşturulmaz. Parçalı saklama ikinci tam boyutlu ByteArray kopyasını önler, ancak kaynağı bellekte tutmanın maliyeti vardır. Bu tüm codec'ler/native allocation için sabit toplam heap garantisi değildir; düşük bellek testi açık.
+
+Okuma/close/izin hatası veya iptal kaynak görüntüsü tamamlanmış sayılmaz. Kaynak kopyalama boyunca iptal kontrolleri ve stream use kapanışı korunur; 0-byte bulk read durumunda tek bayt okuyarak ilerleme sağlanır. Bloklanan ve iptale uymayan content-provider okumasının zorla kesildiği iddia edilmez.
+
+Önceki görsel/gizlilik fixture'ları tek sağlayıcı açılışına güncellendi: izin kaybı kaynak okuması sırasında, close hatası kaynak kapanışında, iptal kaynak alımından sonra sınanır. Sonraki provider açılışı farklı içerik verecek fixture'da yalnız ilk açılış kullanılmalıdır. Gerçek galeri/codec/URI matrisi, sağlayıcı bloklaması, fiziksel düşük bellek, diğer metadata türleri ve Storage canlı testleri açık. Henüz push edilmedi.
+
+Doğrulama: 4 yeni AvatarSourceSnapshot testi dahil 353 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. Yeni JVM testleri tek sağlayıcı açılışıyla çok parçalı 150.000 baytın üç geçişte aynı kalmasını, enjekte küçük sınırda taşmanın reddi/kapanışı, tam sınır ve 0-byte okuma, güvenli boyut mesajını kapsar. SM-T500 Android 12'de güncellenmiş AvatarImagePrivacyDeviceTest + AvatarImageProcessorDeviceTest 9/9 geçti: tek açılışta değişen sağlayıcı senaryosu, metadata, izin/close/iptal, EXIF ve büyük JPEG doğrulamaları. Gerçek galeri izni değiştirilmedi, gerçek fotoğraf/Firebase kullanılmadı.
+
+
+## Şeffaflık, format ve parça sınırı okuması — 3 Kasım
+
+JPEG alpha taşımaz; alpha içeren bitmap artık ölçeklemeden sonra açıkça beyaz zemine Canvas ile birleştirilir. Tam şeffaf pikseller için rastlantısal siyah arka plan yerine tanımlı bir JPEG politikası vardır; yarı şeffaf pikseller de beyazla compositing yapar. Bu akışta yeni opak bitmap'in sahipliği finally temizliğine devredilir, önceki ölçeklenmiş bitmap serbest bırakılır. Çıkış JPEG/75 ve mevcut boyut politikası korunur; küçük görseller büyütülmez.
+
+Parçalı kaynak, Enumeration/SequenceInputStream yerine tek konum imleçli bağımsız InputStream okuyucuları sunar. available tüm kalan kaynağı gösterir; bulk read/skip parça sınırını aşabilir, mark/reset aynı baytlara döner. Tam boyutlu ek kaynak kopyası oluşturulmaz. Böylece codec/EXIF okuyucusunun uzunluk ve geri okuma davranışı için belirgin akış sözleşmesi sağlanır. Okuyucular birbirinin konumunu değiştirmez; aralık hatası konumu ilerletmez.
+
+Yeni Android fixture'ları şeffaf/yarı şeffaf PNG'nin görsel sonucunu, PNG/WebP'den JPEG üretimini ve EXIF APP1 bloğu 64 KB sonrasına itilmiş JPEG'i kapsar. Renk karşılaştırması JPEG kayıplı sıkıştırmasına uygun toleransla yapılır. Gerçek galeri/HEIC/animasyon/üretici codec matrisi, geniş renk gamutları, düşük bellek ve canlı Storage hâlâ açık. Bu adım fotoğraf yükleme veya Firebase testi değildir. Henüz push edilmedi.
+
+Doğrulama: 3 yeni kaynak akışı testi dahil 356 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. Yeni JVM testleri parça sınırında bulk read/mark/reset/skip/EOF, tam available uzunluğu, bağımsız okuyucular, unsigned tek bayt ve aralık hatasında konumun korunmasını kapsar. SM-T500 Android 12'de AvatarFormatDeviceTest + önceki gizlilik/işleme paketi 13/13 geçti (4 yeni format testi, 9 önceki test). Yeni testler tam/kısmi alpha compositing rengini, PNG/WebP→JPEG MIME/boyutunu ve 64 KB sonrası EXIF=6 etiketinin doğru yönlendirmesini doğrular. Yalnız sentetik görsel ve ayrı test dosyaları kullanıldı; gerçek galeri, fiziksel düşük bellek veya Firebase testi yapılmadı.
+
+
+## Bildirim Room deposu: hesap silme sonrası yeniden oluşma — 3 Kasım
+
+NotificationDatabase sürümü 5→6 oldu; notification_account_deletions tablosu ve migration eklendi. AccountDeletionManager artık bildirimler için deleteAccountData kullanır: aynı Room transaction'ında hesap engeli kaydedilir ve o UID'nin mesajları silinir. Geç insert/insertIncoming/update yolları engeli kontrol eder; uygulama/veritabanı yeniden açıldıktan sonra da geç sonuçlar mesajı yeniden oluşturamaz. insertIncoming ret durumunda -1 döndürür; mevcut FCM persistence yolu bunu başarılı kayıt saymaz.
+
+Engelde ham UID veya bildirim içeriği yerine SHA-256 UID özeti tutulur. Bu minimal kalıcı güvenlik metadatasıdır; anonimlik veya bütün yerel verinin fiziksel olarak sıfırlanması iddia edilmez. İşaret mevcut Room verisi/app verileri silinene kadar korunur; bu yerel tutma davranışının gizlilik dokümanında değerlendirilmesi açık kalır. Migration geçmişte tamamlanmış silmelerin UID'sini geriye dönük icat etmez.
+
+REPLACE insert ve entity update aynı bildirim kimliğinde başka kullanıcının kaydını ezemez; owner kontrolü aynı transaction içindedir. Normal kullanıcı inbox deleteAll işlemi hesap silme işareti koymaz, gelecekteki bildirimlere izin verir. Raw DAO metotları Room altyapısı içindir; üretim çağrıları korumalı metotları kullanır. Eski 4→5 migration testi yeni 5→6 zincirini de alacak şekilde güncellendi.
+
+Açık sınırlar: sistem bildirimini OS'a gönderme aşamasında geç işlemin durdurulması ayrıca doğrulanmalı; DB'ye ret ile tüm OS bildirim kanalları kapsanmış sayılmaz. Weather Room seyahat/AI ve kuyruk yazımları, canlı FCM/hesap silme ve çok cihaz matrisi sıradadır. Bu adım gerçek kullanıcı veritabanını temizlemez; testler ayrı adlarla oluşturulan veritabanlarındadır. Henüz push edilmedi.
+
+Doğrulama: 1 yeni NotificationOwnerHash testi dahil 357 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. SM-T500 Android 12 üzerinde NotificationDeletionDeviceTest (3 yeni) ve mevcut version4 bildirim migration testi toplam 4/4 geçti. Yeni testler ayrı dosyada silme sonrası yeniden açılışta insert/incoming/update reddi, B verisinin korunması, çapraz UID REPLACE/update engeli, normal kutu temizliği sonrası yeni mesaja izin ve 5→6 veriyi koruyan migration'ı kapsar. Mevcut test 4→5→6 zincirini doğruladı. Gerçek kullanıcı DB'si, gerçek hesap silme, OS bildirim gönderimi veya canlı FCM testi yapılmadı.
+
+
+## Seyahat/AI Room deposu: hesap silme sonrası yeniden oluşma — 3 Kasım
+
+WeatherDatabase sürümü 22→23 oldu; weather_account_deletions tablosu ve migration eklendi. deleteAccountData aynı transaction içinde UID'nin SHA-256 özet engelini yazar; seyahatleri, AI geçmişini ve history/trip deletion/upload kuyruklarını temizler. AccountDeletionManager'ın ayrı ayrı temizleme çağrıları bu metoda taşındı. Bildirim ve Weather depoları farklı veritabanlarıdır; bütün depolar arasında tek dağıtık transaction iddia edilmez. Mevcut silme günlüğü yarım kalan yerel temizliği yeniden yürütür.
+
+Gelen plan insert, yerel seyahat/analiz kaydı, yerel/gelen AI geçmişi ve tam uzlaştırma yollarında hesap engeli kontrol edilir. Geç history deletion, trip deletion ve upload enqueue çağrıları da korumalı transaction'lara alındı. Silme tamamlanması callback'leri hesabın kuyruk işaretlerini tekrar oluşturmaz. AI yerel insert engelde hata döndürür; sessizce kayıt başarılı denmez. Raw insert metotları Room altyapısı için kalır; üretim çağrıları korumalı yolları kullanır.
+
+Bildirimdeki SHA-256 yardımcı fonksiyonu AccountOwnerHash'a taşındı ve iki depo tarafından paylaşıldı. Eski hash'ler değişmez. Minimal özet işareti app verileri kaldırılana kadar yerel güvenlik metadatası olarak kalır; anonimlik/fiziksel tam sıfırlama iddia edilmez. Geçmişte tamamlanmış silmelerin kimliği geriye dönük tahmin edilmez. 20 ve 11 sürümü test fixture/migration zincirleri de 23'e kadar güncellendi.
+
+Açık sınırlar: paylaşılan weather_cache geç ağ sonucu tarafından yeniden doldurulabilir; UID'ye bağlı depo engeli bunu kapsamaz. Başlamış uzak upload/silme, OS bildirim yayını, raw API'lerin gelecekte yanlış kullanılması, kullanıcıya doğru no-op/engel UI bildirimi ve canlı silme matrisi ayrı doğrulama ister. Gerçek kullanıcı DB'sine veya servise müdahale edilmedi. Henüz push edilmedi.
+
+Doğrulama: mevcut 357 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. SM-T500 Android 12'de 8 seçili Room testi geçti: 3 yeni WeatherAccountDeletionDeviceTest, 4 mevcut TripDeletionPersistenceTest ve mevcut sürüm 11 migration testi. Yeni testler yeniden açılışta A plan/AI/kuyruk yazımlarının reddi ve B verisinin korunması, 100 yerel yazımla hesap temizliği yarışı ve 22→23 veriyi koruyan migration'ı kapsar. Mevcut testler 20→23 ve 11→23 migration zincirlerini de doğruladı. Gerçek kullanıcı DB'si, gerçek hesap silme veya canlı Firebase/backend testi yapılmadı.
+
+
+## Hesap temizliği sonrası geç hava yanıtı — 3 Kasım
+
+WeatherRepository üretim singleton'ına pending/busy silme kontrolü bağlandı. getWeatherData cache okuma/yayın ve ağ sonucu/hata aşamalarında izin kontrol eder. Silme başladığında eski başarı veya hata yeni hava state'ine taşınmaz. Hesap temizliği clearForAccountDeletion kullanır: aynı repository kilidinde epoch artırılır, görünür veri sıfırlanır ve weather_cache temizlenir. O anda cache yazımı başlamışsa temizleme onu bekler; sonra yazılmış kayıt da silinir.
+
+Akış epoch'u getWeatherData çağrısında yakalanır (collection başlangıcında değil). Böylece temizlemeden önce oluşturulup daha sonra collect edilen cold flow eski koordinatlarla yeni istek başlatamaz. Silme kurtarması bitip erişim yeniden açılsa da eski epoch yanıtı geçerli sayılmaz. Yeni çağrı yeni epoch ile normal çalışır. Cache/state yayınları kilitle serileştirilir; downstream emit sırasında kilit tutulup temizleme UI tüketicisine bağımlı hale getirilmez. Önceden tüketiciye ulaşmış verinin geri çağrıldığı iddia edilmez.
+
+Normal ayarlar cache temizleme ve clearCurrentWeather davranışı bu silme işlemiyle karıştırılmaz; kullanıcı cache temizlerken görünen hava verisini aniden boşaltma eklenmedi. Üretimde tek repository örneği kullanılır; farklı keyfi repository örnekleri arasında bu bellek epoch'u paylaşılmaz. Süreç ölünce eski callback'ler de ölür; yeniden açılışta pending silme günlüğü yeni erişimi engeller.
+
+Açık sınırlar: silme dışı A/B/A hesap geçişinde ortak hava state'i epoch'u, bağımsız fetchWeatherSnapshot çağıranlarının tam yaşam döngüsü matrisi, gerçek ağ/SDK iptali ve OS bildirim yayını. Bu adım gerçek Firebase/hesap silme veya gerçek hava servis isteğiyle test edilmedi. Henüz push edilmedi.
+
+Doğrulama: mevcut 357 Android JVM testi geçti (0 failure/error); debug/test APK'ları derlendi. SM-T500 Android 12 üzerinde WeatherLateResponseDeviceTest (4 yeni) + mevcut WeatherCacheClearStorageTest toplam 5/5 geçti. Yeni testler temizlik bitip izin yeniden açılsa bile geç başarının cache/state/collector'a dönmemesi ve yeni isteğin çalışması, başlamış cache yazımını temizliğin bekleyip silmesi, eski cold flow'un sonradan ağ başlatamaması, pending silmede yeni çağrı/late hata engelini kapsar. Gerçek ayrı in-memory Room ve sahte WeatherApiService kullanıldı; gerçek hava servisine/Firebase'e istek veya gerçek hesap silme yapılmadı.
+
+
+## OS bildirim yayımlama: oturum/temizlik yarışı — 3 Kasım
+
+NotificationSessionEpoch artık kısa eşzamanlı OS publish ve epoch-change+cancelAll işlemlerini aynı süreç içi kapıda sıralar. MainApplication hesabın değiştiğini gözlediğinde ve AccountDeletionManager son yerel temizliği yaptığında epoch artırma ile görünür bildirim iptali aynı kapıdan geçer. Daha önce kapıya kabul edilmiş post önce biter, ardından temizleme uygulanır; temizlik bitince eski epoch tekrar post edemez. Başlamış native çağrının atomik biçimde geri alındığı iddia edilmez.
+
+Hava ve seyahat worker'ları çalışma başında epoch yakalar; UID aynı görünse bile gözlenen A→B→A geçişi eski işi geçersiz kılar. Son postNotificationIfCurrent kapısı canlı Job iptalini de kilit alındıktan sonra kontrol eder. Böylece kapıyı beklerken iptal edilen worker native notify çağırmaz. Final aşamada permission ve pending/busy tekrar kontrol edilir. İki worker ayrıca notification DB'deki kalıcı hesap silme işaretine bakar. FCM data-only alıcısı final TTL/izin/oturum kontrolüyle aynı yayın kapısına bağlandı.
+
+Üç üretim notify çağrısı ortak kapının içindedir. Kapı içinde ağ/Room işi yapılmaz; yalnız kısa koşul/OS çağrısı bulunur. Seyahat güzergâh analizinde CancellationException yutan catch de düzeltildi. İşlem kipleri ve uygulama içi bildirim kaydı/OS gösterimi birbirine eşit sayılmaz.
+
+Açık sınırlar: gerçek OS tepsi/kanal/API33/OEM ve hızlı Firebase auth callback matrisi, ilk process açılışındaki eski tepsi temizliği, çok süreç, app bildirim tercihi hazırlık sırasında kapanırsa davranış ve kanal/dedup kurtarma. FCM notification payload'ının SDK tarafından arka planda otomatik gösterimi bu data-only kapısına dahil değildir; sunucu data-only sözleşmesi/rollout doğrulanmalı. Gerçek FCM etkinleştirilmedi, cihaz tepsisinde gerçek bildirim gönderilmedi/temizlenmedi. Henüz push edilmedi.
+
+Doğrulama: 4 yeni AccountNotificationPublication testi dahil 361 Android JVM testi geçti (0 failure/error); debug APK derlendi. Testler yanlış UID/eski epoch/silme engeli, geçerli oturumda tek post, gerçek iki thread ile post tamamlanmadan cleanup callback'inin girememesi ve cleanup sonrası eski epoch'un reddi, monitor beklerken iptal edilen coroutine'in post etmemesini kapsar. OS post/clear callback'leri sahtedir; cihaz bildirimi, gerçek worker/FCM/OEM veya Auth SDK geçişi testi yapılmadı.

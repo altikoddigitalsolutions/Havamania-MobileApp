@@ -21,7 +21,10 @@ class WeatherNotificationWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
+    private var executionEpoch = Long.MIN_VALUE
+
     override suspend fun doWork(): Result {
+        executionEpoch = NotificationSessionEpoch.capture()
         val application = applicationContext as? android.app.Application ?: return Result.failure()
         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
         val uid = auth.currentUser?.uid ?: return Result.success()
@@ -89,9 +92,11 @@ class WeatherNotificationWorker(
 
     private fun canPublishFor(uid: String): Boolean =
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == uid &&
-            !AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.pending
+            NotificationSessionEpoch.capture() == executionEpoch &&
+            AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.let { !it.pending && !it.busy }
 
-    private fun showNotification(uid: String, title: String, message: String) {
+    private suspend fun showNotification(uid: String, title: String, message: String) {
+        if (NotificationDatabase.getDatabase(applicationContext).notificationDao().isDeletedAccountHash(accountOwnerHash(uid))) return
         if (!canPublishFor(uid)) return
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
             return
@@ -119,7 +124,12 @@ class WeatherNotificationWorker(
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(1, notification)
+        currentCoroutineContext().ensureActive()
+        postNotificationIfCurrent(uid, executionEpoch,
+            { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            { !canPublishFor(uid) || !PermissionHelper.hasNotificationPermission(applicationContext) }) {
+            notificationManager.notify(1, notification)
+        }
     }
 
     companion object {

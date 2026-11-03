@@ -1,10 +1,6 @@
 package com.havamania
 
 import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
-import androidx.exifinterface.media.ExifInterface
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,7 +14,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.io.InputStream
 
 sealed class ProfileState {
     object Idle : ProfileState()
@@ -44,7 +39,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val aboutMeRunner = AssistantTaskRunner(viewModelScope, { auth.currentUser?.uid ?: "legacy" }, {}, 20_000)
     internal fun resetAboutMeSave() { aboutMeRunner.reset(); _aboutMeSaveState.value = ProfileSaveState.Idle }
 
-    // RCA FIX: Standard initialization. We will log the bucket name to verify.
     private val storage = FirebaseStorage.getInstance()
 
     private val _profileState = MutableStateFlow<ProfileState>(ProfileState.Idle)
@@ -56,6 +50,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val _avatarVersion = MutableStateFlow(System.currentTimeMillis())
     val avatarVersion: StateFlow<Long> = _avatarVersion
 
+    private val avatarMutations = AvatarMutationController(viewModelScope,
+        { auth.currentUser?.uid }, ::profileWritesAllowed,
+        { _uploadProgress.value = it },
+        { _avatarVersion.value = System.currentTimeMillis() },
+        { _profileState.value = ProfileState.Error(it) })
+
     private val userProfileRepository = UserProfileRepository.getInstance()
     private var profileJob: kotlinx.coroutines.Job? = null
 
@@ -64,7 +64,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         saveController.reset()
         personalizationSave.reset()
         resetAboutMeSave()
-        _uploadProgress.value = false
+        avatarMutations.reset()
         val user = firebaseAuth.currentUser
         _activeUid.value = user?.uid
         if (user == null) {
@@ -141,6 +141,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         auth.removeAuthStateListener(authListener)
         personalizationSave.reset()
         resetAboutMeSave()
+        avatarMutations.reset()
         // We don't stopObserving in repository here because other ViewModels might still need it.
         // It's a singleton.
     }
@@ -197,226 +198,71 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun toggleInterest(interestId: String, currentInterests: Set<String>) {
+    fun setInterestSelected(interestId: String, selected: Boolean) {
         val uid = auth.currentUser?.uid ?: return
-        accountTasks.launch launch@ { ownerUid ->
-            if (uid != ownerUid) return@launch
+        accountTasks.launch { owner ->
+            if (uid != owner) return@launch
+            val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
             try {
-                val newList = currentInterests.toMutableList()
-                if (newList.contains(interestId)) newList.remove(interestId)
-                else newList.add(interestId)
-
-                runAccountProfileWrite(ownerUid, { auth.currentUser?.uid }, ::profileWritesAllowed, {
-                db.collection("users").document(ownerUid).update(
-                    "personalizationProfile.selectedInterests", newList,
-                    "updatedAt", System.currentTimeMillis()
-                ).await()
+                runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed, {
+                    val document = db.collection("users").document(owner)
+                    db.runTransaction { transaction ->
+                        if (job?.isActive != true || auth.currentUser?.uid != owner || !profileWritesAllowed()) return@runTransaction
+                        val snapshot = transaction.get(document)
+                        val raw = snapshot.get("personalizationProfile.selectedInterests")
+                        require(raw == null || (raw is List<*> && raw.all { it is String }))
+                        val existing = (raw as? List<*>)?.filterIsInstance<String>().orEmpty()
+                        val updated = updateInterestSelection(existing, interestId, selected)
+                        if (job.isActive && auth.currentUser?.uid == owner && profileWritesAllowed() && updated != existing) {
+                            transaction.update(document, mapOf(
+                                "personalizationProfile.selectedInterests" to updated,
+                                "updatedAt" to System.currentTimeMillis()))
+                        }
+                    }.await()
                 })
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("ProfileVM", "Toggle interest failed", e)
-}
-                publishAccountResult(ownerUid, { auth.currentUser?.uid ?: "legacy" }) {
-                    if (profileWritesAllowed()) _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi.")
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                publishAccountResult(owner, { auth.currentUser?.uid ?: "legacy" }) {
+                    if (profileWritesAllowed()) _profileState.value = ProfileState.Error("İlgi alanı güncellenemedi. Lütfen tekrar deneyin.")
                 }
             }
         }
     }
 
     fun uploadProfileImage(uri: Uri) {
-        val currentUser = auth.currentUser
-        if (currentUser == null) {
-if (BuildConfig.DEBUG) {
-                android.util.Log.e("PHOTO_DEBUG", "[PHOTO] Step 2 FAILED: No authenticated user")
-}
-            return
-        }
-        val uid = currentUser.uid
-
-        accountTasks.launch launch@ { ownerUid ->
-            if (BuildConfig.DEBUG) {
-                android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE START ---")
-                android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2 OK: Uploading URI = $uri")
-            }
-
-            _uploadProgress.value = true
-            try {
-                val context = getApplication<Application>()
-
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.1: Checking URI accessibility...")
-                }
-                context.contentResolver.openInputStream(uri)?.use { it.close() }
-                    ?: throw Exception("URI access failed")
-
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 2.2: Processing image...")
-                }
-                val bitmap = processImage(uri) ?: throw Exception("Görsel işlenemedi.")
-
-                val data = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    java.io.ByteArrayOutputStream().use { output ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, output)
-                        output.toByteArray()
-                    }
-                }
-
-                // Path must match rules 'profile-images/{userId}/{allPaths=**}'
-                val storagePath = "profile-images/$uid/avatar.jpg"
-                val storageRef = storage.reference.child(storagePath)
-
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3: PRE-UPLOAD DATA:")
-                    android.util.Log.i("PHOTO_DEBUG", ">> Bucket: ${storageRef.bucket}")
-                    android.util.Log.i("PHOTO_DEBUG", ">> Path: $storagePath")
-if (BuildConfig.DEBUG) {
-                        android.util.Log.i("PHOTO_DEBUG", ">> Size: ${data.size} bytes")
-}
-                }
-
-                val metadata = com.google.firebase.storage.StorageMetadata.Builder()
-                    .setContentType("image/jpeg")
-                    .build()
-
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3.1: storageRef.putBytes() starting...")
-                }
-
-                storageRef.putBytes(data, metadata).await()
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 3 OK: Upload Success")
-                }
-
-                val downloadUrl = storageRef.downloadUrl.await().toString()
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 4 OK: Download URL = $downloadUrl")
-
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 5: Saving imageUrl = $downloadUrl")
-                }
-                db.collection("users").document(uid).update("photoURL", downloadUrl, "updatedAt", System.currentTimeMillis()).await()
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "[PHOTO] Step 6 OK: Firestore Updated")
-                }
-
-                _avatarVersion.value = System.currentTimeMillis()
-
-                // CRITICAL SYNC: Update local DataStore immediately to prevent UI flicker
-                ThemeManager.saveUserImageUriByUid(context, uid, downloadUrl)
-
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.i("PHOTO_DEBUG", "--- UPLOAD TRACE SUCCESS ---")
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                if (BuildConfig.DEBUG) {
-                    android.util.Log.e("PHOTO_DEBUG", "--- UPLOAD TRACE FAILED ---")
-                }
-                val friendlyError = when {
-                    e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_NOT_AUTHORIZED ->
-                        "Yetki hatası: Fotoğraf yükleme izniniz bulunmuyor."
-                    e is com.google.firebase.storage.StorageException && e.errorCode == com.google.firebase.storage.StorageException.ERROR_QUOTA_EXCEEDED ->
-                        "Sunucu kotası doldu, lütfen daha sonra tekrar deneyin."
-                    e is com.google.firebase.storage.StorageException && e.httpResultCode == 402 ->
-                        "Fotoğraf hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin."
-                    e is java.io.IOException ->
-                        "Bağlantı hatası: Lütfen internetinizi kontrol edin."
-                    e.message?.contains("unknown", true) == true ->
-                        "Fotoğraf yüklenemedi. Lütfen daha sonra tekrar deneyin."
-                    else -> "Beklenmedik bir hata oluştu: ${e.localizedMessage ?: "Bilinmiyor"}"
-                }
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("PHOTO_DEBUG", "Mapped Error: $friendlyError", e)
-}
-                _profileState.value = ProfileState.Error(friendlyError)
-            } finally {
-                _uploadProgress.value = false
-            }
+        avatarMutations.start { owner ->
+            val context = getApplication<Application>()
+            val reference = storage.reference.child("profile-images/$owner/avatar.jpg")
+            lateinit var data: ByteArray
+            lateinit var downloadUrl: String
+            runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed,
+                {
+                    data = prepareAvatarJpeg { context.contentResolver.openInputStream(uri) }
+                },
+                {
+                    val metadata = com.google.firebase.storage.StorageMetadata.Builder().setContentType("image/jpeg").build()
+                    val upload = reference.putBytes(data, metadata)
+                    try { upload.await() }
+                    catch (cancelled: kotlinx.coroutines.CancellationException) { upload.cancel(); throw cancelled }
+                },
+                { downloadUrl = reference.downloadUrl.await().toString() },
+                { db.collection("users").document(owner).update("photoURL", downloadUrl, "updatedAt", System.currentTimeMillis()).await() },
+                { ThemeManager.saveUserImageUriByUid(context, owner, downloadUrl) })
         }
     }
 
     fun removeProfileImage() {
-        val uid = auth.currentUser?.uid ?: return
-        accountTasks.launch launch@ { ownerUid ->
-            _uploadProgress.value = true
-            try {
-                val context = getApplication<Application>()
-                try {
-                    storage.reference.child("profile-images/$uid/avatar.jpg").delete().await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                }
-
-                db.collection("users").document(uid).update("photoURL", null, "updatedAt", System.currentTimeMillis()).await()
-                ThemeManager.saveUserImageUriByUid(context, uid, null)
-
-                _avatarVersion.value = System.currentTimeMillis()
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                _profileState.value = ProfileState.Error("İşlem başarısız.")
-            } finally {
-                _uploadProgress.value = false
-            }
+        avatarMutations.start { owner ->
+            runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed,
+                {
+                    try { storage.reference.child("profile-images/$owner/avatar.jpg").delete().await() }
+                    catch (error: com.google.firebase.storage.StorageException) {
+                        if (error.errorCode != com.google.firebase.storage.StorageException.ERROR_OBJECT_NOT_FOUND) throw error
+                    }
+                },
+                { db.collection("users").document(owner).update("photoURL", null, "updatedAt", System.currentTimeMillis()).await() },
+                { ThemeManager.saveUserImageUriByUid(getApplication(), owner, null) })
         }
     }
 
-    private suspend fun processImage(uri: Uri): Bitmap? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-        val context = getApplication<Application>()
-        var inputStream: InputStream? = null
-        try {
-            inputStream = context.contentResolver.openInputStream(uri)
-            if (inputStream == null) return@withContext null
-
-            val exif = try {
-                ExifInterface(inputStream)
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                null
-            }
-            val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-                ?: ExifInterface.ORIENTATION_NORMAL
-
-            inputStream.close()
-            inputStream = context.contentResolver.openInputStream(uri)
-
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeStream(inputStream, null, options)
-            inputStream?.close()
-
-            var scale = 1
-            while (options.outWidth / scale / 2 >= 512 || options.outHeight / scale / 2 >= 512) {
-                scale *= 2
-            }
-
-            inputStream = context.contentResolver.openInputStream(uri)
-            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = scale }
-            val bitmap = BitmapFactory.decodeStream(inputStream, null, decodeOptions) ?: return@withContext null
-
-            val matrix = Matrix()
-            when (orientation) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
-            }
-
-            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-
-            if (rotatedBitmap.width > 512 || rotatedBitmap.height > 512) {
-                val ratio = rotatedBitmap.width.toFloat() / rotatedBitmap.height.toFloat()
-                val width = if (ratio > 1) 512 else (512 * ratio).toInt()
-                val height = if (ratio > 1) (512 / ratio).toInt() else 512
-                Bitmap.createScaledBitmap(rotatedBitmap, width.coerceAtLeast(1), height.coerceAtLeast(1), true)
-            } else {
-                rotatedBitmap
-            }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                android.util.Log.e("PHOTO_DEBUG", "Error processing image", e)
-}
-            null
-        } finally {
-            try { inputStream?.close() } catch (e: Exception) {}
-        }
-    }
 }

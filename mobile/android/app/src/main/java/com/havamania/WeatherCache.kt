@@ -224,8 +224,27 @@ data class HistoryDeletionRequest(val userId: String, val recordId: String, @Col
 /**
  * Veritabanı Erişim Nesnesi (DAO)
  */
+@Entity(tableName = "weather_account_deletions")
+data class WeatherAccountDeletion(@PrimaryKey val ownerHash: String)
+
 @Dao
 interface WeatherDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun blockDeletedAccountRaw(marker: WeatherAccountDeletion)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM weather_account_deletions WHERE ownerHash = :hash)")
+    suspend fun isDeletedAccountHash(hash: String): Boolean
+
+    @Transaction
+    suspend fun deleteAccountData(uid: String) {
+        blockDeletedAccountRaw(WeatherAccountDeletion(accountOwnerHash(uid)))
+        clearAllTravelPlans(uid)
+        clearAllAiHistory(uid)
+        clearHistoryDeletions(uid)
+        clearTripDeletions(uid)
+        clearTripUploads(uid)
+    }
+
     @Query("SELECT * FROM weather_cache WHERE cityName = :city LIMIT 1")
     suspend fun getCachedWeather(city: String): WeatherCacheEntity?
 
@@ -270,6 +289,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun insertTravelPlan(plan: TravelPlanEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return
         if (hasTripDeletion(plan.userId, plan.id)) return
         val existing = getTravelPlanByIdRaw(plan.id)
         if (existing != null && existing.userId != plan.userId) {
@@ -303,6 +323,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun insertAiHistory(item: AiHistoryEntity) {
+        check(!isDeletedAccountHash(accountOwnerHash(item.userId))) { "Account history writes are blocked" }
         check(!hasHistoryDeletion(item.userId, item.id)) { "History deletion is pending" }
         val existing = getAiHistoryItemRaw(item.id)
         if (existing != null && existing.userId != item.userId) {
@@ -316,6 +337,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun mergeAiHistory(item: AiHistoryEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(item.userId))) return
         if (hasHistoryDeletion(item.userId, item.id)) return
         val existing = getAiHistoryItemRaw(item.id)
         if (existing != null && (existing.userId != item.userId || existing.updatedAt > item.updatedAt || existing.pendingUpload)) return
@@ -338,13 +360,20 @@ interface WeatherDao {
     suspend fun getHistoryDeletions(uid: String): List<HistoryDeletionRequest>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertHistoryDeletion(request: HistoryDeletionRequest)
+    suspend fun insertHistoryDeletionRaw(request: HistoryDeletionRequest)
+
+    @Transaction
+    suspend fun insertHistoryDeletion(request: HistoryDeletionRequest) {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+        insertHistoryDeletionRaw(request)
+    }
 
     @Query("DELETE FROM ai_history_deletions WHERE userId = :uid AND recordId = :id")
     suspend fun removeHistoryDeletion(uid: String, id: String)
 
     @Transaction
     suspend fun enqueueHistoryDeletion(uid: String, id: String?) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
         insertHistoryDeletion(HistoryDeletionRequest(uid, id ?: ""))
         stopAiHistoryUpload(uid, id)
     }
@@ -357,6 +386,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun completeHistoryDeletion(uid: String, id: String) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
         if (id.isEmpty()) {
             getAllAiHistory(uid).forEach { insertHistoryDeletion(HistoryDeletionRequest(uid, it.id, true)) }
             clearAllAiHistory(uid)
@@ -370,6 +400,7 @@ interface WeatherDao {
     /** Full, server-confirmed collection only. Unknown/local-only records are retained. */
     @Transaction
     suspend fun reconcileAiHistory(uid: String, items: List<AiHistoryEntity>, serverIds: Set<String>) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
         items.filter { it.userId == uid }.forEach { mergeAiHistory(it.copy(syncedUpdatedAt = it.updatedAt, pendingUpload = false)) }
         getAllAiHistory(uid).forEach { local ->
             if (local.id !in serverIds && local.syncedUpdatedAt == local.updatedAt && !local.pendingUpload) {
@@ -391,7 +422,13 @@ interface WeatherDao {
     suspend fun pendingTripUploadVersion(uid: String, id: String): Long?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun enqueueTripUpload(request: TripUploadRequest)
+    suspend fun enqueueTripUploadRaw(request: TripUploadRequest)
+
+    @Transaction
+    suspend fun enqueueTripUpload(request: TripUploadRequest) {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+        enqueueTripUploadRaw(request)
+    }
 
     @Query("SELECT * FROM trip_uploads WHERE userId = :uid")
     suspend fun pendingTripUploads(uid: String): List<TripUploadRequest>
@@ -404,6 +441,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun saveLocalTrip(plan: TravelPlanEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return
         if (hasTripDeletion(plan.userId, plan.id)) return
         val old = getTravelPlanByIdRaw(plan.id)
         if (old != null && old.userId != plan.userId) return
@@ -414,6 +452,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun saveTripAnalysisIfVersion(plan: TravelPlanEntity, expectedVersion: Long): Long? {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return null
         val current = getTravelPlanByIdRaw(plan.id) ?: return null
         if (current.userId != plan.userId || current.updatedAt != expectedVersion || hasTripDeletion(plan.userId, plan.id)) return null
         saveLocalTrip(plan)
@@ -427,7 +466,13 @@ interface WeatherDao {
     suspend fun hasTripDeletion(uid: String, id: String): Boolean
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun enqueueTripDeletion(request: TripDeletionRequest)
+    suspend fun enqueueTripDeletionRaw(request: TripDeletionRequest)
+
+    @Transaction
+    suspend fun enqueueTripDeletion(request: TripDeletionRequest) {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+        enqueueTripDeletionRaw(request)
+    }
 
     @Query("SELECT * FROM trip_deletions WHERE userId = :uid AND completed = 0")
     suspend fun pendingTripDeletions(uid: String): List<TripDeletionRequest>
@@ -437,6 +482,7 @@ interface WeatherDao {
 
     @Transaction
     suspend fun completeTripDeletion(uid: String, id: String) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
         deleteTravelPlan(id, uid)
         pendingTripUploadVersion(uid, id)?.let { acknowledgeTripUpload(uid, id, it) }
         acknowledgeTripDeletion(uid, id)
@@ -458,7 +504,7 @@ data class TripDeletionRequest(val userId: String, val recordId: String, val com
 @Entity(tableName = "trip_uploads", primaryKeys = ["userId", "recordId"])
 data class TripUploadRequest(val userId: String, val recordId: String, val revision: Long)
 
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class], version = 22, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class, WeatherAccountDeletion::class], version = 23, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -544,6 +590,12 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS weather_account_deletions (ownerHash TEXT NOT NULL, PRIMARY KEY(ownerHash))")
+            }
+        }
+
         val MIGRATION_21_22 = object : Migration(21, 22) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("CREATE TABLE IF NOT EXISTS trip_uploads (userId TEXT NOT NULL, recordId TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(userId, recordId))")
@@ -569,7 +621,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22)
+                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
                 .build()
                 INSTANCE = instance
                 instance

@@ -31,9 +31,10 @@ class MainApplication : Application() {
     auth.addAuthStateListener { currentAuth ->
         val nextOwner = currentAuth.currentUser?.uid
         if (nextOwner != notificationOwner) {
-            NotificationSessionEpoch.changed()
             notificationOwner = nextOwner
-            (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+            NotificationSessionEpoch.changed {
+                (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+            }
         }
         tokenQueueScope.launch {
             try { FcmTokenQueue.reconcile(this@MainApplication) }

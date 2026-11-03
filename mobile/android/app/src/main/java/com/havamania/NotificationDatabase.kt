@@ -9,8 +9,26 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 
+@Entity(tableName = "notification_account_deletions")
+data class NotificationAccountDeletion(@PrimaryKey val ownerHash: String)
+
 @Dao
 interface NotificationDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun blockDeletedAccountRaw(marker: NotificationAccountDeletion)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM notification_account_deletions WHERE ownerHash = :hash)")
+    suspend fun isDeletedAccountHash(hash: String): Boolean
+
+    @Query("SELECT userId FROM notifications WHERE id = :id LIMIT 1")
+    suspend fun notificationOwner(id: String): String?
+
+    @Transaction
+    suspend fun deleteAccountData(uid: String) {
+        blockDeletedAccountRaw(NotificationAccountDeletion(accountOwnerHash(uid)))
+        deleteAll(uid)
+    }
+
     @Query("SELECT * FROM notifications WHERE userId = :uid ORDER BY createdAt DESC")
     fun getAllNotifications(uid: String): Flow<List<NotificationItem>>
 
@@ -24,13 +42,34 @@ interface NotificationDao {
     fun getUnreadCount(uid: String): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(notification: NotificationItem)
+    suspend fun insertRaw(notification: NotificationItem)
+
+    @Transaction
+    suspend fun insert(notification: NotificationItem) {
+        if (isDeletedAccountHash(accountOwnerHash(notification.userId))) return
+        val owner = notificationOwner(notification.id)
+        if (owner != null && owner != notification.userId) return
+        insertRaw(notification)
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertIncoming(notification: NotificationItem): Long
+    suspend fun insertIncomingRaw(notification: NotificationItem): Long
+
+    @Transaction
+    suspend fun insertIncoming(notification: NotificationItem): Long {
+        if (isDeletedAccountHash(accountOwnerHash(notification.userId))) return -1
+        return insertIncomingRaw(notification)
+    }
 
     @Update
-    suspend fun update(notification: NotificationItem)
+    suspend fun updateRaw(notification: NotificationItem)
+
+    @Transaction
+    suspend fun update(notification: NotificationItem) {
+        if (isDeletedAccountHash(accountOwnerHash(notification.userId))) return
+        if (notificationOwner(notification.id) != notification.userId) return
+        updateRaw(notification)
+    }
 
     @Query("UPDATE notifications SET isRead = 1 WHERE userId = :uid AND id IN (:ids)")
     suspend fun markAsRead(uid: String, ids: List<String>)
@@ -54,7 +93,7 @@ interface NotificationDao {
     suspend fun existsWithKey(uid: String, key: String): Boolean
 }
 
-@Database(entities = [NotificationItem::class], version = 5, exportSchema = false)
+@Database(entities = [NotificationItem::class, NotificationAccountDeletion::class], version = 6, exportSchema = false)
 @TypeConverters(NotificationConverters::class)
 abstract class NotificationDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
@@ -76,6 +115,12 @@ abstract class NotificationDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS notification_account_deletions (ownerHash TEXT NOT NULL, PRIMARY KEY(ownerHash))")
+            }
+        }
+
         fun getDatabase(context: Context): NotificationDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -83,7 +128,7 @@ abstract class NotificationDatabase : RoomDatabase() {
                     NotificationDatabase::class.java,
                     "notification_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance

@@ -43,7 +43,7 @@ class DatabaseMigrationTest {
                 VALUES ('old','owner','Title','Message','TRAVEL',123,0,'NONE')""")
         }
         val database = Room.databaseBuilder(context, NotificationDatabase::class.java, name)
-            .addMigrations(NotificationDatabase.MIGRATION_4_5).build()
+            .addMigrations(NotificationDatabase.MIGRATION_4_5, NotificationDatabase.MIGRATION_5_6).build()
         try {
             val rows = database.notificationDao().getAllNotifications("owner").first()
             assertEquals(1, rows.size)
@@ -86,7 +86,7 @@ class DatabaseMigrationTest {
         val database = Room.databaseBuilder(context, WeatherDatabase::class.java, name)
             .addMigrations(WeatherDatabase.MIGRATION_11_13, WeatherDatabase.MIGRATION_13_14,
                 WeatherDatabase.MIGRATION_14_15, WeatherDatabase.MIGRATION_15_16,
-                WeatherDatabase.MIGRATION_16_17, WeatherDatabase.MIGRATION_17_18, WeatherDatabase.MIGRATION_18_19, WeatherDatabase.MIGRATION_19_20).build()
+                WeatherDatabase.MIGRATION_16_17, WeatherDatabase.MIGRATION_17_18, WeatherDatabase.MIGRATION_18_19, WeatherDatabase.MIGRATION_19_20, WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23).build()
         try {
             val dao = database.weatherDao()
             val plan = dao.getAllTravelPlans("owner").single()

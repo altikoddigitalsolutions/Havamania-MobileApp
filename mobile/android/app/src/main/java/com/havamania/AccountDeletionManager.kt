@@ -199,21 +199,18 @@ class AccountDeletionManager private constructor(private val app: Application) {
         firestore.terminate().await()
         firestore.clearPersistence().await()
         val weather = WeatherDatabase.getDatabase(app).weatherDao()
-        weather.clearAllTravelPlans(uid)
-        weather.clearAllAiHistory(uid)
-        weather.clearHistoryDeletions(uid)
-        weather.clearTripDeletions(uid)
-        weather.clearTripUploads(uid)
-        weather.clearAllWeatherCache()
-        WeatherRepository.getInstance(app).clearCurrentWeather()
-        NotificationDatabase.getDatabase(app).notificationDao().deleteAll(uid)
+        weather.deleteAccountData(uid)
+        WeatherRepository.getInstance(app).clearForAccountDeletion()
+        NotificationDatabase.getDatabase(app).notificationDao().deleteAccountData(uid)
         app.dataStore.edit { preferences ->
             preferences.asMap().keys.filter { it.name.startsWith("havamania:$uid:") }
                 .forEach { preferences.remove(it) }
         }
         app.imageLoader.memoryCache?.clear()
         withContext(Dispatchers.IO) { app.imageLoader.diskCache?.clear() }
-        (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancelAll()
+        NotificationSessionEpoch.changed {
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancelAll()
+        }
     }
 
     fun acknowledgeCompletion() {
