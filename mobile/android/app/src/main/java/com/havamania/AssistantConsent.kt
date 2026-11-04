@@ -55,9 +55,11 @@ internal class AssistantConsentController(
 ) {
     private val tasks = AccountTaskScope(scope, uid)
     private var operation: Job? = null
+    private var stateOwner: String? = null
     private val mutable = MutableStateFlow(AssistantConsentState())
     val state = mutable.asStateFlow()
     private var dismissed = false
+    private var reviewRequested = false
     private var lastOperation: ConsentOperation? = null
     private var attempt = 0
 
@@ -78,34 +80,59 @@ internal class AssistantConsentController(
         throw AssistantConsentServiceException(ConsentFailure.TIMEOUT)
     }
 
-    fun reset() { tasks.reset(); operation?.cancel(); dismissed = false; lastOperation = null; attempt = 0; mutable.value = AssistantConsentState() }
+    private suspend fun ensureCurrentOwner(owner: String) {
+        currentCoroutineContext().ensureActive()
+        if (uid() != owner) throw CancellationException("Consent account changed")
+    }
+
+    fun reset() { tasks.reset(); operation?.cancel(); stateOwner = null; dismissed = false; lastOperation = null; attempt = 0; mutable.value = AssistantConsentState() }
     fun close() { tasks.close() }
     fun dismiss() { dismissed = true; mutable.value = mutable.value.copy(visible = false) }
     fun open() = load(review = true)
-    fun retry() { if (mutable.value.retry == ConsentRetry.REVOKE || mutable.value.withdrawalPending) revoke() else open() }
+    fun retry() {
+        if (!hasCurrentOwner()) return
+        if (mutable.value.retry == ConsentRetry.REVOKE || mutable.value.withdrawalPending) revoke() else open()
+    }
+
+    private fun hasCurrentOwner(): Boolean {
+        if (stateOwner == uid()) return true
+        reset()
+        return false
+    }
 
     fun load(review: Boolean = false, showLoading: Boolean = review) {
-        dismissed = false
+        val owner = uid()
+        if (stateOwner != owner) {
+            reset()
+            stateOwner = owner
+        }
         if (mutable.value.busy) {
-            publish(mutable.value.copy(visible = true))
+            if (review || showLoading) {
+                dismissed = false
+                reviewRequested = reviewRequested || review
+                publish(mutable.value.copy(visible = true))
+            }
             return
         }
+        dismissed = false
         if (mutable.value.withdrawalPending) {
             publish(mutable.value.copy(visible = true))
             return
         }
         operation?.cancel()
+        reviewRequested = review
         beginOperation(ConsentOperation.LOAD)
         publish(AssistantConsentState(busy = true, visible = showLoading, operation = ConsentOperation.LOAD))
-        operation = tasks.launch { owner ->
+        operation = tasks.launch {
             try {
+                ensureCurrentOwner(owner)
                 val doc = timed { gateway.load(owner) }
-                ensureActive()
+                ensureCurrentOwner(owner)
                 if (!doc.isValid()) throw AssistantConsentServiceException(ConsentFailure.INVALID)
-                publish(AssistantConsentState(document = doc, visible = review || !doc.accepted || doc.health_review_required))
+                publish(AssistantConsentState(document = doc, visible = reviewRequested || !doc.accepted || doc.health_review_required))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                ensureActive()
+                ensureCurrentOwner(owner)
                 val pending = e is AssistantWithdrawalPendingException
                 publish(AssistantConsentState(visible = true, withdrawalPending = pending,
                     retry = if (pending) ConsentRetry.REVOKE else ConsentRetry.LOAD,
@@ -115,34 +142,38 @@ internal class AssistantConsentController(
     }
 
     fun save(health: Boolean) {
+        val owner = stateOwner ?: return
+        if (!hasCurrentOwner()) return
         val current = mutable.value
         val doc = current.document ?: return
         if (current.busy || current.withdrawalPending || !doc.isValid()) return
         dismissed = false
         beginOperation(ConsentOperation.SAVE)
         publish(current.copy(busy = true, error = null, operation = ConsentOperation.SAVE))
-        operation = tasks.launch { owner ->
+        operation = tasks.launch {
             try {
+                ensureCurrentOwner(owner)
                 val updated = timed { gateway.save(owner, doc, health && doc.health != null) }
-                ensureActive()
+                ensureCurrentOwner(owner)
                 require(updated.isValid())
                 publish(AssistantConsentState(document = updated, visible = !updated.accepted))
             } catch (e: CancellationException) { throw e }
             catch (e: AssistantConsentStaleException) {
+                ensureCurrentOwner(owner)
                 try {
                     val updated = timed { gateway.load(owner) }
-                    ensureActive()
+                    ensureCurrentOwner(owner)
                     require(updated.isValid())
                     publish(AssistantConsentState(document = updated.copy(accepted = false, health_accepted = false),
                         visible = true, error = "Metin güncellendi. Lütfen yeni metni okuyup yeniden karar verin."))
                 } catch (cancel: CancellationException) { throw cancel }
                 catch (failure: Exception) {
-                    ensureActive()
+                    ensureCurrentOwner(owner)
                     publish(AssistantConsentState(visible = true, retry = ConsentRetry.LOAD,
                         error = "Güncel metin alınamadı. " + consentFailureMessage(failure)))
                 }
             } catch (e: Exception) {
-                ensureActive()
+                ensureCurrentOwner(owner)
                 val pending = e is AssistantWithdrawalPendingException
                 publish(current.copy(visible = true, withdrawalPending = pending,
                     retry = if (pending) ConsentRetry.REVOKE else null,
@@ -152,6 +183,8 @@ internal class AssistantConsentController(
     }
 
     fun revoke() {
+        val owner = stateOwner ?: return
+        if (!hasCurrentOwner()) return
         if (mutable.value.busy) return
         val current = mutable.value
         val blocked = current.copy(document = current.document?.copy(accepted = false, health_accepted = false),
@@ -159,15 +192,16 @@ internal class AssistantConsentController(
         dismissed = false
         beginOperation(ConsentOperation.REVOKE)
         publish(blocked.copy(busy = true, error = null, visible = true, operation = ConsentOperation.REVOKE))
-        operation = tasks.launch { owner ->
+        operation = tasks.launch {
             try {
+                ensureCurrentOwner(owner)
                 timed { gateway.revoke(owner) }
-                ensureActive()
+                ensureCurrentOwner(owner)
                 publish(AssistantConsentState(document = blocked.document, visible = true,
                     notice = "Uzak asistan izinleriniz geri çekildi."))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                ensureActive()
+                ensureCurrentOwner(owner)
                 publish(blocked.copy(busy = false, visible = true,
                     error = "İzinlerin geri çekildiği doğrulanamadı. " + consentFailureMessage(e)))
             }

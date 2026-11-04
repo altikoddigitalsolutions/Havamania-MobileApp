@@ -2,6 +2,8 @@ package com.havamania
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 internal interface AssistantWithdrawalStore {
@@ -53,6 +55,10 @@ internal class AndroidAssistantWithdrawalStore : AssistantWithdrawalStore {
 
 internal class WithdrawalTrackingConsentGateway(private val delegate: AssistantConsentGateway,
     private val store: AssistantWithdrawalStore) : AssistantConsentGateway {
+    private companion object {
+        val withdrawalLocks = Array(32) { Mutex() }
+    }
+
     override suspend fun load(owner: String): AssistantConsentDocument {
         if (store.pending(owner)) throw AssistantWithdrawalPendingException()
         return effective(owner, delegate.load(owner))
@@ -68,15 +74,22 @@ internal class WithdrawalTrackingConsentGateway(private val delegate: AssistantC
         return effective(owner, updated)
     }
     override suspend fun revoke(owner: String) {
-        store.setPending(owner, true)
-        store.beginHealthUpdate(owner, false)
-        delegate.revoke(owner)
-        store.setPending(owner, false)
+        val lock = withdrawalLocks[(owner.hashCode() and Int.MAX_VALUE) % withdrawalLocks.size]
+        lock.withLock {
+            store.setPending(owner, true)
+            store.beginHealthUpdate(owner, false)
+            delegate.revoke(owner)
+            store.setPending(owner, false)
+        }
     }
-    private suspend fun effective(owner: String, document: AssistantConsentDocument) =
-        if (store.healthBlocked(owner)) document.copy(health_accepted = false,
+    private suspend fun effective(owner: String, document: AssistantConsentDocument): AssistantConsentDocument {
+        val healthBlocked = store.healthBlocked(owner)
+        // Another consent screen may have started withdrawal while the request was in flight.
+        if (store.pending(owner)) throw AssistantWithdrawalPendingException()
+        return if (healthBlocked) document.copy(health_accepted = false,
             health_sync_required = document.health_accepted,
             health_review_required = document.health_review_required || document.health_accepted) else document
+    }
 }
 
 internal fun applyAssistantHealthPrivacy(request: BackendChatbotAskRequest, blocked: Boolean): BackendChatbotAskRequest =

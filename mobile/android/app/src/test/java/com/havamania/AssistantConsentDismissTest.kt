@@ -13,6 +13,31 @@ class AssistantConsentDismissTest {
         override suspend fun revoke(owner: String) = Unit
     }
 
+    @Test fun openingDuringBackgroundLoadKeepsAcceptedPermissionsVisible() = runBlocking {
+        val accepted = doc.copy(accepted = true)
+        val result = CompletableDeferred<AssistantConsentDocument>()
+        var loads = 0
+        val controller = AssistantConsentController(this, { "a" }, object : Gateway() {
+            override suspend fun load(owner: String): AssistantConsentDocument {
+                loads++
+                return result.await()
+            }
+        })
+        try {
+            controller.load()
+            yield()
+            controller.load()
+            assertFalse(controller.state.value.visible)
+            controller.open()
+            assertTrue(controller.state.value.visible)
+            result.complete(accepted)
+            yield()
+            assertEquals(1, loads)
+            assertEquals(accepted, controller.state.value.document)
+            assertTrue(controller.state.value.visible)
+        } finally { controller.close() }
+    }
+
     @Test fun immediateRepeatedFailuresAreDistinctAndAttemptResetsForOtherOperationAndAccount() = runBlocking {
         val controller = AssistantConsentController(this, { "a" }, object : Gateway() {
             override suspend fun load(owner: String): AssistantConsentDocument = throw IOException("offline")
@@ -29,6 +54,68 @@ class AssistantConsentDismissTest {
             assertEquals(ConsentRetry.REVOKE, controller.state.value.retry)
             assertFalse(controller.state.value.allowed)
             controller.reset(); assertEquals(0, controller.state.value.attempt)
+        } finally { controller.close() }
+    }
+
+    @Test fun accountChangeBeforeListenerResetDiscardsOldConsentResponse() = runBlocking {
+        var owner = "A"
+        val result = CompletableDeferred<AssistantConsentDocument>()
+        val controller = AssistantConsentController(this, { owner }, object : Gateway() {
+            override suspend fun load(owner: String) = if (owner == "A") result.await() else doc
+        })
+        try {
+            controller.open()
+            yield()
+            owner = "B"
+            result.complete(doc.copy(accepted = true))
+            yield()
+            assertNull(controller.state.value.document)
+            assertFalse(controller.state.value.allowed)
+
+            controller.reset()
+            controller.open()
+            yield()
+            assertEquals(doc, controller.state.value.document)
+            assertFalse(controller.state.value.allowed)
+        } finally { controller.close() }
+    }
+
+    @Test fun actionsFromPreviousAccountCannotMutateTheNewAccount() = runBlocking {
+        var owner = "A"
+        val mutations = mutableListOf<String>()
+        val controller = AssistantConsentController(this, { owner }, object : Gateway() {
+            override suspend fun save(owner: String, document: AssistantConsentDocument, health: Boolean): AssistantConsentDocument {
+                mutations.add(owner)
+                return doc
+            }
+            override suspend fun revoke(owner: String) {
+                mutations.add(owner)
+                throw IOException("offline")
+            }
+        })
+        try {
+            controller.open(); yield()
+            owner = "B"
+            controller.save(false); yield()
+            assertNull(controller.state.value.document)
+            assertFalse(controller.state.value.visible)
+
+            owner = "A"
+            controller.open(); yield()
+            owner = "B"
+            controller.revoke(); yield()
+            assertTrue(mutations.isEmpty())
+
+            owner = "A"
+            controller.open(); yield()
+            controller.revoke(); yield()
+            assertEquals(ConsentRetry.REVOKE, controller.state.value.retry)
+            owner = "B"
+            controller.retry(); yield()
+            assertEquals(listOf("A"), mutations)
+            assertFalse(controller.state.value.withdrawalPending)
+            controller.open(); yield()
+            assertEquals(doc, controller.state.value.document)
         } finally { controller.close() }
     }
 

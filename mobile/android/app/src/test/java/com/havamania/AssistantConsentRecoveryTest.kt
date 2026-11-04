@@ -93,6 +93,66 @@ class AssistantConsentRecoveryTest {
         } finally { controller.close() }
     }
 
+    @Test fun withdrawalStartedDuringLoadOrSaveDiscardsLateApprovalForThatOwner() = runBlocking {
+        val store = Store()
+        val server = object : Gateway() {
+            override suspend fun load(owner: String): AssistantConsentDocument {
+                if (owner == "A") store.setPending(owner, true)
+                return doc
+            }
+            override suspend fun save(owner: String, document: AssistantConsentDocument, health: Boolean): AssistantConsentDocument {
+                store.setPending(owner, true)
+                return doc
+            }
+        }
+        val gateway = WithdrawalTrackingConsentGateway(server, store)
+        val controller = AssistantConsentController(this, { "A" }, gateway)
+        try {
+            controller.open(); yield()
+            assertEquals(ConsentRetry.REVOKE, controller.state.value.retry)
+            assertFalse(controller.state.value.allowed)
+            assertTrue(gateway.load("B").accepted)
+            store.setPending("A", false)
+            try {
+                gateway.save("A", document(), false)
+                fail("Late approval must not replace the pending withdrawal")
+            } catch (_: AssistantWithdrawalPendingException) { }
+            assertTrue(store.pending("A"))
+            assertFalse(store.pending("B"))
+        } finally { controller.close() }
+    }
+
+    @Test fun concurrentWithdrawalsFromSeparateScreensCannotClearEachOthersPendingState() = runBlocking {
+        val store = Store()
+        val releaseFirst = CompletableDeferred<Unit>()
+        val server = object : Gateway() {
+            override suspend fun revoke(owner: String) {
+                revokes++
+                if (revokes == 1) releaseFirst.await() else throw java.io.IOException("offline")
+            }
+        }
+        val first = WithdrawalTrackingConsentGateway(server, store)
+        val second = WithdrawalTrackingConsentGateway(server, store)
+        val firstRequest = launch(start = CoroutineStart.UNDISPATCHED) { first.revoke("A") }
+        val secondRequest = async(start = CoroutineStart.UNDISPATCHED) {
+            runCatching { second.revoke("A") }
+        }
+        try {
+            assertEquals(1, server.revokes)
+            assertTrue(store.pending("A"))
+            assertTrue(second.load("B").accepted)
+            releaseFirst.complete(Unit)
+            firstRequest.join()
+            assertTrue(secondRequest.await().exceptionOrNull() is java.io.IOException)
+            assertEquals(2, server.revokes)
+            assertTrue(store.pending("A"))
+            assertFalse(store.pending("B"))
+        } finally {
+            firstRequest.cancel()
+            secondRequest.cancel()
+        }
+    }
+
     @Test fun privacyIntentMustBeWrittenBeforeNetworkAndFailedWritePreventsCall() = runBlocking {
         val server = Gateway()
         val store = object : AssistantWithdrawalStore {
@@ -133,7 +193,7 @@ class AssistantConsentRecoveryTest {
     }
 
     @Test fun httpFailuresAreSafeAndDoNotBlameConnectionForMissingService() {
-        for (code in listOf(401,403,404,405,429,500,502,503,504)) {
+        for (code in listOf(401,403,404,405,429,500,502,503,504,520,522)) {
             assertTrue(consentFailureMessage(consentHttpFailure(code)).isNotBlank())
             assertFalse(consentFailureMessage(consentHttpFailure(code)).contains("PRIVATE"))
         }
@@ -141,7 +201,20 @@ class AssistantConsentRecoveryTest {
         assertEquals(ConsentFailure.FORBIDDEN, consentHttpFailure(403).failure)
         assertEquals(ConsentFailure.UNAVAILABLE, consentHttpFailure(404).failure)
         assertEquals(ConsentFailure.RATE_LIMIT, consentHttpFailure(429).failure)
+        assertEquals(ConsentFailure.UNAVAILABLE, consentHttpFailure(522).failure)
+        assertEquals(ConsentFailure.TIMEOUT, consentHttpFailure(504).failure)
         assertFalse(consentFailureMessage(consentHttpFailure(503)).contains("İnternet"))
         assertFalse(consentFailureMessage(java.io.IOException("PRIVATE_TOKEN")).contains("PRIVATE_TOKEN"))
+    }
+
+    @Test fun tlsFailureReportsSecureConnectionAndHidesInternalDetails() {
+        val message = consentFailureMessage(javax.net.ssl.SSLHandshakeException("PRIVATE_HOST"))
+        assertTrue(message.contains("güvenli bağlantı"))
+        assertFalse(message.contains("İnternet"))
+        assertFalse(message.contains("PRIVATE_HOST"))
+        val dnsMessage = consentFailureMessage(java.net.UnknownHostException("PRIVATE_HOST"))
+        assertTrue(dnsMessage.contains("adresine ulaşılamadı"))
+        assertFalse(dnsMessage.contains("PRIVATE_HOST"))
+        assertTrue(consentFailureMessage(java.io.IOException()).contains("İnternet"))
     }
 }
