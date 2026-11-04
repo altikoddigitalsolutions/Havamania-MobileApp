@@ -28,10 +28,13 @@ data class AssistantConsentUpdate(
     val health_consent_version: Int? = null, val health_consent_hash: String? = null
 )
 
+internal enum class ConsentOperation { LOAD, SAVE, REVOKE }
+
 internal data class AssistantConsentState(
     val document: AssistantConsentDocument? = null, val busy: Boolean = false,
     val visible: Boolean = false, val error: String? = null,
-    val retry: ConsentRetry? = null, val notice: String? = null, val withdrawalPending: Boolean = false
+    val retry: ConsentRetry? = null, val notice: String? = null, val withdrawalPending: Boolean = false,
+    val operation: ConsentOperation? = null, val attempt: Int = 0
 ) {
     val allowed: Boolean get() = !busy && !withdrawalPending && document?.let { it.isValid() && it.accepted } == true
 }
@@ -54,6 +57,19 @@ internal class AssistantConsentController(
     private var operation: Job? = null
     private val mutable = MutableStateFlow(AssistantConsentState())
     val state = mutable.asStateFlow()
+    private var dismissed = false
+    private var lastOperation: ConsentOperation? = null
+    private var attempt = 0
+
+    private fun beginOperation(kind: ConsentOperation) {
+        attempt = if (lastOperation == kind) attempt + 1 else 1
+        lastOperation = kind
+    }
+
+    private fun publish(next: AssistantConsentState) {
+        mutable.value = next.copy(visible = next.visible && !dismissed, attempt = attempt,
+            operation = if (next.busy) next.operation else null)
+    }
 
     private suspend fun <T> timed(block: suspend () -> T): T = try {
         withTimeout(timeoutMillis) { block() }
@@ -62,32 +78,38 @@ internal class AssistantConsentController(
         throw AssistantConsentServiceException(ConsentFailure.TIMEOUT)
     }
 
-    fun reset() { tasks.reset(); operation?.cancel(); mutable.value = AssistantConsentState() }
+    fun reset() { tasks.reset(); operation?.cancel(); dismissed = false; lastOperation = null; attempt = 0; mutable.value = AssistantConsentState() }
     fun close() { tasks.close() }
-    fun dismiss() { if (!mutable.value.busy) mutable.value = mutable.value.copy(visible = false) }
+    fun dismiss() { dismissed = true; mutable.value = mutable.value.copy(visible = false) }
     fun open() = load(review = true)
     fun retry() { if (mutable.value.retry == ConsentRetry.REVOKE || mutable.value.withdrawalPending) revoke() else open() }
 
     fun load(review: Boolean = false, showLoading: Boolean = review) {
+        dismissed = false
+        if (mutable.value.busy) {
+            publish(mutable.value.copy(visible = true))
+            return
+        }
         if (mutable.value.withdrawalPending) {
-            mutable.value = mutable.value.copy(visible = true)
+            publish(mutable.value.copy(visible = true))
             return
         }
         operation?.cancel()
-        mutable.value = AssistantConsentState(busy = true, visible = showLoading)
+        beginOperation(ConsentOperation.LOAD)
+        publish(AssistantConsentState(busy = true, visible = showLoading, operation = ConsentOperation.LOAD))
         operation = tasks.launch { owner ->
             try {
                 val doc = timed { gateway.load(owner) }
                 ensureActive()
                 if (!doc.isValid()) throw AssistantConsentServiceException(ConsentFailure.INVALID)
-                mutable.value = AssistantConsentState(document = doc, visible = review || !doc.accepted || doc.health_review_required)
+                publish(AssistantConsentState(document = doc, visible = review || !doc.accepted || doc.health_review_required))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 ensureActive()
                 val pending = e is AssistantWithdrawalPendingException
-                mutable.value = AssistantConsentState(visible = true, withdrawalPending = pending,
+                publish(AssistantConsentState(visible = true, withdrawalPending = pending,
                     retry = if (pending) ConsentRetry.REVOKE else ConsentRetry.LOAD,
-                    error = "Asistan izin metni alınamadı. " + consentFailureMessage(e))
+                    error = "Asistan izin metni alınamadı. " + consentFailureMessage(e)))
             }
         }
     }
@@ -96,33 +118,35 @@ internal class AssistantConsentController(
         val current = mutable.value
         val doc = current.document ?: return
         if (current.busy || current.withdrawalPending || !doc.isValid()) return
-        mutable.value = current.copy(busy = true, error = null)
+        dismissed = false
+        beginOperation(ConsentOperation.SAVE)
+        publish(current.copy(busy = true, error = null, operation = ConsentOperation.SAVE))
         operation = tasks.launch { owner ->
             try {
                 val updated = timed { gateway.save(owner, doc, health && doc.health != null) }
                 ensureActive()
                 require(updated.isValid())
-                mutable.value = AssistantConsentState(document = updated, visible = !updated.accepted)
+                publish(AssistantConsentState(document = updated, visible = !updated.accepted))
             } catch (e: CancellationException) { throw e }
             catch (e: AssistantConsentStaleException) {
                 try {
                     val updated = timed { gateway.load(owner) }
                     ensureActive()
                     require(updated.isValid())
-                    mutable.value = AssistantConsentState(document = updated.copy(accepted = false, health_accepted = false),
-                        visible = true, error = "Metin güncellendi. Lütfen yeni metni okuyup yeniden karar verin.")
+                    publish(AssistantConsentState(document = updated.copy(accepted = false, health_accepted = false),
+                        visible = true, error = "Metin güncellendi. Lütfen yeni metni okuyup yeniden karar verin."))
                 } catch (cancel: CancellationException) { throw cancel }
                 catch (failure: Exception) {
                     ensureActive()
-                    mutable.value = AssistantConsentState(visible = true, retry = ConsentRetry.LOAD,
-                        error = "Güncel metin alınamadı. " + consentFailureMessage(failure))
+                    publish(AssistantConsentState(visible = true, retry = ConsentRetry.LOAD,
+                        error = "Güncel metin alınamadı. " + consentFailureMessage(failure)))
                 }
             } catch (e: Exception) {
                 ensureActive()
                 val pending = e is AssistantWithdrawalPendingException
-                mutable.value = current.copy(visible = true, withdrawalPending = pending,
+                publish(current.copy(visible = true, withdrawalPending = pending,
                     retry = if (pending) ConsentRetry.REVOKE else null,
-                    error = "İzin kaydedilemedi. " + consentFailureMessage(e))
+                    error = "İzin kaydedilemedi. " + consentFailureMessage(e)))
             }
         }
     }
@@ -132,18 +156,20 @@ internal class AssistantConsentController(
         val current = mutable.value
         val blocked = current.copy(document = current.document?.copy(accepted = false, health_accepted = false),
             withdrawalPending = true, retry = ConsentRetry.REVOKE, notice = null)
-        mutable.value = blocked.copy(busy = true, error = null, visible = true)
+        dismissed = false
+        beginOperation(ConsentOperation.REVOKE)
+        publish(blocked.copy(busy = true, error = null, visible = true, operation = ConsentOperation.REVOKE))
         operation = tasks.launch { owner ->
             try {
                 timed { gateway.revoke(owner) }
                 ensureActive()
-                mutable.value = AssistantConsentState(document = blocked.document, visible = true,
-                    notice = "Uzak asistan izinleriniz geri çekildi.")
+                publish(AssistantConsentState(document = blocked.document, visible = true,
+                    notice = "Uzak asistan izinleriniz geri çekildi."))
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 ensureActive()
-                mutable.value = blocked.copy(busy = false, visible = true,
-                    error = "İzinlerin geri çekildiği doğrulanamadı. " + consentFailureMessage(e))
+                publish(blocked.copy(busy = false, visible = true,
+                    error = "İzinlerin geri çekildiği doğrulanamadı. " + consentFailureMessage(e)))
             }
         }
     }

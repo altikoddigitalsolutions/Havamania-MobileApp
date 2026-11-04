@@ -138,10 +138,19 @@ if (BuildConfig.DEBUG) {
                     if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
                             Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) return@LaunchedEffect
                     val destination = try {
-                        resolveNotificationTap(launch,
-                            { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
-                            { deletionManager.state.value.let { it.pending || it.busy } },
-                            NotificationDatabase.getDatabase(application).notificationDao()::getVisibleNotification)
+                        val dao = NotificationDatabase.getDatabase(application).notificationDao()
+                        NotificationInboxGate.withLock {
+                            resolveNotificationTap(launch,
+                                { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+                                { deletionManager.state.value.let { it.pending || it.busy } },
+                                markRead = { owner, id ->
+                                    try { dao.markAsRead(owner, listOf(id)) }
+                                    catch (_: android.database.sqlite.SQLiteException) {
+                                        Log.w("NotificationTap", "Could not mark notification as read")
+                                    }
+                                },
+                                load = dao::getVisibleNotification)
+                        }
                     } catch (error: kotlinx.coroutines.CancellationException) { throw error }
                     catch (_: Exception) { null }
                     if (pendingNotificationLaunch !== launch) return@LaunchedEffect

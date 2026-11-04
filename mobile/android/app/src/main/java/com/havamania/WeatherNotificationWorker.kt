@@ -131,7 +131,8 @@ class WeatherNotificationWorker(
         return postNotificationIfCurrent(uid, executionEpoch,
             { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
             { !canPublishFor(uid) || !PermissionHelper.canPostToChannel(applicationContext, channelId) },
-            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, uid).first() }) {
+            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, uid).first() },
+            stillReserved = { NotificationDatabase.getDatabase(applicationContext).notificationDao().ownsPendingDelivery(uid, item.id) }) {
             notificationManager.notify(notificationSystemTag(item), 0, notification)
         }
     }

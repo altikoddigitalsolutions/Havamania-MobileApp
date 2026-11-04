@@ -385,7 +385,8 @@ if (BuildConfig.DEBUG) {
         return postNotificationIfCurrent(item.userId, executionEpoch,
             { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
             { !canPublishFor(item.userId) || !PermissionHelper.canPostToChannel(applicationContext, channelId) },
-            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, item.userId).first() }) {
+            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, item.userId).first() },
+            stillReserved = { NotificationDatabase.getDatabase(applicationContext).notificationDao().ownsPendingDelivery(item.userId, item.id) }) {
             notificationManager.notify(notificationSystemTag(item), 0, notification)
         }
     }

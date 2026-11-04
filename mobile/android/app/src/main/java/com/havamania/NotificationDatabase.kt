@@ -39,6 +39,9 @@ interface NotificationDao {
     @Query("SELECT EXISTS(SELECT 1 FROM notification_pending_deliveries WHERE notificationId = :id)")
     suspend fun hasPendingDelivery(id: String): Boolean
 
+    @Query("SELECT EXISTS(SELECT 1 FROM notification_pending_deliveries WHERE notificationId = :id AND userId = :uid AND processId = :processId)")
+    suspend fun ownsPendingDelivery(uid: String, id: String, processId: String = NotificationDeliveryProcess.id): Boolean
+
     @Query("SELECT id FROM notifications WHERE userId = :uid AND deduplicationKey = :key LIMIT 1")
     suspend fun notificationIdWithKey(uid: String, key: String): String?
 

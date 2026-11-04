@@ -14,6 +14,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -29,7 +32,7 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
     var health by remember(doc?.text_hash, doc?.health?.text_hash, doc?.accepted, doc?.health_accepted, doc?.health_sync_required) {
         mutableStateOf(doc?.accepted == true && doc.health_accepted)
     }
-    Dialog(onDismissRequest = { if (!state.busy) onDismiss() },
+    Dialog(onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(color = colors.surface, shape = MaterialTheme.shapes.large,
             modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().heightIn(max = maxHeight)
@@ -40,8 +43,22 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Bu izinler uzak yapay zekâ asistanı içindir. Cihazda hazırlanan hava yanıtları bu servise gönderilmez.",
                         color = colors.textSecondary)
-                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (state.busy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(when (state.operation) {
+                            ConsentOperation.SAVE -> "İzin seçimleri kaydediliyor…"
+                            ConsentOperation.REVOKE -> "İzinlerin geri çekilmesi doğrulanıyor…"
+                            else -> "İzin metni yükleniyor…"
+                        }, color = colors.textPrimary)
+                        Text("Bu pencereyi kapatabilirsiniz; işlem arka planda tamamlanır.", color = colors.textSecondary)
+                    }
+                    state.error?.let {
+                        Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                            if (state.attempt > 1) Text("Deneme ${state.attempt}",
+                                style = MaterialTheme.typography.labelMedium, color = colors.textSecondary)
+                        }
+                    }
                     state.notice?.let { Text(it, color = colors.textPrimary) }
                     if (state.withdrawalPending) Text(
                         "İşlem tamamlanana kadar bu cihazdan uzak asistana gönderim durduruldu.", color = colors.textSecondary)
@@ -81,8 +98,8 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
                     if (state.retry != ConsentRetry.REVOKE && state.notice == null) TextButton(onClick = onRevoke, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                         Text("Uzak asistan izinlerini geri çek")
                     }
-                    TextButton(onClick = onDismiss, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (state.notice != null || state.withdrawalPending) "Kapat" else "Vazgeç")
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (state.busy || state.notice != null || state.withdrawalPending) "Kapat" else "Vazgeç")
                     }
                 }
             }

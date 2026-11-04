@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -38,13 +39,21 @@ class NotificationTapDeviceTest {
             val dao = db.notificationDao()
             val item = NotificationItem(id = "test", userId = "test-owner", actionType = NotificationActionType.WEATHER_HOME)
             val request = NotificationTapRequest(item.userId, item.id, NotificationSessionEpoch.capture())
+            suspend fun tap(owner: String) = resolveNotificationTap(request, { owner }, { false },
+                markRead = { uid, id -> dao.markAsRead(uid, listOf(id)) }, load = dao::getVisibleNotification)
+            dao.insert(item.copy(id = "other", userId = "other"))
             dao.reserveForDelivery(item)
-            assertNull(resolveNotificationTap(request, { item.userId }, { false }, dao::getVisibleNotification))
+            assertNull(tap(item.userId))
             dao.completeDelivery(item.userId, item.id)
-            assertEquals(Routes.WEATHER_ROOT, resolveNotificationTap(request, { item.userId }, { false }, dao::getVisibleNotification))
-            assertNull(resolveNotificationTap(request, { "other" }, { false }, dao::getVisibleNotification))
+            assertEquals(1, dao.getUnreadCount(item.userId).first())
+            assertNull(tap("other"))
+            assertEquals(1, dao.getUnreadCount(item.userId).first())
+            assertEquals(Routes.WEATHER_ROOT, tap(item.userId))
+            assertEquals(Routes.WEATHER_ROOT, tap(item.userId))
+            assertEquals(0, dao.getUnreadCount(item.userId).first())
+            assertEquals(1, dao.getUnreadCount("other").first())
             dao.delete(item.userId, listOf(item.id))
-            assertNull(resolveNotificationTap(request, { item.userId }, { false }, dao::getVisibleNotification))
+            assertNull(tap(item.userId))
         } finally { db.close() }
     }
 }

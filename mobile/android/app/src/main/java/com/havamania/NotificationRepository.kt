@@ -34,16 +34,16 @@ if (BuildConfig.DEBUG) {
     suspend fun markAllAsRead(uid: String) = dao.markAllAsRead(uid)
 
     suspend fun delete(uid: String, ids: List<String>) {
-        if (ids.isNotEmpty()) dao.delete(uid, ids)
+        if (ids.isNotEmpty()) NotificationInboxGate.withLock { dao.delete(uid, ids) }
     }
 
     suspend fun deleteAll(uid: String) {
-        dao.deleteAll(uid)
+        NotificationInboxGate.withLock { dao.deleteAll(uid) }
     }
 
     suspend fun deleteByCategory(uid: String, category: NotificationCategory) {
         try {
-            dao.deleteByCategory(uid, category.name)
+            NotificationInboxGate.withLock { dao.deleteByCategory(uid, category.name) }
         } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
                 Log.e(TAG, "Failed to delete by category: $category", e)
@@ -106,7 +106,7 @@ if (BuildConfig.DEBUG) {
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
             }
-            dao.deleteAll(uid)
+            NotificationInboxGate.withLock { dao.deleteAll(uid) }
             val demoList = DefaultNotifications.create(uid)
             demoList.forEach { dao.insert(it) }
             if (BuildConfig.DEBUG) {

@@ -40,27 +40,30 @@ class HavamaniaMessagingService : FirebaseMessagingService() {
                 withTimeout(3000) {
                     if (!ownsSession() || !ThemeManager.getNotificationsEnabled(applicationContext, uid).first()) return@withTimeout
                     val dao = NotificationDatabase.getDatabase(applicationContext).notificationDao()
-                    deliverFcmRecord(uid, envelope, ::ownsSession,
-                        { item -> dao.reserveForDelivery(item).let { if (it > 0) it else -1L } }, dao::delete,
-                        complete = { dao.completeDelivery(it.userId, it.id) },
-                        recovery = NotificationDeliveryRecovery.shared) { item ->
-                        if (System.currentTimeMillis() / 1000 >= envelope.expiresAt ||
-                            !PermissionHelper.hasNotificationPermission(applicationContext)) return@deliverFcmRecord false
-                        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        val channel = "critical_weather"
-                        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
-                            NotificationChannel(channel, "Kritik Hava Uyarıları", NotificationManager.IMPORTANCE_HIGH))
-                        val pending = notificationTapPendingIntent(applicationContext, item)
-                        val notification = NotificationCompat.Builder(applicationContext, channel)
-                            .setSmallIcon(R.mipmap.ic_launcher).setContentTitle(item.title).setContentText(item.message)
-                            .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
-                            .setContentIntent(pending).setOnlyAlertOnce(true).setAutoCancel(true).build()
-                        currentCoroutineContext().ensureActive()
-                        postNotificationIfCurrent(uid, epoch, { auth.currentUser?.uid },
-                            { !ownsSession() || System.currentTimeMillis() / 1000 >= envelope.expiresAt ||
-                                !PermissionHelper.canPostToChannel(applicationContext, channel) },
-                            enabled = { ThemeManager.getNotificationsEnabled(applicationContext, uid).first() }) {
-                            manager.notify(notificationSystemTag(item), 0, notification)
+                    withNotificationDeliveryLock {
+                        deliverFcmRecord(uid, envelope, ::ownsSession,
+                            { item -> dao.reserveForDelivery(item).let { if (it > 0) it else -1L } }, dao::delete,
+                            complete = { dao.completeDelivery(it.userId, it.id) },
+                            recovery = NotificationDeliveryRecovery.shared) { item ->
+                            if (System.currentTimeMillis() / 1000 >= envelope.expiresAt ||
+                                !PermissionHelper.hasNotificationPermission(applicationContext)) return@deliverFcmRecord false
+                            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            val channel = "critical_weather"
+                            if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
+                                NotificationChannel(channel, "Kritik Hava Uyarıları", NotificationManager.IMPORTANCE_HIGH))
+                            val pending = notificationTapPendingIntent(applicationContext, item)
+                            val notification = NotificationCompat.Builder(applicationContext, channel)
+                                .setSmallIcon(R.mipmap.ic_launcher).setContentTitle(item.title).setContentText(item.message)
+                                .setStyle(NotificationCompat.BigTextStyle().bigText(item.message))
+                                .setContentIntent(pending).setOnlyAlertOnce(true).setAutoCancel(true).build()
+                            currentCoroutineContext().ensureActive()
+                            postNotificationIfCurrent(uid, epoch, { auth.currentUser?.uid },
+                                { !ownsSession() || System.currentTimeMillis() / 1000 >= envelope.expiresAt ||
+                                    !PermissionHelper.canPostToChannel(applicationContext, channel) },
+                                enabled = { ThemeManager.getNotificationsEnabled(applicationContext, uid).first() },
+                                stillReserved = { dao.ownsPendingDelivery(uid, item.id) }) {
+                                manager.notify(notificationSystemTag(item), 0, notification)
+                            }
                         }
                     }
                 }

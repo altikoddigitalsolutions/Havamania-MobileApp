@@ -23,6 +23,7 @@ internal fun notificationTapPendingIntent(context: Context, item: NotificationIt
 
 internal suspend fun resolveNotificationTap(
     request: NotificationTapRequest, currentOwner: () -> String?, blocked: () -> Boolean,
+    markRead: suspend (String, String) -> Unit = { _, _ -> },
     load: suspend (String, String) -> NotificationItem?
 ): String? {
     fun allowed() = request.epoch == NotificationSessionEpoch.capture() &&
@@ -32,5 +33,8 @@ internal suspend fun resolveNotificationTap(
     val item = load(request.owner, request.id) ?: return null
     currentCoroutineContext().ensureActive()
     if (!allowed() || item.userId != request.owner || item.id != request.id) return null
-    return notificationDestination(item)
+    val destination = notificationDestination(item) ?: return null
+    if (!item.isRead) markRead(request.owner, request.id)
+    currentCoroutineContext().ensureActive()
+    return destination.takeIf { allowed() }
 }

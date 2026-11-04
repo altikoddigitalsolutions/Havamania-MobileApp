@@ -9,6 +9,9 @@ import kotlinx.coroutines.sync.withLock
 
 private val localNotificationDeliveryMutex = Mutex()
 
+internal suspend fun <T> withNotificationDeliveryLock(block: suspend () -> T): T =
+    localNotificationDeliveryMutex.withLock { block() }
+
 internal enum class LocalNotificationDelivery { POSTED, ALREADY_RECORDED, SKIPPED }
 
 /** Reservations persist until native post is acknowledged or the owned attempt is released. */
