@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -37,18 +38,16 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 
 class WeatherPremiumActivity : ComponentActivity() {
-    private var pendingNotificationLaunch by mutableStateOf<NotificationTapRequest?>(null)
+    private val notificationTap by viewModels<NotificationTapViewModel>()
 
-    private fun captureNotificationLaunch(incoming: Intent): Boolean {
+    private fun captureNotificationLaunch(incoming: Intent, restoring: Boolean = false): Boolean {
         if (incoming.action?.startsWith(NOTIFICATION_ACTION_PREFIX) != true &&
             !incoming.hasExtra(NOTIFICATION_OWNER) && !incoming.hasExtra(NOTIFICATION_ID)) return false
-        val owner = incoming.getStringExtra(NOTIFICATION_OWNER)
-        val allowed = canOpenOwnedNotification(owner,
+        notificationTapRequest(incoming,
             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
-            AccountDeletionManager.getInstance(application).state.value.let { it.pending || it.busy })
-        pendingNotificationLaunch = if (allowed && !incoming.getStringExtra(NOTIFICATION_ID).isNullOrBlank()) {
-            NotificationTapRequest(owner!!, incoming.getStringExtra(NOTIFICATION_ID)!!, NotificationSessionEpoch.capture())
-        } else null
+            AccountDeletionManager.getInstance(application).state.value.let { it.pending || it.busy },
+            restoring = restoring
+        )?.let { notificationTap.pending = it }
         // NavHost must not consume this automatically before the owner check.
         setIntent(Intent(incoming).apply {
             data = null
@@ -66,7 +65,6 @@ class WeatherPremiumActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
-        captureNotificationLaunch(intent)
 
         // Initialize MapLibre before any MapView is created
 if (BuildConfig.DEBUG) {
@@ -92,6 +90,7 @@ if (BuildConfig.DEBUG) {
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        captureNotificationLaunch(intent, restoring = savedInstanceState != null)
 
         setContent {
             HavamaniaTheme {
@@ -123,20 +122,17 @@ if (BuildConfig.DEBUG) {
                 val navigationOwner = authViewModel.currentUser?.uid
                 val navController = key(navigationOwner) { rememberNavController() }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route ?: Routes.WEATHER_ROOT
+                val activeRoute = navBackStackEntry?.destination?.route
+                val currentRoute = activeRoute ?: Routes.WEATHER_ROOT
 
                 var appState by remember { mutableStateOf("splash") }
-                LaunchedEffect(pendingNotificationLaunch, navigationOwner, appState, isReady, currentRoute, profileState) {
-                    val launch = pendingNotificationLaunch ?: return@LaunchedEffect
-                    if (launch.epoch != NotificationSessionEpoch.capture() ||
-                        !canOpenOwnedNotification(launch.owner, navigationOwner,
-                            deletionManager.state.value.let { it.pending || it.busy })) {
-                        pendingNotificationLaunch = null
+                LaunchedEffect(notificationTap.pending, navigationOwner, appState, isReady, activeRoute, deletionState.busy) {
+                    val launch = notificationTap.pending ?: return@LaunchedEffect
+                    if (!launch.isCurrent(navigationOwner, deletionManager.state.value.let { it.pending || it.busy })) {
+                        notificationTap.pending = null
                         return@LaunchedEffect
                     }
-                    if (appState != "main" || !isReady) return@LaunchedEffect
-                    if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
-                            Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) return@LaunchedEffect
+                    if (appState != "main" || !isReady || !canNavigateFromNotification(activeRoute)) return@LaunchedEffect
                     val destination = try {
                         val dao = NotificationDatabase.getDatabase(application).notificationDao()
                         NotificationInboxGate.withLock {
@@ -153,9 +149,14 @@ if (BuildConfig.DEBUG) {
                         }
                     } catch (error: kotlinx.coroutines.CancellationException) { throw error }
                     catch (_: Exception) { null }
-                    if (pendingNotificationLaunch !== launch) return@LaunchedEffect
-                    pendingNotificationLaunch = null
-                    if (destination != null) navController.navigate(destination) { launchSingleTop = true }
+                    if (notificationTap.pending !== launch) return@LaunchedEffect
+                    notificationTap.pending = null
+                    if (destination != null && launch.isCurrent(
+                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+                            deletionManager.state.value.let { it.pending || it.busy }
+                        )) {
+                        navController.navigate(destination) { launchSingleTop = true }
+                    }
                 }
 
                 // Splash Screen Minimum Duration Timer

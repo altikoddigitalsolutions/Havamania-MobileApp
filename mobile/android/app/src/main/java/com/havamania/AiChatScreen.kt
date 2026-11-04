@@ -183,7 +183,7 @@ fun AiChatScreen(
                     }
 
                     AssistantSectionLabel("NELER YAPABİLİRİM?")
-                    FeatureCards(themeColors, themeStyles) { prompt ->
+                    FeatureCards(themeColors, hasTrip = activeTrip != null) { prompt ->
                         viewModel.sendMessage(prompt)
                     }
 

@@ -1,6 +1,5 @@
 package com.havamania
 
-import java.net.URLEncoder
 import java.net.URLDecoder
 
 internal const val NOTIFICATION_OWNER = "notification_owner_uid"
@@ -15,10 +14,10 @@ internal fun notificationDestination(item: NotificationItem): String? = when (it
     NotificationActionType.DAILY_FORECAST, NotificationActionType.UV_DETAIL,
     NotificationActionType.WEATHER_ALERT -> Routes.WEATHER_ROOT
     NotificationActionType.TRAVEL_CALENDAR -> Routes.CALENDAR_ROOT
-    NotificationActionType.TRAVEL_DETAIL -> item.targetId?.takeIf {
-        it.isNotBlank() && it.length <= 200 && it.none(Char::isISOControl)
-    }?.let { "${Routes.CALENDAR_ROOT}?focusId=${URLEncoder.encode(it, "UTF-8").replace("+", "%20")}" }
-        ?: Routes.CALENDAR_ROOT
+    NotificationActionType.TRAVEL_DETAIL ->
+        (item.targetId?.takeIf(::validTripId) ?: item.relatedTripId?.takeIf(::validTripId))
+            ?.let(Routes::calendarTrip)
+            ?: Routes.CALENDAR_ROOT
     NotificationActionType.WEEKLY_SUMMARY -> Routes.AI_ROOT
     NotificationActionType.APP_UPDATE -> Routes.PROFILE_ROOT
     NotificationActionType.NONE -> when (item.deepLinkTarget) {
@@ -43,7 +42,8 @@ private fun legacyTripNotificationDestination(target: String?): String? {
     }
     if (raw.isBlank() || raw.any { it in "/?#&" }) return null
     val id = try { URLDecoder.decode(raw.replace("+", "%2B"), "UTF-8") } catch (_: IllegalArgumentException) { return null }
-    if (id.isBlank() || id.length > 200 || id.any(Char::isISOControl)) return null
-    val encoded = URLEncoder.encode(id, "UTF-8").replace("+", "%20")
-    return if (route) Routes.routeWeather(encoded) else "${Routes.CALENDAR_ROOT}?focusId=$encoded"
+    if (!validTripId(id)) return null
+    return if (route) Routes.routeWeather(id) else Routes.calendarTrip(id)
 }
+
+private fun validTripId(id: String) = id.isNotBlank() && id.length <= 200 && id.none(Char::isISOControl)

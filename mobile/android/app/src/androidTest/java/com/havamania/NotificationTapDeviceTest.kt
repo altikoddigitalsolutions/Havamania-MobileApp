@@ -2,7 +2,10 @@ package com.havamania
 
 import android.content.Intent
 import android.os.Build
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.ViewModelProvider
 import androidx.room.Room
+import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -11,6 +14,33 @@ import org.junit.Test
 
 class NotificationTapDeviceTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    @Test fun pendingTapSurvivesActivityRecreationWithoutReplayingAfterConsumption() {
+        val request = NotificationTapRequest("test-owner", "test-event", NotificationSessionEpoch.capture())
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { ViewModelProvider(it)[NotificationTapViewModel::class.java].pending = request }
+            scenario.recreate()
+            scenario.onActivity {
+                val state = ViewModelProvider(it)[NotificationTapViewModel::class.java]
+                assertSame(request, state.pending)
+                state.pending = null
+            }
+            scenario.recreate()
+            scenario.onActivity { assertNull(ViewModelProvider(it)[NotificationTapViewModel::class.java].pending) }
+        }
+    }
+
+    @Test fun onlyOwnedValidNotificationIntentsCanReplaceThePendingLaunch() {
+        val item = NotificationItem(id = "test-event", userId = "test-owner")
+        val intent = notificationTapIntent(context, item)
+        assertEquals(item.id, notificationTapRequest(intent, item.userId, false)?.id)
+        assertNull(notificationTapRequest(intent, item.userId, false, restoring = true))
+        assertEquals(item.id, notificationTapRequest(intent, item.userId, false)?.id)
+        assertNull(notificationTapRequest(intent, "other-owner", false))
+        assertNull(notificationTapRequest(intent, item.userId, true))
+        assertNull(notificationTapRequest(Intent(intent).setAction(Intent.ACTION_VIEW), item.userId, false))
+        assertNull(notificationTapRequest(Intent(intent).putExtra(NOTIFICATION_ID, "bad\nid"), item.userId, false))
+    }
 
     @Test fun pendingIntentIdentityIsImmutableDistinctPerEventAndDoesNotClearAppTask() {
         val one = NotificationItem(id = "test-one", userId = "test-owner", deduplicationKey = "test-weather-one")

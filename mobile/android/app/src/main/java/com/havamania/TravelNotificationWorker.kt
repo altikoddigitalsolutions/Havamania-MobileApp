@@ -114,6 +114,8 @@ class TravelNotificationWorker(
                     createdAt = System.currentTimeMillis(),
                     eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
                     deepLinkTarget = "havamania://app/calendar?focusId=${Uri.encode(plan.id)}",
+                    actionType = NotificationActionType.TRAVEL_DETAIL,
+                    targetId = plan.id,
                     relatedTripId = plan.id,
                     actionLabel = "Analizi Gör",
                     travelData = travelData,

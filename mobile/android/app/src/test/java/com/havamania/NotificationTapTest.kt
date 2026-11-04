@@ -9,6 +9,15 @@ class NotificationTapTest {
     private val item = NotificationItem(id = "event", userId = "a", actionType = NotificationActionType.WEATHER_HOME)
     private fun request() = NotificationTapRequest("a", item.id, NotificationSessionEpoch.capture())
 
+    @Test fun navigationWaitsForAnActualNonAuthBackStackEntry() {
+        for (route in listOf(null, Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
+            Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) {
+            assertFalse(canNavigateFromNotification(route))
+        }
+        assertTrue(canNavigateFromNotification(Routes.WEATHER_ROOT))
+        assertTrue(canNavigateFromNotification(Routes.NOTIFICATION_CENTER))
+    }
+
     @Test fun ownVisibleWeatherItemResolvesFromStoredAction() = runBlocking {
         assertEquals(Routes.WEATHER_ROOT, resolveNotificationTap(request(), { "a" }, { false }) { uid, id ->
             assertEquals("a", uid); assertEquals(item.id, id); item
@@ -40,6 +49,14 @@ class NotificationTapTest {
         }
     }
 
+    @Test fun deletionStartingDuringMarkReadPreventsNavigation() = runBlocking {
+        var blocked = false
+        val tap = request()
+        assertNull(resolveNotificationTap(tap, { "a" }, { blocked },
+            markRead = { _, _ -> blocked = true }) { _, _ -> item.copy(isRead = false) })
+        assertFalse(tap.isCurrent("a", blocked))
+    }
+
     @Test fun invalidIdsAvoidDiskAndCancellationIsNotConvertedToNavigation() = runBlocking {
         for (id in listOf("", "\ninvalid", "x".repeat(1025))) {
             assertNull(resolveNotificationTap(request().copy(id = id), { "a" }, { false }) { _, _ -> fail("Invalid ID"); item })
@@ -49,10 +66,20 @@ class NotificationTapTest {
         }.exceptionOrNull() is CancellationException)
     }
 
+    @Test fun typedTripDetailUsesRelatedTripIdWhenPrimaryTargetIsMissingOrInvalid() {
+        val trip = NotificationItem(category = NotificationCategory.TRAVEL,
+            actionType = NotificationActionType.TRAVEL_DETAIL, relatedTripId = "trip +&id")
+        val fallback = "${Routes.CALENDAR_ROOT}?focusId=trip%20%2B%26id"
+        assertEquals(fallback, notificationDestination(trip))
+        assertEquals(fallback, notificationDestination(trip.copy(targetId = "\n")))
+        assertEquals("${Routes.CALENDAR_ROOT}?focusId=primary", notificationDestination(trip.copy(targetId = "primary")))
+        assertEquals(Routes.CALENDAR_ROOT, notificationDestination(trip.copy(relatedTripId = " ")))
+    }
+
     @Test fun legacyTripTargetIsCanonicalizedAndCannotInjectArgumentsOrAnotherRoute() {
         val trip = NotificationItem(category = NotificationCategory.TRAVEL,
             deepLinkTarget = "havamania://app/route/trip%20%26city%3Dother%2Fid")
-        assertEquals(Routes.routeWeather("trip%20%26city%3Dother%2Fid"), notificationDestination(trip))
+        assertEquals("sub_route_weather/trip%20%26city%3Dother%2Fid", notificationDestination(trip))
         assertEquals("${Routes.CALENDAR_ROOT}?focusId=trip%2Bid",
             notificationDestination(trip.copy(deepLinkTarget = "havamania://app/calendar?focusId=trip%2Bid")))
         for (target in listOf("havamania://app/route/a/b", "havamania://app/route/a?x=b",
@@ -61,5 +88,11 @@ class NotificationTapTest {
             assertNull(notificationDestination(trip.copy(deepLinkTarget = target)))
         }
         assertNull(notificationDestination(trip.copy(category = NotificationCategory.GENERAL)))
+    }
+
+    @Test fun routeWeatherTreatsRawTripIdAsOnePathSegment() {
+        assertEquals("sub_route_weather/%C4%B0zmir%2F%2B%3F%23%252F",
+            Routes.routeWeather("İzmir/+?#%2F"))
+        assertEquals("sub_route_weather/ordinary-id", Routes.routeWeather("ordinary-id"))
     }
 }

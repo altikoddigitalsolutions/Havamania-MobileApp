@@ -24,9 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
 import java.time.LocalDateTime
+import java.util.Locale
 
 @Composable
 fun AssistantWeatherCard(data: WeatherData, c: HavamaniaColors) {
@@ -296,13 +298,17 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "BUGÜN ÖZET",
+                text = stringResource(
+                    if (data.isStale) R.string.assistant_weather_summary_cached_title
+                    else R.string.assistant_weather_summary_title
+                ),
                 style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                 color = c.textMuted
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "${data.cityName} için bugün hava ${data.condition.lowercase()}. Sıcaklık ${data.temperature} civarında seyrediyor.",
+                text = stringResource(R.string.assistant_weather_summary, data.cityName,
+                    data.condition.lowercase(Locale.forLanguageTag("tr")), data.temperature),
                 style = HavamaniaTheme.typography.bodyMedium,
                 color = c.textPrimary
             )
@@ -311,20 +317,18 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
 }
 
 @Composable
-fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        val features = listOf(
-            Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", "Ankara'da hava nasıl?"),
-            Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", "Seyahatim için hava uygun mu?"),
-            Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?")
-        )
+fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, onFeatureClick: (String) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        val features = buildList {
+            add(Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", todayWeatherPrompt))
+            if (hasTrip) add(Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", tripWeatherPrompt))
+            add(Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?"))
+        }
 
-        features.forEach { (icon, title, prompt) ->
+        val card: @Composable (Modifier, Triple<ImageVector, String, String>) -> Unit = { modifier, (icon, title, prompt) ->
             Surface(
-                modifier = Modifier.weight(1f).heightIn(min = 100.dp).clickable { onFeatureClick(prompt) },
+                onClick = { onFeatureClick(prompt) },
+                modifier = modifier.heightIn(min = 100.dp),
                 color = c.surface.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, c.border.copy(alpha = 0.1f))
@@ -338,13 +342,20 @@ fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = title,
-                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                        style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                         textAlign = TextAlign.Center,
-                        color = c.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        color = c.textPrimary
                     )
                 }
+            }
+        }
+        if (maxWidth / LocalDensity.current.fontScale < 420.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                features.forEach { card(Modifier.fillMaxWidth(), it) }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                features.forEach { card(Modifier.weight(1f), it) }
             }
         }
     }
@@ -353,12 +364,12 @@ fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String
 @Composable
 fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean) {
     val suggestions = mutableListOf(
-        "Bugün hava nasıl?",
+        todayWeatherPrompt,
         "Yağmur bekleniyor mu?",
         "Yarın hava nasıl?"
     )
     if (hasTrip) {
-        suggestions.add("Seyahatim için hava uygun mu?")
+        suggestions.add(tripWeatherPrompt)
     }
 
     Column(
@@ -388,6 +399,9 @@ fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, ha
         }
     }
 }
+
+private const val todayWeatherPrompt = "Bugün hava nasıl?"
+private const val tripWeatherPrompt = "Seyahatim için hava uygun mu?"
 
 @Composable
 fun TypingIndicator(c: HavamaniaColors) {

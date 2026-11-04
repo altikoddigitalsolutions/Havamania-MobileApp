@@ -4,7 +4,7 @@ Ana kontrol listesinde 59 geniş kabul maddesinin 22’si tamamlandı işaretli,
 
 | Öncelik | Çalışma paketi | Açık kapanış koşulu |
 |---|---|---|
-| 1 | Asistan izinleri ve platform bağlantısı | 3 Kasım ekran raporu açık: retry/revoke/cancel tepkisizliği öncelikli. Bekleme sırasında kapatma ve geç sonucun pencereyi yeniden açması düzeltildi; gerçek uygulama/servis nedeni henüz doğrulanmadı. Canlı izin metni, kayıt/geri çekme ve asistan istek sözleşmesi ayrıca doğrulanacak. |
+| 1 | Asistan izinleri ve platform bağlantısı | 4 Kasım tablet geri bildirimiyle üç düğmenin çalıştığı doğrulandı. İzin metninin yüklenmesini engelleyen adres erişim hatası açık. Cihazın `api.havamania.com` DNS çözümlemesi, HTTPS erişimi ve ardından canlı izin metni, kayıt/geri çekme ve asistan istek sözleşmesi doğrulanacak. |
 | 2 | Bildirim dayanıklılığı | Aktif teslim sırasında liste temizleme yarışı yerelde doğrulandı. Dokunma sonrası okundu ve sayaç davranışı yerelde doğrulandı. Gerçek tepsi, izin, kanal ve Activity yaşam döngüsü açık. |
 | 3 | Tüm ekran ve durumların görsel denetimi | Boş/dolu/yükleme/hata/offline, telefon/tablet, açık/koyu/mevsimsel tema, yatay/klavye, büyük yazı/TalkBack; yazım, tipografi, geçiş ve premium bütünlük. |
 | 4 | Hesap, Firebase ve senkronizasyon | A/B izolasyonu, silme/kurtarma, profil/şehir/seyahat/AI/tercih senkronizasyonu, çok cihaz çatışmaları ve avatar/Storage/Blaze. |
@@ -30,3 +30,33 @@ Bu tur doğrulaması: 403 JVM testi (0 hata), debug APK ve SM-T500 Android 12 ü
 4 Kasım izin penceresi hesap ayrımı: Hesap değiştikten sonra eski pencerenin kaydetme, geri çekme ve yeniden deneme işlemleri engelleniyor. Yeni hesap kendi izin metnini ayrı yükleyebiliyor. Yeni yerel regresyon testi dahil 409 Android JVM testi geçti ve debug APK üretildi. Tablet ve canlı hizmet doğrulaması açık.
 
 4 Kasım izin hizmeti hata mesajları: DNS, TLS, zaman aşımı ve HTTP 5xx hataları kullanıcıya ayrı nedenlerle gösteriliyor. Teknik sunucu adresleri hata metnine taşınmıyor. Yeni yerel regresyon testi dahil 410 Android JVM testi geçti ve debug APK üretildi. Tablet ve canlı hizmet doğrulaması açık.
+
+4 Kasım 12:49 tablet geri bildirimi: Tekrar dene, Uzak asistan izinlerini geri çek ve Vazgeç çalışıyor. Deneme 3 ekranındaki adres erişim hatası ayrı takip ediliyor. Android hedefi https://api.havamania.com/v1/chatbot/consent ve depodaki GET/POST yolları eşleşiyor. Yerel backend izin testleri 13/13 geçti (2 bağımlılık uyarısı). Canlı DNS ve HTTPS yerel test kapsamı dışında, kök neden doğrulanmadı.
+
+4 Kasım bildirim yönlendirme: Başka hesaba ait, engellenmiş veya biçimi geçersiz bildirim Intent’leri açılışta bekleyen geçerli yönlendirmeyi değiştiremiyor. 410 Android JVM testi ve SM-T500 Android 12 üzerinde 3/3 izole bildirim testi geçti. Debug uygulama ve test APK’ları derlendi. Gerçek bildirim tepsisinden soğuk ve sıcak açılış ayrıca doğrulanacak.
+
+4 Kasım bildirim açılış sırası: Bildirime dokunma işlemi gezinme yığınında gerçek bir ekran oluşana kadar bekliyor. Giriş ve kişiselleştirme ekranları yönlendirmeye kapalı. Yeni regresyon dahil 411 Android birim testi geçti ve debug APK üretildi. Bildirim tepsisinden soğuk ve sıcak açılışın gerçek cihaz doğrulaması açık.
+
+4 Kasım bildirim ve ekran yeniden oluşturma: Bekleyen bildirim yönlendirmesi Activity kapsamlı ViewModel içinde korunuyor. İşlenmiş istek ikinci yeniden oluşturmada tekrar açılmıyor. SM-T500 Android 12 üzerinde izole ActivityScenario yeniden oluşturma testi dahil 4/4 bildirim cihaz testi geçti. Gerçek bildirim tepsisi ve süreç yeniden başlatma doğrulaması açık.
+
+4 Kasım eski bildirim açılış komutu: Activity geri yüklenirken Android’in eski açılış Intent’i yeniden sıraya alınmıyor. Aynı süreçte bekleyen istek ViewModel’de korunuyor; yeni dokunuşlar normal akıştan geçiyor. SM-T500 Android 12 üzerinde 4/4 izole bildirim testi geçti. Gerçek bildirim tepsisi ve süreç ölümü sonrası bekleyen yönlendirme açık.
+
+4 Kasım bildirim ve hesap silme: Bekleyen bildirim, hesap silme başlayınca iptal ediliyor. Ekran açılmadan hemen önce güncel hesap, oturum ve silme durumu tekrar kontrol ediliyor. Okundu işlemi sırasında başlayan silme için yeni regresyon dahil 412 Android birim testi geçti ve debug APK üretildi. Gerçek bildirim tepsisi doğrulaması açık.
+
+4 Kasım seyahat bildirimi hedefi: Analiz bildirimleri hedef seyahat kimliğini doğrudan kaydediyor. Birincil hedefi eksik veya geçersiz olan seyahat detay kayıtları geçerli ilişkili seyahat kimliğini kullanıyor. Eski bağlantı biçimi destekleniyor. 413 Android birim testi geçti ve debug APK üretildi. Gerçek bildirim tepsisi doğrulaması açık.
+
+4 Kasım seyahat yönlendirme kodlaması: Takvim ve bildirimler seyahat kimliğini ortak rota oluşturucularına ham değer olarak iletiyor. Özel karakterler rota oluşturulurken bir kez kodlanıyor. 414 Android birim testi geçti ve debug APK üretildi. Gerçek bildirim tepsisi doğrulaması açık.
+
+4 Kasım seyahat gezinmesi cihaz testi: SM-T500 Android 12 üzerinde izole Compose NavHost testi geçti. Özel karakter ve yüzde dizisi içeren seyahat kimliği güzergâh ve takvim hedeflerine özgün değeriyle ulaşıyor. Gerçek bildirim tepsisinden uçtan uca açılış açık.
+
+4 Kasım Android bildirim teslimi: SM-T500 Android 12 üzerinde geçici yerel bildirimin sistemdeki PendingIntent'i çalıştırıldı. İlk bildirim izole test Activity'sini açtı, ikincisi aynı Activity örneğine yeni istek olarak ulaştı. 1/1 test geçti. Tepsiye dokunma otomasyonu iki koşuda test satırına erişemedi; gerçek Havamania ekranına tepsiden uçtan uca geçiş açık. Geçici bildirimler ve test kanalı temizlendi.
+
+4 Kasım Asistan hava özeti: Başlık ve sıcaklık metni sadeleştirildi, Türkçe küçük harf dönüşümü düzeltildi ve metinler Android kaynaklarına taşındı. 414 Android birim testi ve debug APK derlemesi başarılı. Yeni metnin cihazda görsel kontrolü açık.
+
+4 Kasım Asistan hava özeti cihaz kontrolü: Eski veri Son kaydedilen hava özeti başlığıyla ayrılıyor. SM-T500 Android 12 üzerinde yüzde 200 yazı ölçeğiyle açık temada güncel ve koyu temada eski özet için 2/2 izole Compose testi geçti. İlk koşuda kilitli ekran nedeniyle iki test arayüze erişemedi; kilit açıldıktan sonra aynı testler geçti. 414 birim testi ve debug APK derlemesi başarılı.
+
+4 Kasım Asistan hızlı işlem kartları: Dar alan veya büyük yazıda kartlar alt alta, yeterli alanda yan yana. Sabit 9 sp ve iki satır kesmesi kaldırıldı. SM-T500 Android 12 üzerinde 320 dp ve yüzde 200 yazıyla üç kartın görünürlüğü ve soru tetiklemesi doğrulandı. İki hava özeti regresyonuyla birlikte 3/3 cihaz testi geçti. Tam ekran görsel denetimi açık.
+
+4 Kasım Asistan hava kartı: Hava durumunu yorumla kartı sabit Ankara sorusu yerine mevcut hava verisindeki şehri kullanabilen Bugün hava nasıl? sorusunu gönderiyor. SM-T500 Android 12 üzerinde kart etkileşimi ve iki hava özeti regresyonu dahil 3/3 izole Compose testi geçti. Canlı hava yanıtı bu testin kapsamı dışında.
+
+4 Kasım Asistan seyahatli ve seyahatsiz durum: Seyahat havasını değerlendir kartı hızlı seyahat sorusuyla aynı koşula bağlı ve aktif seyahat varsa gösteriliyor. SM-T500 Android 12 üzerinde 320 dp ve yüzde 200 yazı ölçeğinde kartın plansızken gizlenmesi, plan geldiğinde görünmesi ve doğru soruyu göndermesi doğrulandı. 3/3 izole Compose testi geçti.
