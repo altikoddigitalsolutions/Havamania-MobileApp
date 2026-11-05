@@ -60,3 +60,71 @@ Bu tur doğrulaması: 403 JVM testi (0 hata), debug APK ve SM-T500 Android 12 ü
 4 Kasım Asistan hava kartı: Hava durumunu yorumla kartı sabit Ankara sorusu yerine mevcut hava verisindeki şehri kullanabilen Bugün hava nasıl? sorusunu gönderiyor. SM-T500 Android 12 üzerinde kart etkileşimi ve iki hava özeti regresyonu dahil 3/3 izole Compose testi geçti. Canlı hava yanıtı bu testin kapsamı dışında.
 
 4 Kasım Asistan seyahatli ve seyahatsiz durum: Seyahat havasını değerlendir kartı hızlı seyahat sorusuyla aynı koşula bağlı ve aktif seyahat varsa gösteriliyor. SM-T500 Android 12 üzerinde 320 dp ve yüzde 200 yazı ölçeğinde kartın plansızken gizlenmesi, plan geldiğinde görünmesi ve doğru soruyu göndermesi doğrulandı. 3/3 izole Compose testi geçti.
+
+5 Kasım Asistan mesaj sınırı: 4.000 karakteri aşan taslak korunuyor, alan uyarı gösteriyor ve gönderim devre dışı kalıyor. Android ve backend emoji içeren metinlerde Unicode kod noktalarını sayıyor. 415 Android birim testi geçti, debug APK üretildi. Mesaj alanının klavye açıkken cihaz doğrulaması açık.
+
+5 Kasım Asistan mesaj alanı cihaz testi: SM-T500 Android 12 üzerinde 4.001 karakterlik taslak korunuyor, uyarı görünür ve gönderme kapalı. Metin kısaltılınca uyarı kalkıyor ve yalnız kısa metin gönderim callback'ine ulaşıyor. 4/4 izole Compose testi geçti. Tam ekranda sistem klavyesiyle yerleşim ve canlı gönderim açık.
+
+5 Kasım Asistan ve sistem klavyesi: Launcher Activity için adjustResize eklendi. Asistan ekranında klavye açıkken alt sekme çubuğu gizleniyor ve kapanınca geri geliyor. 415 Android birim testi ve debug APK derlemesi başarılı. Tam ekranda gerçek cihaz klavyesiyle yerleşim doğrulaması açık.
+
+5 Kasım Asistan klavye cihaz testi: SM-T500 Android 12 üzerinde izole kenardan kenara Scaffold ile gerçek sistem klavyesi açıldı. Gönder düğmesinin yukarı taşındığı ve dokunmayla mesajı yerel callback'e ilettiği doğrulandı. 5/5 Compose testi geçti. Tam Asistan ekranında alt sekme çubuğunun gizlenmesi ve yatay yerleşim doğrulaması açık.
+
+5 Kasım Asistan alt boşluğu: Sekme çubuğu açıkken ayrılmış sistem gezinme boşluğu Asistan mesaj alanında ikinci kez uygulanmıyor. Klavye açılınca sekme çubuğu yer ayırmadığından mesaj alanı klavye boşluğunu kendi uyguluyor. 415 Android birim testi ve debug APK derlemesi başarılı. Tam ekran yatay cihaz doğrulaması açık.
+
+5 Kasım Asistan yatay klavye: SM-T500 Android 12 üzerinde izole test Activity'si yataya çevrildi. Gerçek sistem klavyesi açılınca Gönder düğmesi yukarı taşındı ve dokunmayla kısa mesaj yerel callback'e ulaştı. 6/6 izole cihaz testi geçti. Tam Asistan ekranında alt sekme çubuğunun gizlenmesi ve canlı gönderim doğrulaması açık.
+
+5 Kasım Asistan mesaj taslağı: Taslak ekran bileşeni yerine Asistan ViewModel'inde bellekte tutuluyor. Activity yeniden oluşturulurken aynı ViewModel taslağı koruyor, oturum değişiminde ve sohbet sıfırlanırken taslak temizleniyor. 415 birim testi geçti, debug ve cihaz test APK'ları derlendi. Tam Asistan ekranında döndürme ve hesap değişimi cihaz doğrulaması açık.
+
+5 Kasım Asistan taslağı ve izin bekleme: Gönder düğmesi taslağı hemen silmiyor. ViewModel, izin gerekiyorsa metni koruyor ve yalnız istek başladığında hâlâ aynı olan taslağı temizliyor. 415 Android birim testi, debug APK ve SM-T500 üzerinde 6/6 izole Compose testi başarılı. Cihaz testi kabul edilmeyen gönderimde taslağın kaldığını doğruluyor. Gerçek izin hizmetiyle uçtan uca akış açık.
+
+5 Kasım Asistan bekleyen taslak düzenlemesi: Kullanıcı izin bekleyen taslağı değiştirirse veya silerse eski gönderim iptal ediliyor. İzin onayı eski metni göndermiyor; güncel taslak yeni bir gönderim bekliyor. 415 Android birim testi ve debug APK derlemesi başarılı. Bu senaryonun izin hizmetiyle uçtan uca doğrulaması açık.
+
+5 Kasım Asistan eşzamanlı gönderim: Yanıt beklenirken hızlı işlem kartları, hazır sorular ve seyahat kartındaki SOR düğmesi devre dışı. İkinci istek izin akışına alınmıyor, daha önce izin bekleyen istek devam eden iş bitene kadar bekliyor. 415 Android birim testi ve SM-T500 üzerinde 6/6 izole Compose testi geçti.
+
+5 Kasım hava önerisinden Asistan'a geçiş: Asistan meşgulse öneri bekliyor, gönderim akışı isteği kabul edince temizleniyor. Bekleyen öneri hesap değişiminde sıfırlanıyor. 415 Android birim testi ve debug APK derlemesi başarılı. Hava ekranından Asistan'a tam cihaz akışı açık.
+
+5 Kasım Asistan öneri ve izin sırası: Hava ekranından gelen öneri, izin penceresi açıkken veya daha önceki mesaj izin beklerken sırada kalıyor. Önceki mesaj izin sonrası işleniyor ve öneri gönderim boşalınca yeniden değerlendiriliyor. 415 Android birim testi ve debug APK derlemesi başarılı. İzin hizmeti ve öneriyle birleşik cihaz akışı açık.
+
+5 Kasım Asistan konuşma kaydırması: Yeni yanıt geldiğinde konuşmanın sonuna yakın olan kullanıcı için otomatik kaydırma sürüyor. Eski mesajları okurken gelen yanıt konumu değiştirmiyor. Yeni kullanıcı mesajı ve yazıyor göstergesi uygun durumda görünür alana alınıyor. 415 Android birim testi ve debug APK derlemesi başarılı. Uzun konuşma kaydırması için cihaz doğrulaması açık.
+
+5 Kasım uzun Asistan konuşması cihaz testi: SM-T500 Android 12 üzerinde 30 mesajlı izole listede uygulamanın kaydırma davranışı doğrulandı. Eski mesaj okunurken gelen yanıt konumu korudu, liste sonundayken yeni yanıt görünür alana taşındı. 415 Android birim testi ve 7/7 cihaz testi geçti.
+
+5 Kasım Asistan son mesaja dönüş: Uzun konuşmada son öğe görünüm dışında kaldığında Son mesaja git düğmesi gösteriliyor. Düğme son öğeye götürüyor ve hedef görünür olunca gizleniyor. SM-T500 Android 12 üzerinde 7/7 izole cihaz testi ve 415 Android birim testi geçti.
+
+5 Kasım Asistan kaydırma geri yükleme: Önceki mesaj sayısı liste konumuyla birlikte saklanıyor, böylece ekran durumu geri yüklenirken eski mesajı okuyan kullanıcı sona atılmıyor. SM-T500 Android 12 üzerinde Compose kayıtlı durum geri yükleme senaryosu dahil 7/7 cihaz testi ve 415 birim testi geçti.
+
+5 Kasım Asistan geçmiş sohbet hatası: Boş hata ekranındaki Tekrar dene artık aynı kayıtlı sohbeti yeniden yüklemeyi başlatıyor. Hata ekranı karşılama içeriğiyle üst üste gelmiyor ve mesaj alanı bu durumda gizleniyor. 415 Android birim testi ve debug APK derlemesi başarılı. Kayıt yükleme hatasının cihazda uçtan uca doğrulaması açık.
+
+5 Kasım kayıtlı Asistan sohbeti yükleme durumu: İlk açılış ve yeniden deneme sırasında Sohbet yükleniyor göstergesi var. Karşılama kartları ve mesaj alanı yükleme sırasında görünmüyor. 415 Android birim testi ve debug APK derlemesi başarılı. Yavaş yükleme ve yeniden deneme geçişlerinin cihaz doğrulaması açık.
+
+5 Kasım açık kayıtlı sohbet ve ekran yeniden oluşturma: ViewModel aynı sohbeti daha önce yüklediyse yeniden oluşturulan ekranın yükleme çağrısını atlıyor. Devam eden yanıt ve bellekteki mesajlar tekrar yüklemeyle kesilmiyor. Başarısız ilk yükleme yeniden denenebilir. 415 Android birim testi ve debug APK derlemesi başarılı. Tam cihaz akışı açık.
+
+5 Kasım kayıtlı sohbet ilk yüklemesi: Aynı kayıt hâlâ okunuyorsa ekran yeniden oluşturulduğunda mevcut işlem korunuyor. İşlem bitince, başarısız olunca veya iptal edilince yükleme işareti temizleniyor. 415 Android birim testi geçti ve debug APK üretildi. Yavaş yerel yükleme sırasında tam ekran döndürme doğrulaması açık.
+
+5 Kasım kayıtlı sohbet ve izin geri çekme: Geri çekme, cihazdaki kayıtlı sohbet okumasını yarıda kesmiyor. Devam eden asistan yanıtı iptal edilirse bekleme durumu temizleniyor. 415 Android birim testi geçti ve debug APK üretildi. Birleşik cihaz senaryosu açık.
+
+5 Kasım kayıtlı Asistan sohbetini bitirme: Kaydet ve bitir başarılı olduğunda eski sohbet kimliğini taşıyan ekran yeni sohbet ekranıyla değiştiriliyor. Böylece yeni sohbet eski kaydı yüklemeye çalışmıyor. 415 Android birim testi geçti ve debug APK üretildi. Kaydetme sonrası tam cihaz gezinmesi açık.
+
+5 Kasım sohbeti bitirme gezinmesi cihaz testi: SM-T500 Android 12 üzerinde izole NavHost ile eski sohbet kaydının yeni sohbetle değiştirildiği, kimliğin taşınmadığı ve Geri ile geçmişe dönüldüğü doğrulandı. Geçersiz kalan eski ekran callback'i mevcut ekranı değiştirmiyor. 2/2 gezinme testi ve 415 Android birim testi geçti. Gerçek sohbet kaydıyla uçtan uca doğrulama açık.
+
+5 Kasım sohbet kaydederken ekran yeniden oluşturma: Kaydetme artık Compose ekranı ayrılırken iptal edilmiyor, ViewModel ve hesap yaşam döngüsüne bağlı kalıyor. Kaydetme sürerken bekleme penceresi yeniden gösteriliyor. 415 Android birim testi geçti, debug APK üretildi. Gerçek kayıt sırasında ekran döndürme cihaz doğrulaması açık.
+
+5 Kasım yanıt sürerken sohbet kaydı: Yanıt beklenirken Kaydet düğmesi ve onay işlemi devre dışı. Kaydetme başlarken ViewModel'in en güncel mesaj listesi kullanılıyor. 415 Android birim testi geçti, debug APK üretildi. Gecikmeli yanıt ve kayıt geçişi cihaz doğrulaması açık.
+
+5 Kasım sohbet kaydı ve otomatik gönderim: Kaydetme sürerken ve başarı sonucu işlenirken hava önerisi veya izin onayı otomatik mesaj başlatamıyor. Kayıt durumu değişince bekleyen işlem yeniden değerlendiriliyor. 415 Android birim testi geçti, debug APK üretildi. Eşzamanlı kayıt ve öneri senaryosunun cihaz doğrulaması açık.
+
+5 Kasım Asistan geçmiş listesi: Yerel kayıtlar okunmadan boş geçmiş gösterilmiyor. Yerel okuma hatası, tekrar deneme düğmesiyle ayrı gösteriliyor. Başarılı boş sonuç boş geçmiş ekranına gidiyor. 415 Android birim testi ve debug APK derlemesi başarılı. Yükleme ve hata durumları cihaz doğrulaması açık.
+
+5 Kasım Asistan geçmiş listesi cihaz testi: SM-T500 Android 12 üzerinde izole Compose testi yükleme, hata, Tekrar dene ile yüklemeye dönüş ve başarılı boş sonucu doğruladı. 1/1 cihaz testi ve 415 Android birim testi geçti. Gerçek Room okuma hatası bu arayüz testinde oluşturulmadı.
+
+5 Kasım Asistan geçmişi yerel ve sunucu boş durumu: Cihazda kayıt yokken sunucu boşluğu doğrulanmadıysa cihaz kapsamlı mesaj gösteriliyor. Hesap geçmişinin boş olduğu mesaj yalnızca aynı hesaba ait sunucu doğrulamasıyla gösteriliyor. 415 Android birim testi ve SM-T500 üzerinde 1/1 izole cihaz testi geçti. Canlı senkronizasyon açık.
+
+5 Kasım Asistan geçmişi senkronizasyon hatası: Dinleyici hata verirse cihazdaki kayıtlar görünür kalıyor, eski sunucu boşluk doğrulaması kaldırılıyor ve kullanıcı dinleyiciyi yeniden başlatabiliyor. 415 Android birim testi ve debug APK derlemesi başarılı. Canlı Firebase hata ve yeniden bağlanma doğrulaması açık.
+
+5 Kasım Asistan geçmişi uyarı paneli: Senkronizasyon, yükleme ve silme uyarıları listeye bindirilmek yerine ölçülen bir alt alanda gösteriliyor. Uzun içerik panel içinde kaydırılıyor, sabit 100 dp liste boşluğu kaldırıldı. 415 Android birim testi ve debug APK derlemesi başarılı. Büyük yazı ve yatay kullanımda panel ile liste cihaz doğrulaması açık.
+
+5 Kasım geçmiş uyarı paneli cihaz senaryosu: 320 dp yükseklik ve yüzde 200 yazı ölçeğinde son sohbet satırı ile paneldeki yeniden deneme düğmesinin erişilebilirliğini kontrol eden test eklendi. 415 birim testi geçti ve cihaz paketi derlendi. Tablet koşusunda ekran kilitliydi ve iki test arayüz ağacına erişemedi; cihaz doğrulaması açık.
+
+5 Kasım geçmiş paneli yeniden test: Tablet kilidi açıldıktan sonra SM-T500 Android 12 üzerinde 2/2 cihaz testi geçti. 320 dp yükseklik ve yüzde 200 yazıyla son sohbet satırı görünür kaldı, uyarı panelindeki yeniden deneme düğmesine kaydırılıp dokunulabildi ve düğme liste alanıyla çakışmadı.
+
+5 Kasım Asistan geçmişi silme sırasında kartlar: Kartlar görünür kalıyor, açma ve silme işlemleri devre dışı. Dokunma anında da güncel silme durumu kontrol ediliyor. SM-T500 üzerinde 3/3 cihaz testi ve 415 birim testi başarılı. İlk koşuda yeni testin ekran boyutu sağlayıcısı eksikti, test kurulumu düzeltildikten sonra üçü de geçti. Gerçek silme işlemi bu arayüz testinde çalıştırılmadı.

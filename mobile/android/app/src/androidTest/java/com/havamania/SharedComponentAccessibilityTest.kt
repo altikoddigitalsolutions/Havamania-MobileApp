@@ -478,7 +478,7 @@ class SharedComponentAccessibilityTest {
 
     @Test fun sendingMessageHasAccessibleDisabledSendAction() {
         compose.setContent {
-            TestTheme { ChatInput({}, true, HavamaniaTheme.colors, HavamaniaStyles()) }
+            TestTheme { ChatInput("", {}, {}, true, HavamaniaTheme.colors, HavamaniaStyles()) }
         }
         compose.onNodeWithContentDescription("Mesaj gönder").assertIsNotEnabled()
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Yanıt bekleniyor"))

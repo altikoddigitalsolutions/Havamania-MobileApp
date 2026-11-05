@@ -6,6 +6,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonObject
 
+internal const val ASSISTANT_QUESTION_LIMIT = 4000
+
+internal fun assistantQuestionTooLong(question: String): Boolean =
+    question.codePointCount(0, question.length) > ASSISTANT_QUESTION_LIMIT
+
 internal fun assistantMessageForSend(
     messages: List<AltikodChatMessage>, prompt: String, isRetry: Boolean, requestId: String?
 ): AltikodChatMessage? {

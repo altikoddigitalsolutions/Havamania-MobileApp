@@ -7,6 +7,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AssistantRequestIdentityTest {
+    @Test fun questionLimitCountsUnicodeCodePointsLikeTheBackend() {
+        assertFalse(assistantQuestionTooLong("a".repeat(4000)))
+        assertFalse(assistantQuestionTooLong("🙂".repeat(4000)))
+        assertTrue(assistantQuestionTooLong("🙂".repeat(4000) + "a"))
+    }
     @Test fun retryUsesOriginalMessageWhileANewIdenticalQuestionGetsANewId() {
         val first = assistantMessageForSend(emptyList(), "Bir öneri sun", false, null)!!
         val retry = assistantMessageForSend(listOf(first), first.text, true, first.id)!!

@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">Havamania</string>
     <string name="assistant_weather_summary_title">Bugünün hava özeti</string>
+    <string name="assistant_message_too_long">Mesaj en fazla %1$d karakter olabilir.</string>
+    <string name="assistant_jump_to_latest">Son mesaja git</string>
+    <string name="assistant_history_loading">Sohbet yükleniyor…</string>
     <string name="assistant_weather_summary_cached_title">Son kaydedilen hava özeti</string>
     <string name="assistant_weather_summary">%1$s için hava durumu %2$s. Sıcaklık %3$s.</string>
     <string name="location_rationale_title">Konum İzni Gerekli</string>

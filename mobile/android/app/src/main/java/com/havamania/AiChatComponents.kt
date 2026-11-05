@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -222,13 +224,16 @@ fun AssistantActionButton(
 
 @Composable
 fun ChatInput(
+    text: String,
+    onTextChange: (String) -> Unit,
     onSend: (String) -> Unit,
     isSending: Boolean,
     c: HavamaniaColors,
     s: HavamaniaStyles,
     contextInfo: String? = null
 ) {
-    var text by remember { mutableStateOf("") }
+    val tooLong = assistantQuestionTooLong(text)
+    val canSend = text.isNotBlank() && !isSending && !tooLong
 
     Column(
         modifier = Modifier
@@ -253,9 +258,10 @@ fun ChatInput(
         ) {
             TextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
                 label = { Text("Asistana mesaj") },
+                isError = tooLong,
                 maxLines = 5,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -268,12 +274,11 @@ fun ChatInput(
 
             IconButton(
                 onClick = {
-                    if (text.isNotBlank() && !isSending) {
+                    if (canSend) {
                         onSend(text)
-                        text = ""
                     }
                 },
-                enabled = text.isNotBlank() && !isSending,
+                enabled = canSend,
                 modifier = Modifier.semantics {
                     contentDescription = "Mesaj gönder"
                     if (isSending) stateDescription = "Yanıt bekleniyor"
@@ -285,6 +290,14 @@ fun ChatInput(
                     Icon(Icons.AutoMirrored.Rounded.Send, null, tint = c.accent)
                 }
             }
+        }
+        if (tooLong) {
+            Text(
+                text = stringResource(R.string.assistant_message_too_long, ASSISTANT_QUESTION_LIMIT),
+                style = HavamaniaTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
         }
     }
 }
@@ -317,7 +330,7 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
 }
 
 @Composable
-fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, onFeatureClick: (String) -> Unit) {
+fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean, onFeatureClick: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         val features = buildList {
             add(Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", todayWeatherPrompt))
@@ -328,6 +341,7 @@ fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, onFeatureClick: (String) 
         val card: @Composable (Modifier, Triple<ImageVector, String, String>) -> Unit = { modifier, (icon, title, prompt) ->
             Surface(
                 onClick = { onFeatureClick(prompt) },
+                enabled = enabled,
                 modifier = modifier.heightIn(min = 100.dp),
                 color = c.surface.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(16.dp),
@@ -362,7 +376,7 @@ fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, onFeatureClick: (String) 
 }
 
 @Composable
-fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean) {
+fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean) {
     val suggestions = mutableListOf(
         todayWeatherPrompt,
         "Yağmur bekleniyor mu?",
@@ -378,7 +392,9 @@ fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, ha
     ) {
         suggestions.forEach { prompt ->
             Surface(
-                modifier = Modifier.fillMaxWidth().clickable { onSuggestionClick(prompt) },
+                onClick = { onSuggestionClick(prompt) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
                 color = c.accent.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))

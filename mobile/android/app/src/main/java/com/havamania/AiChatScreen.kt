@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
@@ -32,6 +36,7 @@ fun AiChatScreen(
     conversationId: String? = null,
     onRecommendationHandled: () -> Unit = {},
     onBack: () -> Unit,
+    onStartNewChat: () -> Unit,
     onNavigateToHistory: () -> Unit = {},
     onNavigateToTravelCreate: (String, String?) -> Unit,
     viewModel: AiChatViewModel = viewModel(),
@@ -42,12 +47,14 @@ fun AiChatScreen(
     val historyOwner by historyViewModel.detailOwner.collectAsStateWithLifecycle()
     val savingHistory = historySaveState == ProfileSaveState.Saving
     val consentState by viewModel.assistantConsent.state.collectAsStateWithLifecycle()
-    LaunchedEffect(consentState.allowed, consentState.visible) { viewModel.resumeAfterConsent() }
     AssistantConsentDialog(consentState, viewModel.assistantConsent::save, viewModel::revokeAssistantConsent,
         viewModel::retryAssistantConsent, viewModel::dismissAssistantConsent)
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    LaunchedEffect(consentState.allowed, consentState.visible, isSending, historySaveState) {
+        if (!historyViewModel.saveState.value.blocksAutomaticSend()) viewModel.resumeAfterConsent()
+    }
     val requestState by viewModel.requestState.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
     val currentWeatherData by viewModel.weatherData.collectAsStateWithLifecycle()
@@ -83,33 +90,33 @@ fun AiChatScreen(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    var showEndChatDialog by remember(historyOwner) { mutableStateOf(false) }
+    var showEndChatDialog by rememberSaveable(historyOwner) { mutableStateOf(false) }
     var showExitConfirm by remember(historyOwner) { mutableStateOf(false) }
-    DisposableEffect(historyViewModel) {
-        onDispose { historyViewModel.cancelSave() }
-    }
     LaunchedEffect(historySaveState) {
         if (historySaveState == ProfileSaveState.Saved) {
             viewModel.resetChat()
             showEndChatDialog = false
             historyViewModel.resetSaveState()
+            if (conversationId != null) onStartNewChat()
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
-    }
+    FollowAssistantConversation(listState, messages, isLoading)
 
-    LaunchedEffect(initialRecommendation) {
+    LaunchedEffect(initialRecommendation, isSending, consentState.visible, historySaveState) {
+        if (isSending || consentState.visible || historyViewModel.saveState.value.blocksAutomaticSend()) {
+            return@LaunchedEffect
+        }
         initialRecommendation?.let { rec ->
             val context = buildPersonalizedContext(aboutMe, userInterests)
-            viewModel.sendMessage(rec.message, systemContext = context)
-            onRecommendationHandled()
+            if (viewModel.sendRecommendation(rec.message, context)) onRecommendationHandled()
         }
     }
 
+    val awaitingHistory = conversationId != null && messages.isEmpty()
+    val historyLoadFailed = awaitingHistory && requestState == AssistantRequestState.ERROR
+    val historyLoading = awaitingHistory &&
+        (requestState == AssistantRequestState.IDLE || requestState == AssistantRequestState.LOADING)
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
@@ -122,8 +129,9 @@ fun AiChatScreen(
                         Icon(Icons.Rounded.PrivacyTip, "Asistan izinleri", tint = themeColors.textPrimary)
                     }
                     if (messages.isNotEmpty()) {
-                        IconButton(onClick = { showEndChatDialog = true }) {
-                            Icon(Icons.Rounded.Save, "Sohbeti kaydet", tint = themeColors.accent)
+                        IconButton(onClick = { showEndChatDialog = true }, enabled = !isSending && !savingHistory) {
+                            Icon(Icons.Rounded.Save, "Sohbeti kaydet",
+                                tint = if (isSending || savingHistory) themeColors.textMuted else themeColors.accent)
                         }
                     } else {
                         IconButton(onClick = onNavigateToHistory) {
@@ -134,10 +142,10 @@ fun AiChatScreen(
             )
         },
         bottomBar = {
-            ChatInput(
-                onSend = { prompt ->
-                    viewModel.sendMessage(prompt)
-                },
+            if (!historyLoadFailed && !historyLoading) ChatInput(
+                text = viewModel.draft,
+                onTextChange = viewModel::updateDraft,
+                onSend = viewModel::sendDraft,
                 isSending = isSending,
                 c = themeColors,
                 s = themeStyles
@@ -154,7 +162,15 @@ fun AiChatScreen(
                     else Modifier.fillMaxWidth()
                 )
         ) {
-            if (messages.isEmpty()) {
+            if (historyLoading) {
+                HavamaniaLoading(text = stringResource(R.string.assistant_history_loading))
+            } else if (historyLoadFailed) {
+                HavamaniaErrorState(
+                    title = "Sohbet yüklenemedi",
+                    description = "Sohbet geçmişi açılamadı. Yeniden deneyebilirsin.",
+                    onRetry = { viewModel.loadConversation(conversationId) }
+                )
+            } else if (messages.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     val firstName = profile?.name?.trim()?.split(" ")?.firstOrNull() ?: ""
                     val greeting = if (firstName.isNotEmpty() && firstName.lowercase() != "user") {
@@ -170,7 +186,7 @@ fun AiChatScreen(
                     PersonalizedContextCard("Tercihlerin ve ilgi alanların kaydedildi", themeColors)
 
                     if (activeTrip != null) {
-                        ActiveTripContextCard(activeTrip, themeColors) {
+                        ActiveTripContextCard(activeTrip, themeColors, enabled = !isSending) {
                             val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
                             val dateStr = activeTrip.startDate.format(formatter)
                             viewModel.sendMessage("${activeTrip.city} seyahati için $dateStr tarihindeki hava durumu nasıl?")
@@ -183,7 +199,7 @@ fun AiChatScreen(
                     }
 
                     AssistantSectionLabel("NELER YAPABİLİRİM?")
-                    FeatureCards(themeColors, hasTrip = activeTrip != null) { prompt ->
+                    FeatureCards(themeColors, hasTrip = activeTrip != null, enabled = !isSending) { prompt ->
                         viewModel.sendMessage(prompt)
                     }
 
@@ -193,7 +209,8 @@ fun AiChatScreen(
                             viewModel.sendMessage(prompt)
                         },
                         c = themeColors,
-                        hasTrip = activeTrip != null
+                        hasTrip = activeTrip != null,
+                        enabled = !isSending
                     )
 
                     Spacer(Modifier.height(32.dp))
@@ -219,35 +236,36 @@ fun AiChatScreen(
                         item { TypingIndicator(themeColors) }
                     }
                 }
+                JumpToLatestAssistantMessage(
+                    listState, messages.lastIndex + if (isLoading) 1 else 0,
+                    Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                )
             }
 
-            if (requestState == AssistantRequestState.ERROR && messages.isEmpty()) {
-                ErrorMessage(null) {
-                    val lastUserMsg = messages.lastOrNull { it.isUser }
-                    if (lastUserMsg != null) viewModel.sendMessage(lastUserMsg.text, isRetry = true, retryRequestId = lastUserMsg.id)
-                }
-            }
         }
     }
 
-    if (showEndChatDialog) {
+    if (showEndChatDialog || savingHistory) {
         HavamaniaDialog(
             onDismissRequest = { if (!savingHistory) showEndChatDialog = false },
             title = "Sohbeti Kaydet?",
             text = when (val state = historySaveState) {
                 ProfileSaveState.Saving -> "Kayıt onayı bekleniyor…"
                 is ProfileSaveState.Failed -> state.message
-                else -> "Bu sohbeti geçmişe kaydedip yeni bir sohbet başlatmak istiyor musun?"
+                else -> if (isSending) "Yanıt tamamlandığında sohbeti kaydedebilirsin."
+                    else "Bu sohbeti geçmişe kaydedip yeni bir sohbet başlatmak istiyor musun?"
             },
             confirmText = if (historySaveState is ProfileSaveState.Failed) "TEKRAR DENE" else "KAYDET VE BİTİR",
-            confirmEnabled = !savingHistory,
+            confirmEnabled = !savingHistory && !isSending && messages.isNotEmpty(),
             dismissEnabled = !savingHistory,
-            onConfirm = {
+            onConfirm = confirm@{
+                val snapshot = viewModel.messages.value
+                if (viewModel.isSending.value || snapshot.isEmpty()) return@confirm
                 historyViewModel.addHistoryItem(
                     id = viewModel.currentConversationId,
-                    title = messages.firstOrNull { it.isUser }?.text?.take(30) ?: "Hava Sohbeti",
-                    summary = messages.lastOrNull { !it.isUser }?.text?.take(100) ?: "",
-                    messages = messages,
+                    title = snapshot.firstOrNull { it.isUser }?.text?.take(30) ?: "Hava Sohbeti",
+                    summary = snapshot.lastOrNull { !it.isUser }?.text?.take(100) ?: "",
+                    messages = snapshot,
                     cityName = currentWeatherData?.cityName
                 )
             }
@@ -262,6 +280,44 @@ fun AiChatScreen(
             confirmText = "ÇIK",
             onConfirm = { historyViewModel.resetSaveState(); showExitConfirm = false; onBack() }
         )
+    }
+}
+
+private fun ProfileSaveState.blocksAutomaticSend(): Boolean =
+    this == ProfileSaveState.Saving || this == ProfileSaveState.Saved
+
+@Composable
+internal fun JumpToLatestAssistantMessage(listState: LazyListState, lastIndex: Int, modifier: Modifier = Modifier) {
+    val showButton by remember(listState, lastIndex) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.let { it.index < lastIndex } == true
+        }
+    }
+    val scope = rememberCoroutineScope()
+    if (showButton) {
+        FilledTonalButton(
+            onClick = { scope.launch { listState.scrollToItem(lastIndex) } },
+            modifier = modifier
+        ) {
+            Text(stringResource(R.string.assistant_jump_to_latest))
+        }
+    }
+}
+
+@Composable
+internal fun FollowAssistantConversation(listState: LazyListState, messages: List<AltikodChatMessage>, isLoading: Boolean) {
+    var previousMessageCount by rememberSaveable { mutableIntStateOf(0) }
+    val latestMessage = messages.lastOrNull()
+    LaunchedEffect(latestMessage?.id, messages.size, isLoading) {
+        val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+        val wasNearEnd = previousMessageCount == 0 ||
+            (lastVisibleIndex != null && lastVisibleIndex >= previousMessageCount - 1)
+        val newUserMessage = latestMessage?.isUser == true && messages.size > previousMessageCount
+        previousMessageCount = messages.size
+        if (messages.isNotEmpty() && (wasNearEnd || newUserMessage)) {
+            val target = if (isLoading) messages.size else messages.lastIndex
+            listState.animateScrollToItem(target)
+        }
     }
 }
 
@@ -296,15 +352,6 @@ private fun PersonalizedContextCard(text: String, c: HavamaniaColors) {
 }
 
 @Composable
-private fun ErrorMessage(detail: String? = null, onRetry: () -> Unit) {
-    HavamaniaErrorState(
-        title = "Asistan Hatası",
-        description = detail ?: "Asistan şu anda yanıt hazırlayamadı. Lütfen internet bağlantını kontrol et ve tekrar dene.",
-        onRetry = onRetry
-    )
-}
-
-@Composable
 fun AssistantSectionLabel(text: String) {
     Text(
         text = text.uppercase(),
@@ -321,7 +368,7 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 }
 
 @Composable
-private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: () -> Unit) {
+private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, enabled: Boolean, onAsk: () -> Unit) {
     val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr")) }
     val formattedDate = remember(trip.startDate) { trip.startDate.format(formatter) }
 
@@ -354,6 +401,7 @@ private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, onAsk: (
 
             TextButton(
                 onClick = onAsk,
+                enabled = enabled,
                 colors = ButtonDefaults.textButtonColors(contentColor = c.accent)
             ) {
                 Text("SOR", style = HavamaniaTheme.typography.button.copy(fontWeight = FontWeight.Black))

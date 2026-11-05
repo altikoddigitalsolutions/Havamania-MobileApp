@@ -8,11 +8,40 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 class TripNavigationDeviceTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun finishingSavedChatReplacesOnlyTheCurrentEntryAndBackReturnsToHistory() {
+        lateinit var nav: NavHostController
+        compose.setContent {
+            nav = rememberNavController()
+            NavHost(nav, startDestination = Routes.AI_HISTORY) {
+                composable(Routes.AI_HISTORY) {}
+                composable("${Routes.AI_ROOT}?conversationId={conversationId}",
+                    listOf(navArgument("conversationId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    })) {}
+            }
+        }
+        compose.runOnIdle {
+            nav.navigate("${Routes.AI_ROOT}?conversationId=saved-chat")
+            val saved = requireNotNull(nav.currentBackStackEntry)
+            assertEquals("saved-chat", saved.arguments?.getString("conversationId"))
+            assertTrue(nav.replaceSavedAssistantChat(saved))
+            assertNull(nav.currentBackStackEntry?.arguments?.getString("conversationId"))
+            assertFalse(nav.replaceSavedAssistantChat(saved))
+            assertTrue(nav.popBackStack())
+            assertEquals(Routes.AI_HISTORY, nav.currentDestination?.route)
+        }
+    }
 
     @Test fun routeAndCalendarReceiveTheOriginalTripId() {
         lateinit var nav: NavHostController

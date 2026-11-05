@@ -14,6 +14,9 @@ import kotlin.coroutines.coroutineContext
 import java.util.UUID
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.CancellationException
+
+internal enum class AiHistoryListStatus { LOADING, READY, FAILED }
 
 class AiHistoryViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
@@ -43,11 +46,19 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _historyItems = MutableStateFlow<List<AiHistoryEntity>>(emptyList())
     val historyItems: StateFlow<List<AiHistoryEntity>> = _historyItems.asStateFlow()
+    private val _listStatus = MutableStateFlow(AiHistoryListStatus.LOADING)
+    internal val listStatus = _listStatus.asStateFlow()
+    private val _syncFailed = MutableStateFlow(false)
+    internal val syncFailed = _syncFailed.asStateFlow()
+
+    fun retryHistorySync() {
+        val owner = currentUid
+        if (owner != "legacy" && _syncFailed.value && !_deleting.value) observeFirestoreHistory(owner)
+    }
 
     private val saveController = HistorySaveController(viewModelScope) { currentUid }
     internal val saveState = saveController.state
     fun resetSaveState() = saveController.reset()
-    fun cancelSave() = saveController.cancel()
 
     private val historyMutex = Mutex()
     private val mutationMutex = HistoryOperationLock.mutex
@@ -118,6 +129,8 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         _detailOwner.value = newUid
         clearEpoch++
         _confirmedEmptyOwner.value = null
+        _syncFailed.value = false
+        _listStatus.value = AiHistoryListStatus.LOADING
         _historyItems.value = emptyList()
         observeFirestoreHistory(newUid)
         loadHistoryForUid(newUid)
@@ -150,12 +163,20 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         historyListener = null
         if (uid == "legacy") return
 
+        _syncFailed.value = false
         val observationEpoch = clearEpoch
         historyListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("users").document(uid).collection("ai_history")
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, e ->
                 if (uid != currentUid || observationEpoch != clearEpoch) return@addSnapshotListener
-                if (e == null && snapshot != null) {
+                if (e != null) {
+                    historyListener?.remove()
+                    historyListener = null
+                    _confirmedEmptyOwner.value = null
+                    _syncFailed.value = true
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
                     accountTasks.launch launch@ { currentUid ->
                         if (observationEpoch != clearEpoch) return@launch
                         val items = snapshot.documents.mapNotNull { doc ->
@@ -187,10 +208,22 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         if (uid != currentUid) return
         accountTasks.launch launch@ { currentUid ->
             val epoch = clearEpoch
-            val items = dao.getAllAiHistory(uid)
+            if (_listStatus.value == AiHistoryListStatus.FAILED) _listStatus.value = AiHistoryListStatus.LOADING
+            val items = try {
+                dao.getAllAiHistory(uid)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (uid == this@AiHistoryViewModel.currentUid && epoch == clearEpoch) {
+                    _listStatus.value = AiHistoryListStatus.FAILED
+                }
+                return@launch
+            }
+            coroutineContext.ensureActive()
             if (uid != this@AiHistoryViewModel.currentUid || epoch != clearEpoch) return@launch
             _historyItems.value = items
-            if (uid != "legacy" && historyListener == null && !_deleting.value) {
+            _listStatus.value = AiHistoryListStatus.READY
+            if (uid != "legacy" && historyListener == null && !_deleting.value && !_syncFailed.value) {
                 observeFirestoreHistory(uid)
             }
         }

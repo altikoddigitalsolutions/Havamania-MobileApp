@@ -37,7 +37,7 @@ class AiAssistantRepository(
             return@withContext AssistantResult.ConfigurationError
         }
 
-        if (question.length > 4000) return@withContext AssistantResult.TooLong
+        if (assistantQuestionTooLong(question)) return@withContext AssistantResult.TooLong
         if (question.isBlank()) {
             return@withContext AssistantResult.QuestionRejected
         }

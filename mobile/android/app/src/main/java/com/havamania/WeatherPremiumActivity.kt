@@ -11,6 +11,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -18,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.HavamaniaTheme
@@ -25,6 +30,8 @@ import com.havamania.ui.theme.ThemeViewModel
 import com.havamania.*
 
 import androidx.navigation.NavDestination
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,6 +43,14 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+
+internal fun NavController.replaceSavedAssistantChat(source: NavBackStackEntry): Boolean {
+    if (currentBackStackEntry != source) return false
+    navigate(Routes.AI_ROOT) {
+        popUpTo(source.destination.id) { inclusive = true }
+    }
+    return true
+}
 
 class WeatherPremiumActivity : ComponentActivity() {
     private val notificationTap by viewModels<NotificationTapViewModel>()
@@ -230,7 +245,7 @@ if (BuildConfig.DEBUG) {
                     }
                 }
 
-                var pendingRecommendation by remember { mutableStateOf<HavamaniaRecommendation?>(null) }
+                var pendingRecommendation by remember(navigationOwner) { mutableStateOf<HavamaniaRecommendation?>(null) }
 
                 // Splash Screen Logic
                 if (appState == "splash") {
@@ -252,7 +267,12 @@ if (BuildConfig.DEBUG) {
                         Routes.AI_HISTORY,
                         Routes.NOTIFICATION_CENTER
                     )
-                    val shouldShowBottomBar = currentRoute !in hideBottomBarRoutes && !currentRoute.startsWith("sub_ai_history_detail") && !currentRoute.startsWith("sub_route_weather")
+                    val composingAssistantMessage = currentRoute == Routes.AI_ROOT &&
+                        WindowInsets.ime.getBottom(LocalDensity.current) > 0
+                    val shouldShowBottomBar = !composingAssistantMessage &&
+                        currentRoute !in hideBottomBarRoutes &&
+                        !currentRoute.startsWith("sub_ai_history_detail") &&
+                        !currentRoute.startsWith("sub_route_weather")
 
                     Scaffold(
                         containerColor = Color.Transparent, // Managed by HavamaniaScreen
@@ -281,12 +301,19 @@ if (BuildConfig.DEBUG) {
                             }
                         }
                     ) { innerPadding ->
+                        val tabBarPadding = PaddingValues(
+                            bottom = if (shouldShowBottomBar) innerPadding.calculateBottomPadding() else 0.dp
+                        )
                         // The background gradient is now handled globally in HavamaniaScreen
                         // for each page to allow specific overrides if needed.
                         // We use a root Box here for common layout values.
                         Box(modifier = Modifier
                             .fillMaxSize()
-                            .padding(bottom = if (shouldShowBottomBar) innerPadding.calculateBottomPadding() else 0.dp)
+                            .padding(tabBarPadding)
+                            .then(
+                                if (currentRoute == Routes.AI_ROOT) Modifier.consumeWindowInsets(tabBarPadding)
+                                else Modifier
+                            )
                         ) {
                             NavHost(
                                 navController = navController,
@@ -373,6 +400,11 @@ if (BuildConfig.DEBUG) {
                                         initialRecommendation = pendingRecommendation,
                                         conversationId = conversationId,
                                         onRecommendationHandled = { pendingRecommendation = null },
+                                        onStartNewChat = {
+                                            if (navController.replaceSavedAssistantChat(backStackEntry)) {
+                                                pendingRecommendation = null
+                                            }
+                                        },
                                         onBack = {
                                             pendingRecommendation = null
                                             navController.popBackStack()

@@ -2,6 +2,9 @@ package com.havamania
 
 import android.app.Application
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -32,10 +35,20 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
     internal val assistantConsent = AssistantConsentController(viewModelScope, { currentUid })
     private data class PendingConsentMessage(val prompt: String, val context: String?,
-        val retry: Boolean, val requestId: String?, val conversation: String, val owner: String)
+        val retry: Boolean, val requestId: String?, val conversation: String, val owner: String,
+        val fromDraft: Boolean = false)
     private var pendingConsentMessage: PendingConsentMessage? = null
 
-    fun revokeAssistantConsent() { pendingConsentMessage = null; requestRunner.reset(); assistantConsent.revoke() }
+    fun revokeAssistantConsent() {
+        pendingConsentMessage = null
+        if (loadingHistoryId == null) {
+            requestRunner.reset()
+            if (_requestState.value == AssistantRequestState.LOADING) {
+                _requestState.value = AssistantRequestState.IDLE
+            }
+        }
+        assistantConsent.revoke()
+    }
     fun retryAssistantConsent() {
         if (assistantConsent.state.value.withdrawalPending || assistantConsent.state.value.retry == ConsentRetry.REVOKE) {
             revokeAssistantConsent()
@@ -43,11 +56,11 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun dismissAssistantConsent() { pendingConsentMessage = null; assistantConsent.dismiss() }
     fun resumeAfterConsent() {
-        if (!assistantConsent.state.value.allowed || assistantConsent.state.value.visible) return
+        if (_isSending.value || !assistantConsent.state.value.allowed || assistantConsent.state.value.visible) return
         val pending = pendingConsentMessage ?: return
         pendingConsentMessage = null
         if (pending.owner == currentUid && pending.conversation == currentConversationId) {
-            sendMessage(pending.prompt, pending.context, pending.retry, pending.requestId)
+            sendMessage(pending.prompt, pending.context, pending.retry, pending.requestId, pending.fromDraft)
         }
     }
 
@@ -68,7 +81,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val _isSending = MutableStateFlow(false)
     val isSending: StateFlow<Boolean> = _isSending.asStateFlow()
 
+    private var loadingHistoryId: String? = null
     private val requestRunner = AssistantTaskRunner(viewModelScope, { currentUid }, { busy ->
+        if (!busy) loadingHistoryId = null
         _isLoading.value = busy
         _isSending.value = busy
     }, timeoutMillis = 75_000)
@@ -97,6 +112,16 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private var weatherJob: Job? = null
     private var fetchJob: Job? = null
 
+    var draft by mutableStateOf("")
+        private set
+
+    fun updateDraft(text: String) {
+        if (text != draft && pendingConsentMessage?.fromDraft == true) {
+            pendingConsentMessage = null
+        }
+        draft = text
+    }
+
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
@@ -109,6 +134,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         _isLoading.value = false
         _isSending.value = false
         _requestState.value = AssistantRequestState.IDLE
+        draft = ""
         _activeTravels.value = emptyList()
         userAboutMe = ""
         userInterests = emptySet()
@@ -256,22 +282,33 @@ if (BuildConfig.DEBUG) {
         return data
     }
 
-    fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false, retryRequestId: String? = null) {
-        if (userPrompt.isBlank()) return
+    fun sendDraft(prompt: String) {
+        if (prompt == draft) sendMessage(prompt, fromDraft = true)
+    }
+
+    fun sendRecommendation(prompt: String, context: String?): Boolean {
+        if (pendingConsentMessage != null || assistantConsent.state.value.visible) return false
+        return sendMessage(prompt, systemContext = context)
+    }
+
+    fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false,
+                    retryRequestId: String? = null, fromDraft: Boolean = false): Boolean {
+        if (_isSending.value || userPrompt.isBlank() || assistantQuestionTooLong(userPrompt)) return false
         if (!isLocalAssistantPrompt(userPrompt) && !assistantConsent.state.value.allowed) {
             pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, isRetry,
-                retryRequestId, currentConversationId, currentUid)
+                retryRequestId, currentConversationId, currentUid, fromDraft)
             assistantConsent.load(showLoading = true)
-            return
+            return true
         }
         if (isRetry && _messages.value.any { it.retryRequestId == retryRequestId &&
-                (it.retryNotBefore ?: 0L) > System.currentTimeMillis() }) return
+                (it.retryNotBefore ?: 0L) > System.currentTimeMillis() }) return false
         val userMessage = assistantMessageForSend(_messages.value, userPrompt, isRetry, retryRequestId)
-            ?: return
+            ?: return false
         val conversationId = currentConversationId
         var platformReply: AssistantResult.Success? = null
-        requestRunner.start(
+        return requestRunner.start(
             onStart = {
+                if (fromDraft && draft == userPrompt) draft = ""
                 _requestState.value = AssistantRequestState.LOADING
                 _messages.value = _messages.value.filterNot {
                     it.isFallback && it.retryRequestId == userMessage.id
@@ -379,6 +416,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun resetChat() {
+        draft = ""
         pendingConsentMessage = null
         requestRunner.reset()
         _messages.value = emptyList()
@@ -387,10 +425,15 @@ if (BuildConfig.DEBUG) {
     }
 
     fun loadConversation(conversationId: String) {
+        // The route effect runs again on recreation, while this conversation stays in the ViewModel.
+        if (currentConversationId == conversationId || loadingHistoryId == conversationId) return
         pendingConsentMessage = null
         requestRunner.reset()
         requestRunner.start(
-            onStart = { _requestState.value = AssistantRequestState.LOADING },
+            onStart = {
+                loadingHistoryId = conversationId
+                _requestState.value = AssistantRequestState.LOADING
+            },
             operation = { owner -> dao.getAiHistoryItem(conversationId, owner) },
             onSuccess = { history ->
                 if (history != null) {
