@@ -49,7 +49,11 @@ internal fun TripSyncStatusPanel(
                 disabledContentColor = colors.textPrimary.copy(alpha = 0.6f)
             )
         ) {
-            Text(if (retrying) "Eşitleniyor…" else if (isOnline) "Yeniden dene" else "Bağlantı bekleniyor")
+            Text(when {
+                !isOnline -> "Bağlantı bekleniyor"
+                retrying -> "Eşitleniyor…"
+                else -> "Yeniden dene"
+            })
         }
     }
 }

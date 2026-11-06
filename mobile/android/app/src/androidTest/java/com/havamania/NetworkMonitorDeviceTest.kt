@@ -3,18 +3,35 @@ package com.havamania
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.ParcelFileDescriptor
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.test.platform.app.InstrumentationRegistry
-import kotlinx.coroutines.channels.Channel
+import com.havamania.ui.theme.HavamaniaTheme
+import java.time.LocalDate
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 
 class NetworkMonitorDeviceTest {
-    @Test fun activeObserverReportsWifiLossAndRecovery() = runBlocking {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun weatherAndTripSyncReportWifiLossAndRecovery() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testWifiToggle") == "true")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         fun shell(command: String): String =
@@ -27,19 +44,67 @@ class NetworkMonitorDeviceTest {
         check(shell("settings get global wifi_on") == "1")
         check(initialNetwork?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true)
 
-        val changes = Channel<Boolean>(Channel.UNLIMITED)
-        val observer = launch {
-            ConnectivityManagerNetworkMonitor(context).isOnline.collect { changes.send(it) }
+        val monitor = ConnectivityManagerNetworkMonitor(context)
+        val weather = WeatherData(cityName = "İzmir", timezone = "Europe/Istanbul")
+        val retrying = mutableStateOf(true)
+        compose.setContent {
+            val online by monitor.isOnline.collectAsStateWithLifecycle(initialValue = null)
+            HavamaniaTheme {
+                val isOnline = online
+                if (isOnline != null) {
+                    Column {
+                        TripSyncStatusPanel(
+                            pendingUploads = 1,
+                            pendingDeletions = 1,
+                            retrying = retrying.value,
+                            isOnline = isOnline,
+                            uploadError = null,
+                            deletionError = null,
+                            onRetry = {}
+                        )
+                        Box(Modifier.weight(1f)) {
+                            WeatherSuccessContent(
+                                data = weather,
+                                selectedHourlyWeather = null,
+                                selectedForecastDate = LocalDate.now(ForecastTime.zone(weather.timezone)),
+                                selectedDailyForecast = null,
+                                recommendation = null,
+                                onSelectHour = {},
+                                onSelectDaily = {},
+                                scrollState = rememberScrollState(),
+                                onAskAiClick = {},
+                                isOnline = isOnline
+                            )
+                        }
+                    }
+                }
+            }
         }
+        val city = compose.onNodeWithText("İZMİR")
+        val offlineLabel = "Çevrimdışı hava verisi"
+        val warning = compose.onNodeWithText(offlineLabel, substring = true)
         try {
-            assertEquals(true, withTimeout(15_000) { changes.receive() })
+            city.assertIsDisplayed()
+            warning.assertDoesNotExist()
+            compose.onNodeWithText("Eşitleniyor…").assertIsNotEnabled()
             shell("svc wifi disable")
-            assertEquals(false, withTimeout(25_000) { changes.receive() })
+            compose.waitUntil(25_000) {
+                compose.onAllNodesWithText(offlineLabel, substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            warning.assertIsDisplayed()
+            city.assertIsDisplayed()
+            compose.onNodeWithText("Bağlantı bekleniyor").assertIsNotEnabled()
+            compose.onNodeWithText("1 seyahat değişikliği eşitlenmeyi bekliyor.").assertIsDisplayed()
+            compose.onNodeWithText("1 seyahat silme işlemi tamamlanmayı bekliyor.").assertIsDisplayed()
+            compose.runOnIdle { retrying.value = false }
             shell("svc wifi enable")
-            assertEquals(true, withTimeout(60_000) { changes.receive() })
+            compose.waitUntil(60_000) {
+                compose.onAllNodesWithText(offlineLabel, substring = true).fetchSemanticsNodes().isEmpty()
+            }
+            city.assertIsDisplayed()
+            compose.onNodeWithText("Yeniden dene").assertIsEnabled()
         } finally {
             shell("svc wifi enable")
-            observer.cancel()
         }
     }
 

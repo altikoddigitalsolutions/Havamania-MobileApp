@@ -812,7 +812,7 @@ fun PremiumWeatherContent(
                 Spacer(Modifier.width(6.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text((districtName ?: cityName).uppercase(), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
+                        Text((districtName ?: cityName).uppercase(java.util.Locale.forLanguageTag("tr")), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Şehir Seçiciyi Aç", tint = secondaryColor, modifier = Modifier.size(16.dp))
                     }
                     Text("Konumu değiştir", style = HavamaniaTheme.typography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))

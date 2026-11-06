@@ -9,6 +9,9 @@ import com.havamania.ui.theme.AssistantTone
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import com.google.firebase.auth.FirebaseAuth
 import com.havamania.NetworkMonitor
 import com.havamania.ConnectivityManagerNetworkMonitor
@@ -25,6 +28,16 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.toObject
 import kotlinx.coroutines.tasks.await
+
+internal suspend fun retryTripQueueAfterActiveAttempt(
+    previousAttempt: Job?,
+    isCurrentSession: () -> Boolean,
+    retry: () -> Unit
+) {
+    previousAttempt?.join()
+    currentCoroutineContext().ensureActive()
+    if (isCurrentSession()) retry()
+}
 
 class TravelViewModel(application: Application) : AndroidViewModel(application) {
     private val database = WeatherDatabase.getDatabase(application)
@@ -63,6 +76,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     private val _pendingUploads = MutableStateFlow(0)
     val pendingUploads = _pendingUploads.asStateFlow()
     private var uploadRetryJob: kotlinx.coroutines.Job? = null
+    private var deletionRetryJob: kotlinx.coroutines.Job? = null
 
     private val _plans = MutableStateFlow<List<TravelPlan>>(emptyList())
     val plans: StateFlow<List<TravelPlan>> = _plans.asStateFlow()
@@ -137,10 +151,18 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
     init {
         auth.addAuthStateListener(authListener)
         viewModelScope.launch {
-            networkMonitor.isOnline.distinctUntilChanged().collect { online ->
+            networkMonitor.isOnline.distinctUntilChanged().collectLatest { online ->
                 if (online) {
-                    retryPendingTripDeletions()
-                    retryPendingTripUploads()
+                    val session = _sessionVersion.value
+                    val owner = currentUid
+                    val isCurrentSession = { session == _sessionVersion.value && owner == currentUid }
+                    val (deletion, upload) = synchronized(this@TravelViewModel) {
+                        deletionRetryJob to uploadRetryJob
+                    }
+                    coroutineScope {
+                        launch { retryTripQueueAfterActiveAttempt(deletion, isCurrentSession, ::retryPendingTripDeletions) }
+                        launch { retryTripQueueAfterActiveAttempt(upload, isCurrentSession, ::retryPendingTripUploads) }
+                    }
                 }
             }
         }
@@ -455,8 +477,6 @@ if (BuildConfig.DEBUG) {
             }
         }
     }
-
-    private var deletionRetryJob: kotlinx.coroutines.Job? = null
 
     @Synchronized fun retryPendingTripDeletions() {
         if (deletionRetryJob?.isActive == true) return
