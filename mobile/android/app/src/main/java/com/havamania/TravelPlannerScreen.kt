@@ -1,5 +1,6 @@
 package com.havamania
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -209,13 +210,29 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
-    var expandedGuidePlan by remember { mutableStateOf<TravelPlan?>(null) }
+    var expandedGuidePlan by remember(session, editorUid) { mutableStateOf<TravelPlan?>(null) }
+    val goBack: () -> Unit = {
+        if (expandedGuidePlan != null) expandedGuidePlan = null else onBack()
+    }
+    BackHandler(enabled = expandedGuidePlan != null, onBack = goBack)
+
+    val tripListStatus: @Composable () -> Unit = {
+        TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
+        TripSyncStatusPanel(
+            pendingUploads, pendingDeletions, retrying, isOnline,
+            uploadSyncError, deletionSyncError,
+            onRetry = {
+                viewModel.retryPendingTripDeletions()
+                viewModel.retryPendingTripUploads()
+            }
+        )
+    }
 
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
                 title = "Seyahat Planlayıcı",
-                onBack = onBack,
+                onBack = goBack,
                 actions = {
                     IconButton(
                         onClick = { editor = editor.create() },
@@ -244,15 +261,6 @@ fun TravelPlannerScreen(
                         else Modifier.fillMaxWidth()
                     )
             ) {
-                TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
-                TripSyncStatusPanel(
-                    pendingUploads, pendingDeletions, retrying, isOnline,
-                    uploadSyncError, deletionSyncError,
-                    onRetry = {
-                        viewModel.retryPendingTripDeletions()
-                        viewModel.retryPendingTripUploads()
-                    }
-                )
                 if (windowSize.isTablet || windowSize.isLargeTablet) {
                     // Tablet layout: Two columns for summary/calendar and trip list, with full-width rich guide below when expanded
                     Column(
@@ -284,17 +292,16 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
-                                if (nextTrip != null) {
-                                    NextTripHero(nextTrip, today, onViewRoute)
-                                    Spacer(Modifier.height(themeStyles.spacingMD))
-                                }
-
                                 TravelCalendarStripe(
                                     selectedDate = selectedDate,
                                     onDateSelect = { selectedDate = it },
                                     tripDates = tripDates,
                                     today = today
                                 )
+                                if (nextTrip != null) {
+                                    Spacer(Modifier.height(themeStyles.spacingMD))
+                                    NextTripHero(nextTrip, today, onViewRoute)
+                                }
                             }
 
                             Column(
@@ -306,6 +313,7 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
+                                tripListStatus()
                                 TripListSection(
                                     filter = selectedFilter,
                                     plans = displayPlans,
@@ -350,17 +358,16 @@ fun TravelPlannerScreen(
                 } else {
                     // Phone layout: Single column
                     if (selectedFilter == TravelFilter.UPCOMING) {
-                        if (nextTrip != null) {
-                            NextTripHero(nextTrip, today, onViewRoute)
-                            Spacer(Modifier.height(themeStyles.spacingLG))
-                        }
-
                         TravelCalendarStripe(
                             selectedDate = selectedDate,
                             onDateSelect = { selectedDate = it },
                             tripDates = tripDates,
-                                    today = today
+                            today = today
                         )
+                        if (nextTrip != null) {
+                            Spacer(Modifier.height(themeStyles.spacingMD))
+                            NextTripHero(nextTrip, today, onViewRoute)
+                        }
                         Spacer(Modifier.height(themeStyles.spacingMD))
                     }
 
@@ -386,6 +393,7 @@ fun TravelPlannerScreen(
 
                     Spacer(Modifier.height(themeStyles.spacingMD))
 
+                    tripListStatus()
                     TripListSection(
                         filter = selectedFilter,
                         plans = displayPlans,

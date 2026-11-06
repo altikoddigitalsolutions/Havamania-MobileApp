@@ -21,6 +21,18 @@ import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.LocationMode
 import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.currentCoroutineContext
+
+internal suspend fun resolveAutomaticWeatherCity(
+    savedCity: GeocodingResultDto?,
+    locate: suspend () -> GeocodingResultDto?,
+    display: (GeocodingResultDto?) -> Unit
+) {
+    if (savedCity != null) display(savedCity)
+    val currentCity = locate()
+    currentCoroutineContext().ensureActive()
+    if (savedCity == null || (currentCity != null && currentCity != savedCity)) display(currentCity)
+}
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -178,7 +190,7 @@ class WeatherViewModel(
                     }
 
                     if (mode == LocationMode.AUTO) {
-                        refreshWeatherWithCurrentLocation()
+                        refreshWeatherWithCurrentLocation(city)
                     } else if (city != null) {
                         fetchWeather(city.latitude, city.longitude, city.name, city.district)
                     } else if (uid == "legacy") {
@@ -203,20 +215,14 @@ class WeatherViewModel(
         }
     }
 
-    fun refreshWeatherWithCurrentLocation() {
+    private fun refreshWeatherWithCurrentLocation(savedCity: GeocodingResultDto?) {
         locationJob?.cancel()
         val uid = currentUid
         locationJob = viewModelScope.launch {
-            val city = locationTracker.getCurrentCity()
-            if (uid != currentUid) return@launch
-            if (city != null) {
-                fetchWeather(city.latitude, city.longitude, city.name, city.admin1)
-            } else {
-                // If failed, fall back to default city from settings
-                val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
-                if (uid != currentUid) return@launch
-                if (defaultCity != null) {
-                    fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
+            resolveAutomaticWeatherCity(savedCity, locate = { locationTracker.getCurrentCity() }) { city ->
+                if (uid != currentUid) return@resolveAutomaticWeatherCity
+                if (city != null) {
+                    fetchWeather(city.latitude, city.longitude, city.getSafeCity(), city.getSafeDistrict())
                 } else {
                     clearWeatherSelection()
                 }

@@ -1,6 +1,9 @@
 package com.havamania
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.material3.Text
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,6 +19,40 @@ import org.junit.Test
 
 class TripNavigationDeviceTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun switchingMainTabsRemovesOutgoingScreenWithoutWaitingForFade() {
+        lateinit var nav: NavHostController
+        compose.setContent {
+            nav = rememberNavController()
+            NavHost(
+                navController = nav,
+                startDestination = Routes.WEATHER_ROOT,
+                enterTransition = { appScreenEnterTransition() },
+                exitTransition = { appScreenExitTransition() }
+            ) {
+                composable(Routes.WEATHER_ROOT) { Text("Hava içeriği") }
+                composable(
+                    "${Routes.CALENDAR_ROOT}?focusId={focusId}",
+                    listOf(navArgument("focusId") { type = NavType.StringType; nullable = true; defaultValue = null })
+                ) { Text("Takvim içeriği") }
+            }
+        }
+        compose.onNodeWithText("Hava içeriği").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { nav.navigate(Routes.CALENDAR_ROOT) }
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithText("Hava içeriği").assertDoesNotExist()
+            compose.onNodeWithText("Takvim içeriği").assertIsDisplayed()
+
+            compose.runOnIdle { nav.popBackStack() }
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithText("Takvim içeriği").assertDoesNotExist()
+            compose.onNodeWithText("Hava içeriği").assertIsDisplayed()
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun finishingSavedChatReplacesOnlyTheCurrentEntryAndBackReturnsToHistory() {
         lateinit var nav: NavHostController
@@ -56,8 +93,15 @@ class TripNavigationDeviceTest {
         }
         val tripId = "İzmir/+?#%2F &"
         compose.runOnIdle {
-            nav.navigate(Routes.routeWeather(tripId))
+            val source = requireNotNull(nav.currentBackStackEntry)
+            assertTrue(nav.navigateFromActiveScreen(source, Routes.routeWeather(tripId)))
             assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("tripId"))
+            assertFalse(nav.navigateFromActiveScreen(source, Routes.routeWeather("another trip")))
+            assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("tripId"))
+            val detail = requireNotNull(nav.currentBackStackEntry)
+            assertTrue(nav.popActiveScreen(detail))
+            assertFalse(nav.popActiveScreen(detail))
+            assertEquals(source, nav.currentBackStackEntry)
             nav.navigate(Routes.calendarTrip(tripId))
             assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("focusId"))
         }

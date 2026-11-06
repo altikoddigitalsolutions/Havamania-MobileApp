@@ -12,6 +12,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import com.google.firebase.auth.FirebaseAuth
 import com.havamania.NetworkMonitor
 import com.havamania.ConnectivityManagerNetworkMonitor
@@ -37,6 +39,26 @@ internal suspend fun retryTripQueueAfterActiveAttempt(
     previousAttempt?.join()
     currentCoroutineContext().ensureActive()
     if (isCurrentSession()) retry()
+}
+
+internal suspend fun retryQueuedTripUploads(
+    requests: List<TripUploadRequest>,
+    onFailure: () -> Unit,
+    upload: suspend (TripUploadRequest) -> Unit
+) {
+    for (request in requests) {
+        currentCoroutineContext().ensureActive()
+        try {
+            upload(request)
+        } catch (e: CancellationException) {
+            if (e !is TimeoutCancellationException) throw e
+            currentCoroutineContext().ensureActive()
+            onFailure()
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            onFailure()
+        }
+    }
 }
 
 class TravelViewModel(application: Application) : AndroidViewModel(application) {
@@ -457,17 +479,17 @@ if (BuildConfig.DEBUG) {
             if (currentUid != owner) return@launch
             deletionAttempt.run(ticket) {
                 try {
-                    TripMutationGate.run {
-                    dao.enqueueTripDeletion(TripDeletionRequest(currentUid, id))
-                    deleteTripWithAcknowledgement(
-                        remoteDelete = {
-                            if (currentUid != "legacy") {
-                                db.collection("users").document(currentUid).collection("trips")
-                                    .document(id).delete().await()
-                            }
-                        },
-                        localDelete = { dao.completeTripDeletion(currentUid, id) }
-                    )
+                    TripMutationGate.run deletion@ {
+                        if (!dao.enqueueTripDeletion(TripDeletionRequest(currentUid, id))) return@deletion
+                        deleteTripWithAcknowledgement(
+                            remoteDelete = {
+                                if (currentUid != "legacy") {
+                                    db.collection("users").document(currentUid).collection("trips")
+                                        .document(id).delete().await()
+                                }
+                            },
+                            localDelete = { dao.completeTripDeletion(currentUid, id) }
+                        )
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
@@ -500,7 +522,10 @@ if (BuildConfig.DEBUG) {
         uploadRetryJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) { uid ->
             if (!uploadAttempt.begin(ticket)) return@launch
             try {
-                dao.pendingTripUploads(uid).forEach { request ->
+                retryQueuedTripUploads(
+                    dao.pendingTripUploads(uid),
+                    onFailure = { uploadAttempt.fail(ticket, "Bazı seyahat değişiklikleri eşitlenemedi. Yerel kayıtlar korunuyor.") }
+                ) { request ->
                     if (!dao.hasTripDeletion(uid, request.recordId)) {
                         val entity = dao.getTravelPlanByIdRaw(request.recordId)
                         if (entity != null && entity.userId == uid) uploadTrip(entity, uid)

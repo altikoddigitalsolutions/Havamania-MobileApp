@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +33,7 @@ import com.havamania.*
 import androidx.navigation.NavDestination
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -51,6 +53,31 @@ internal fun NavController.replaceSavedAssistantChat(source: NavBackStackEntry):
     }
     return true
 }
+
+internal fun NavController.navigateFromActiveScreen(
+    source: NavBackStackEntry,
+    route: String,
+    options: NavOptionsBuilder.() -> Unit = {}
+): Boolean {
+    if (currentBackStackEntry != source) return false
+    navigate(route, options)
+    return true
+}
+
+internal fun NavController.popActiveScreen(source: NavBackStackEntry): Boolean =
+    currentBackStackEntry == source && popBackStack()
+
+private val mainTabRoutes = setOf(Routes.WEATHER_ROOT, Routes.CALENDAR_ROOT, Routes.AI_ROOT, Routes.PROFILE_ROOT)
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.isMainTabSwitch(): Boolean =
+    initialState.destination.route?.substringBefore('?') in mainTabRoutes &&
+        targetState.destination.route?.substringBefore('?') in mainTabRoutes
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.appScreenEnterTransition(): EnterTransition =
+    if (isMainTabSwitch()) EnterTransition.None else fadeIn(tween(700))
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.appScreenExitTransition(): ExitTransition =
+    if (isMainTabSwitch()) ExitTransition.None else fadeOut(tween(700))
 
 class WeatherPremiumActivity : ComponentActivity() {
     private val notificationTap by viewModels<NotificationTapViewModel>()
@@ -280,7 +307,14 @@ if (BuildConfig.DEBUG) {
                             if (shouldShowBottomBar) {
                                 WeatherBottomBar(
                                     currentRoute = currentRoute,
-                                    onNavigate = { route ->
+                                    onNavigate = navigate@ { route ->
+                                        val entry = navController.currentBackStackEntry
+                                        if (entry?.destination?.route?.substringBefore('?') == route &&
+                                            listOf("focusId", "city", "date", "conversationId")
+                                                .none { entry.arguments?.getString(it) != null }
+                                        ) {
+                                            return@navigate
+                                        }
                                         try {
                                             val startDestId = navController.graph.findStartDestination().id
 
@@ -317,7 +351,9 @@ if (BuildConfig.DEBUG) {
                         ) {
                             NavHost(
                                 navController = navController,
-                                startDestination = if (authViewModel.currentUser != null) Routes.WEATHER_ROOT else Routes.AUTH_WELCOME
+                                startDestination = if (authViewModel.currentUser != null) Routes.WEATHER_ROOT else Routes.AUTH_WELCOME,
+                                enterTransition = { appScreenEnterTransition() },
+                                exitTransition = { appScreenExitTransition() }
                             ) {
                                 // --- AUTH ROUTES ---
                                 composable(Routes.AUTH_WELCOME) {
@@ -326,10 +362,10 @@ if (BuildConfig.DEBUG) {
                                         onNavigateToRegister = { navController.navigate(Routes.REGISTER) }
                                     )
                                 }
-                                composable(Routes.LOGIN) {
+                                composable(Routes.LOGIN) { backStackEntry ->
                                     LoginScreen(
                                         viewModel = authViewModel,
-                                        onBack = { navController.popBackStack() },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
                                         onNavigateToRegister = {
                                             navController.navigate(Routes.REGISTER) {
                                                 popUpTo(Routes.AUTH_WELCOME)
@@ -338,10 +374,10 @@ if (BuildConfig.DEBUG) {
                                         onNavigateToForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) }
                                     )
                                 }
-                                composable(Routes.REGISTER) {
+                                composable(Routes.REGISTER) { backStackEntry ->
                                     RegisterScreen(
                                         viewModel = authViewModel,
-                                        onBack = { navController.popBackStack() },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
                                         onNavigateToLogin = {
                                             navController.navigate(Routes.LOGIN) {
                                                 popUpTo(Routes.AUTH_WELCOME)
@@ -349,10 +385,10 @@ if (BuildConfig.DEBUG) {
                                         }
                                     )
                                 }
-                                composable(Routes.FORGOT_PASSWORD) {
+                                composable(Routes.FORGOT_PASSWORD) { backStackEntry ->
                                     ForgotPasswordScreen(
                                         viewModel = authViewModel,
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popActiveScreen(backStackEntry) }
                                     )
                                 }
 
@@ -360,13 +396,14 @@ if (BuildConfig.DEBUG) {
                                 composable(
                                     Routes.WEATHER_ROOT,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/weather" })
-                                ) {
+                                ) { backStackEntry ->
                                     HomeScreen(profileViewModel = profileViewModel, themeViewModel = themeViewModel,
                                         onNavigateToAi = { rec: HavamaniaRecommendation, _: WeatherData? ->
-                                        pendingRecommendation = rec
-                                        navController.navigate(Routes.AI_ROOT)
+                                        if (navController.navigateFromActiveScreen(backStackEntry, Routes.AI_ROOT)) {
+                                            pendingRecommendation = rec
+                                        }
                                     }, onNavigateToNotifications = {
-                                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                                        navController.navigateFromActiveScreen(backStackEntry, Routes.NOTIFICATION_CENTER)
                                     })
                                 }
                                 composable(
@@ -382,11 +419,13 @@ if (BuildConfig.DEBUG) {
                                     val city = backStackEntry.arguments?.getString("city")
                                     val date = backStackEntry.arguments?.getString("date")
                                     TravelPlannerScreen(
-                                        onBack = { navController.popBackStack() },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
                                         focusId = focusId,
                                         initialCity = city,
                                         initialStartDate = date,
-                                        onViewRoute = { tripId -> navController.navigate(Routes.routeWeather(tripId)) }
+                                        onViewRoute = { tripId ->
+                                            navController.navigateFromActiveScreen(backStackEntry, Routes.routeWeather(tripId))
+                                        }
                                     )
                                 }
                                 composable(
@@ -406,30 +445,33 @@ if (BuildConfig.DEBUG) {
                                             }
                                         },
                                         onBack = {
-                                            pendingRecommendation = null
-                                            navController.popBackStack()
+                                            if (navController.popActiveScreen(backStackEntry)) {
+                                                pendingRecommendation = null
+                                            }
                                         },
                                         onNavigateToHistory = {
-                                            navController.navigate(Routes.AI_HISTORY)
+                                            navController.navigateFromActiveScreen(backStackEntry, Routes.AI_HISTORY)
                                         },
                                         onNavigateToTravelCreate = { city: String, date: String? ->
                                             val encodedCity = android.net.Uri.encode(city)
-                                            navController.navigate("${Routes.CALENDAR_ROOT}?focusId=NEW&city=$encodedCity&date=$date")
+                                            navController.navigateFromActiveScreen(
+                                                backStackEntry, "${Routes.CALENDAR_ROOT}?focusId=NEW&city=$encodedCity&date=$date"
+                                            )
                                         }
                                     )
                                 }
-                                composable(Routes.PROFILE_ROOT) {
+                                composable(Routes.PROFILE_ROOT) { backStackEntry ->
                                     ProfileScreen(
                                         profileViewModel = profileViewModel,
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToAiHistory = { navController.navigate(Routes.AI_HISTORY) },
-                                        onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToPersonalization = { navController.navigate(Routes.PERSONALIZATION) },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
+                                        onNavigateToSettings = { navController.navigateFromActiveScreen(backStackEntry, Routes.SETTINGS) },
+                                        onNavigateToCities = { navController.navigateFromActiveScreen(backStackEntry, Routes.CITIES) },
+                                        onNavigateToAiHistory = { navController.navigateFromActiveScreen(backStackEntry, Routes.AI_HISTORY) },
+                                        onNavigateToEditProfile = { navController.navigateFromActiveScreen(backStackEntry, Routes.EDIT_PROFILE) },
+                                        onNavigateToPersonalization = { navController.navigateFromActiveScreen(backStackEntry, Routes.PERSONALIZATION) },
                                         onNavigateToTravels = {
                                             val startDestId = navController.graph.findStartDestination().id
-                                            navController.navigate(Routes.CALENDAR_ROOT) {
+                                            navController.navigateFromActiveScreen(backStackEntry, Routes.CALENDAR_ROOT) {
                                                 popUpTo(startDestId) {
                                                     saveState = true
                                                 }
@@ -439,14 +481,16 @@ if (BuildConfig.DEBUG) {
                                         }
                                     )
                                 }
-                                composable(Routes.CITIES) {
-                                    CitiesManagementScreen(onBack = { navController.popBackStack() })
+                                composable(Routes.CITIES) { backStackEntry ->
+                                    CitiesManagementScreen(onBack = { navController.popActiveScreen(backStackEntry) })
                                 }
-                                composable(Routes.AI_HISTORY) {
+                                composable(Routes.AI_HISTORY) { backStackEntry ->
                                     AiHistoryScreen(
-                                        onBack = { navController.popBackStack() },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
                                         onNavigateToChat = { id ->
-                                            navController.navigate("sub_ai_history_detail/${android.net.Uri.encode(id)}")
+                                            navController.navigateFromActiveScreen(
+                                                backStackEntry, "sub_ai_history_detail/${android.net.Uri.encode(id)}"
+                                            )
                                         }
                                     )
                                 }
@@ -454,24 +498,24 @@ if (BuildConfig.DEBUG) {
                                     val itemId = backStackEntry.arguments?.getString("itemId") ?: ""
                                     AiHistoryDetailScreen(
                                         itemId = itemId,
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popActiveScreen(backStackEntry) }
                                     )
                                 }
-                                composable(Routes.EDIT_PROFILE) {
-                                    EditProfileScreen(onBack = { navController.popBackStack() })
+                                composable(Routes.EDIT_PROFILE) { backStackEntry ->
+                                    EditProfileScreen(onBack = { navController.popActiveScreen(backStackEntry) })
                                 }
-                                composable(Routes.SETTINGS) {
+                                composable(Routes.SETTINGS) { backStackEntry ->
                                     SettingsScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onNavigateToEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                        onNavigateToCities = { navController.navigate(Routes.CITIES) },
-                                        onNavigateToSmartAlerts = { navController.navigate(Routes.SMART_ALERTS) }
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
+                                        onNavigateToEditProfile = { navController.navigateFromActiveScreen(backStackEntry, Routes.EDIT_PROFILE) },
+                                        onNavigateToCities = { navController.navigateFromActiveScreen(backStackEntry, Routes.CITIES) },
+                                        onNavigateToSmartAlerts = { navController.navigateFromActiveScreen(backStackEntry, Routes.SMART_ALERTS) }
                                     )
                                 }
-                                composable(Routes.SMART_ALERTS) {
-                                    SmartAlertsScreen(onBack = { navController.popBackStack() })
+                                composable(Routes.SMART_ALERTS) { backStackEntry ->
+                                    SmartAlertsScreen(onBack = { navController.popActiveScreen(backStackEntry) })
                                 }
-                                composable(Routes.PERSONALIZATION) {
+                                composable(Routes.PERSONALIZATION) { backStackEntry ->
                                     PersonalizationScreen(
                                         profileViewModel = profileViewModel,
                                         onComplete = {
@@ -479,15 +523,15 @@ if (BuildConfig.DEBUG) {
                                                 popUpTo(Routes.PERSONALIZATION) { inclusive = true }
                                             }
                                         },
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popActiveScreen(backStackEntry) }
                                     )
                                 }
                                 composable(
                                     Routes.NOTIFICATION_CENTER,
                                     deepLinks = listOf(navDeepLink { uriPattern = "havamania://app/notifications" })
-                                ) {
+                                ) { backStackEntry ->
                                     NotificationCenterScreen(
-                                        onBack = { navController.popBackStack() },
+                                        onBack = { navController.popActiveScreen(backStackEntry) },
                                         onNavigateToDetail = { screen, params ->
                                             try {
                                                 navController.navigate(screen) {
@@ -513,7 +557,7 @@ if (BuildConfig.DEBUG) {
                                     val tripId = backStackEntry.arguments?.getString("tripId") ?: ""
                                     TravelRouteWeatherScreen(
                                         tripId = tripId,
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popActiveScreen(backStackEntry) }
                                     )
                                 }
                             }

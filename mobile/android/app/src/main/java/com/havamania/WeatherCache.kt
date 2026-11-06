@@ -522,13 +522,17 @@ interface WeatherDao {
     @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id)")
     suspend fun hasTripDeletion(uid: String, id: String): Boolean
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id AND completed = 0)")
+    suspend fun isTripDeletionPending(uid: String, id: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun enqueueTripDeletionRaw(request: TripDeletionRequest)
 
     @Transaction
-    suspend fun enqueueTripDeletion(request: TripDeletionRequest) {
-        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+    suspend fun enqueueTripDeletion(request: TripDeletionRequest): Boolean {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return false
         enqueueTripDeletionRaw(request)
+        return isTripDeletionPending(request.userId, request.recordId)
     }
 
     @Query("SELECT * FROM trip_deletions WHERE userId = :uid AND completed = 0")
