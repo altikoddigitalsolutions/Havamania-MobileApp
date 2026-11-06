@@ -295,7 +295,7 @@ fun generateBadges(text: String): List<String> {
 }
 
 @Composable
-fun StatsDetailContent(type: String, userInterests: Set<String>, travelPlans: List<TravelPlan>, aiHistory: List<AiHistoryEntity>) {
+fun StatsDetailContent(type: String, userInterests: Set<String>, travelPlans: List<TravelPlan>, aiHistory: List<AiHistorySummary>) {
     val themeColors = HavamaniaTheme.colors
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp).heightIn(max = 500.dp)) {
         val title = when(type) {

@@ -170,7 +170,7 @@ object CityPersonalityProvider {
         val customTip = base.tipByTripType[tripType]
 
         if (BuildConfig.DEBUG) {
-            android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "getPersonality: city=$cityName, tripType=$tripType, highlights=${customHighlights?.size}, food=${customFood?.size}")
+            android.util.Log.d("HAVAMANIA_TRAVEL_GUIDE_DEBUG", "Preparing travel guide personality")
         }
 
         var result = base

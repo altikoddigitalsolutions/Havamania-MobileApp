@@ -110,7 +110,7 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
         _citySuggestions.value = emptyList()
         _originSuggestions.value = emptyList()
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-        if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed. New UID: $newUid")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Auth state changed.")
         analysisJobs.values.forEach { it.cancel() }
         analysisJobs.clear()
         _confirmedEmptyOwner.value = null

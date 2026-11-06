@@ -15,3 +15,10 @@ internal suspend fun deleteHistoryWithAcknowledgement(
 
 /** Serializes history mutations across ViewModel instances in this process. */
 internal object HistoryOperationLock { val mutex = kotlinx.coroutines.sync.Mutex() }
+
+/** Caller holds the history mutation lock while checking and finishing the queued request. */
+internal suspend fun WeatherDao.finishQueuedHistoryDeletion(
+    uid: String, recordId: String, finish: suspend () -> Unit
+) {
+    if (getHistoryDeletions(uid).any { it.recordId == recordId }) finish()
+}

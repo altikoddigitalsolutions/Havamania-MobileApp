@@ -68,7 +68,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+            Log.d(TAG, "Auth state changed. Re-initializing notifications.")
         }
         actionTasks.reset()
         _actionError.value = null
@@ -100,14 +100,14 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 repository.getAllNotificationsFlow(uid)
                     .catch { e ->
 if (BuildConfig.DEBUG) {
-                            Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting empty for $uid.", e)
+                            Log.e(TAG, "Could not read notifications.")
 }
                         emit(emptyList())
                     }
                     .collect { list ->
                         if (uid != currentUid) return@collect
                         if (BuildConfig.DEBUG) {
-                            Log.d("Notifications", "collected size=${list.size} for $uid")
+                            Log.d("Notifications", "Notification list updated.")
                         }
 
                         updateStateWithList(list)
@@ -116,7 +116,7 @@ if (BuildConfig.DEBUG) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (uid != currentUid) return@launch
 if (BuildConfig.DEBUG) {
-                    Log.e(TAG, "Fatal error in collect chain for $uid", e)
+                    Log.e(TAG, "Notification observation failed.")
 }
                 updateStateWithList(emptyList())
             }

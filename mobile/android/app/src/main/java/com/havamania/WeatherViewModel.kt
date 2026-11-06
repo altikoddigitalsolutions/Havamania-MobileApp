@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.LocationMode
@@ -92,10 +93,15 @@ class WeatherViewModel(
     private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
     val locationMode: StateFlow<LocationMode> = _locationMode.asStateFlow()
 
-    private var lastCity = "Balıkesir"
-    private var lastDistrict: String? = null
-    private var lastLat = 39.6484
-    private var lastLon = 27.8826
+    private data class WeatherSelection(
+        val uid: String,
+        val latitude: Double,
+        val longitude: Double,
+        val city: String,
+        val district: String?
+    )
+
+    private var weatherSelection: WeatherSelection? = null
 
     private var fetchJob: kotlinx.coroutines.Job? = null
     private var searchJob: kotlinx.coroutines.Job? = null
@@ -105,10 +111,11 @@ class WeatherViewModel(
     private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
         accountTasks.reset()
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-        if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+        if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing weather.")
 
         // Clear UI state to prevent showing old user's data
         fetchJob?.cancel()
+        weatherSelection = null
         locationJob?.cancel()
         searchJob?.cancel()
         _isRefreshing.value = false
@@ -178,7 +185,7 @@ class WeatherViewModel(
                         // Guest user starts with Balıkesir if no default set
                         fetchWeather(39.6484, 27.8826, "Balıkesir")
                     } else {
-                        _uiState.value = WeatherUiState.NoCity
+                        clearWeatherSelection()
                     }
                 }
             }
@@ -189,7 +196,7 @@ class WeatherViewModel(
                 if (_uiState.value is WeatherUiState.Loading) {
                     val currentCity = ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
                     if (currentCity == null && uid != "legacy") {
-                        _uiState.value = WeatherUiState.NoCity
+                        if (weatherSelection == null && uid == currentUid) clearWeatherSelection()
                     }
                 }
             }
@@ -211,91 +218,74 @@ class WeatherViewModel(
                 if (defaultCity != null) {
                     fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
                 } else {
-                    _uiState.value = WeatherUiState.NoCity
+                    clearWeatherSelection()
                 }
             }
         }
     }
 
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
-        // Business Rule 5: Deduplication
-        if (fetchJob?.isActive == true && lastLat == lat && lastLon == lon) return
+        val selection = WeatherSelection(currentUid, lat, lon, cityName, districtName)
+        if (fetchJob?.isActive == true && weatherSelection == selection) return
+        weatherSelection = selection
+        loadWeather(selection, forceRefresh = false)
+    }
 
-        lastLat = lat
-        lastLon = lon
-        lastCity = cityName
-        lastDistrict = districtName
-
+    private fun clearWeatherSelection() {
         fetchJob?.cancel()
+        weatherSelection = null
+        _isRefreshing.value = false
+        _uiState.value = WeatherUiState.NoCity
+    }
+
+    fun refreshWeather() {
+        val selection = weatherSelection?.takeIf { it.uid == currentUid } ?: return
+        if (!isOnline.value || _isRefreshing.value) return
+        loadWeather(selection, forceRefresh = true)
+    }
+
+    private fun loadWeather(selection: WeatherSelection, forceRefresh: Boolean) {
+        fetchJob?.cancel()
+        _isRefreshing.value = forceRefresh
         fetchJob = accountTasks.launch { ownerUid ->
-            _uiState.value = WeatherUiState.Loading
-
+            if (!forceRefresh) _uiState.value = WeatherUiState.Loading
             try {
-                // Wrap in timeout to prevent infinite loading
-                kotlinx.coroutines.withTimeout(20000) {
-                    repository.getWeatherData(lat, lon, cityName, districtName)
-                        .catch { e ->
-if (BuildConfig.DEBUG) {
-                                android.util.Log.e("WeatherVM", "Fetch error", e)
-}
-                            _uiState.value = WeatherUiState.Error(
-                                if (!isOnline.value) "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
-                                else "Hava durumu sunucularına şu an ulaşılamıyor. Lütfen daha sonra tekrar deneyin."
-                            )
+                val completed = withTimeoutOrNull(20000) {
+                    repository.getWeatherData(
+                        selection.latitude, selection.longitude, selection.city, selection.district,
+                        forceRefresh = forceRefresh
+                    ).collect { data ->
+                        _uiState.value = WeatherUiState.Success(data)
+
+                        launch {
+                            val config = ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
+                            _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
                         }
-                        .collect { data ->
-                            _uiState.value = WeatherUiState.Success(data)
-
-                            // Calculate Smart Alerts
-                            launch {
-                                val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
-                                _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
-                            }
-
-                            selectInitialForecast(data)
-
-                            updateRecommendation()
-                        }
+                        selectInitialForecast(data)
+                        updateRecommendation()
+                    }
+                    true
                 }
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                _uiState.value = WeatherUiState.Error("Zaman aşımı: Hava durumu verileri çok uzun sürdü.")
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                _uiState.value = WeatherUiState.Error("Hava durumu yüklenirken bir hata oluştu.")
+                if (completed == null) {
+                    showWeatherError(selection, "Hava durumu isteği zaman aşımına uğradı. Lütfen tekrar deneyin.")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                coroutineContext.ensureActive()
+                showWeatherError(selection,
+                    if (isOnline.value) "Hava durumu şu anda alınamıyor. Lütfen tekrar deneyin."
+                    else "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
+                )
+            } finally {
+                if (weatherSelection === selection) _isRefreshing.value = false
             }
         }
     }
 
-    fun refreshWeather() {
-        if (!isOnline.value || _isRefreshing.value) {
-            return
-        }
-
-        fetchJob?.cancel()
-        fetchJob = accountTasks.launch { ownerUid ->
-            _isRefreshing.value = true
-            try {
-            repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict, forceRefresh = true)
-                .catch { e ->
-                    _isRefreshing.value = false
-                }
-                .collect { data ->
-                    _uiState.value = WeatherUiState.Success(data)
-
-                    // Calculate Smart Alerts
-                    launch {
-                        val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
-                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
-                    }
-
-                    selectInitialForecast(data)
-
-                    _isRefreshing.value = false
-                    updateRecommendation()
-                }
-            } finally {
-                _isRefreshing.value = false
-            }
+    private fun showWeatherError(selection: WeatherSelection, message: String) {
+        if (weatherSelection === selection && selection.uid == currentUid && _uiState.value !is WeatherUiState.Success) {
+            _uiState.value = WeatherUiState.Error(message)
         }
     }
 

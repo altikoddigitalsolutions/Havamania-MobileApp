@@ -17,6 +17,7 @@ internal fun WeatherCitySearchContent(
     status: LocationSearchStatus,
     onRetry: () -> Unit,
     isSelected: (GeocodingResultDto) -> Boolean = { false },
+    savedCities: List<GeocodingResultDto> = emptyList(),
     onSelect: (GeocodingResultDto) -> Unit
 ) {
     val colors = HavamaniaTheme.colors
@@ -36,16 +37,29 @@ internal fun WeatherCitySearchContent(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        if (query.trim().length >= 2) {
+        val searching = query.trim().length >= 2
+        if (searching) {
             item { LocationSearchFeedback(status, onRetry) }
-            items(suggestions.distinctBy { it.id }, key = { it.id }) { suggestion ->
-                Surface(onClick = { onSelect(suggestion) }, color = if (isSelected(suggestion)) colors.accent.copy(alpha = 0.1f) else colors.surface, modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        if (isSelected(suggestion)) Text("Seçili", color = colors.accent)
-                        Text(suggestion.getSafeDistrict() ?: suggestion.name, color = colors.textPrimary,
-                            style = HavamaniaTheme.typography.bodyLarge)
-                        Text(suggestion.getSafeCity(), color = colors.textMuted,
-                            style = HavamaniaTheme.typography.bodySmall)
+        } else if (savedCities.isNotEmpty()) {
+            item {
+                Text("Kayıtlı şehirler", color = colors.textPrimary, style = HavamaniaTheme.typography.cardTitle)
+            }
+        }
+        val cities = if (searching) suggestions else savedCities
+        items(cities.distinctBy { it.id }, key = { it.id }) { suggestion ->
+            val selected = isSelected(suggestion)
+            val city = suggestion.getSafeCity()
+            val title = suggestion.getSafeDistrict() ?: suggestion.name
+            Surface(
+                onClick = { onSelect(suggestion) },
+                color = if (selected) colors.accent.copy(alpha = 0.1f) else colors.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    if (selected) Text("Seçili", color = colors.accent)
+                    Text(title, color = colors.textPrimary, style = HavamaniaTheme.typography.bodyLarge)
+                    if (city != title) {
+                        Text(city, color = colors.textMuted, style = HavamaniaTheme.typography.bodySmall)
                     }
                 }
             }

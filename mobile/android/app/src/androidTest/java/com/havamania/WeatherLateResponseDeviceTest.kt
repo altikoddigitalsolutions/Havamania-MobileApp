@@ -10,6 +10,33 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WeatherLateResponseDeviceTest {
+    @Test fun forcedRefreshKeepsSelectedCityCacheWhenConnectionDrops() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, WeatherDatabase::class.java).build()
+        try {
+            var online = true
+            var failedRequests = 0
+            val repo = WeatherRepository(api({
+                if (!online) {
+                    failedRequests++
+                    throw IOException("Simulated connection loss")
+                }
+                response()
+            }), db.weatherDao())
+            repo.getWeatherData(41.0, 29.0, "İstanbul").toList()
+            val cached = repo.getWeatherData(40.2, 29.1, "Bursa").toList().single()
+
+            online = false
+            val refreshed = repo.getWeatherData(40.2, 29.1, "Bursa", forceRefresh = true)
+                .toList()
+            assertEquals(1, failedRequests)
+            assertEquals(listOf(cached, cached.copy(isStale = true)), refreshed)
+            assertEquals(refreshed.last(), repo.currentWeatherState.value)
+        } finally {
+            db.close()
+        }
+    }
+
     @Test fun accountRoundTripRejectsOldResponseAndColdFlow() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext, WeatherDatabase::class.java).build()
         try {

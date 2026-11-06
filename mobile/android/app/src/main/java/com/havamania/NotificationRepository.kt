@@ -57,7 +57,7 @@ if (BuildConfig.DEBUG) {
             // For now, let's keep seeding only for "legacy" or if explicitly asked.
             if (uid != "legacy") {
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "🚀 SEED SKIP: Authenticated user $uid starts clean.")
+                    Log.d(TAG, "Skipping sample notifications for an authenticated session.")
                 }
                 return
             }
@@ -65,7 +65,7 @@ if (BuildConfig.DEBUG) {
             val hasSeeded = com.havamania.ui.theme.ThemeManager.getHasSeededNotifications(context, uid).first()
             val count = dao.getTotalCountFirst(uid)
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB for $uid: $count, hasSeeded: $hasSeeded")
+                Log.d(TAG, "Checking sample notification state.")
             }
 
             if (count == 0 && !hasSeeded) {

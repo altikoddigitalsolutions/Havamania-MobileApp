@@ -143,7 +143,7 @@ class WeatherRepository(
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
-                android.util.Log.e("WeatherRepo", "fetchWeatherSnapshot failed for $cityName", e)
+                android.util.Log.e("WeatherRepo", "Could not fetch weather snapshot.")
 }
             null
         }
@@ -192,6 +192,9 @@ if (BuildConfig.DEBUG) {
         } catch (e: Exception) {
             if (!current(epoch)) return@flow
             if (cachedData == null) throw e
+            if (forceRefresh && isCacheFresh) {
+                emitCurrent(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = true), epoch)
+            }
             return@flow
         }
         try {

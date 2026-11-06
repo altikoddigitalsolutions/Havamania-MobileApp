@@ -15,6 +15,7 @@ import java.util.UUID
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 
 internal enum class AiHistoryListStatus { LOADING, READY, FAILED }
 
@@ -30,13 +31,15 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun loadDetail(id: String) {
         detailLoader.load { owner ->
-            dao.getAiHistoryItem(id, owner) ?: if (owner == "legacy") null else {
-                val document = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users").document(owner).collection("ai_history").document(id)
-                    .get(com.google.firebase.firestore.Source.SERVER).await()
-                if (!document.exists()) null else document.toObject(AiHistoryEntity::class.java)
-                    ?.copy(id = document.id, userId = owner)
-                    ?: error("History document could not be decoded")
+            readVisibleHistoryDetail(isDeleted = { dao.hasHistoryDeletion(owner, id) }) {
+                dao.getAiHistoryItem(id, owner) ?: if (owner == "legacy") null else {
+                    val document = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users").document(owner).collection("ai_history").document(id)
+                        .get(com.google.firebase.firestore.Source.SERVER).await()
+                    if (!document.exists()) null else document.toObject(AiHistoryEntity::class.java)
+                        ?.copy(id = document.id, userId = owner)
+                        ?: error("History document could not be decoded")
+                }
             }
         }
     }
@@ -44,8 +47,8 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     private val _confirmedEmptyOwner = MutableStateFlow<String?>(null)
     val confirmedEmptyOwner = _confirmedEmptyOwner.asStateFlow()
 
-    private val _historyItems = MutableStateFlow<List<AiHistoryEntity>>(emptyList())
-    val historyItems: StateFlow<List<AiHistoryEntity>> = _historyItems.asStateFlow()
+    private val _historyItems = MutableStateFlow<List<AiHistorySummary>>(emptyList())
+    val historyItems: StateFlow<List<AiHistorySummary>> = _historyItems.asStateFlow()
     private val _listStatus = MutableStateFlow(AiHistoryListStatus.LOADING)
     internal val listStatus = _listStatus.asStateFlow()
     private val _syncFailed = MutableStateFlow(false)
@@ -85,12 +88,14 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                     for (request in dao.getHistoryDeletions(uid)) {
                         coroutineContext.ensureActive()
                         finishHistoryDeletion(uid, request.recordId)
+                        // A confirmed full-history deletion also acknowledges the individual requests.
+                        if (request.recordId.isEmpty()) break
                     }
-                    for (item in dao.getPendingAiHistory(uid)) {
+                    for (id in dao.getPendingAiHistoryIds(uid)) {
                         coroutineContext.ensureActive()
                         if (_deleting.value || uid != currentUid) break
                         // Re-read under the operation lock; a cancelled deletion must not be resurrected.
-                        val pending = dao.getAiHistoryItem(item.id, uid) ?: continue
+                        val pending = dao.getAiHistoryItem(id, uid) ?: continue
                         if (!pending.pendingUpload || uid == "legacy") continue
                         uploadHistory(pending)
                     }
@@ -105,12 +110,17 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    private suspend fun ensureHistoryOwner(uid: String) {
+        coroutineContext.ensureActive()
+        check(uid == currentUid)
+    }
+
     private suspend fun uploadHistory(item: AiHistoryEntity) {
+        ensureHistoryOwner(item.userId)
         com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("users").document(item.userId).collection("ai_history")
             .document(item.id).set(item).await()
-        coroutineContext.ensureActive()
-        check(item.userId == currentUid)
+        ensureHistoryOwner(item.userId)
         dao.acknowledgeAiHistory(item.id, item.userId, item.updatedAt)
     }
 
@@ -138,6 +148,8 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private var historyListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var historyObservation: Any? = null
+    private var historyReadJob: Job? = null
     @Volatile private var clearEpoch = 0
 
     init {
@@ -148,6 +160,7 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         historyListener?.remove()
+        historyObservation = null
         detailLoader.reset()
         uploadRunner.reset()
         _uploadError.value = null
@@ -161,44 +174,61 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
         if (uid != currentUid) return
         historyListener?.remove()
         historyListener = null
+        historyObservation = null
         if (uid == "legacy") return
 
         _syncFailed.value = false
         val observationEpoch = clearEpoch
+        val observation = Any()
+        historyObservation = observation
+        fun isCurrentObservation() =
+            historyObservation === observation && uid == currentUid && observationEpoch == clearEpoch
+        fun reportSyncFailure() {
+            if (!isCurrentObservation()) return
+            historyObservation = null
+            historyListener?.remove()
+            historyListener = null
+            _confirmedEmptyOwner.value = null
+            _syncFailed.value = true
+        }
         historyListener = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             .collection("users").document(uid).collection("ai_history")
             .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, e ->
-                if (uid != currentUid || observationEpoch != clearEpoch) return@addSnapshotListener
+                if (!isCurrentObservation()) return@addSnapshotListener
                 if (e != null) {
-                    historyListener?.remove()
-                    historyListener = null
-                    _confirmedEmptyOwner.value = null
-                    _syncFailed.value = true
+                    reportSyncFailure()
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    accountTasks.launch launch@ { currentUid ->
-                        if (observationEpoch != clearEpoch) return@launch
-                        val items = snapshot.documents.mapNotNull { doc ->
-                            try { doc.toObject(AiHistoryEntity::class.java)?.copy(id = doc.id, userId = uid) } catch (ex: Exception) {
-                                if (ex is kotlinx.coroutines.CancellationException) throw ex
-                                null
-                            }
-                        }
-                        if (observationEpoch != clearEpoch) return@launch
+                    accountTasks.launch launch@ {
+                        if (!isCurrentObservation()) return@launch
                         historyMutex.withLock {
                             coroutineContext.ensureActive()
-                            if (observationEpoch != clearEpoch) return@launch
+                            if (!isCurrentObservation()) return@launch
                             // Cache/latency-compensated events cannot establish server absence.
                             if (!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
-                                dao.reconcileAiHistory(uid, items, snapshot.documents.map { it.id }.toSet())
+                                try {
+                                    val documents = snapshot.documents
+                                    val items = documents.map { doc ->
+                                        checkNotNull(doc.toObject(AiHistoryEntity::class.java)) {
+                                            "History document could not be decoded"
+                                        }.copy(id = doc.id, userId = uid)
+                                    }
+                                    dao.reconcileAiHistory(uid, items, documents.map { it.id }.toSet())
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    coroutineContext.ensureActive()
+                                    reportSyncFailure()
+                                    return@launch
+                                }
+                                coroutineContext.ensureActive()
+                                if (!isCurrentObservation()) return@launch
                                 _confirmedEmptyOwner.value = if (snapshot.isEmpty) uid else null
                             }
 
                         }
-                        if (observationEpoch == clearEpoch) {
-                            loadHistory()
-                        }
+                        if (isCurrentObservation()) loadHistoryForUid(uid)
                     }
                 }
             }
@@ -206,21 +236,24 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun loadHistoryForUid(uid: String) {
         if (uid != currentUid) return
-        accountTasks.launch launch@ { currentUid ->
-            val epoch = clearEpoch
+        val epoch = clearEpoch
+        historyReadJob?.cancel()
+        historyReadJob = accountTasks.launch launch@ {
+            if (epoch != clearEpoch) return@launch
             if (_listStatus.value == AiHistoryListStatus.FAILED) _listStatus.value = AiHistoryListStatus.LOADING
             val items = try {
-                dao.getAllAiHistory(uid)
+                dao.getVisibleAiHistory(uid)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                if (uid == this@AiHistoryViewModel.currentUid && epoch == clearEpoch) {
+                coroutineContext.ensureActive()
+                if (uid == currentUid && epoch == clearEpoch) {
                     _listStatus.value = AiHistoryListStatus.FAILED
                 }
                 return@launch
             }
             coroutineContext.ensureActive()
-            if (uid != this@AiHistoryViewModel.currentUid || epoch != clearEpoch) return@launch
+            if (uid != currentUid || epoch != clearEpoch) return@launch
             _historyItems.value = items
             _listStatus.value = AiHistoryListStatus.READY
             if (uid != "legacy" && historyListener == null && !_deleting.value && !_syncFailed.value) {
@@ -242,16 +275,15 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     ) {
         saveController.save(id) { uid, finalId ->
             mutationMutex.withLock {
-                coroutineContext.ensureActive()
-                val existing = dao.getAiHistoryItem(finalId, uid)
-                val item = AiHistoryEntity(
-                    id = finalId, userId = uid, title = title, summary = summary,
-                    messages = messages, cityName = cityName,
-                    timestamp = existing?.timestamp ?: System.currentTimeMillis(),
-                    updatedAt = maxOf(System.currentTimeMillis(), (existing?.updatedAt ?: 0) + 1),
-                    pendingUpload = uid != "legacy"
+                ensureHistoryOwner(uid)
+                val now = System.currentTimeMillis()
+                val item = dao.saveAiHistoryRevision(
+                    AiHistoryEntity(
+                        id = finalId, userId = uid, title = title, summary = summary,
+                        messages = messages, cityName = cityName, timestamp = now, updatedAt = now,
+                        pendingUpload = uid != "legacy"
+                    )
                 )
-                dao.insertAiHistory(item)
                 loadHistoryForUid(uid)
                 if (uid != "legacy") {
                     uploadHistory(item)
@@ -265,16 +297,17 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
     private suspend fun finishHistoryDeletion(uid: String, recordId: String) {
         deleteHistoryWithAcknowledgement(
             remoteDelete = {
+                ensureHistoryOwner(uid)
                 if (uid != "legacy") {
                     val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                     val collection = db.collection("users").document(uid).collection("ai_history")
                     if (recordId.isNotEmpty()) collection.document(recordId).delete().await()
                     else {
                         val snapshot = collection.get(com.google.firebase.firestore.Source.SERVER).await()
-                        for (document in snapshot.documents) {
-                            dao.insertHistoryDeletion(HistoryDeletionRequest(uid, document.id, true))
-                        }
                         for (chunk in snapshot.documents.chunked(400)) {
+                            ensureHistoryOwner(uid)
+                            dao.markRemoteHistoryForDeletion(uid, chunk.map { it.id })
+                            ensureHistoryOwner(uid)
                             val batch = db.batch()
                             chunk.forEach { batch.delete(it.reference) }
                             batch.commit().await()
@@ -283,8 +316,10 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             },
             localDelete = {
-                check(uid == currentUid)
-                historyMutex.withLock { dao.completeHistoryDeletion(uid, recordId) }
+                historyMutex.withLock {
+                    ensureHistoryOwner(uid)
+                    dao.completeHistoryDeletion(uid, recordId)
+                }
             }
         )
     }
@@ -293,11 +328,13 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearAll() = deleteHistory(null)
 
-    private fun deleteHistory(id: String?) {
+    private fun deleteHistory(id: String?, enqueue: Boolean = true) {
+        val recordId = id.orEmpty()
+        var needsEnqueue = enqueue
         deleteRunner.start(
             onStart = {
                 _deleteError.value = null
-                retryDelete = { deleteHistory(id) }
+                retryDelete = { deleteHistory(id, enqueue = needsEnqueue) }
                 clearEpoch++
                 historyListener?.remove()
                 historyListener = null
@@ -306,10 +343,17 @@ class AiHistoryViewModel(application: Application) : AndroidViewModel(applicatio
                 val operationEpoch = clearEpoch
                 try {
                     mutationMutex.withLock {
-                    dao.enqueueHistoryDeletion(uid, id)
-                    finishHistoryDeletion(uid, id ?: "")
-                    coroutineContext.ensureActive()
-                    loadHistoryForUid(uid)
+                        if (needsEnqueue) {
+                            dao.enqueueHistoryDeletion(uid, id)
+                            needsEnqueue = false
+                        }
+                        // Another screen can finish a queued deletion while this error is still visible.
+                        dao.finishQueuedHistoryDeletion(uid, recordId) {
+                            loadHistoryForUid(uid)
+                            finishHistoryDeletion(uid, recordId)
+                        }
+                        coroutineContext.ensureActive()
+                        loadHistoryForUid(uid)
                     }
                 } finally {
                     if (uid == currentUid && operationEpoch == clearEpoch) observeFirestoreHistory(uid)

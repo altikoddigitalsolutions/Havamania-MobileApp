@@ -57,6 +57,7 @@ fun HomeScreen(
     val selectedDailyForecast by viewModel.selectedDailyForecast.collectAsStateWithLifecycle()
     val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
     val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
+    val registeredCities by themeViewModel.registeredCities.collectAsStateWithLifecycle()
     val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
     val profile = (profileState as? ProfileState.Success)?.profile
 
@@ -106,40 +107,41 @@ fun HomeScreen(
     HavamaniaScreen(
         modifier = Modifier.pullRefresh(pullRefreshState)
     ) { padding ->
-        Crossfade(targetState = uiState, label = "state_transition", animationSpec = tween(1000)) { state ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (state) {
-                    is WeatherUiState.Loading -> HomeScreenLoading()
-                    is WeatherUiState.NoCity -> {
-                        NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
-                    }
-                    is WeatherUiState.Success -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            WeatherSuccessContent(
-                                data = state.data,
-                                selectedHourlyWeather = selectedHourlyWeather,
-                                selectedForecastDate = selectedForecastDate,
-                                selectedDailyForecast = selectedDailyForecast,
-                                recommendation = todayRecommendation,
-                                userInterests = userInterests,
-                                unreadCount = unreadNotificationsCount,
-                                onSelectHour = { viewModel.selectHour(it) },
-                                onSelectDaily = { viewModel.selectDailyForecast(it) },
-                                scrollState = scrollState,
-                                onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
-                                onCityClick = { showCitySwitcher = true },
-                                onNotificationsClick = onNavigateToNotifications
-                            )
-                        }
-                    }
-                    is WeatherUiState.Error -> {
-                        val isOffline = !isOnline
-                        HavamaniaErrorState(
-                            title = if (isOffline) "Bağlantı Yok" else "Hata",
-                            description = if (isOffline) "İnternet bağlantını kontrol et." else state.message,
-                            onRetry = { viewModel.refreshWeather() }
+        val state = uiState
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (state) {
+                is WeatherUiState.Loading -> HomeScreenLoading()
+                is WeatherUiState.NoCity -> {
+                    NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
+                }
+                is WeatherUiState.Success -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        WeatherSuccessContent(
+                            data = state.data,
+                            isOnline = isOnline,
+                            selectedHourlyWeather = selectedHourlyWeather,
+                            selectedForecastDate = selectedForecastDate,
+                            selectedDailyForecast = selectedDailyForecast,
+                            recommendation = todayRecommendation,
+                            userInterests = userInterests,
+                            unreadCount = unreadNotificationsCount,
+                            onSelectHour = { viewModel.selectHour(it) },
+                            onSelectDaily = { viewModel.selectDailyForecast(it) },
+                            scrollState = scrollState,
+                            onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
+                            onCityClick = { showCitySwitcher = true },
+                            onNotificationsClick = onNavigateToNotifications
                         )
                     }
+                }
+                is WeatherUiState.Error -> {
+                    WeatherLoadError(
+                        message = state.message,
+                        isOnline = isOnline,
+                        isRefreshing = isRefreshing,
+                        onChooseCity = { showCitySwitcher = true },
+                        onRetry = viewModel::refreshWeather
+                    )
                 }
             }
         }
@@ -158,6 +160,7 @@ fun HomeScreen(
                     suggestions = citySuggestions,
                     status = citySearchStatus,
                     onRetry = { viewModel.searchCity(searchText) },
+                    savedCities = registeredCities,
                     isSelected = { suggestion ->
                         val data = (uiState as? WeatherUiState.Success)?.data
                         data?.cityName == suggestion.getSafeCity() && data?.districtName == suggestion.getSafeDistrict()
@@ -197,7 +200,8 @@ fun BoxScope.WeatherSuccessContent(
     scrollState: androidx.compose.foundation.ScrollState,
     onAskAiClick: (HavamaniaRecommendation) -> Unit,
     onCityClick: () -> Unit = {},
-    onNotificationsClick: () -> Unit = {}
+    onNotificationsClick: () -> Unit = {},
+    isOnline: Boolean = true
 ) {
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
@@ -248,13 +252,13 @@ fun BoxScope.WeatherSuccessContent(
     ) {
         Spacer(modifier = Modifier.height(themeStyles.spacingSM))
 
-        if (data.isStale) {
-            val formattedTime = remember(data.timestamp) {
-                try {
-                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("tr"))
-                    java.util.Date(data.timestamp).let { sdf.format(it) }
-                } catch (e: Exception) { "" }
+        if (data.isStale || !isOnline) {
+            val formattedTime = remember(data.timestamp, data.timezone) {
+                java.time.Instant.ofEpochMilli(data.timestamp)
+                    .atZone(ForecastTime.zone(data.timezone))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.forLanguageTag("tr-TR")))
             }
+            val status = if (isOnline) "Önbellekteki hava verisi" else "Çevrimdışı hava verisi"
             Surface(
                 color = themeColors.warning.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(12.dp),
@@ -270,13 +274,13 @@ fun BoxScope.WeatherSuccessContent(
                 ) {
                     Icon(
                         Icons.Rounded.Info,
-                        contentDescription = "Çevrimdışı / Eski Veri",
+                        contentDescription = null,
                         tint = themeColors.warning,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (formattedTime.isNotBlank()) "Çevrimdışı veri • Son güncelleme $formattedTime" else "Çevrimdışı veri",
+                        text = "$status • Son güncelleme $formattedTime",
                         style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.warning
                     )

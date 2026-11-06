@@ -148,7 +148,7 @@ fun AiHistoryScreen(
 
 @Composable
 fun AiHistoryCard(
-    item: AiHistoryEntity,
+    item: AiHistorySummary,
     enabled: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit

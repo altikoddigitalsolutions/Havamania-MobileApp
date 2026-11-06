@@ -5,6 +5,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AiHistoryDetailLoaderTest {
+    @Test fun deletionBeforeOrDuringReadHidesHistoryDetail() = runBlocking {
+        var deleted = true
+        val record = AiHistoryEntity(id = "record", userId = "A")
+        assertNull(readVisibleHistoryDetail({ deleted }) {
+            fail("A deleted conversation must not be fetched")
+            record
+        })
+        deleted = false
+        assertEquals(record, readVisibleHistoryDetail({ deleted }) { record })
+        assertNull(readVisibleHistoryDetail({ deleted }) {
+            deleted = true
+            record
+        })
+    }
+
     @Test fun emptyInitialListDoesNotMeanMissingWhileReadIsPending() = runBlocking {
         val result = CompletableDeferred<AiHistoryEntity?>()
         val loader = AiHistoryDetailLoader(this) { "A" }

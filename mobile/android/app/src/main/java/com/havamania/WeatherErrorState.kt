@@ -33,6 +33,9 @@ fun HavamaniaErrorState(
     title: String,
     description: String,
     icon: ImageVector = Icons.Rounded.ErrorOutline,
+    retryEnabled: Boolean = true,
+    retryInProgress: Boolean = false,
+    onChooseCity: (() -> Unit)? = null,
     onRetry: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
@@ -95,13 +98,38 @@ fun HavamaniaErrorState(
             Spacer(modifier = Modifier.height(40.dp))
 
             HavamaniaPrimaryButton(
-                text = "TEKRAR DENE",
+                text = "Tekrar dene",
                 onClick = onRetry,
                 modifier = Modifier.fillMaxWidth(0.7f),
-                icon = Icons.Rounded.Refresh
+                icon = Icons.Rounded.Refresh,
+                enabled = retryEnabled,
+                isLoading = retryInProgress
             )
+            if (onChooseCity != null) {
+                TextButton(onClick = onChooseCity) {
+                    Text("Şehir seç")
+                }
+            }
         }
     }
+}
+
+@Composable
+internal fun WeatherLoadError(
+    message: String,
+    isOnline: Boolean,
+    isRefreshing: Boolean,
+    onChooseCity: (() -> Unit)? = null,
+    onRetry: () -> Unit
+) {
+    HavamaniaErrorState(
+        title = if (isOnline) "Hava durumu alınamadı" else "Bağlantı yok",
+        description = if (isOnline) message else "İnternet bağlantını kontrol et.",
+        retryEnabled = isOnline && !isRefreshing,
+        retryInProgress = isRefreshing,
+        onChooseCity = onChooseCity,
+        onRetry = onRetry
+    )
 }
 
 // Predefined error states

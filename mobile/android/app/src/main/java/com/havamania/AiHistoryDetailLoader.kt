@@ -4,6 +4,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+internal suspend fun readVisibleHistoryDetail(
+    isDeleted: suspend () -> Boolean,
+    read: suspend () -> AiHistoryEntity?
+): AiHistoryEntity? {
+    if (isDeleted()) return null
+    val item = read() ?: return null
+    return if (isDeleted()) null else item
+}
+
 internal sealed interface AiHistoryDetailState {
     data object Loading : AiHistoryDetailState
     data class Ready(val item: AiHistoryEntity) : AiHistoryDetailState

@@ -217,6 +217,17 @@ data class AiHistoryEntity(
     val pendingUpload: Boolean = false
 )
 
+data class AiHistorySummary(
+    val id: String,
+    val title: String,
+    val summary: String,
+    val cityName: String?,
+    val timestamp: Long,
+    val pendingUpload: Boolean
+)
+
+data class AiHistoryVersion(val userId: String, val timestamp: Long, val updatedAt: Long, val pendingUpload: Boolean)
+
 /** Empty recordId means the entire user's history. Kept until remote acknowledgement. */
 @Entity(tableName = "ai_history_deletions", primaryKeys = ["userId", "recordId"])
 data class HistoryDeletionRequest(val userId: String, val recordId: String, @ColumnInfo(defaultValue = "0") val completed: Boolean = false)
@@ -312,11 +323,20 @@ interface WeatherDao {
     @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY updatedAt DESC")
     suspend fun getAllAiHistory(uid: String): List<AiHistoryEntity>
 
+    @Query("""
+        SELECT id, title, summary, cityName, timestamp, pendingUpload
+        FROM ai_history WHERE userId = :uid AND NOT EXISTS (
+            SELECT 1 FROM ai_history_deletions d
+            WHERE d.userId = :uid AND (d.recordId = '' OR d.recordId = ai_history.id)
+        ) ORDER BY updatedAt DESC
+    """)
+    suspend fun getVisibleAiHistory(uid: String): List<AiHistorySummary>
+
     @Query("SELECT * FROM ai_history WHERE id = :id AND userId = :uid LIMIT 1")
     suspend fun getAiHistoryItem(id: String, uid: String): AiHistoryEntity?
 
-    @Query("SELECT * FROM ai_history WHERE id = :id LIMIT 1")
-    suspend fun getAiHistoryItemRaw(id: String): AiHistoryEntity?
+    @Query("SELECT userId, timestamp, updatedAt, pendingUpload FROM ai_history WHERE id = :id LIMIT 1")
+    suspend fun getAiHistoryVersion(id: String): AiHistoryVersion?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiHistoryRaw(item: AiHistoryEntity)
@@ -325,11 +345,23 @@ interface WeatherDao {
     suspend fun insertAiHistory(item: AiHistoryEntity) {
         check(!isDeletedAccountHash(accountOwnerHash(item.userId))) { "Account history writes are blocked" }
         check(!hasHistoryDeletion(item.userId, item.id)) { "History deletion is pending" }
-        val existing = getAiHistoryItemRaw(item.id)
-        if (existing != null && existing.userId != item.userId) {
-            return
-        }
+        val existing = getAiHistoryVersion(item.id)
+        check(existing == null || existing.userId == item.userId) { "History ID belongs to another account" }
         insertAiHistoryRaw(item)
+    }
+
+    @Transaction
+    suspend fun saveAiHistoryRevision(item: AiHistoryEntity): AiHistoryEntity {
+        val existing = getAiHistoryVersion(item.id)
+        check(existing == null || existing.userId == item.userId) { "History ID belongs to another account" }
+        val previousVersion = existing?.updatedAt ?: 0L
+        check(previousVersion < Long.MAX_VALUE) { "History revision cannot advance" }
+        val revision = item.copy(
+            timestamp = existing?.timestamp ?: item.timestamp,
+            updatedAt = maxOf(item.updatedAt, previousVersion + 1L)
+        )
+        insertAiHistory(revision)
+        return revision
     }
 
     @Query("DELETE FROM ai_history WHERE id = :id AND userId = :uid")
@@ -339,13 +371,18 @@ interface WeatherDao {
     suspend fun mergeAiHistory(item: AiHistoryEntity) {
         if (isDeletedAccountHash(accountOwnerHash(item.userId))) return
         if (hasHistoryDeletion(item.userId, item.id)) return
-        val existing = getAiHistoryItemRaw(item.id)
+        val existing = getAiHistoryVersion(item.id)
         if (existing != null && (existing.userId != item.userId || existing.updatedAt > item.updatedAt || existing.pendingUpload)) return
         insertAiHistoryRaw(item)
     }
 
-    @Query("SELECT * FROM ai_history WHERE userId = :uid AND pendingUpload = 1 AND NOT EXISTS (SELECT 1 FROM ai_history_deletions d WHERE d.userId = :uid AND (d.recordId = '' OR d.recordId = ai_history.id)) ORDER BY updatedAt")
-    suspend fun getPendingAiHistory(uid: String): List<AiHistoryEntity>
+    @Query("""
+        SELECT id FROM ai_history WHERE userId = :uid AND pendingUpload = 1 AND NOT EXISTS (
+            SELECT 1 FROM ai_history_deletions d
+            WHERE d.userId = :uid AND (d.recordId = '' OR d.recordId = ai_history.id)
+        ) ORDER BY updatedAt
+    """)
+    suspend fun getPendingAiHistoryIds(uid: String): List<String>
 
     @Query("UPDATE ai_history SET pendingUpload = 0, syncedUpdatedAt = :version WHERE id = :id AND userId = :uid AND updatedAt = :version")
     suspend fun acknowledgeAiHistory(id: String, uid: String, version: Long)
@@ -361,6 +398,15 @@ interface WeatherDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertHistoryDeletionRaw(request: HistoryDeletionRequest)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertHistoryDeletionBatchRaw(requests: List<HistoryDeletionRequest>)
+
+    @Transaction
+    suspend fun markRemoteHistoryForDeletion(uid: String, ids: List<String>) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        insertHistoryDeletionBatchRaw(ids.map { HistoryDeletionRequest(uid, it, completed = true) })
+    }
 
     @Transaction
     suspend fun insertHistoryDeletion(request: HistoryDeletionRequest) {
@@ -381,15 +427,25 @@ interface WeatherDao {
     @Query("UPDATE ai_history_deletions SET completed = 1 WHERE userId = :uid AND recordId = :id")
     suspend fun acknowledgeHistoryDeletion(uid: String, id: String)
 
+    @Query("UPDATE ai_history_deletions SET completed = 1 WHERE userId = :uid AND recordId <> '' AND completed = 0")
+    suspend fun acknowledgeIndividualHistoryDeletions(uid: String)
+
     @Query("DELETE FROM ai_history_deletions WHERE userId = :uid")
     suspend fun clearHistoryDeletions(uid: String)
+
+    @Query("""
+        INSERT OR IGNORE INTO ai_history_deletions (userId, recordId, completed)
+        SELECT userId, id, 1 FROM ai_history WHERE userId = :uid
+    """)
+    suspend fun markLocalHistoryDeleted(uid: String)
 
     @Transaction
     suspend fun completeHistoryDeletion(uid: String, id: String) {
         if (isDeletedAccountHash(accountOwnerHash(uid))) return
         if (id.isEmpty()) {
-            getAllAiHistory(uid).forEach { insertHistoryDeletion(HistoryDeletionRequest(uid, it.id, true)) }
+            markLocalHistoryDeleted(uid)
             clearAllAiHistory(uid)
+            acknowledgeIndividualHistoryDeletions(uid)
             removeHistoryDeletion(uid, id)
         } else {
             deleteAiHistory(id, uid)
@@ -397,15 +453,16 @@ interface WeatherDao {
         }
     }
 
+    @Query("SELECT id FROM ai_history WHERE userId = :uid AND syncedUpdatedAt = updatedAt AND pendingUpload = 0")
+    suspend fun getAcknowledgedAiHistoryIds(uid: String): List<String>
+
     /** Full, server-confirmed collection only. Unknown/local-only records are retained. */
     @Transaction
     suspend fun reconcileAiHistory(uid: String, items: List<AiHistoryEntity>, serverIds: Set<String>) {
         if (isDeletedAccountHash(accountOwnerHash(uid))) return
         items.filter { it.userId == uid }.forEach { mergeAiHistory(it.copy(syncedUpdatedAt = it.updatedAt, pendingUpload = false)) }
-        getAllAiHistory(uid).forEach { local ->
-            if (local.id !in serverIds && local.syncedUpdatedAt == local.updatedAt && !local.pendingUpload) {
-                deleteAiHistory(local.id, uid)
-            }
+        getAcknowledgedAiHistoryIds(uid).forEach { id ->
+            if (id !in serverIds) deleteAiHistory(id, uid)
         }
     }
 

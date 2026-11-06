@@ -127,7 +127,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         val user = firebaseAuth.currentUser
         val newUid = user?.uid ?: "legacy"
 if (BuildConfig.DEBUG) {
-            Log.d("ThemeVM", "Auth state changed. New UID: $newUid")
+            Log.d("ThemeVM", "Auth state changed.")
 }
 
         clearLocalUserData()
@@ -157,7 +157,7 @@ if (BuildConfig.DEBUG) {
         if (uid == "legacy") return
 
 if (BuildConfig.DEBUG) {
-            Log.d("ThemeVM", "Starting Cities listener for $uid")
+            Log.d("ThemeVM", "Starting cities listener.")
 }
         val queue = com.havamania.CitySnapshotQueue<com.google.firebase.firestore.QuerySnapshot>()
         citiesSnapshotJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) {

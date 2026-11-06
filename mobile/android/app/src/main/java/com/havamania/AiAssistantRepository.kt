@@ -43,7 +43,7 @@ class AiAssistantRepository(
         }
 
         if (BuildConfig.DEBUG) {
-            Log.d("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_START | requestId=$requestId | messageLength=${question.length}")
+            Log.d("ASSISTANT_DEBUG", "ASSISTANT_REQUEST_START | requestId=$requestId")
         }
 
         try {

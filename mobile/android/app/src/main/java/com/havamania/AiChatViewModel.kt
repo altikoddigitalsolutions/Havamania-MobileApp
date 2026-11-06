@@ -138,7 +138,6 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         _activeTravels.value = emptyList()
         userAboutMe = ""
         userInterests = emptySet()
-        if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "Auth state changed. New UID: $newUid")
         _messages.value = emptyList()
         _weatherData.value = null
         _weatherUiState.value = WeatherUiState.Loading
@@ -146,14 +145,11 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         contextCity = null
         heavyContextSentFor = null
 
-        loadActiveTravels(newUid)
-        observeWeatherState(newUid)
+        loadActiveTravels()
+        observeWeatherState()
     }
 
     init {
-if (BuildConfig.DEBUG) {
-            android.util.Log.i("ASSISTANT_TRACE", "AiChatViewModel init (Assistant mounted)")
-}
         auth.addAuthStateListener(authListener)
         loadConfig()
     }
@@ -175,9 +171,8 @@ if (BuildConfig.DEBUG) {
         if (owner != currentUid) throw kotlinx.coroutines.CancellationException("Account changed")
     }
 
-    private fun loadActiveTravels(uid: String = currentUid) {
+    private fun loadActiveTravels() {
         accountTasks.launch { owner ->
-            if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "loadActiveTravels started for $uid")
             try {
                 val entities = dao.getUserTravelPlans(owner)
                 ensureOwner(owner)
@@ -188,26 +183,20 @@ if (BuildConfig.DEBUG) {
                 _activeTravels.value = active
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-if (BuildConfig.DEBUG) {
-                    android.util.Log.e("ASSISTANT_TRACE", "loadActiveTravels FAILED: ${e.message}", e)
-}
+                if (BuildConfig.DEBUG) Log.e("ASSISTANT_TRACE", "Could not load active trips")
             }
         }
     }
 
-    private fun observeWeatherState(uid: String) {
+    private fun observeWeatherState() {
         weatherJob?.cancel()
         weatherJob = accountTasks.launch { owner ->
-            if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "observeWeatherState started for $uid")
-
             val current = repository.currentWeatherState.value
             if (current != null) {
-                if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "Initial weather found: ${current.cityName}")
                 _weatherData.value = current
                 _weatherUiState.value = WeatherUiState.Success(current)
             } else {
-                if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "Initial weather NULL. Triggering tryAutoFetch.")
-                tryAutoFetch(uid)
+                tryAutoFetch()
             }
 
             repository.currentWeatherState.collect { data ->
@@ -220,10 +209,9 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    private fun tryAutoFetch(uid: String) {
+    private fun tryAutoFetch() {
         fetchJob?.cancel()
         fetchJob = accountTasks.launch { owner ->
-            if (BuildConfig.DEBUG) android.util.Log.i("ASSISTANT_TRACE", "tryAutoFetch started for $uid")
             _weatherUiState.value = WeatherUiState.Loading
             try {
                 val defaultCity = kotlinx.coroutines.withTimeoutOrNull(3000) {
@@ -434,7 +422,11 @@ if (BuildConfig.DEBUG) {
                 loadingHistoryId = conversationId
                 _requestState.value = AssistantRequestState.LOADING
             },
-            operation = { owner -> dao.getAiHistoryItem(conversationId, owner) },
+            operation = { owner ->
+                readVisibleHistoryDetail(isDeleted = { dao.hasHistoryDeletion(owner, conversationId) }) {
+                    dao.getAiHistoryItem(conversationId, owner)
+                }
+            },
             onSuccess = { history ->
                 if (history != null) {
                     currentConversationId = conversationId

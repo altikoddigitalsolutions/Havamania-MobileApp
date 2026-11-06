@@ -41,6 +41,32 @@ import org.junit.Test
 class AiHistoryListDeviceTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun longHistoryDetailKeepsHeaderAndLastMessageReachable() {
+        val record = AiHistoryEntity(title = "Uzun sohbet", cityName = "İzmir",
+            messages = List(200) { AltikodChatMessage(text = "Örnek mesaj $it", isUser = it % 2 == 0) })
+        compose.setContent {
+            val colors = ThemeFactory.createColors(AppTheme.DARK)
+            CompositionLocalProvider(
+                LocalHavamaniaColors provides colors,
+                LocalHavamaniaTypography provides ThemeFactory.createTypography(colors),
+                LocalDensity provides Density(LocalDensity.current.density, 2f)
+            ) {
+                ProvideResponsiveLayout {
+                    AiHistoryDetailMessages(record, Modifier.testTag("history-detail"))
+                }
+            }
+        }
+        compose.onNodeWithText("Uzun sohbet").assertIsDisplayed()
+        compose.onNodeWithText("İzmir").assertIsDisplayed()
+        val last = compose.onNodeWithText("Örnek mesaj 199")
+        last.assertDoesNotExist()
+        val list = compose.onNodeWithTag("history-detail")
+        list.performScrollToIndex(record.messages.size)
+        last.assertIsDisplayed()
+        list.performScrollToIndex(0)
+        compose.onNodeWithText("Uzun sohbet").assertIsDisplayed()
+    }
+
     @Test fun historyCardActionsAreUnavailableDuringDeletionAndReturnAfterward() {
         val enabled = mutableStateOf(false)
         var opened = false
@@ -51,7 +77,8 @@ class AiHistoryListDeviceTest {
                 LocalHavamaniaTypography provides ThemeFactory.createTypography(colors)
             ) {
                 ProvideResponsiveLayout {
-                    AiHistoryCard(AiHistoryEntity(title = "Örnek sohbet"), enabled.value, { opened = true }, {})
+                    AiHistoryCard(AiHistorySummary("example", "Örnek sohbet", "", null, 0L, false),
+                        enabled.value, { opened = true }, {})
                 }
             }
         }

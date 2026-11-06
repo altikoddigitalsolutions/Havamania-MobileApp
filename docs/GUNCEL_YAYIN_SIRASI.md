@@ -128,3 +128,77 @@ Bu tur doğrulaması: 403 JVM testi (0 hata), debug APK ve SM-T500 Android 12 ü
 5 Kasım geçmiş paneli yeniden test: Tablet kilidi açıldıktan sonra SM-T500 Android 12 üzerinde 2/2 cihaz testi geçti. 320 dp yükseklik ve yüzde 200 yazıyla son sohbet satırı görünür kaldı, uyarı panelindeki yeniden deneme düğmesine kaydırılıp dokunulabildi ve düğme liste alanıyla çakışmadı.
 
 5 Kasım Asistan geçmişi silme sırasında kartlar: Kartlar görünür kalıyor, açma ve silme işlemleri devre dışı. Dokunma anında da güncel silme durumu kontrol ediliyor. SM-T500 üzerinde 3/3 cihaz testi ve 415 birim testi başarılı. İlk koşuda yeni testin ekran boyutu sağlayıcısı eksikti, test kurulumu düzeltildikten sonra üçü de geçti. Gerçek silme işlemi bu arayüz testinde çalıştırılmadı.
+
+6 Kasım Asistan geçmişi detay silme kontrolü: Silme kaydı, detay okunmadan önce ve yanıt geldikten sonra kontrol ediliyor. Önceden silme işaretli kayıt için okuma yapılmıyor; okuma sırasında silme başlarsa gelen detay gösterilmiyor. 416 Android birim testi ve debug APK derlemesi başarılı. Canlı Firestore cihaz senaryosu açık.
+
+6 Kasım kayıtlı sohbet açılışında silme kontrolü: Asistan sohbet ekranı da detay ekranıyla aynı silme kontrolünü kullanıyor. Silme işaretli kayıt açılmıyor ve okuma sırasında silme başlarsa dönen kayıt uygulanmıyor. 416 Android birim testi ve debug APK derlemesi başarılı. Doğrudan açılışın cihaz doğrulaması açık.
+
+6 Kasım geçmiş listesi silme görünürlüğü: Yerel silme isteği kaydedilince liste yeniden okunuyor; silme işaretli sohbetler görünür listeden ve yükleme kuyruğundan dışlanıyor. Yerel satır sunucu onayı için korunuyor. 416 Android birim testi ve SM-T500 üzerinde 4/4 izole Room cihaz testi geçti. Canlı Firestore silme onayı bu testin dışında.
+
+6 Kasım geçmiş listesi eşzamanlı okumaları: Yeni liste okuması önceki okumayı iptal ediyor. İptal edilen veya önceki silme dönemine ait sonuç listeye ya da hata durumuna uygulanmıyor. 416 Android birim testi ve debug APK derlemesi başarılı. Gecikmeli eşzamanlı okumanın cihaz doğrulaması açık.
+
+6 Kasım Asistan geçmişi senkronizasyon uygulaması: Firestore sonucu Room'a işlenemezse yeniden deneme uyarısı gösteriliyor. Kapatılmış dinleyicinin gecikmiş sonucu yeni durumu veya hesap boşluk doğrulamasını değiştiremiyor. 416 Android birim testi ve debug APK derlemesi başarılı. Firebase ile yerel yazma hatasının birleşik cihaz senaryosu açık.
+
+6 Kasım Asistan geçmişi bozuk sunucu kaydı: Sunucu görüntüsündeki bir sohbet çözümlenemezse liste kısmen uygulanmıyor, yerel geçmiş korunuyor ve senkronizasyon uyarısı gösteriliyor. 416 Android birim testi geçti ve debug APK üretildi. Bozuk belgeyle Firestore entegrasyon testi açık.
+
+6 Kasım toplu geçmiş silme: Tüm geçmiş silme onayı aynı hesabın bekleyen tekil silme isteklerini de tamamlıyor. Tekil silme işaretleri eski verinin dönmesini engellemek için korunuyor. Diğer hesabın kuyruğu etkilenmiyor. 416 Android birim testi ve SM-T500 üzerinde 4/4 izole Room testi geçti. Canlı Firestore toplu silme doğrulaması açık.
+
+6 Kasım sohbet kimliği ve hesap ayrımı: Yerel Room kimliği başka hesaba aitse kaydetme açıkça başarısız oluyor ve uzak yükleme başlamıyor. Mevcut kayıt korunuyor. 416 Android birim testi ve SM-T500 üzerinde 5/5 izole Room testi geçti. Şema aynı sohbet kimliğinin iki hesapta eşzamanlı saklanmasını henüz desteklemiyor.
+
+6 Kasım Asistan geçmişi yükleme ve hesap değişimi: Firestore yazısı başlatılmadan hemen önce işlem iptali ve kayıt sahibinin güncel hesapla eşleşmesi kontrol ediliyor. Onaydan sonraki sahiplik kontrolü de devam ediyor. 416 Android birim testi ve debug APK derlemesi başarılı. Canlı hesap geçişi senaryosu açık.
+
+6 Kasım geçmiş silme ve hesap geçişi: Tekil veya toplu Firestore silmesi öncesinde, toplu işlemde her grup öncesinde ve yerel onay işlemi öncesinde aktif hesap ve iptal durumu kontrol ediliyor. 416 Android birim testi ve debug APK derlemesi başarılı. Canlı Firestore'da gruplar arasında hesap değişimi doğrulaması açık.
+
+6 Kasım geçmiş silme eski yeniden deneme: Önceden kuyruğa yazılan silme başka ekranda tamamlandıysa eski Tekrar dene işlemi yeni silme isteği oluşturmuyor. Kuyruğa ilk yazma başarısızsa yeniden denenebiliyor. 416 Android birim testi ve debug APK derlemesi başarılı. İki ekranlı uçtan uca senaryo açık.
+
+6 Kasım eski toplu silme yeniden deneme cihaz testi: SM-T500 Android 12 üzerinde izole Room veritabanında toplu silme tamamlandı, yeni sohbet eklendi ve eski istek yeniden denendi. İkinci silme başlamadı ve yeni sohbet görünür kaldı. 6/6 cihaz testi ve 416 Android birim testi geçti. Canlı Firestore çağrısı bu testin kapsamında değil.
+
+6 Kasım uzun sohbet detayı: Geçmiş detay ekranı tüm mesajları açılışta oluşturmak yerine LazyColumn kullanıyor. Başlık Sohbet detayı olarak düzeltildi ve Türkçe tarih biçimi korundu. 416 Android birim testi ve debug APK derlemesi başarılı. Uzun kayıtla cihaz kaydırma ve performans ölçümü açık.
+
+6 Kasım uzun sohbet detayı cihaz testi: SM-T500 Android 12 üzerinde 200 sentetik mesaj ve yüzde 200 yazıyla başlık ve şehir görünür, son mesaj açılışta görünüm dışında, kaydırınca erişilebilir ve başa dönüş çalışıyor. 4/4 izole cihaz testi ve 416 birim testi geçti. Kare süresi ve bellek ölçümü açık.
+
+6 Kasım Asistan geçmişi özet sorgusu: Geçmiş listesi ve Profil istatistikleri Room'dan yalnızca görünür sohbetlerin özet alanlarını alıyor. Mesaj dizisi liste açılışında okunmuyor. 200 mesajlı kayıtla özet ve detay ayrı doğrulandı. 416 Android birim testi ve SM-T500 üzerinde 7/7 izole Room testi geçti. Bellek ve süre ölçümü açık.
+
+6 Kasım geçmiş senkronizasyonu yerel karşılaştırma: Room, sunucu listesinde eksik olabilecek onaylı kayıtların yalnızca kimliklerini okuyor. Bekleyen, güncellenmiş veya eski şemadan gelen onaysız kayıtların korunması devam ediyor. 416 Android birim testi ve SM-T500 üzerinde 6/6 izole veritabanı testi geçti. Canlı Firestore ve performans ölçümü açık.
+
+6 Kasım toplu geçmiş silme yerel performansı: Room, sohbet içeriklerini açmadan silme işaretlerini tek SQL komutuyla oluşturuyor. Hesap ayrımı, tamamlanan işaretlerin korunması ve bekleyen tekil isteklerin kapanması doğrulandı. 416 Android birim testi ve SM-T500 üzerinde 7/7 izole Room testi geçti. Büyük geçmişle süre ölçümü açık.
+
+6 Kasım sunucu geçmişi toplu silme işaretleri: Her Firestore silme grubu için yerel işaretler tek Room işlemiyle yazılıyor. Önceden bekleyen tekil silme durumu korunuyor ve yalnız sunucuda bulunan sohbetin işareti de doğru hesaba yazılıyor. 416 Android birim testi ve SM-T500 üzerinde 7/7 izole Room testi geçti. Canlı Firestore ve süre ölçümü açık.
+
+6 Kasım sohbet sürüm sorgusu: Room, kayıt çakışması ve senkronizasyon sürüm kararlarında yalnızca hesap, güncelleme zamanı ve bekleyen yükleme alanlarını okuyor. Mesaj dizisi bu karşılaştırmada açılmıyor. 416 Android birim testi ve SM-T500 üzerinde 13/13 izole veritabanı testi geçti. Süre ve bellek ölçümü açık.
+
+6 Kasım sohbet kaydı tarih ve sürüm okuması: Yeniden kaydetme eski mesaj dizisini açmadan oluşturulma tarihi ve güncelleme sürümünü okuyor. Yerel kayıt öncesi aktif hesap tekrar kontrol ediliyor. 200 mesajlı kayıtla tarih ve sürüm sorgusu doğrulandı. 416 birim testi ve SM-T500 üzerinde 7/7 izole Room testi geçti. Uçtan uca kayıt süresi ölçümü açık.
+
+6 Kasım sohbet sürümü ve yerel kayıt atomikliği: Oluşturulma tarihinin ve sürümün okunması ile yeni kaydın yazılması aynı Room işlemi içinde. Firestore yüklemesi yerel işlem tamamlandıktan sonra başlıyor. 416 Android birim testi ve debug APK derlemesi başarılı. Eşzamanlı kayıt ve senkronizasyonun cihaz doğrulaması açık.
+
+6 Kasım eşzamanlı yerel sohbet kaydı cihaz testi: Sürüm hesaplama ve yazma tek Room DAO işlemi olarak test edildi. Aynı başlangıç sürümüyle eşzamanlı iki kayıt 201 ve 202 sürümlerini aldı, oluşturulma tarihi korundu ve son sürüm saklandı. 416 birim testi ve SM-T500 üzerinde 8/8 izole Room testi geçti. Cihazlar arası canlı Firestore yarışı açık.
+
+6 Kasım Asistan geçmişi yükleme kuyruğu: Room kuyruk sorgusu yalnızca sıralı sohbet kimliklerini döndürüyor. Her sohbetin mesaj dizisi yükleme sırası geldiğinde bir kez okunuyor. Sıralama, silme işaretleri ve hesap ayrımı doğrulandı. 416 Android birim testi ve SM-T500 üzerinde 14/14 izole veritabanı testi geçti. Canlı yükleme ve bellek ölçümü açık.
+
+6 Kasım sohbet sürüm üst sınırı: Sürüm Long.MAX_VALUE değerindeyse güncelleme reddediliyor ve mevcut kayıt korunuyor. Sayısal taşma daha eski bir sürümün yazılmasına neden olmuyor. 416 Android birim testi ve SM-T500 üzerinde 9/9 izole Room testi geçti.
+
+6 Kasım Asistan hata ayıklama günlükleri: Hesap kimliği, şehir adı, mesaj uzunluğu ve seyahat okumasının ham hata ayrıntıları kaldırıldı. Debug istek kimliği ve hata aşaması korunuyor. 416 Android birim testi ve debug APK derlemesi başarılı. Daha geniş uygulama günlük denetimi açık.
+
+6 Kasım Android günlük denetimi: Bildirim, tema, seyahat, hava ve ağ günlüklerindeki hesap kimlikleri, şehir adı ve seçili ham hata ayrıntıları kaldırıldı. Olay ve yeniden deneme bilgileri korunuyor. 416 Android birim testi ve debug APK derlemesi başarılı. Çalışma zamanı logcat ve servis günlükleri doğrulaması açık.
+
+6 Kasım konum taşıyan ağ günlükleri: Open-Meteo istek ve yanıt dökümü ile OSRM rota adresi günlüğü kaldırıldı. Konum sorgu parametreleri ve rota yolundaki koordinatlar bu istemcilerin HTTP günlüklerine yazılmıyor. 416 Android birim testi ve debug APK derlemesi başarılı. Çalışma zamanı Logcat doğrulaması açık.
+
+6 Kasım hava isteği yeniden deneme: Ara 5xx yanıtları bekleme öncesinde kapatılıyor ve iptal edilen istek yeni deneme başlatmıyor. 429 doğrudan dönüyor. Canlı ağ kullanmayan sentetik OkHttp testleri dahil 418 Android birim testi ve debug APK derlemesi başarılı.
+
+6 Kasım hava isteği TLS ve protokol hataları: TLS el sıkışması, uç kimliği doğrulaması ve protokol hataları otomatik yeniden denenmiyor. Sentetik OkHttp testi üç hatanın ilk denemede değişmeden iletildiğini doğruladı. 419 Android birim testi ve debug APK derlemesi başarılı.
+
+6 Kasım hava ekranı yenileme: Son şehir seçimi hesapla eşleşmek zorunda. Hesap değişiminde veya şehir kaldırıldığında seçim sıfırlanıyor ve bekleyen istek iptal ediliyor. Elle yenileme 20 saniye ile sınırlı. Hata durumunda mevcut hava verisi korunuyor, veri yoksa yenileme hatası gösteriliyor. 419 Android birim testi ve debug APK derlemesi başarılı. Hesap/şehir değişimi sırasında yenileme ve bağlantı kesintisi senaryoları gerçek cihaz doğrulamasına açık.
+
+6 Kasım hava ekranı ilk yükleme ve yenileme: İki işlem aynı istek ve hata akışını kullanıyor. Önbellekten gösterilen tahmin ağ zaman aşımında korunuyor. İptal edilmiş veya artık etkin hesaba/şehre ait olmayan istek hata ekranı açmıyor. Ham ağ istisnası günlükten kaldırıldı. 419 Android birim testi ve debug APK derlemesi başarılı. SM-T500 üzerinde 6 izole geç yanıt testi geçti. Ekranda şehir değiştirirken ve bağlantı kesilirken yenilemenin uçtan uca doğrulaması açık.
+
+6 Kasım hava ekranı bağlantı ve şehir geçişi: Çevrimdışıyken Tekrar dene devre dışı, bağlantı dönünce etkin, istek sürerken ilerleme göstergeli. Hava ekranındaki eski ve yeni içerikleri bir saniye üst üste tutan geçiş kaldırıldı. 419 Android birim testi, debug APK ve SM-T500 üzerinde 7/7 hedefli test başarılı. Cihaz testleri kontrollü bağlantı durumu ve geç yanıtı kapsıyor. Canlı bağlantıyı keserek şehir seçimi ve yenilemeyi birlikte doğrulama açık.
+
+6 Kasım çevrimdışı şehir seçimi: Hava hatası ekranı şehir seçiciyi açabiliyor. Arama yapılmadığında cihazda kayıtlı şehirler listeleniyor ve internet gerektirmeden seçilebiliyor. Aynı şehir adı satırda iki kez yazılmıyor. 419 Android birim testi, debug APK ve SM-T500 üzerinde 2/2 hedefli Compose testi başarılı. Test çevrimdışı durumu simüle ediyor. Gerçek bağlantı kesintisinde önbellekteki tahminin gösterilmesi uçtan uca doğrulamaya açık.
+
+6 Kasım önbellekteki hava verisi: Bağlantı yokken çevrimdışı veri uyarısı, bağlantı varken eski önbellek uyarısı gösteriliyor. Son güncelleme tarihi ve saati seçili şehrin saat dilimine göre yazılıyor. SM-T500 üzerinde 7/7 hedefli test geçti. Yeni izole Room testi, başarısız ağ yenilemesinde seçili şehrin önbelleğinin korunduğunu doğruluyor. 419 birim testi ve debug APK derlemesi başarılı. Gerçek ağ kesintisiyle tam ekran doğrulaması açık.
+
+6 Kasım hava kartı çökmesi ve önbellek uyarısı: Gün doğumu veya batımı eksikse hava kartı görsel hesaplarında varsayılan saatleri kullanıyor. Elle yenileme başarısız olduğunda 15 dakikadan yeni tahmin de önbellek olarak işaretleniyor. İstanbul saat diliminde gün değişimi ve yeni veri geldiğinde uyarının kalkması Compose ekranında doğrulandı. SM-T500 üzerinde 10/10 hedefli test, 419 birim testi ve debug APK derlemesi başarılı. Gerçek ağ kesintisiyle uçtan uca doğrulama açık.
+
+6 Kasım Android bağlantı izlemesi: Hava ve seyahat ekranları etkin varsayılan ağın doğrulanmış internet erişimini takip ediyor. Ağ doğrulaması değiştiğinde durum yeniden okunuyor. Android 6 için genel ağ bildirimi uyumluluğu korunuyor. 419 Android birim testi, debug APK ve SM-T500 üzerinde 11/11 hedefli test başarılı. Ağ izleyicisinin ilk durumu tabletin Android bağlantı bilgisiyle karşılaştırıldı. Wi-Fi kesilip geri açılırken tam ekran akışı ve Android 6 cihaz doğrulaması açık.
+
+6 Kasım gerçek Wi-Fi kesintisi: İlk SM-T500 denemesinde Android Wi-Fi bağlantısı kesilmesine rağmen izleyici çevrimdışı olayını kaçırdı. Varsayılan ağın kayıp ve yetenek değişiklikleri artık geri çağrının taşıdığı durumla işleniyor. Wi-Fi kapatılıp geri açıldığında aynı gözlemci çevrimiçi, çevrimdışı ve tekrar çevrimiçi durumlarını sırayla doğruladı. Test Wi-Fi ayarını geri yükledi ve yalnızca testWifiToggle parametresiyle çalışıyor. Hava ekranı Compose testleri dahil SM-T500 üzerinde 5/5 hedefli test ve debug APK derlemesi başarılı. Gerçek bağlantı olayını ana hava ekranı ve seyahat akışına kadar tek senaryoda izleme ile Android 6 cihaz doğrulaması açık.
