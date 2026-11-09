@@ -94,7 +94,8 @@ fun HomeScreen(
     var showCitySwitcher by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    LaunchedEffect(searchText, showCitySwitcher) {
+    val weatherSession by viewModel.weatherSession.collectAsStateWithLifecycle()
+    LaunchedEffect(searchText, showCitySwitcher, weatherSession) {
         viewModel.searchCity(if (showCitySwitcher) searchText else "")
     }
 

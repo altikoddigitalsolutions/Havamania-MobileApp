@@ -135,9 +135,21 @@ class WeatherViewModel(
     private val accountTasks = AccountTaskScope(viewModelScope) { currentUid }
     private var locationJob: kotlinx.coroutines.Job? = null
 
+    private val _weatherSession = MutableStateFlow(0L)
+    val weatherSession = _weatherSession.asStateFlow()
+
+    private var observedUid: String? = null
     private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val accountUid = firebaseAuth.currentUser?.uid
+        val newUid = accountUid ?: "legacy"
+        if (newUid != observedUid) {
+            observedUid = newUid
+            resetWeatherSession(newUid, accountUid)
+        }
+    }
+
+    private fun resetWeatherSession(newUid: String, accountUid: String?) {
         accountTasks.reset()
-        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing weather.")
 
         // Clear UI state to prevent showing old user's data
@@ -151,12 +163,13 @@ class WeatherViewModel(
         currentUserInterests = emptySet()
         currentUserAboutMe = null
         currentPersonalization = null
-        repository.onAccountChanged(firebaseAuth.currentUser?.uid)
+        repository.onAccountChanged(accountUid)
         _uiState.value = WeatherUiState.Loading
         _todayRecommendation.value = null
         _smartAlerts.value = emptyList()
 
         observeUserData(newUid)
+        _weatherSession.value++
     }
 
     init {
