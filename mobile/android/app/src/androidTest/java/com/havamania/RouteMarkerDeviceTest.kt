@@ -11,6 +11,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.unit.dp
@@ -37,6 +40,7 @@ class RouteMarkerDeviceTest {
         val waypointsById = mutableMapOf<Long, RouteWaypoint>()
         var map by mutableStateOf<MapLibreMap?>(null)
         var selected by mutableStateOf(emptyList<RouteWaypoint>())
+        var chosen: RouteWaypoint? = null
 
         fun showMarker(target: MapLibreMap, waypoint: RouteWaypoint) {
             target.clear()
@@ -52,6 +56,12 @@ class RouteMarkerDeviceTest {
             val view = rememberMapViewWithLifecycle()
             AndroidView(factory = { view }, modifier = Modifier.size(300.dp).testTag("route-map"))
             RouteMarkerSelection(map, waypointsById) { selected = it }
+            if (selected.size > 1) {
+                RoutePassageDialog(selected, onDismiss = { selected = emptyList() }) {
+                    chosen = it
+                    selected = emptyList()
+                }
+            }
             LaunchedEffect(view) {
                 view.getMapAsync { ready ->
                     ready.setStyle(Style.Builder().fromJson("""{"version":8,"sources":{},"layers":[]}""")) {
@@ -78,6 +88,10 @@ class RouteMarkerDeviceTest {
         }
         tapMarker()
         compose.waitUntil(5_000) { selected == listOf(first, second) }
-        compose.runOnIdle { assertEquals(listOf(first, second), selected) }
+        compose.onNodeWithText("Bu noktadan geçişler").assertIsDisplayed()
+        compose.onNodeWithText("1. geçiş").assertIsDisplayed()
+        compose.onNodeWithText("2. geçiş").performClick()
+        compose.onNodeWithText("Bu noktadan geçişler").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(second, chosen) }
     }
 }

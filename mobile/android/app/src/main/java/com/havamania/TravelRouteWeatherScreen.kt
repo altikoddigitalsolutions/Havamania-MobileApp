@@ -213,29 +213,10 @@ if (BuildConfig.DEBUG) {
         }
     }
     if (overlappingWaypoints.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { overlappingWaypoints = emptyList() },
-            title = { Text("Bu noktadan geçişler") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    overlappingWaypoints.forEachIndexed { index, waypoint ->
-                        val time = waypoint.etaEpochMillis?.let {
-                            LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
-                                .format(DateTimeFormatter.ofPattern("HH:mm"))
-                        }
-                        TextButton(onClick = {
-                            overlappingWaypoints = emptyList()
-                            selected = waypoint
-                        }) {
-                            Text("${index + 1}. geçiş" + (time?.let { " · $it" } ?: ""))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { overlappingWaypoints = emptyList() }) { Text("Kapat") }
-            }
-        )
+        RoutePassageDialog(overlappingWaypoints, onDismiss = { overlappingWaypoints = emptyList() }) {
+            overlappingWaypoints = emptyList()
+            selected = it
+        }
     }
 
     LaunchedEffect(selected) {
@@ -854,6 +835,36 @@ private fun RouteAnalysisActionCard(analyzing: Boolean, onAnalyze: () -> Unit, c
             )
         }
     }
+}
+
+@Composable
+internal fun RoutePassageDialog(
+    waypoints: List<RouteWaypoint>,
+    onDismiss: () -> Unit,
+    onSelect: (RouteWaypoint) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Bu noktadan geçişler") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                waypoints.forEachIndexed { index, waypoint ->
+                    val time = waypoint.etaEpochMillis?.let {
+                        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("HH:mm"))
+                    }
+                    TextButton(onClick = {
+                        onSelect(waypoint)
+                    }) {
+                        Text("${index + 1}. geçiş" + (time?.let { " · $it" } ?: ""))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Kapat") }
+        }
+    )
 }
 
 @Composable

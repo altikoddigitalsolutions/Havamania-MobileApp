@@ -371,3 +371,5 @@ Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
 9 Kasım MapLibre işaretçi cihaz testi: SM-T500 üzerinde gerçek MapLibre görünümüne yerel stil ile dokunuldu. Aynı koordinatta işaretçi yeniden çizildiğinde güncel geçiş seçildi. Üretim ekranı ve test aynı işaretçi seçim kodunu kullanıyor. Android birim testleri ve debug APK başarılı. Eşzamanlı üst üste işaretçilerin seçimi ve canlı servislerle uçtan uca rota kontrolü açık.
 
 9 Kasım çakışan rota işaretçileri: Aynı koordinattaki kayıtlar tek dokunuşla rota sırasına göre seçime sunuluyor. Yerel MapLibre stiliyle SM-T500 cihaz testi eşzamanlı çakışan iki işaretçinin adaylarını doğruladı. Android birim testleri ve debug APK başarılı. Seçim penceresinin görsel doğrulaması ve canlı servislerle uçtan uca kontrol açık.
+
+9 Kasım çakışan işaretçi seçim penceresi: SM-T500 üzerinde yerel MapLibre stilinde dokunuşla gerçek seçim penceresi açıldı. İkinci geçişe basıldığında pencerenin kapandığı ve ikinci kaydın seçildiği doğrulandı. Android birim testleri ve debug APK başarılı. Canlı servislerle uçtan uca rota kontrolü açık.
