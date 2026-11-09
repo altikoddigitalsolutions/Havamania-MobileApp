@@ -78,4 +78,14 @@ class RouteSamplerTest {
         val result = EtaCalculator.assignEtas(route, listOf(wp), departureEpochMillis = 1000L)
         assertEquals(null, result[0].etaEpochMillis)
     }
+
+    @Test
+    fun forecastPointsUseRoadEndpointsAndIncludeShortRouteMidpoint() {
+        val start = GeoPoint(40.0, 29.0)
+        val end = GeoPoint(41.0, 29.0)
+        val route = RoutePath(listOf(start, end), 100_000.0, 3600.0)
+        val points = route.forecastWaypoints(1000L)
+        assertEquals(listOf(start, GeoPoint(40.5, 29.0), end), points.map { it.location })
+        assertEquals(listOf(1000L, 1_801_000L, 3_601_000L), points.map { it.etaEpochMillis })
+    }
 }

@@ -375,3 +375,15 @@ Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
 9 Kasım çakışan işaretçi seçim penceresi: SM-T500 üzerinde yerel MapLibre stilinde dokunuşla gerçek seçim penceresi açıldı. İkinci geçişe basıldığında pencerenin kapandığı ve ikinci kaydın seçildiği doğrulandı. Android birim testleri ve debug APK başarılı. Canlı servislerle uçtan uca rota kontrolü açık.
 
 9 Kasım giriş sonrası Hava ekranı ve şehir araması: Videoda ilk yükleme görünümü ve sekme dönüşünde açılan şehir ekleme ekranı incelendi. Gezinme denetleyicisi ve NavHost aynı hesap anahtarıyla yenileniyor. Aynı UID için yinelenen auth bildirimi hava/arama durumunu sıfırlamıyor. Oturum değişirse açık sorgu yeniden çalışıyor. Android birim testleri ve debug APK başarılı. Gerçek girişten hemen sonra sekme değiştirmeden Hava ekranının açılması ve şehir sonuçlarının görünmesi cihazda doğrulanacak.
+
+9 Kasım seyahat bildirimi güzergâh riski: Bildirim ekranla aynı yoğun rota örneklemesini kullanıyor. Kısmi tahmin güvenli rota olarak sunulmuyor ve mevcut tehlike uyarıları korunuyor. İki yeni regresyon dahil 444 Android birim testi ve debug APK başarılı. Arka plan bildiriminin gerçek cihaz kontrolü açık. Giriş sonrası Hava ve şehir araması cihaz doğrulaması kullanıcı isteğiyle ertelendi.
+
+9 Kasım ortak güzergâh tahmin hesabı: Ekran ve seyahat bildirimi, rota geometrisinin kalkış ve varış koordinatlarını ve aynı ara geçiş saatlerini kullanıyor. Kısa rota regresyonu dahil 445 Android birim testi ve debug APK başarılı. Arka plan bildiriminin cihaz doğrulaması açık.
+
+9 Kasım değişen güzergâh bildirimi: Tahmin değişse bile bildirim gövdesi güncel risk ve eksik veri özetini gösteriyor. Android birim testleri ve debug APK başarılı. Tüm tahminlerin geçici olarak alınamadığı durumda mevcut günlük döngü bekleniyor. Sınırlı yeniden deneme ve cihaz doğrulaması açık.
+
+9 Kasım güzergâh bildirimi yeniden deneme: Rota veya hava tahmini geçici olarak alınamadığında WorkManager en fazla iki ek deneme istiyor. Rota bulunamazsa, seyahat uygun değilse veya günlük bildirim zaten gönderildiyse bu yol tetiklenmiyor. 446 Android birim testi ve debug APK başarılı. Gerçek cihazda zamanlama ve teslimat kontrolü açık.
+
+9 Kasım ilk güzergâh bildirimi: Hazır bildirimi artık tahmin sonucu alındığında gönderiliyor ve risk özeti içeriyor. İlk bildirim ve sonraki güncellemeler aynı günlük tekrar korumasını kullanıyor. Tahmin tamamen yoksa sınırlı yeniden deneme uygulanıyor. 446 Android birim testi ve debug APK başarılı. WorkManager zamanlaması ve cihaz bildirimi açık.
+
+9 Kasım güzergâh bildirimi teslimat kurtarma: Yarım kalan rezervasyon günlük teslimat sayılmıyor. SM-T500 üzerindeki izole Room testinde önceki süreçten kalan kayıt kurtarıldı ve tek tamamlanmış bildirim oluştu. İlk koşuda testin süreç kimliği eşleşmedi, test düzeltildikten sonra 3/3 cihaz testi geçti. Birim testleri ve debug APK başarılı. WorkManager zamanlaması ve gerçek sistem bildirimi açık.

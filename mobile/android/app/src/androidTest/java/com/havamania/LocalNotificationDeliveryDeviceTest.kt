@@ -45,4 +45,26 @@ class LocalNotificationDeliveryDeviceTest {
             assertTrue(dao.getAllNotificationsFirst("a").single().isRead)
         } finally { db.close() }
     }
+
+    @Test fun interruptedRouteReservationDoesNotBlockDeliveryAfterRestart() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,
+            NotificationDatabase::class.java).build()
+        try {
+            val dao = db.notificationDao()
+            val key = "route_daily_owner_trip_2026-11-09"
+            val id = notificationEventRecordId("owner", "route_daily", key)
+            val item = NotificationItem(id = id, userId = "owner", deduplicationKey = key)
+            assertTrue(dao.reserveForDelivery(item, processId = "previous") > 0)
+            assertNull(dao.getVisibleNotification("owner", id))
+            val delivery = deliverLocalNotification(
+                item,
+                { dao.reserveForDelivery(it) },
+                dao::delete,
+                complete = { dao.completeDelivery(it.userId, it.id) }
+            ) { true }
+            assertEquals(LocalNotificationDelivery.POSTED, delivery)
+            assertNotNull(dao.getVisibleNotification("owner", id))
+            assertEquals(1, dao.getTotalCountFirst("owner"))
+        } finally { db.close() }
+    }
 }

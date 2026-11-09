@@ -130,3 +130,15 @@ object EtaCalculator {
         }
     }
 }
+
+internal fun RoutePath.forecastWaypoints(departureMillis: Long): List<RouteWaypoint> {
+    val start = origin ?: return emptyList()
+    val end = destination ?: return emptyList()
+    val intermediate = EtaCalculator.assignEtas(this, RouteSampler.denseSampleForAnalysis(this), departureMillis)
+    val arrivalMillis = departureMillis + (durationSeconds * 1000).toLong()
+    return buildList {
+        add(RouteWaypoint(start, 0.0, departureMillis))
+        addAll(intermediate)
+        add(RouteWaypoint(end, distanceMeters, arrivalMillis))
+    }
+}

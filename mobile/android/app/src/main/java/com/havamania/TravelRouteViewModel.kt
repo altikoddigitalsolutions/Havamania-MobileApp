@@ -175,27 +175,12 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         val currentAnalysis = coroutineContext.job
         analysis.start(currentAnalysis)
         try {
-            // 1. Denser sampling for thorough risk analysis
-            val denseWaypoints = RouteSampler.denseSampleForAnalysis(routeResult.route)
-            val denseWithEtas = EtaCalculator.assignEtas(routeResult.route, denseWaypoints, depMillis)
-
-            // 2. Prepare batch points (Start + Dense + End)
-            val allPoints = mutableListOf<GeoPoint>()
-            val allEtas = mutableListOf<Long?>()
-
-            routeResult.route.origin?.let { allPoints.add(it) }
-            allEtas.add(depMillis)
-
-            denseWithEtas.forEach {
-                allPoints.add(it.location)
-                allEtas.add(it.etaEpochMillis)
-            }
-
-            routeResult.route.destination?.let { allPoints.add(it) }
-            allEtas.add(depMillis + (routeResult.route.durationSeconds * 1000).toLong())
-
-            // 3. Fetch weather for ALL points
-            val weatherResults = weatherProvider.weatherAtBatch(allPoints, allEtas)
+            val forecastPoints = routeResult.route.forecastWaypoints(depMillis)
+            val denseWithEtas = forecastPoints.drop(1).dropLast(1)
+            val weatherResults = weatherProvider.weatherAtBatch(
+                forecastPoints.map { it.location },
+                forecastPoints.map { it.etaEpochMillis }
+            )
             if (routeJob !== analysisRouteJob) return@coroutineScope
             if (weatherResults.all { it == null }) {
                 _analysisError.value = "Güzergâh için hava tahmini alınamadı. Daha sonra tekrar deneyin."
