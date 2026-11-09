@@ -21,6 +21,25 @@ import org.junit.Test
 class WeatherLoadErrorDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun localCitySettingsCanBeRetriedWhileOffline() {
+        var retries = 0
+        compose.setContent {
+            HavamaniaTheme {
+                WeatherLoadError(
+                    message = "Şehir ayarları okunamadı.",
+                    isOnline = false,
+                    isRefreshing = false,
+                    retryNeedsInternet = false,
+                    onRetry = { retries++ }
+                )
+            }
+        }
+        compose.onNodeWithText("Şehir ayarları yüklenemedi").assertIsDisplayed()
+        compose.onNodeWithText("Bağlantı yok").assertDoesNotExist()
+        compose.onNodeWithText("Tekrar dene").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
+    }
+
     @Test fun forecastShowsCityLocalCacheTimeAndClearsWarningAfterFreshData() {
         val online = mutableStateOf(false)
         val weather = mutableStateOf(WeatherData(

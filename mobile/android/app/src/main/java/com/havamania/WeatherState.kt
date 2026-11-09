@@ -125,5 +125,5 @@ sealed class WeatherUiState {
     object Loading : WeatherUiState()
     object NoCity : WeatherUiState()
     data class Success(val data: WeatherData) : WeatherUiState()
-    data class Error(val message: String) : WeatherUiState()
+    data class Error(val message: String, val retryNeedsInternet: Boolean = true) : WeatherUiState()
 }

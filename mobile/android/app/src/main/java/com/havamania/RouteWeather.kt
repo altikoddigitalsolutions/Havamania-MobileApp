@@ -7,7 +7,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.math.abs
 
 /**
  * Akıllı Güzergâh Hava Durumu — Aşama 5 (hava + risk bağlama).
@@ -148,21 +147,30 @@ if (BuildConfig.DEBUG) {
         }
         // Open-Meteo timezone=auto → saatlik zamanlar noktanın yerel saatinde döner.
         val target = Instant.ofEpochMilli(etaEpochMillis).atZone(zone).toLocalDateTime()
-        var bestIdx = 0
-        var bestDiff = Long.MAX_VALUE
+        var earlierIndex = -1
+        var laterIndex = -1
+        var earlierDistance = Long.MAX_VALUE
+        var laterDistance = Long.MAX_VALUE
         for (i in time.indices) {
             val t = try {
                 LocalDateTime.parse(time[i])
             } catch (e: Exception) {
                 continue
             }
-            val diff = abs(Duration.between(t, target).toMinutes())
-            if (diff < bestDiff) {
-                bestDiff = diff
-                bestIdx = i
+            val offset = Duration.between(target, t).toMillis()
+            if (offset == 0L) return i
+            if (offset < 0 && -offset < earlierDistance) {
+                earlierDistance = -offset
+                earlierIndex = i
+            }
+            if (offset > 0 && offset < laterDistance) {
+                laterDistance = offset
+                laterIndex = i
             }
         }
-        // A date outside the forecast horizon must not reuse the last available forecast.
-        return bestIdx.takeIf { bestDiff <= 60 }
+        if (earlierIndex < 0 || laterIndex < 0) return null
+        // A missing hourly sample must not be covered by a neighboring forecast.
+        if (earlierDistance + laterDistance > 3_600_000) return null
+        return if (earlierDistance <= laterDistance) earlierIndex else laterIndex
     }
 }

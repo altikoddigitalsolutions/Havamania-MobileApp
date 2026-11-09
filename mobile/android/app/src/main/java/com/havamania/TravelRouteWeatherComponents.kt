@@ -23,7 +23,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -151,6 +153,9 @@ fun TimelineWaypointItem(
     weather: WaypointWeather?,
     isLast: Boolean = false,
     isFirst: Boolean = false,
+    missingForecastLabel: String,
+    etaEpochMillis: Long?,
+
     onClick: () -> Unit
 ) {
     val colors = HavamaniaTheme.colors
@@ -233,7 +238,7 @@ fun TimelineWaypointItem(
                     )
                     if (weather != null) {
                         Text(
-                            text = WeatherUtils.getWeatherDisplayName(weather.weatherCode, LocalDateTime.now(), null, null),
+                            text = routeWeatherDisplayName(weather.weatherCode, etaEpochMillis),
                             style = typography.caption.copy(fontSize = 11.sp),
                             color = colors.textSecondary,
                             maxLines = 1,
@@ -248,7 +253,7 @@ fun TimelineWaypointItem(
                             )
                         }
                     } else {
-                        Text("Veri bekleniyor...", style = typography.caption.copy(fontSize = 11.sp), color = colors.textMuted)
+                        Text(missingForecastLabel, style = typography.caption.copy(fontSize = 11.sp), color = colors.textMuted)
                     }
                 }
 
@@ -269,4 +274,10 @@ fun TimelineWaypointItem(
             }
         }
     }
+}
+
+internal fun routeWeatherDisplayName(code: Int, etaEpochMillis: Long?, zone: ZoneId = ZoneId.systemDefault()): String {
+    val eta = etaEpochMillis ?: return "Hava tahmini"
+    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(eta), zone)
+    return WeatherUtils.getWeatherDisplayName(code, time, null, null)
 }

@@ -63,55 +63,25 @@ object RouteSampler {
     }
 
     private fun adaptiveSample(route: RoutePath): List<RouteWaypoint> {
-        val pts = route.points
-        if (pts.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0.0 ||
-            !route.durationSeconds.isFinite() || route.durationSeconds <= 0.0) return emptyList()
-        val geometryLength = pts.zipWithNext().sumOf { (a, b) -> GeoMath.haversineMeters(a, b) }
-        if (!geometryLength.isFinite() || geometryLength <= 0.0) return emptyList()
-
-        val durationHrs = route.durationSeconds / 3600.0
-        val intermediateCount = getTargetIntermediateCount(durationHrs)
-
-        if (intermediateCount == 0) return emptyList()
-
-        val result = mutableListOf<RouteWaypoint>()
-        val intervalMeters = geometryLength / (intermediateCount + 1)
-
-        var cumulative = 0.0
-        var nextThreshold = intervalMeters
-
-        for (i in 1 until pts.size) {
-            val segStart = pts[i - 1]
-            val segEnd = pts[i]
-            val segLen = GeoMath.haversineMeters(segStart, segEnd)
-            if (segLen <= 0.0) continue
-
-            while (nextThreshold < cumulative + segLen && result.size < intermediateCount) {
-                val t = ((nextThreshold - cumulative) / segLen).coerceIn(0.0, 1.0)
-                val lat = segStart.latitude + (segEnd.latitude - segStart.latitude) * t
-                val lon = segStart.longitude + (segEnd.longitude - segStart.longitude) * t
-                result.add(RouteWaypoint(GeoPoint(lat, lon), nextThreshold / geometryLength * route.distanceMeters))
-                nextThreshold += intervalMeters
-            }
-            cumulative += segLen
-        }
-        return result
+        return sampleIntermediate(route, getTargetIntermediateCount(route.durationSeconds / 3600.0))
     }
 
-    /**
-     * Denser sampling for analysis purposes (~every 45 mins of driving).
-     * Hazards will be extracted from this list.
-     */
+    /** Samples more points for hazard detection, roughly every 45 minutes of driving. */
     fun denseSampleForAnalysis(route: RoutePath): List<RouteWaypoint> {
-        val pts = route.points
-        if (pts.size < 2 || !route.distanceMeters.isFinite() || route.distanceMeters <= 0.0 ||
-            !route.durationSeconds.isFinite() || route.durationSeconds <= 0.0) return emptyList()
-        val geometryLength = pts.zipWithNext().sumOf { (a, b) -> GeoMath.haversineMeters(a, b) }
-        if (!geometryLength.isFinite() || geometryLength <= 0.0) return emptyList()
+        val count = (route.durationSeconds / (45 * 60)).toInt().coerceIn(1, 20)
+        return sampleIntermediate(route, count)
+    }
 
-        val durationMins = route.durationSeconds / 60.0
-        val sampleEveryMins = 45.0
-        val count = (durationMins / sampleEveryMins).toInt().coerceIn(1, 20)
+    private fun sampleIntermediate(route: RoutePath, count: Int): List<RouteWaypoint> {
+        val pts = route.points
+        if (count == 0 || pts.size < 2 ||
+            !route.distanceMeters.isFinite() || route.distanceMeters <= 0.0 ||
+            !route.durationSeconds.isFinite() || route.durationSeconds <= 0.0
+        ) return emptyList()
+
+        val segmentLengths = DoubleArray(pts.lastIndex) { i -> GeoMath.haversineMeters(pts[i], pts[i + 1]) }
+        val geometryLength = segmentLengths.sum()
+        if (!geometryLength.isFinite() || geometryLength <= 0.0) return emptyList()
 
         val result = mutableListOf<RouteWaypoint>()
         val intervalMeters = geometryLength / (count + 1)
@@ -122,7 +92,7 @@ object RouteSampler {
         for (i in 1 until pts.size) {
             val segStart = pts[i - 1]
             val segEnd = pts[i]
-            val segLen = GeoMath.haversineMeters(segStart, segEnd)
+            val segLen = segmentLengths[i - 1]
             if (segLen <= 0.0) continue
 
             while (nextThreshold < cumulative + segLen && result.size < count) {

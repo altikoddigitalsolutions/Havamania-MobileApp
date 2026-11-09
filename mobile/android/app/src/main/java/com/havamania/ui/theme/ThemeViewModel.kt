@@ -408,9 +408,9 @@ if (BuildConfig.DEBUG) {
             refreshClock = { ThemeManager.refreshCitySyncClock(getApplication(), uid, it, true) })
     }
 
-    fun setDefaultCity(city: GeocodingResultDto) {
+    fun setDefaultCity(city: GeocodingResultDto, useManualLocation: Boolean = false) {
         mutateCities(local = { uid ->
-            ThemeManager.recordDefaultCity(getApplication(), uid, city)
+            ThemeManager.recordDefaultCity(getApplication(), uid, city, useManualLocation)
             true
         }, remote = { uid ->
             sendPendingDefaultCity(uid)

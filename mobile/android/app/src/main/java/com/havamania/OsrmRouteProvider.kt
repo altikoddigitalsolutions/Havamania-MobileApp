@@ -38,14 +38,23 @@ class OsrmRouteProvider(
             try {
                 val response = api.getRoute(coords)
                 val route = response.routes.firstOrNull()
-                if (response.code != "Ok" || route == null || route.geometry.coordinates.isEmpty()) {
+                if (response.code != "Ok" || route == null) {
                     return@withContext RouteResult.NoRoute
                 }
-                // GeoJSON [lon, lat] -> domain GeoPoint(lat, lon)
-                val points = route.geometry.coordinates.mapNotNull { c ->
-                    if (c.size >= 2) GeoPoint(latitude = c[1], longitude = c[0]) else null
+                val geometry = route.geometry
+                if (geometry.type != "LineString" || geometry.coordinates.size < 2 ||
+                    !route.distance.isFinite() || route.distance < 0 ||
+                    !route.duration.isFinite() || route.duration < 0
+                ) return@withContext RouteResult.Error("Rota verisi geçersiz")
+
+                val points = geometry.coordinates.map { coordinate ->
+                    val longitude = coordinate.getOrNull(0)
+                    val latitude = coordinate.getOrNull(1)
+                    if (longitude == null || longitude !in -180.0..180.0 ||
+                        latitude == null || latitude !in -90.0..90.0
+                    ) return@withContext RouteResult.Error("Rota koordinatları geçersiz")
+                    GeoPoint(latitude, longitude)
                 }
-                if (points.size < 2) return@withContext RouteResult.NoRoute
                 RouteResult.Success(
                     RoutePath(
                         points = points,

@@ -119,13 +119,19 @@ internal fun WeatherLoadError(
     message: String,
     isOnline: Boolean,
     isRefreshing: Boolean,
+    retryNeedsInternet: Boolean = true,
     onChooseCity: (() -> Unit)? = null,
     onRetry: () -> Unit
 ) {
+    val retryAvailable = isOnline || !retryNeedsInternet
     HavamaniaErrorState(
-        title = if (isOnline) "Hava durumu alınamadı" else "Bağlantı yok",
-        description = if (isOnline) message else "İnternet bağlantını kontrol et.",
-        retryEnabled = isOnline && !isRefreshing,
+        title = when {
+            !retryNeedsInternet -> "Şehir ayarları yüklenemedi"
+            isOnline -> "Hava durumu alınamadı"
+            else -> "Bağlantı yok"
+        },
+        description = if (retryAvailable) message else "İnternet bağlantını kontrol et.",
+        retryEnabled = retryAvailable && !isRefreshing,
         retryInProgress = isRefreshing,
         onChooseCity = onChooseCity,
         onRetry = onRetry

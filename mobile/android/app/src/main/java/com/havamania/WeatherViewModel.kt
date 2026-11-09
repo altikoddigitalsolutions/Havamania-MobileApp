@@ -10,9 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
@@ -22,14 +20,31 @@ import com.havamania.ui.theme.LocationMode
 import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 
 internal suspend fun resolveAutomaticWeatherCity(
     savedCity: GeocodingResultDto?,
     locate: suspend () -> GeocodingResultDto?,
-    display: (GeocodingResultDto?) -> Unit
-) {
+    display: (GeocodingResultDto?) -> Unit,
+    offerCityPicker: (() -> Unit)? = null,
+    waitForPicker: suspend () -> Unit = { delay(5_000) }
+): Unit = coroutineScope {
     if (savedCity != null) display(savedCity)
-    val currentCity = locate()
+    val picker = if (savedCity == null && offerCityPicker != null) launch {
+        waitForPicker()
+        ensureActive()
+        offerCityPicker()
+    } else null
+    val currentCity = try {
+        locate()
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    } finally {
+        picker?.cancel()
+    }
     currentCoroutineContext().ensureActive()
     if (savedCity == null || (currentCity != null && currentCity != savedCity)) display(currentCity)
 }
@@ -162,7 +177,7 @@ class WeatherViewModel(
         userDataJob = viewModelScope.launch {
             // Tone observation
             launch {
-                com.havamania.ui.theme.ThemeManager.getAssistantTone(getApplication(), uid).collect { tone ->
+                ThemeManager.getAssistantTone(getApplication(), uid).catch { emit(AssistantTone.DENGELI) }.collect { tone ->
                     _assistantTone.value = tone
                     updateRecommendation()
                 }
@@ -175,12 +190,9 @@ class WeatherViewModel(
                     .collect { _unreadNotificationCount.value = it }
             }
 
-            // City and Location Mode observation combined for better performance
             launch {
-                ThemeManager.getLocationMode(getApplication(), uid).combine(
-                    ThemeManager.getDefaultCity(getApplication(), uid)
-                ) { mode, city ->
-                    mode to city
+                ThemeManager.observeWeatherLocation(getApplication(), uid).catch {
+                    showWeatherPreferenceError(uid)
                 }.collect { (mode, city) ->
                     if (uid != currentUid) return@collect
                     locationJob?.cancel()
@@ -192,26 +204,24 @@ class WeatherViewModel(
                     if (mode == LocationMode.AUTO) {
                         refreshWeatherWithCurrentLocation(city)
                     } else if (city != null) {
-                        fetchWeather(city.latitude, city.longitude, city.name, city.district)
+                        loadSelectedCity(city.latitude, city.longitude, city.name, city.district)
                     } else if (uid == "legacy") {
                         // Guest user starts with Balıkesir if no default set
-                        fetchWeather(39.6484, 27.8826, "Balıkesir")
+                        loadSelectedCity(39.6484, 27.8826, "Balıkesir")
                     } else {
                         clearWeatherSelection()
                     }
                 }
             }
 
-            // Safety check: If nothing emitted NoCity or Success after a while, check again
-            launch {
-                kotlinx.coroutines.delay(5000) // Reduced to 5s
-                if (_uiState.value is WeatherUiState.Loading) {
-                    val currentCity = ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
-                    if (currentCity == null && uid != "legacy") {
-                        if (weatherSelection == null && uid == currentUid) clearWeatherSelection()
-                    }
-                }
-            }
+        }
+    }
+
+    private fun showWeatherPreferenceError(uid: String) {
+        if (uid == currentUid && weatherSelection == null && _uiState.value is WeatherUiState.Loading) {
+            _uiState.value = WeatherUiState.Error(
+                "Şehir ayarları okunamadı. Lütfen tekrar deneyin.", retryNeedsInternet = false
+            )
         }
     }
 
@@ -219,18 +229,33 @@ class WeatherViewModel(
         locationJob?.cancel()
         val uid = currentUid
         locationJob = viewModelScope.launch {
-            resolveAutomaticWeatherCity(savedCity, locate = { locationTracker.getCurrentCity() }) { city ->
-                if (uid != currentUid) return@resolveAutomaticWeatherCity
-                if (city != null) {
-                    fetchWeather(city.latitude, city.longitude, city.getSafeCity(), city.getSafeDistrict())
-                } else {
-                    clearWeatherSelection()
-                }
-            }
+            resolveAutomaticWeatherCity(
+                savedCity,
+                locate = { locationTracker.getCurrentCity() },
+                display = { city ->
+                    if (uid == currentUid) {
+                        if (city != null) {
+                            loadSelectedCity(city.latitude, city.longitude, city.getSafeCity(), city.getSafeDistrict())
+                        } else {
+                            clearWeatherSelection()
+                        }
+                    }
+                },
+                offerCityPicker = if (uid == "legacy") null else ({
+                    if (uid == currentUid && weatherSelection == null && _uiState.value is WeatherUiState.Loading) {
+                        clearWeatherSelection()
+                    }
+                })
+            )
         }
     }
 
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
+        locationJob?.cancel()
+        loadSelectedCity(lat, lon, cityName, districtName)
+    }
+
+    private fun loadSelectedCity(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
         val selection = WeatherSelection(currentUid, lat, lon, cityName, districtName)
         if (fetchJob?.isActive == true && weatherSelection == selection) return
         weatherSelection = selection
@@ -245,7 +270,14 @@ class WeatherViewModel(
     }
 
     fun refreshWeather() {
-        val selection = weatherSelection?.takeIf { it.uid == currentUid } ?: return
+        val selection = weatherSelection?.takeIf { it.uid == currentUid }
+        if (selection == null) {
+            if (_uiState.value is WeatherUiState.Error) {
+                _uiState.value = WeatherUiState.Loading
+                observeUserData(currentUid)
+            }
+            return
+        }
         if (!isOnline.value || _isRefreshing.value) return
         loadWeather(selection, forceRefresh = true)
     }

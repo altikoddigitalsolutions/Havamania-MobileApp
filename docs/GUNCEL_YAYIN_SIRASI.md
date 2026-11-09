@@ -301,3 +301,73 @@ Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
 9 Kasım Bildirim Merkezi süreç ölümü: SM-T500 üzerinde bağlantıyla merkez açıldı, uygulama arka plana alındı ve süreç sonlandırıldı. Başlatıcıyla geri dönüldüğünde farklı PID ve geri yüklenen Bildirim Merkezi doğrulandı. Tek sistem Geri ana ekrana döndü. Gerçek test hesabıyla yapıldı. Sistem tepsisi dokunuşu açık.
 
 9 Kasım hava yüklemesi: Tahmin akışı veri vermeden biterse etkin isteğin yükleme ekranı yeniden denenebilir hataya geçiyor. Eldeki başarılı tahmin korunuyor. 429 Android birim testi ve debug APK başarılı. Boş akışın hedefli cihaz doğrulaması açık.
+
+9 Kasım Hava ilk açılış ayar hatası: Yerel şehir ayarı okunamazsa ekran yüklemede kalmak yerine hata gösteriyor. İnternet yokken de ayar yeniden okunabiliyor. Asistan tonu okuma hatası Hava başlangıç işlerini iptal etmiyor. 429 Android birim testi ve debug APK başarılı. Yerel ayar hata enjeksiyonu ve tablet doğrulaması açık.
+
+9 Kasım Hava yerel hata arayüzü: Şehir ayarı hatası kendi başlığını gösteriyor ve internet kapalıyken yeniden denemeye izin veriyor. SM-T500 üzerinde 4/4 Hava hata testi, 429 birim testi ve debug APK başarılı. Gerçek DataStore hatasının tam açılış akışında doğrulaması açık.
+
+9 Kasım Hava manuel şehir seçimi: Elle seçim bekleyen otomatik konum işini iptal ediyor ve konum tercihini manuel kaydediyor. Yeni birim testi iptalden sonra ulaşan konumun elle seçilmiş şehri değiştirmediğini doğruladı. 430 birim testi ve debug APK başarılı. Gerçek GPS ve şehir seçimi cihaz doğrulaması açık.
+
+9 Kasım manuel şehir kaydı: Şehir, konum modu ve bekleyen şehir eşitleme kaydı tek DataStore yazımında saklanıyor. SM-T500 izole DataStore testi depoyu yeniden açınca seçili şehir ve Manuel modun korunduğunu, diğer hesabın Auto modunun değişmediğini doğruladı. 430 birim testi, 1 cihaz testi ve debug APK başarılı. Gerçek Hava ekranında GPS ile birlikte doğrulama açık.
+
+9 Kasım Hava konum tercihi okuması: Şehir ve konum modu aynı DataStore anlık görüntüsünden okunuyor. İzole SM-T500 testinde ilk değer Otomatik ve şehir yok iken sonraki değer doğrudan Manuel ve Ankara oldu. 430 birim testi, 1 cihaz testi ve debug APK başarılı. Gerçek Hava ekranında GPS ile birlikte doğrulama açık.
+
+9 Kasım Hava otomatik konum beklemesi: Kayıtlı şehir yoksa beş saniyelik şehir seçme geçişi doğrudan etkin konum aramasına bağlı. İkinci DataStore okuması kaldırıldı. Erken konum sonucu veya elle seçim bekleyen geçişi iptal ediyor. 430 Android birim testi ve debug APK başarılı. Yavaş GPS ile gerçek cihaz doğrulaması açık.
+
+9 Kasım otomatik konum hatası: Konum sağlayıcısı hata verirse kayıtlı şehir korunuyor; kayıtlı şehir yoksa şehir seçme görünümü açılıyor. İptal ayrı işleniyor. Yapay sağlayıcı hatası regresyonu dahil 431 Android birim testi ve debug APK başarılı. Gerçek GPS hata senaryosu açık.
+
+9 Kasım Hava soğuk açılış tekrar kontrolü: SM-T500 üzerinde güncel APK ve açık test hesabıyla, sekme değiştirmeden ilk kontrolde tahmin görünüyordu. Şehir seçici açıldı ve sistem Geri ile kapandı. Şehir tercihi değiştirilmedi. Bu hesapta kayıtlı tahmin bulunduğundan şehir bulunmayan soğuk açılış ve gerçek yavaş GPS senaryosu açık.
+
+9 Kasım yavaş konum testi: Konum aramasına bağlı şehir seçme beklemesi aynı çözümleme akışına taşındı. Kontrollü zamanlama testi kayıtlı şehir yokken konum yanıtı beklenmeden şehir seçme seçeneğinin sunulduğunu, sonra gelen konumun yüklenebildiğini doğruladı. 432 Android birim testi ve debug APK başarılı. Gerçek yavaş GPS cihaz senaryosu açık.
+
+9 Kasım konum zamanlayıcı regresyonları: Konum erken tamamlandığında veya arama iptal edildiğinde bekleyen şehir seçme seçeneğinin sonradan açılmadığı iki kontrollü birim testiyle doğrulandı. 434 Android birim testi ve debug APK doğrulaması başarılı. Gerçek GPS cihaz kontrolü açık.
+
+9 Kasım otomatik konum adları: Boş adres alanları atlanıyor ve il adı Türkçe harf karşılaştırmasıyla ilçe olarak tekrarlanmıyor. Yer adı bulunamazsa Mevcut konum gösteriliyor. Yeni regresyonla 435 birim testi ve debug APK başarılı. Gerçek cihazın adres sağlayıcısıyla doğrulama açık.
+
+9 Kasım seyahat rotası: Kayıtlı başlangıç yoksa GPS koordinatı adres çözümlemesine bağlı olmadan kullanılıyor. İptal edilen hesaplama rota sonucunu güncellemiyor ve başlangıç koordinatları debug günlüğüne yazılmıyor. 435 Android birim testi ve debug APK başarılı. Adres sağlayıcısı yanıt vermezken rota başlangıcının gerçek cihazda doğrulanması açık.
+
+9 Kasım rota hava analizi: Rota yenilenince analiz durumu sıfırlanıyor ve önceki rotadan geciken analiz sonuçları yeni rotaya yazılmıyor. 435 Android birim testi ve debug APK derlemesi başarılı. Adres sağlayıcısı yanıt vermezken GPS ile rota başlatma ve analiz sırasında rota değiştirme senaryoları gerçek cihazda açık.
+
+9 Kasım güzergâh hava verisi hatası: Tüm tahminler eksikse analiz tamamlanmış sayılmıyor. Mevcut rota korunuyor ve kullanıcı hava analizini aynı ekranda tekrar başlatabiliyor. 435 Android birim testi ve debug APK derlemesi başarılı. Veri kesintisi ve yeniden deneme akışının telefon ve tablette görsel kontrolü açık.
+
+9 Kasım kısmi güzergâh tahmini: Tahmin alınabilen noktalar gösteriliyor. Herhangi bir örnek noktası eksikse telefon ve tablet yerleşimlerinde o kesimlerde riskin değerlendirilemediği belirtiliyor. 435 Android birim testi ve debug APK başarılı. Kısmi yanıtın gerçek cihazda görsel doğrulaması açık.
+
+9 Kasım güzergâh tahmin saatleri: ETA, servisten gelen ilk ve son geçerli saat örneği arasındaysa eşleştiriliyor. Sınır dışı saatlerde en yakın örnek kullanılmıyor. Yeni regresyonla 436 Android birim testi ve debug APK derlemesi başarılı.
+
+9 Kasım güzergâh tahmin boşluğu: Geçiş saati iki örnek arasındaysa tahmin ancak bu örnekler en fazla bir saat aralıklı olduğunda gösteriliyor. Eksik saat komşu tahminle doldurulmuyor. Yeni regresyon dahil 437 Android birim testi ve debug APK derlemesi başarılı.
+
+9 Kasım rota örnekleme: Harita ve hava analizi ortak örnekleme kodunu kullanıyor. Parça mesafeleri her örnekleme çağrısında bir kez hesaplanıyor. Tekrarlanan koordinatların ara noktaları ve tahmini geçiş saatlerini değiştirmediği regresyonla doğrulandı. 438 Android birim testi ve debug APK derlemesi başarılı.
+
+9 Kasım OSRM rota doğrulaması: Bozuk ara koordinatlar, geçersiz geometri ve negatif veya sonlu olmayan süre/mesafe hata olarak ele alınıyor. Geçerli koordinat sırası ve bozuk ara nokta regresyonları dahil 440 Android birim testi ve debug APK derlemesi başarılı. Tablet bağlantısı görüldü. GPS başlangıcı ve rota değişimi için cihaz doğrulaması açık.
+
+9 Kasım rota ekranı: Rota hazır olmadan hava analizi düğmesi gösterilmiyor. Telefon ve tablet yerleşimlerinde rota hatası ve yeniden yükleme eylemi eklendi. Android birim testleri ve debug APK başarılı. SM-T500 üzerinde seyahat kimliğinin rota ve takvim hedeflerine doğru iletildiğini doğrulayan izole test geçti. Rota hatasının görsel testi, GPS başlangıcı ve analiz sırasında rota değişimi cihazda açık.
+
+9 Kasım rota yeniden yükleme cihaz testi: SM-T500 üzerinde izole Compose testinde hata mesajı, yeniden yükleme tıklaması, yükleme boyunca analiz seçeneğinin gizlenmesi ve rota hazır olunca geri gelmesi doğrulandı. Android birim testleri ve debug APK derlemesi başarılı. GPS başlangıcı ve aktif analiz sırasında rota değişimi açık.
+
+9 Kasım rota başlangıcı cihaz testi: SM-T500 üzerinde izole konum sağlayıcısıyla koordinatın adres sorgusu yapılmadan rota başlangıcına aktarıldığı ve konum yoksa boş sonuç döndüğü doğrulandı. Rota yeniden yükleme testi de geçti. Android birim testleri ve debug APK başarılı. Canlı GPS ve OSRM uçtan uca denemesi ile analiz sırasında rota değiştirme cihaz doğrulaması açık.
+
+9 Kasım güzergâh analizi iptali: Rota değiştiğinde eski analiz iptal ediliyor. Eski işlem yeni analizin yükleme durumuna dokunamıyor ve uç nokta tahminleri sonuçla birlikte yayımlanıyor. Android birim testleri ve debug APK derlemesi başarılı. Kontrollü gecikmeyle analiz sırasında rota değiştirme regresyonu ve canlı cihaz doğrulaması açık.
+
+9 Kasım rota analizi regresyonu: İptal edilen analizin tamamlanması kontrollü olarak geciktirildi. Eski analiz sonlandığında yeni analizin yükleme göstergesi açık kaldı ve yalnızca yeni analiz tamamlanınca kapandı. 441 Android birim testi ve debug APK derlemesi başarılı. Gerçek cihazda uçtan uca rota değiştirme kontrolü açık.
+
+9 Kasım rota haritası: Yükleme veya hata durumunda önceki rota çizgisi, işaretçileri ve etiketleri temizleniyor. Ara nokta seçimi güncel rota ve listeye bağlı. İşaretçi dinleyicisi ekran değişiminde kaldırılıyor ve seçim başına kamera tek kez hareket ediyor. Android birim testleri ve debug APK derlemesi başarılı. Harita geçişi ve işaretçi etkileşiminin cihaz doğrulaması açık.
+
+9 Kasım harita işaretçisi: Ara nokta seçimi koordinat araması yerine MapLibre işaretçi kimliğine bağlandı. Harita yeniden çizildiğinde eski eşleştirmeler temizleniyor. Android birim testleri ve debug APK başarılı. Çakışan işaretçilerin fiziksel dokunma davranışı cihazda açık.
+
+9 Kasım güzergâh listesi: Kalkış ve varış satırları hava verisi mevcutsa ilgili ayrıntıyı açıyor. Samsung SM-T500 üzerinde aynı koordinattaki iki geçişin ve iki uç noktanın ayrı ayrı doğru seçildiği doğrulandı. Üç izole cihaz testi, Android birim testleri ve debug APK derlemesi başarılı. Haritada fiziksel işaretçi dokunma doğrulaması açık.
+
+9 Kasım güzergâh listesi eksik tahmin: Analiz tamamlanmadan ve tamamlandığında veri eksik olan satırlar ayrı metinlerle gösteriliyor. SM-T500 cihaz testi bu geçişi doğruladı. Üç izole cihaz testi, Android birim testleri ve debug APK derlemesi başarılı. Haritadaki fiziksel dokunma doğrulaması açık.
+
+9 Kasım güzergâh hava açıklaması: Liste ve ayrıntı kartındaki gündüz/gece metni telefonun anlık saatinden değil tahmini geçiş saatinden üretiliyor. Mevcut seyahat saat dilimi ve gündüz/gece eşikleri kullanılıyor. 442 Android birim testi, üç SM-T500 cihaz testi ve debug APK derlemesi başarılı. Fiziksel harita dokunma doğrulaması açık.
+
+9 Kasım rota kamera hareketi: Tahmin verisi işaretçileri güncellediğinde kamera tekrar tüm rotaya uzaklaşmıyor. İlk otomatik hareket beklerken ara nokta seçilirse rota geneline dönüş atlanıyor. Android birim testleri ve debug APK derlemesi başarılı. Kamera ve işaretçi etkileşiminin cihaz doğrulaması açık. Firebase Admin anahtarı kurulumu kullanıcı isteğiyle ertelendi.
+
+9 Kasım güzergâh ayrıntı kartı: Android geri tuşu açık kartı kapatıyor, kapatma düğmesi erişilebilirlik etiketi taşıyor ve risk metni ayrı satıra alındı. Tahmin eksikse durum açıklanıyor. Android birim testleri ve debug APK başarılı. Kartın büyük yazı ve gerçek harita etkileşimiyle cihaz doğrulaması açık.
+
+9 Kasım güzergâh ayrıntısı büyük yazı: Kart dikey kaydırılabiliyor, uzun başlık üç satırla sınırlı. SM-T500 üzerinde 320 × 250 dp test alanında yüzde 200 yazıyla risk uyarısına kaydırma ve kartı kapatma doğrulandı. Dört cihaz testi, birim testleri ve debug APK başarılı. Canlı harita ve sistem geri tuşu uçtan uca doğrulaması açık.
+
+9 Kasım güzergâh ayrıntısı geri tuşu: Geri işlemi doğrudan kartta ele alınıyor. SM-T500 üzerinde izole test ilk sistem geri basışının kartı kapattığını, ikincisinin üst ekrana iletildiğini doğruladı. İlk koşuda Compose arayüzü bulunamadı, tekrar koşusunda 5/5 cihaz testi geçti. Birim testleri ve debug APK başarılı. Canlı harita işaretçisi uçtan uca kontrolü açık.
+
+9 Kasım MapLibre işaretçi cihaz testi: SM-T500 üzerinde gerçek MapLibre görünümüne yerel stil ile dokunuldu. Aynı koordinatta işaretçi yeniden çizildiğinde güncel geçiş seçildi. Üretim ekranı ve test aynı işaretçi seçim kodunu kullanıyor. Android birim testleri ve debug APK başarılı. Eşzamanlı üst üste işaretçilerin seçimi ve canlı servislerle uçtan uca rota kontrolü açık.
+
+9 Kasım çakışan rota işaretçileri: Aynı koordinattaki kayıtlar tek dokunuşla rota sırasına göre seçime sunuluyor. Yerel MapLibre stiliyle SM-T500 cihaz testi eşzamanlı çakışan iki işaretçinin adaylarını doğruladı. Android birim testleri ve debug APK başarılı. Seçim penceresinin görsel doğrulaması ve canlı servislerle uçtan uca kontrol açık.

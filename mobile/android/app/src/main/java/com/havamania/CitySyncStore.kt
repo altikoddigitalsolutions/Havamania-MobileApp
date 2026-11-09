@@ -7,8 +7,17 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import com.havamania.ui.theme.LocationMode
+
+internal fun weatherLocationModeKey(uid: String) = stringPreferencesKey("havamania:$uid:location_mode")
+
+internal fun Preferences.weatherLocationMode(uid: String): LocationMode {
+    val mode = this[weatherLocationModeKey(uid)]
+    return LocationMode.entries.firstOrNull { it.name == mode } ?: LocationMode.MANUAL
+}
 
 internal class CitySyncStore(
     private val store: DataStore<Preferences>, private val clock: () -> CitySyncClock? = { null },
@@ -33,9 +42,14 @@ internal class CitySyncStore(
         }
     }
 
-    fun observeDefaultCity(uid: String): Flow<GeocodingResultDto?> = store.data.map {
-        val str = it[defaultKey(uid)] ?: ""
-        if (str.isEmpty()) {
+    fun observeDefaultCity(uid: String): Flow<GeocodingResultDto?> = store.data.map { it.defaultCity(uid) }
+
+    fun observeWeatherLocation(uid: String): Flow<Pair<LocationMode, GeocodingResultDto?>> =
+        store.data.map { it.weatherLocationMode(uid) to it.defaultCity(uid) }.distinctUntilChanged()
+
+    private fun Preferences.defaultCity(uid: String): GeocodingResultDto? {
+        val str = this[defaultKey(uid)] ?: ""
+        return if (str.isEmpty()) {
             if (uid == "legacy") {
                 GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")
             } else {
@@ -48,10 +62,11 @@ internal class CitySyncStore(
         }
     }
 
-    suspend fun recordDefaultCity(uid: String, city: GeocodingResultDto) {
+    suspend fun recordDefaultCity(uid: String, city: GeocodingResultDto, useManualLocation: Boolean = false) {
         store.edit { prefs ->
             if (!writesAllowed()) return@edit
             prefs[defaultKey(uid)] = Json.encodeToString(city)
+            if (useManualLocation) prefs[weatherLocationModeKey(uid)] = LocationMode.MANUAL.name
             if (uid != "legacy") prefs[defaultChangeKey(uid)] = Json.encodeToString(CitySyncChange(city, false))
         }
     }

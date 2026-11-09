@@ -138,6 +138,7 @@ fun HomeScreen(
                     WeatherLoadError(
                         message = state.message,
                         isOnline = isOnline,
+                        retryNeedsInternet = state.retryNeedsInternet,
                         isRefreshing = isRefreshing,
                         onChooseCity = { showCitySwitcher = true },
                         onRetry = viewModel::refreshWeather
@@ -179,7 +180,7 @@ fun HomeScreen(
                     },
                     onSelect = { suggestion ->
                         viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
-                        themeViewModel.setDefaultCity(suggestion)
+                        themeViewModel.setDefaultCity(suggestion, useManualLocation = true)
                         showCitySwitcher = false
                         searchText = ""
                     }

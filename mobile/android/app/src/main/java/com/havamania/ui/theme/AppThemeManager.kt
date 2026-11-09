@@ -1,6 +1,7 @@
 package com.havamania.ui.theme
 
 import com.havamania.withRetryClock
+import com.havamania.weatherLocationMode
 
 import android.content.Context
 import androidx.compose.material3.ColorScheme
@@ -129,7 +130,7 @@ object ThemeManager {
     private fun seededNotificationsKey(uid: String) = booleanPreferencesKey("havamania:$uid:has_seeded_notifications")
     private fun onboardingCompletedKey(uid: String) = booleanPreferencesKey("havamania:$uid:onboarding_completed")
     private fun migrationChoiceMadeKey(uid: String) = booleanPreferencesKey("havamania:$uid:migration_choice_made")
-    private fun locationModeKey(uid: String) = stringPreferencesKey("havamania:$uid:location_mode")
+    private fun locationModeKey(uid: String) = com.havamania.weatherLocationModeKey(uid)
 
     // Smart Alert Keys
     private fun rainAlertKey(uid: String) = booleanPreferencesKey("havamania:$uid:alert_rain")
@@ -205,8 +206,7 @@ object ThemeManager {
 
     suspend fun saveLocationMode(context: Context, uid: String, mode: LocationMode) = context.dataStore.edit { it[locationModeKey(uid)] = mode.name }
     fun getLocationMode(context: Context, uid: String): Flow<LocationMode> = context.dataStore.data.map {
-        val modeName = it[locationModeKey(uid)] ?: LocationMode.MANUAL.name
-        try { LocationMode.valueOf(modeName) } catch (e: Exception) { LocationMode.MANUAL }
+        it.weatherLocationMode(uid)
     }
 
     /** Persist a complete profile in one transaction, including intentionally cleared fields. */
@@ -284,8 +284,9 @@ object ThemeManager {
     internal suspend fun releaseCitySyncBlocks(context: Context, uid: String, authOnly: Boolean) =
         citySyncStore(context).releaseBlocks(uid, authOnly)
 
-    internal suspend fun recordDefaultCity(context: Context, uid: String, city: GeocodingResultDto) =
-        citySyncStore(context).recordDefaultCity(uid, city)
+    internal suspend fun recordDefaultCity(
+        context: Context, uid: String, city: GeocodingResultDto, useManualLocation: Boolean = false
+    ) = citySyncStore(context).recordDefaultCity(uid, city, useManualLocation)
     internal suspend fun pendingDefaultCity(context: Context, uid: String) =
         citySyncStore(context).pendingDefaultCity(uid)
     internal suspend fun acknowledgeDefaultCity(context: Context, uid: String, sent: com.havamania.CitySyncChange) =
@@ -313,6 +314,9 @@ object ThemeManager {
     }
     fun getDefaultCity(context: Context, uid: String): Flow<GeocodingResultDto?> =
         citySyncStore(context).observeDefaultCity(uid)
+
+    internal fun observeWeatherLocation(context: Context, uid: String) =
+        citySyncStore(context).observeWeatherLocation(uid)
 
     // --- System / UI Config ---
     suspend fun saveLiveEffects(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[liveEffectsKey(uid)] = enabled }

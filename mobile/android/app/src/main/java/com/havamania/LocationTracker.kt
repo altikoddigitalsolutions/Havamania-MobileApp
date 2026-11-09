@@ -16,6 +16,23 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
 
+internal fun currentLocationNames(
+    adminArea: String?,
+    locality: String?,
+    subLocality: String?,
+    subAdminArea: String?
+): Pair<String, String?> {
+    val city = sequenceOf(adminArea, locality, subAdminArea, subLocality)
+        .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+        .firstOrNull() ?: return "Mevcut konum" to null
+    val locale = Locale.forLanguageTag("tr")
+    val cityKey = city.lowercase(locale)
+    val district = sequenceOf(locality, subLocality, subAdminArea)
+        .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+        .firstOrNull { it.lowercase(locale) != cityKey }
+    return city to district
+}
+
 interface LocationTracker {
     suspend fun getCurrentLocation(): Location?
     suspend fun getCurrentCity(): GeocodingResultDto?
@@ -77,21 +94,22 @@ class DefaultLocationTracker(
         val location = getCurrentLocation() ?: return null
         return withContext(Dispatchers.IO) {
             try {
-                val geocoder = Geocoder(application, Locale("tr"))
+                val geocoder = Geocoder(application, Locale.forLanguageTag("tr"))
                 @Suppress("DEPRECATION")
                 val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
                 if (!addresses.isNullOrEmpty()) {
                     val address = addresses[0]
 
-                    val cityName = address.adminArea ?: address.locality ?: "Bilinmeyen Şehir"
-                    val districtName = address.locality ?: address.subLocality ?: address.subAdminArea
+                    val (cityName, districtName) = currentLocationNames(
+                        address.adminArea, address.locality, address.subLocality, address.subAdminArea
+                    )
 
                     GeocodingResultDto(
                         id = (location.latitude * 1000 + location.longitude * 1000).toLong(),
                         name = districtName ?: cityName,
                         latitude = location.latitude,
                         longitude = location.longitude,
-                        country = address.countryName ?: "Türkiye",
+                        country = address.countryName?.trim().orEmpty(),
                         countryCode = address.countryCode,
                         admin1 = cityName
                     )
