@@ -162,7 +162,8 @@ fun TravelPlanCard(
     onViewRoute: (String) -> Unit = {},
     isOnline: Boolean = true,
     isAnalyzing: Boolean = false,
-    onToggleGuide: ((TravelPlan) -> Unit)? = null
+    onToggleGuide: ((TravelPlan) -> Unit)? = null,
+    guideExpanded: Boolean = false
 ) {
     val themeColors = HavamaniaTheme.colors
     val planToday = tripAnalysisToday(plan, today)
@@ -342,7 +343,8 @@ fun TravelPlanCard(
             }
 
             // City Personality Section (Trip-Type Aware & Clean Surface)
-            var showPersonality by remember { mutableStateOf(false) }
+            var localGuideExpanded by remember(plan.id) { mutableStateOf(false) }
+            val showPersonality = if (onToggleGuide != null) guideExpanded else localGuideExpanded
             val isTablet = LocalWindowSize.current.isTablet || LocalWindowSize.current.isLargeTablet
             val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
 
@@ -354,10 +356,10 @@ fun TravelPlanCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        if (isTablet && onToggleGuide != null) {
+                        if (onToggleGuide != null) {
                             onToggleGuide(plan)
                         } else {
-                            showPersonality = !showPersonality
+                            localGuideExpanded = !localGuideExpanded
                         }
                     }
             ) {
@@ -365,7 +367,11 @@ fun TravelPlanCard(
                     Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (isTablet || showPersonality) "Rehberi Kapat / Aç" else personality.slogan,
+                        text = when {
+                            showPersonality -> "Rehberi kapat"
+                            isTablet -> "Rehberi aç"
+                            else -> personality.slogan
+                        },
                         style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.accent,
                         modifier = Modifier.weight(1f)
@@ -626,7 +632,8 @@ fun TripListSection(
     highlight: String?,
     today: LocalDate,
     modifier: Modifier = Modifier,
-    onToggleGuide: ((TravelPlan) -> Unit)? = null
+    onToggleGuide: ((TravelPlan) -> Unit)? = null,
+    expandedGuideId: String? = null
 ) {
     val responsive = LocalResponsiveValues.current
 
@@ -678,7 +685,8 @@ fun TripListSection(
                         onViewRoute = onViewRoute,
                         isOnline = isOnline,
                         isAnalyzing = plan.isAnalyzing,
-                        onToggleGuide = onToggleGuide
+                        onToggleGuide = onToggleGuide,
+                        guideExpanded = plan.id == expandedGuideId
                     )
                 }
             }

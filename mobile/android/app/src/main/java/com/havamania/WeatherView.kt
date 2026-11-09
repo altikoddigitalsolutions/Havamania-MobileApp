@@ -144,6 +144,18 @@ fun HomeScreen(
                     )
                 }
             }
+            if (state !is WeatherUiState.Success) {
+                IconButton(
+                    onClick = onNavigateToNotifications,
+                    modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Notifications,
+                        contentDescription = "Bildirimler",
+                        tint = themeColors.textPrimary
+                    )
+                }
+            }
         }
 
         if (showCitySwitcher) {

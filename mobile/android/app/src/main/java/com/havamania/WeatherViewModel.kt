@@ -257,10 +257,12 @@ class WeatherViewModel(
             if (!forceRefresh) _uiState.value = WeatherUiState.Loading
             try {
                 val completed = withTimeoutOrNull(20000) {
+                    var receivedForecast = false
                     repository.getWeatherData(
                         selection.latitude, selection.longitude, selection.city, selection.district,
                         forceRefresh = forceRefresh
                     ).collect { data ->
+                        receivedForecast = true
                         _uiState.value = WeatherUiState.Success(data)
 
                         launch {
@@ -270,10 +272,12 @@ class WeatherViewModel(
                         selectInitialForecast(data)
                         updateRecommendation()
                     }
-                    true
+                    receivedForecast
                 }
-                if (completed == null) {
-                    showWeatherError(selection, "Hava durumu isteği zaman aşımına uğradı. Lütfen tekrar deneyin.")
+                when (completed) {
+                    null -> showWeatherError(selection, "Hava durumu isteği zaman aşımına uğradı. Lütfen tekrar deneyin.")
+                    false -> showWeatherError(selection, "Hava durumu verisi alınamadı. Lütfen tekrar deneyin.")
+                    true -> Unit
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

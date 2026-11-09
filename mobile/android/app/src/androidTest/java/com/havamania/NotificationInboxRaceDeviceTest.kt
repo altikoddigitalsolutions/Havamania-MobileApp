@@ -1,12 +1,66 @@
 package com.havamania
 
+import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationInboxRaceDeviceTest {
+    @Test fun retryAfterInjectedSqliteFailureReadsSavedNotifications() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, NotificationDatabase::class.java).build()
+        try {
+            val dao = db.notificationDao()
+            dao.insert(NotificationItem(id = "saved", userId = "a"))
+            dao.insert(NotificationItem(id = "other-account", userId = "b"))
+            val failure = SQLiteException("Simulated read error")
+            var attempts = 0
+            val flakyDao = object : NotificationDao by dao {
+                override fun getAllNotifications(uid: String) = flow {
+                    if (++attempts == 1) throw failure
+                    emitAll(dao.getAllNotifications(uid))
+                }
+            }
+            val repo = NotificationRepository(flakyDao)
+            val first = withTimeout(5_000) { repo.getAllNotificationsFlow("a").inboxReadResults().first() }
+            assertSame(failure, first.exceptionOrNull())
+            val retry = withTimeout(5_000) { repo.getAllNotificationsFlow("a").inboxReadResults().first() }
+            assertEquals(listOf("saved"), retry.getOrThrow().map { it.id })
+            assertEquals(2, attempts)
+        } finally {
+            db.close()
+        }
+    }
+    @Test fun rejectedSecondOpenLeavesUnreadCountUnchanged() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, NotificationDatabase::class.java).build()
+        try {
+            val dao = db.notificationDao()
+            val repo = NotificationRepository(dao)
+            val first = NotificationItem(id = "first", userId = "a", actionType = NotificationActionType.WEATHER_HOME)
+            val second = first.copy(id = "second")
+            dao.insert(first)
+            dao.insert(second)
+            assertEquals(2, repo.getUnreadCount("a").first())
+            var listActive = true
+            val open: (String?) -> Boolean = { route ->
+                (listActive && route == Routes.WEATHER_ROOT).also { if (it) listActive = false }
+            }
+            openNotificationAndMarkRead(first, open) { repo.markAsRead(it.userId, listOf(it.id)) }
+            openNotificationAndMarkRead(second, open) { repo.markAsRead(it.userId, listOf(it.id)) }
+            assertEquals(1, repo.getUnreadCount("a").first())
+            assertTrue(dao.getVisibleNotification("a", "first")?.isRead == true)
+            assertTrue(dao.getVisibleNotification("a", "second")?.isRead == false)
+        } finally {
+            db.close()
+        }
+    }
+
     @Test fun clearingInboxDuringPreparationBlocksLatePostAndAllowsNextAttempt() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, NotificationDatabase::class.java).build()

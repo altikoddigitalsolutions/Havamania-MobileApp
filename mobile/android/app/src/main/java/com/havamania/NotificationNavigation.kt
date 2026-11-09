@@ -2,6 +2,14 @@ package com.havamania
 
 import java.net.URLDecoder
 
+internal inline fun openNotificationAndMarkRead(
+    item: NotificationItem,
+    open: (String?) -> Boolean,
+    markRead: (NotificationItem) -> Unit
+) {
+    if (open(notificationDestination(item))) markRead(item)
+}
+
 internal const val NOTIFICATION_OWNER = "notification_owner_uid"
 internal const val NOTIFICATION_ID = "notification_id"
 internal const val NOTIFICATION_ACTION_PREFIX = "com.havamania.notification."

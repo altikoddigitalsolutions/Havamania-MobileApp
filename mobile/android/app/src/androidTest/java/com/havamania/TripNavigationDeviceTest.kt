@@ -1,5 +1,13 @@
 package com.havamania
 
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.performClick
+import androidx.test.platform.app.InstrumentationRegistry
+
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
@@ -19,6 +27,36 @@ import org.junit.Test
 
 class TripNavigationDeviceTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun systemAndToolbarBackCloseGuideBeforeLeavingCalendar() {
+        val guideOpen = mutableStateOf(true)
+        val calendarOpen = mutableStateOf(true)
+        compose.setContent {
+            if (calendarOpen.value) {
+                val leaveCalendar = { calendarOpen.value = false }
+                BackHandler(onBack = leaveCalendar)
+                val back = travelGuideBackAction(guideOpen.value, { guideOpen.value = false }, leaveCalendar)
+                Column {
+                    Text("Takvim")
+                    if (guideOpen.value) Text("Seyahat rehberi")
+                    TextButton(onClick = back) { Text("Geri") }
+                }
+            }
+        }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        compose.onNodeWithText("Seyahat rehberi").assertIsDisplayed()
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithText("Seyahat rehberi").assertDoesNotExist()
+        compose.onNodeWithText("Takvim").assertIsDisplayed()
+
+        compose.runOnIdle { guideOpen.value = true }
+        compose.onNodeWithText("Geri").performClick()
+        compose.onNodeWithText("Seyahat rehberi").assertDoesNotExist()
+        compose.onNodeWithText("Takvim").assertIsDisplayed()
+
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithText("Takvim").assertDoesNotExist()
+    }
 
     @Test fun switchingMainTabsRemovesOutgoingScreenWithoutWaitingForFade() {
         lateinit var nav: NavHostController
@@ -96,7 +134,9 @@ class TripNavigationDeviceTest {
             val source = requireNotNull(nav.currentBackStackEntry)
             assertTrue(nav.navigateFromActiveScreen(source, Routes.routeWeather(tripId)))
             assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("tripId"))
-            assertFalse(nav.navigateFromActiveScreen(source, Routes.routeWeather("another trip")))
+            assertFalse(nav.navigateFromActiveScreen(source, Routes.routeWeather("another trip")) {
+                launchSingleTop = true
+            })
             assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("tripId"))
             val detail = requireNotNull(nav.currentBackStackEntry)
             assertTrue(nav.popActiveScreen(detail))

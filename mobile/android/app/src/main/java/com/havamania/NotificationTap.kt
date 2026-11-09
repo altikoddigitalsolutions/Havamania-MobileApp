@@ -16,8 +16,17 @@ internal data class NotificationTapRequest(val owner: String, val id: String, va
         epoch == NotificationSessionEpoch.capture() && canOpenOwnedNotification(owner, currentOwner, blocked)
 }
 
+internal data class NotificationInboxLaunch(
+    val owner: String,
+    val epoch: Long = NotificationSessionEpoch.capture()
+) {
+    fun isCurrent(currentOwner: String?, blocked: Boolean): Boolean =
+        epoch == NotificationSessionEpoch.capture() && canOpenOwnedNotification(owner, currentOwner, blocked)
+}
+
 internal class NotificationTapViewModel : ViewModel() {
     var pending by mutableStateOf<NotificationTapRequest?>(null)
+    var pendingInboxLaunch by mutableStateOf<NotificationInboxLaunch?>(null)
 }
 
 internal fun canNavigateFromNotification(route: String?): Boolean = when (route) {

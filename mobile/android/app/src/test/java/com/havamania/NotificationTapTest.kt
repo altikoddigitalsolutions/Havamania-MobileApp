@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationTapTest {
+    @Test fun pendingInboxLinkCannotSurviveAccountRoundTrip() {
+        val link = NotificationInboxLaunch("a")
+        assertTrue(link.isCurrent("a", false))
+        assertFalse(link.isCurrent("b", false))
+        assertFalse(link.isCurrent("a", true))
+        NotificationSessionEpoch.changed()
+        assertFalse(link.isCurrent("a", false))
+        assertTrue(NotificationInboxLaunch("a").isCurrent("a", false))
+    }
+
     private val item = NotificationItem(id = "event", userId = "a", actionType = NotificationActionType.WEATHER_HOME)
     private fun request() = NotificationTapRequest("a", item.id, NotificationSessionEpoch.capture())
 

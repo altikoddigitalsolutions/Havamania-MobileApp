@@ -27,6 +27,12 @@ import androidx.lifecycle.repeatOnLifecycle
 
 enum class TravelFilter { UPCOMING, PAST, ARCHIVED }
 
+@Composable
+internal fun travelGuideBackAction(guideOpen: Boolean, closeGuide: () -> Unit, navigateBack: () -> Unit): () -> Unit {
+    BackHandler(enabled = guideOpen, onBack = closeGuide)
+    return if (guideOpen) closeGuide else navigateBack
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TravelPlannerScreen(
@@ -210,11 +216,12 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
-    var expandedGuidePlan by remember(session, editorUid) { mutableStateOf<TravelPlan?>(null) }
-    val goBack: () -> Unit = {
-        if (expandedGuidePlan != null) expandedGuidePlan = null else onBack()
+    var expandedGuideId by remember(session, editorUid, selectedFilter, selectedDate) { mutableStateOf<String?>(null) }
+    val expandedGuidePlan = displayPlans.firstOrNull { it.id == expandedGuideId }
+    val toggleGuide: (TravelPlan) -> Unit = { plan ->
+        expandedGuideId = if (expandedGuideId == plan.id) null else plan.id
     }
-    BackHandler(enabled = expandedGuidePlan != null, onBack = goBack)
+    val goBack = travelGuideBackAction(expandedGuidePlan != null, { expandedGuideId = null }, onBack)
 
     val tripListStatus: @Composable () -> Unit = {
         TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
@@ -332,9 +339,8 @@ fun TravelPlannerScreen(
                                     focusId = focusId,
                                     highlight = highlight,
                                     today = today,
-                                    onToggleGuide = { plan ->
-                                        expandedGuidePlan = if (expandedGuidePlan?.id == plan.id) null else plan
-                                    }
+                                    onToggleGuide = toggleGuide,
+                                    expandedGuideId = expandedGuideId
                                 )
                             }
                         }
@@ -351,7 +357,7 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
-                                RichTravelGuideView(plan = expandedGuidePlan!!, today = today)
+                                RichTravelGuideView(plan = expandedGuidePlan, today = today)
                             }
                         }
                     }
@@ -412,7 +418,9 @@ fun TravelPlannerScreen(
                         focusId = focusId,
                         highlight = highlight,
                         today = today,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        onToggleGuide = toggleGuide,
+                        expandedGuideId = expandedGuideId
                     )
                 }
 

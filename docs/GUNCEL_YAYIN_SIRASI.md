@@ -236,3 +236,68 @@ Bu tur doğrulaması: 403 JVM testi (0 hata), debug APK ve SM-T500 Android 12 ü
 6 Kasım çift Geri dokunuşu: Ekran içi Geri işlemi yalnız o gezinme girdisi hâlâ etkinse çalışıyor. Kapanan ekrandan gelen ikinci olay bir önceki ekranı atlamıyor. SM-T500 üzerinde iki ardışık geri çağrısında kaynak ekranın korunduğu doğrulandı. 425 Android birim testi, 3 hedefli gezinme cihaz testi ve debug APK başarılı. Sistem geri hareketi ve gerçek ekranlardaki hızlı dokunuş denetimi açık.
 
 6 Kasım Takvim Geri davranışı: Tablet düzeninde açık seyahat rehberi, sistem Geri veya başlık Geri düğmesiyle önce kapanıyor. Rehber oturum değişiminde sıfırlanıyor. SM-T500 üzerinde izole düzenleyici testi gerçek Android Geri tuşunun pencereyi kapattığını, alttaki ekranı koruduğunu ve düzenleyicinin yeniden açılabildiğini doğruladı. 425 Android birim testi, 3 cihaz testi ve debug APK başarılı. Tablet rehberinin gerçek Takvim ekranında doğrulaması ve telefon düzenindeki satır içi rehber açık.
+
+9 Kasım Takvim rehberi: Telefon ve tablet aynı rehber seçimini kullanıyor. Sistem ve başlık Geri düğmeleri açık rehberi önce kapatıyor. Tarih, filtre veya hesap değiştiğinde açık seçim sıfırlanıyor. Tablet düğmesi açma ve kapatma durumunu ayrı gösteriyor. 425 Android birim testi ve debug APK başarılı. Telefon ve tablette gerçek Geri hareketi doğrulaması açık.
+
+9 Kasım seyahat rehberi Geri testi: Takvim’in kullandığı ortak Geri kontrolü SM-T500 üzerinde izole Compose ekranında test edildi. Android Geri tuşu ve ekran düğmesi açık rehberi kapatırken Takvim açık kaldı. Rehber kapalıyken sonraki sistem Geri normal gezinmeye döndü. 425 birim testi, 4/4 cihaz testi ve debug APK başarılı. Gerçek Takvim ekranında telefon ve tablet yerleşimlerinin uçtan uca doğrulaması açık.
+
+9 Kasım bildirim listesi geçişi: Ayrıntı ve Hava yedek hedefi yalnız bildirim listesi hâlâ etkinse açılıyor. İzole NavHost testi aynı hedef türüne ait geç ikinci isteğin ilk rota kimliğini değiştirmediğini doğruladı. 425 birim testi, SM-T500 üzerinde 4 gezinme testi ve debug APK başarılı. Gerçek bildirim listesinden hızlı dokunuş ve sistem tepsisi doğrulaması açık.
+
+9 Kasım bildirim okundu sırası: Liste etkinse ve açma işlemi kabul edildiyse bildirim okundu işaretleniyor. Ayrıntısız bildirimler etkin listede okunabiliyor. Arkada kalan listeden gelen olay okundu durumunu değiştirmiyor. 425 Android birim testi ve debug APK başarılı. Gerçek bildirim listesinde ardışık dokunuş ve sayaç doğrulaması açık.
+
+9 Kasım bildirim sayacı: Kabul edilen açma ve okundu güncellemesi ortak akışta. SM-T500 izole Room testinde ilk bildirim okundu, reddedilen ikinci bildirim okunmamış kaldı ve sayaç 2’den 1’e indi. 425 birim testi, 3 cihaz testi ve debug APK başarılı. Gerçek listede dokunuş ve sistem tepsisi doğrulaması açık.
+
+9 Kasım sistem bildirim tepsisi: SM-T500 Android 12 üzerinde tepsi açıldı ancak geçici bildirimin satırı iki ayrı otomasyon denemesinde bulunup tıklanamadı. Mevcut PendingIntent teslim testi korundu. Gerçek tepsi dokunuşuyla ilk ve tekrar açılış ile uygulama içi hedefin doğrulanması açık.
+
+9 Kasım bildirim okundu hesap kapsamı: Kabul edilen açma işlemi bildirim kimliğini ve sahibini birlikte taşıyor. Hesap değişirse eski bildirimin okundu işlemi yeni hesaba uygulanmıyor. 425 birim testi, SM-T500 üzerinde 3 izole bildirim testi ve debug APK başarılı. Gerçek hesap geçişi ve tepsi dokunuşu açık. Sunucu dağıtımı kullanıcı isteğiyle sonraya bırakıldı.
+
+9 Kasım tekil bildirim işlemleri: Silme ve okundu durumunu değiştirme, dokunulan bildirimin sahibiyle birlikte kuyruğa alınıyor. Kilit beklemesinden sonra etkin hesap yeniden denetleniyor. 425 birim testi, SM-T500 üzerinde 3 mevcut izole bildirim testi ve debug APK başarılı. Gerçek A/B hesap değişimi ve toplu seçim akışı açık.
+
+9 Kasım toplu bildirim işlemleri: Seçilenleri silme ve okundu işaretleme, ekrandaki hesap ve seçim anlık görüntüsüyle çalışıyor. Tümünü sil onayı hesap değişiminde kapanıyor ve eski onay yeni hesaba uygulanmıyor. 425 birim testi, SM-T500 üzerinde 3 mevcut izole bildirim testi ve debug APK başarılı. Gerçek A/B hesap geçişinde toplu işlem ve sayaç doğrulaması açık.
+
+9 Kasım bildirim seçimi: Liste güncellendiğinde artık görünmeyen bildirimler seçimden çıkarılıyor. Tümünü seç, görünür kimlikleri seçili kimliklerle karşılaştırıyor. Son seçim kalkınca seçim modu kapanıyor. Yeni regresyon dahil 426 Android birim testi ve debug APK başarılı. Fiziksel cihazda filtre ve toplu seçim akışı açık.
+
+9 Kasım bildirim filtresi: Etkin filtre tekrar seçildiğinde mevcut seçim korunuyor. Seçim boşken liste yenilemesi ek kimlik taraması yapmıyor. 426 Android birim testi ve debug APK başarılı. Filtre ve toplu seçim davranışının gerçek cihaz doğrulaması açık.
+
+9 Kasım bildirim seçim düğmesi: Tüm görünür satırlar seçildiğinde simge ve ekran okuyucu etiketi Seçimi kaldır olarak değişiyor. Eski hesap görünümünden gelen toplu seçim dokunuşu yeni hesaba uygulanmıyor. 426 Android birim testi ve debug APK başarılı. TalkBack ve gerçek cihazda toplu seçim doğrulaması açık.
+
+9 Kasım bildirim seçim düğmesi cihaz testi: Ortak düğme bileşeni için Tümünü seç ve Seçimi kaldır erişilebilirlik etiketi ile seçim değişimini kontrol eden Compose testi eklendi. 426 Android birim testi ve debug APK başarılı. SM-T500 ekranı kapalı ve kilitli olduğu için yeni cihaz testi arayüze erişemedi. Cihaz doğrulaması açık.
+
+9 Kasım bildirim seçim düğmesi tekrar testi: Tablet kilidi açıldıktan sonra SM-T500 Android 12 üzerinde izole Compose testi 1/1 geçti. Tümünü seç ve Seçimi kaldır etiketleri ile seçimin iki yönde değişmesi doğrulandı. Tam bildirim listesi ve TalkBack turu açık.
+
+9 Kasım bildirim satırı erişilebilirliği: Seçim modunda satır hem seçili hem okundu durumunu erişilebilirlik ağacına veriyor. Seçme ve seçimi kaldırma eylemleri etiketlendi. 426 birim testi, SM-T500 üzerinde 1 hedefli Compose testi ve debug APK başarılı. Tam listeyle sesli TalkBack turu açık.
+
+9 Kasım bildirim filtreleri: Etkin filtre seçili semantiğini ve temanın vurgu üstü metin rengini kullanıyor. SM-T500 Compose testi Tümü ve Okunmamış arasında seçili durumunun doğru taşındığını doğruladı. 426 Android birim testi, 1 hedefli cihaz testi ve debug APK başarılı. Sesli TalkBack turu açık.
+
+9 Kasım bildirim merkezi boş durumları: Gerçek boş kutu ve sonuçsuz filtre ayrı metin gösteriyor. Filtreyi temizleme düğmesi yalnızca sonuçsuz filtrede var. Liste ve toplu seçim aynı filtreli veriyi kullanıyor. 426 birim testi, SM-T500 üzerinde 1 hedefli Compose testi ve debug APK başarılı. Tam liste ve TalkBack doğrulaması açık.
+
+9 Kasım bildirim yükleme hatası: Room okuma hatası boş kutu yerine yeniden denenebilir hata ekranı gösteriyor. Yeniden deneme etkin hesapla sınırlı. 426 Android birim testi ve debug APK başarılı. Hata enjeksiyonuyla cihaz doğrulaması açık.
+
+9 Kasım bildirim okuma regresyonu: Akış hatası, başarılı boş liste ve iptal ayrı işleniyor. Yapay okuma hatası sonrası yeni okumada bildirim alındığı ve iptalin hata olarak sunulmadığı doğrulandı. 428 Android birim testi ve debug APK başarılı. Hata ekranından gerçek dokunuşla yeniden deneme cihazda açık.
+
+9 Kasım bildirim hata ekranı: SM-T500 üzerinde 1 hedefli Compose testi geçti. Tekrar dene bir kez çağrıldı ve simüle edilen başarılı okumadan sonra hata görünümü boş kutu görünümüne geçti. Debug APK derlendi. Gerçek Room hatasının tam bildirim ekranından uçtan uca doğrulaması açık.
+
+9 Kasım bildirim Room yeniden okuma: SM-T500 üzerinde yapay SQLite okuma hatasının hata sonucu olarak geldiği ve sonraki okumada yalnız doğru hesabın kayıtlı bildiriminin Room veritabanından döndüğü doğrulandı. 428 birim testi ve 4 cihaz testi başarılı. Tam bildirim ekranından birleşik hata/yeniden deneme akışı açık.
+
+9 Kasım bildirim hata ve yeniden deneme birleşik testi: SM-T500 üzerinde ilk okuma SQLite hatasıyla simüle edildi. Tekrar dene düğmesine tek dokunuş sonrasında kayıt izole Room veritabanından alındı ve gerçek bildirim satırı bileşeninde göründü. 1/1 hedefli cihaz testi başarılı. Tam Activity ve gerçek hesapla doğrulama açık.
+
+9 Kasım tam Bildirim Merkezi cihaz kontrolü: SM-T500 üzerinde uygulama paketi bulunmadığı için güncel debug APK kuruldu ve uygulama açıldı. Giriş ekranı görüldü. Gerçek Bildirim Merkezi ve filtre doğrulaması test hesabıyla oturum açılmasını bekliyor.
+
+9 Kasım gerçek Bildirim Merkezi: Test hesabıyla oturum açıldıktan sonra tahmin başarıyla yüklenmediğinde Hava ekranında Bildirimler düğmesinin eksik olduğu görüldü. Yükleme, boş şehir ve hata durumlarına bildirim düğmesi eklendi. SM-T500 üzerinde gerçek uygulamada düğme merkezi açtı. Tümü ve Okunmamış filtrelerinin Android erişilebilirlik ağacında işaretli duruma geçtiği doğrulandı. 428 birim testi ve debug APK başarılı. Dolu liste, sesli TalkBack ve sistem tepsisi açık.
+
+9 Kasım Bildirim Merkezi sıcak bağlantısı: havamania://app/notifications açık Activity’ye ulaştığında etkin oturum ve gezinme hazırsa merkezi açıyor. Merkez zaten açıksa ikinci kayıt eklenmiyor. SM-T500 üzerinde iki bağlantı teslimi ve tek Geri ile doğrulandı. 428 Android birim testi ve debug APK başarılı. Sistem tepsisindeki sahipli bildirimle uçtan uca test açık.
+
+9 Kasım sistem bildirimi teslim testi: İlk doğrudan cihaz koşusunda ikinci bildirim notify dönüşünden hemen sonra etkin listede görünmedi. Test artık Android yayınının etkin listeye yansımasını en çok beş saniye bekliyor. Test APK derlendi. Gerçek tepsi satırına dokunma ve uygulama içi hedef doğrulaması açık.
+Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
+
+9 Kasım tepsi dokunuşu tekrar denemesi: Android etkin listede bildirimin yayımlandığı doğrulandı. SM-T500 ekranı açık ve kilitsiz olmasına rağmen otomasyon bildirim satırını panelin erişilebilirlik ağacında bulamadı. Başarısız deneme kodu kaldırıldı, etkin listeyi bekleyen mevcut teslim testi korundu. Fiziksel tepsi dokunuşu açık.
+
+9 Kasım bekleyen Bildirim Merkezi bağlantısı: İstek hesap kimliği ve bildirim oturumu sürümüyle sınırlanıyor. A hesabına geri dönülse bile önceki oturumun bekleyen bağlantısı geçersiz. Hesap silme engeli de gezinmeden önce yeniden kontrol ediliyor. 429 birim testi ve debug APK başarılı. Gerçek A/B hesap geçişi cihazda açık.
+
+9 Kasım Bildirim Merkezi soğuk bağlantısı: İlk ve sıcak açılış aynı oturum kontrolünden geçiyor. Bekleyen bağlantı Activity yeniden oluşturulurken ViewModel içinde tutuluyor ve eski Intent tekrar işlenmiyor. SM-T500 üzerinde gerçek soğuk başlangıçta Bildirim Merkezi açıldı, tek Geri ana ekrana döndü. 429 birim testi ve debug APK başarılı. Sistem tepsisi dokunuşu açık.
+
+9 Kasım bildirim bağlantısı Activity testi: SM-T500 üzerinde bekleyen doğrudan Bildirim Merkezi bağlantısı yeniden oluşturulan Activity’nin ViewModel’inde korundu. Tüketilen doğrudan bağlantı ve sahipli bildirim isteği ikinci yeniden oluşturmada geri gelmedi. Test APK derlendi ve 4/4 bildirim cihaz testi geçti. Tam uygulamada süreç ölümü ve fiziksel tepsi dokunuşu açık.
+
+9 Kasım Bildirim Merkezi süreç ölümü: SM-T500 üzerinde bağlantıyla merkez açıldı, uygulama arka plana alındı ve süreç sonlandırıldı. Başlatıcıyla geri dönüldüğünde farklı PID ve geri yüklenen Bildirim Merkezi doğrulandı. Tek sistem Geri ana ekrana döndü. Gerçek test hesabıyla yapıldı. Sistem tepsisi dokunuşu açık.
+
+9 Kasım hava yüklemesi: Tahmin akışı veri vermeden biterse etkin isteğin yükleme ekranı yeniden denenebilir hataya geçiyor. Eldeki başarılı tahmin korunuyor. 429 Android birim testi ve debug APK başarılı. Boş akışın hedefli cihaz doğrulaması açık.

@@ -5,6 +5,20 @@ import org.junit.Test
 import java.time.Instant
 
 class NotificationPresentationTest {
+    @Test fun selectAllUsesVisibleIdsRatherThanSelectionSize() {
+        val state = NotificationUiState(
+            filteredNotifications = listOf(NotificationItem(id = "visible")),
+            selectedIds = setOf("hidden"),
+            isSelectionMode = true
+        )
+        val selected = state.toggleVisibleSelection()
+        assertEquals(setOf("visible"), selected.selectedIds)
+        assertTrue(selected.isSelectionMode)
+        val cleared = selected.toggleVisibleSelection()
+        assertTrue(cleared.selectedIds.isEmpty())
+        assertFalse(cleared.isSelectionMode)
+    }
+
     @Test fun sameTextForDifferentTripsMustNotHideEitherEvent() {
         val a = NotificationItem(id = "a", title = "Uyarı", message = "Yağmur", targetId = "trip-a", createdAt = 1)
         val b = a.copy(id = "b", targetId = "trip-b", createdAt = 2)

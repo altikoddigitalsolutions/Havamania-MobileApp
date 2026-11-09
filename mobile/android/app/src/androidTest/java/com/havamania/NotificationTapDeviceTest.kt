@@ -17,16 +17,27 @@ class NotificationTapDeviceTest {
 
     @Test fun pendingTapSurvivesActivityRecreationWithoutReplayingAfterConsumption() {
         val request = NotificationTapRequest("test-owner", "test-event", NotificationSessionEpoch.capture())
+        val inbox = NotificationInboxLaunch("test-owner")
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
-            scenario.onActivity { ViewModelProvider(it)[NotificationTapViewModel::class.java].pending = request }
+            scenario.onActivity {
+                val state = ViewModelProvider(it)[NotificationTapViewModel::class.java]
+                state.pending = request
+                state.pendingInboxLaunch = inbox
+            }
             scenario.recreate()
             scenario.onActivity {
                 val state = ViewModelProvider(it)[NotificationTapViewModel::class.java]
                 assertSame(request, state.pending)
+                assertSame(inbox, state.pendingInboxLaunch)
                 state.pending = null
+                state.pendingInboxLaunch = null
             }
             scenario.recreate()
-            scenario.onActivity { assertNull(ViewModelProvider(it)[NotificationTapViewModel::class.java].pending) }
+            scenario.onActivity {
+                val state = ViewModelProvider(it)[NotificationTapViewModel::class.java]
+                assertNull(state.pending)
+                assertNull(state.pendingInboxLaunch)
+            }
         }
     }
 

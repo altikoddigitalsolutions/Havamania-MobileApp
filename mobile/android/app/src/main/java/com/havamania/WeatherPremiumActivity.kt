@@ -85,6 +85,7 @@ class WeatherPremiumActivity : ComponentActivity() {
     private fun captureNotificationLaunch(incoming: Intent, restoring: Boolean = false): Boolean {
         if (incoming.action?.startsWith(NOTIFICATION_ACTION_PREFIX) != true &&
             !incoming.hasExtra(NOTIFICATION_OWNER) && !incoming.hasExtra(NOTIFICATION_ID)) return false
+        notificationTap.pendingInboxLaunch = null
         notificationTapRequest(incoming,
             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
             AccountDeletionManager.getInstance(application).state.value.let { it.pending || it.busy },
@@ -100,9 +101,24 @@ class WeatherPremiumActivity : ComponentActivity() {
         return true
     }
 
+    private fun captureInboxLaunch(incoming: Intent, restoring: Boolean = false): Boolean {
+        if (incoming.action != Intent.ACTION_VIEW || incoming.dataString != "havamania://app/notifications") return false
+        if (!restoring) {
+            val deletion = AccountDeletionManager.getInstance(application).state.value
+            val owner = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            notificationTap.pendingInboxLaunch = owner?.takeUnless { deletion.pending || deletion.busy }
+                ?.let { NotificationInboxLaunch(it) }
+        }
+        setIntent(Intent(incoming).apply {
+            data = null
+            action = Intent.ACTION_MAIN
+        })
+        return true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (!captureNotificationLaunch(intent)) setIntent(intent)
+        if (!captureNotificationLaunch(intent) && !captureInboxLaunch(intent)) setIntent(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,7 +148,8 @@ if (BuildConfig.DEBUG) {
 
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        captureNotificationLaunch(intent, restoring = savedInstanceState != null)
+        val restoring = savedInstanceState != null
+        if (!captureNotificationLaunch(intent, restoring)) captureInboxLaunch(intent, restoring)
 
         setContent {
             HavamaniaTheme {
@@ -168,6 +185,20 @@ if (BuildConfig.DEBUG) {
                 val currentRoute = activeRoute ?: Routes.WEATHER_ROOT
 
                 var appState by remember { mutableStateOf("splash") }
+                LaunchedEffect(notificationTap.pendingInboxLaunch, navigationOwner, appState, isReady, activeRoute, deletionState.busy) {
+                    val launch = notificationTap.pendingInboxLaunch ?: return@LaunchedEffect
+                    val activeOwner = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (!launch.isCurrent(activeOwner, deletionManager.state.value.let { it.pending || it.busy })) {
+                        notificationTap.pendingInboxLaunch = null
+                        return@LaunchedEffect
+                    }
+                    if (activeOwner != navigationOwner || appState != "main" || !isReady ||
+                        !canNavigateFromNotification(activeRoute)) return@LaunchedEffect
+                    notificationTap.pendingInboxLaunch = null
+                    if (activeRoute != Routes.NOTIFICATION_CENTER) {
+                        navController.navigate(Routes.NOTIFICATION_CENTER) { launchSingleTop = true }
+                    }
+                }
                 LaunchedEffect(notificationTap.pending, navigationOwner, appState, isReady, activeRoute, deletionState.busy) {
                     val launch = notificationTap.pending ?: return@LaunchedEffect
                     if (!launch.isCurrent(navigationOwner, deletionManager.state.value.let { it.pending || it.busy })) {
@@ -532,16 +563,18 @@ if (BuildConfig.DEBUG) {
                                 ) { backStackEntry ->
                                     NotificationCenterScreen(
                                         onBack = { navController.popActiveScreen(backStackEntry) },
-                                        onNavigateToDetail = { screen, params ->
+                                        onOpenNotification = open@ { screen ->
+                                            if (navController.currentBackStackEntry != backStackEntry) return@open false
+                                            if (screen == null) return@open true
                                             try {
-                                                navController.navigate(screen) {
+                                                navController.navigateFromActiveScreen(backStackEntry, screen) {
                                                     launchSingleTop = true
                                                 }
                                             } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
                                                     Log.e("Nav", "Failed to navigate to $screen", e)
 }
-                                                navController.navigate(Routes.WEATHER_ROOT) {
+                                                navController.navigateFromActiveScreen(backStackEntry, Routes.WEATHER_ROOT) {
                                                     launchSingleTop = true
                                                 }
                                             }

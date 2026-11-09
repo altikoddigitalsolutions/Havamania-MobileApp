@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
@@ -50,7 +51,13 @@ class NotificationTrayDeviceTest {
             manager.notify(tag, sequence, Notification.Builder(app, channel)
                 .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle(title)
                 .setContentIntent(pending).setAutoCancel(true).build())
-            val posted = requireNotNull(manager.activeNotifications.firstOrNull { it.tag == tag && it.id == sequence }) {
+            val deadline = SystemClock.uptimeMillis() + 5_000
+            var active = manager.activeNotifications.firstOrNull { it.tag == tag && it.id == sequence }
+            while (active == null && SystemClock.uptimeMillis() < deadline) {
+                SystemClock.sleep(50)
+                active = manager.activeNotifications.firstOrNull { it.tag == tag && it.id == sequence }
+            }
+            val posted = requireNotNull(active) {
                 "Android did not post test notification $sequence"
             }
             posted.notification.contentIntent.send()
