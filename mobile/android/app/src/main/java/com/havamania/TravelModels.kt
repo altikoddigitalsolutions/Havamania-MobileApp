@@ -66,7 +66,9 @@ data class ForecastSnapshot(
     val conditionSummary: String? = null,
     val weatherCode: Int? = 0,
     val travelScore: Int? = null,
-    val generatedAt: Long = System.currentTimeMillis()
+    val generatedAt: Long = 0L,
+    val averageTemperature: Double? = null,
+    val timezone: String? = null
 )
 
 @Keep

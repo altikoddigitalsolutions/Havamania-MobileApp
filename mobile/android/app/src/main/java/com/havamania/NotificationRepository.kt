@@ -8,16 +8,7 @@ import kotlinx.coroutines.flow.map
 class NotificationRepository(private val dao: NotificationDao) {
     private val TAG = "NotificationRepo"
 
-    fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid).map { list ->
-        if (list.isEmpty() && uid == "legacy") {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "Legacy user list is empty. Returning DefaultNotifications.")
-            }
-            DefaultNotifications.create(uid)
-        } else {
-            list
-        }
-    }
+    fun getAllNotificationsFlow(uid: String): Flow<List<NotificationItem>> = dao.getAllNotifications(uid)
 
     fun getUnreadCount(uid: String): Flow<Int> = dao.getUnreadCount(uid)
 
@@ -25,96 +16,34 @@ class NotificationRepository(private val dao: NotificationDao) {
         try {
             dao.insert(notification)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e(TAG, "Failed to insert notification", e)
 }
         }
     }
 
-    suspend fun markAsRead(id: String) {
-        try {
-            dao.markAsRead(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as read: $id", e)
-}
-        }
+    suspend fun markAsRead(uid: String, ids: List<String>) {
+        if (ids.isNotEmpty()) dao.markAsRead(uid, ids)
     }
 
-    suspend fun markAsRead(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.markAsRead(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as read: $ids", e)
-}
-        }
+    suspend fun toggleReadStatus(uid: String, id: String, currentRead: Boolean) {
+        if (currentRead) dao.markAsUnread(uid, listOf(id)) else dao.markAsRead(uid, listOf(id))
     }
 
-    suspend fun toggleReadStatus(id: String, currentRead: Boolean) {
-        try {
-            if (currentRead) dao.markAsUnread(listOf(id))
-            else dao.markAsRead(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to toggle read status: $id", e)
-}
-        }
-    }
+    suspend fun markAllAsRead(uid: String) = dao.markAllAsRead(uid)
 
-    suspend fun markAsUnread(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.markAsUnread(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark as unread: $ids", e)
-}
-        }
-    }
-
-    suspend fun markAllAsRead(uid: String) {
-        try {
-            dao.markAllAsRead(uid)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to mark all as read", e)
-}
-        }
-    }
-
-    suspend fun delete(id: String) {
-        try {
-            dao.delete(listOf(id))
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete: $id", e)
-}
-        }
-    }
-
-    suspend fun delete(ids: List<String>) {
-        try {
-            if (ids.isNotEmpty()) dao.delete(ids)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete: $ids", e)
-}
-        }
+    suspend fun delete(uid: String, ids: List<String>) {
+        if (ids.isNotEmpty()) NotificationInboxGate.withLock { dao.delete(uid, ids) }
     }
 
     suspend fun deleteAll(uid: String) {
-        try {
-            dao.deleteAll(uid)
-        } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                Log.e(TAG, "Failed to delete all", e)
-}
-        }
+        NotificationInboxGate.withLock { dao.deleteAll(uid) }
     }
 
     suspend fun deleteByCategory(uid: String, category: NotificationCategory) {
         try {
-            dao.deleteByCategory(uid, category.name)
+            NotificationInboxGate.withLock { dao.deleteByCategory(uid, category.name) }
         } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
                 Log.e(TAG, "Failed to delete by category: $category", e)
@@ -128,7 +57,7 @@ if (BuildConfig.DEBUG) {
             // For now, let's keep seeding only for "legacy" or if explicitly asked.
             if (uid != "legacy") {
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "🚀 SEED SKIP: Authenticated user $uid starts clean.")
+                    Log.d(TAG, "Skipping sample notifications for an authenticated session.")
                 }
                 return
             }
@@ -136,7 +65,7 @@ if (BuildConfig.DEBUG) {
             val hasSeeded = com.havamania.ui.theme.ThemeManager.getHasSeededNotifications(context, uid).first()
             val count = dao.getTotalCountFirst(uid)
             if (BuildConfig.DEBUG) {
-                Log.d(TAG, "🔍 SEED CHECK: Total notifications in DB for $uid: $count, hasSeeded: $hasSeeded")
+                Log.d(TAG, "Checking sample notification state.")
             }
 
             if (count == 0 && !hasSeeded) {
@@ -177,7 +106,7 @@ if (BuildConfig.DEBUG) {
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "MANUAL REFRESH of demo notifications requested")
             }
-            dao.deleteAll(uid)
+            NotificationInboxGate.withLock { dao.deleteAll(uid) }
             val demoList = DefaultNotifications.create(uid)
             demoList.forEach { dao.insert(it) }
             if (BuildConfig.DEBUG) {

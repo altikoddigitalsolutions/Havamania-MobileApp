@@ -14,6 +14,11 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -21,9 +26,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
@@ -31,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.*
 import java.time.LocalDateTime
+import java.util.Locale
 
 @Composable
 fun AssistantWeatherCard(data: WeatherData, c: HavamaniaColors) {
@@ -84,8 +91,8 @@ fun AssistantWeatherCard(data: WeatherData, c: HavamaniaColors) {
 fun ChatBubble(
     message: AltikodChatMessage,
     c: HavamaniaColors,
-    onRetry: (String) -> Unit,
-    onActionClick: (AssistantAction) -> Unit
+    onRetry: ((String) -> Unit)?,
+    onActionClick: ((AssistantAction) -> Unit)?
 ) {
     val isUser = message.isUser
 
@@ -119,9 +126,28 @@ fun ChatBubble(
             }
         }
 
-        message.action?.let { action ->
+        message.disclaimer?.takeIf { it.isNotBlank() }?.let {
+            Text(it, color = c.textSecondary, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp).widthIn(max = 300.dp))
+        }
+        if (onRetry != null && message.isFallback && message.retryPrompt != null && message.retryRequestId != null) {
+            var retryReady by remember(message.id, message.retryNotBefore) {
+                mutableStateOf((message.retryNotBefore ?: 0L) <= System.currentTimeMillis())
+            }
+            LaunchedEffect(message.id, message.retryNotBefore) {
+                val waitMillis = ((message.retryNotBefore ?: 0L) - System.currentTimeMillis()).coerceAtLeast(0)
+                if (waitMillis > 0) kotlinx.coroutines.delay(waitMillis)
+                retryReady = true
+            }
+            TextButton(enabled = retryReady, onClick = { onRetry(message.retryPrompt) }) {
+                Text(if (retryReady) "Tekrar dene" else "Lütfen bekleyin",
+                    color = if (retryReady) c.accent else c.textSecondary)
+            }
+        }
+
+        message.action?.takeIf { onActionClick != null }?.let { action ->
             Spacer(modifier = Modifier.height(8.dp))
-            AssistantActionButton(action, c, onActionClick)
+            AssistantActionButton(action, c, { onActionClick?.invoke(it) })
         }
     }
 }
@@ -198,13 +224,16 @@ fun AssistantActionButton(
 
 @Composable
 fun ChatInput(
+    text: String,
+    onTextChange: (String) -> Unit,
     onSend: (String) -> Unit,
     isSending: Boolean,
     c: HavamaniaColors,
     s: HavamaniaStyles,
     contextInfo: String? = null
 ) {
-    var text by remember { mutableStateOf("") }
+    val tooLong = assistantQuestionTooLong(text)
+    val canSend = text.isNotBlank() && !isSending && !tooLong
 
     Column(
         modifier = Modifier
@@ -212,6 +241,7 @@ fun ChatInput(
             .background(c.surface)
             .padding(16.dp)
             .navigationBarsPadding()
+            .imePadding()
     ) {
         if (contextInfo != null) {
             Text(
@@ -228,9 +258,11 @@ fun ChatInput(
         ) {
             TextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Asistan'a sor...") },
+                label = { Text("Asistana mesaj") },
+                isError = tooLong,
+                maxLines = 5,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -242,12 +274,15 @@ fun ChatInput(
 
             IconButton(
                 onClick = {
-                    if (text.isNotBlank() && !isSending) {
+                    if (canSend) {
                         onSend(text)
-                        text = ""
                     }
                 },
-                enabled = text.isNotBlank() && !isSending
+                enabled = canSend,
+                modifier = Modifier.semantics {
+                    contentDescription = "Mesaj gönder"
+                    if (isSending) stateDescription = "Yanıt bekleniyor"
+                }
             ) {
                 if (isSending) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -255,6 +290,14 @@ fun ChatInput(
                     Icon(Icons.AutoMirrored.Rounded.Send, null, tint = c.accent)
                 }
             }
+        }
+        if (tooLong) {
+            Text(
+                text = stringResource(R.string.assistant_message_too_long, ASSISTANT_QUESTION_LIMIT),
+                style = HavamaniaTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
         }
     }
 }
@@ -268,13 +311,17 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "BUGÜN ÖZET",
+                text = stringResource(
+                    if (data.isStale) R.string.assistant_weather_summary_cached_title
+                    else R.string.assistant_weather_summary_title
+                ),
                 style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                 color = c.textMuted
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "${data.cityName} için bugün hava ${data.condition.lowercase()}. Sıcaklık ${data.temperature} civarında seyrediyor.",
+                text = stringResource(R.string.assistant_weather_summary, data.cityName,
+                    data.condition.lowercase(Locale.forLanguageTag("tr")), data.temperature),
                 style = HavamaniaTheme.typography.bodyMedium,
                 color = c.textPrimary
             )
@@ -283,20 +330,19 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
 }
 
 @Composable
-fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        val features = listOf(
-            Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", "Ankara'da hava nasıl?"),
-            Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", "Seyahatim için hava uygun mu?"),
-            Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?")
-        )
+fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean, onFeatureClick: (String) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        val features = buildList {
+            add(Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", todayWeatherPrompt))
+            if (hasTrip) add(Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", tripWeatherPrompt))
+            add(Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?"))
+        }
 
-        features.forEach { (icon, title, prompt) ->
+        val card: @Composable (Modifier, Triple<ImageVector, String, String>) -> Unit = { modifier, (icon, title, prompt) ->
             Surface(
-                modifier = Modifier.weight(1f).height(100.dp).clickable { onFeatureClick(prompt) },
+                onClick = { onFeatureClick(prompt) },
+                enabled = enabled,
+                modifier = modifier.heightIn(min = 100.dp),
                 color = c.surface.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, c.border.copy(alpha = 0.1f))
@@ -310,27 +356,34 @@ fun FeatureCards(c: HavamaniaColors, s: HavamaniaStyles, onFeatureClick: (String
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = title,
-                        style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                        style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                         textAlign = TextAlign.Center,
-                        color = c.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        color = c.textPrimary
                     )
                 }
+            }
+        }
+        if (maxWidth / LocalDensity.current.fontScale < 420.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                features.forEach { card(Modifier.fillMaxWidth(), it) }
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                features.forEach { card(Modifier.weight(1f), it) }
             }
         }
     }
 }
 
 @Composable
-fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean) {
+fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean) {
     val suggestions = mutableListOf(
-        "Bugün hava nasıl?",
+        todayWeatherPrompt,
         "Yağmur bekleniyor mu?",
         "Yarın hava nasıl?"
     )
     if (hasTrip) {
-        suggestions.add("Seyahatim için hava uygun mu?")
+        suggestions.add(tripWeatherPrompt)
     }
 
     Column(
@@ -339,7 +392,9 @@ fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, ha
     ) {
         suggestions.forEach { prompt ->
             Surface(
-                modifier = Modifier.fillMaxWidth().clickable { onSuggestionClick(prompt) },
+                onClick = { onSuggestionClick(prompt) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
                 color = c.accent.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))
@@ -360,6 +415,9 @@ fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, ha
         }
     }
 }
+
+private const val todayWeatherPrompt = "Bugün hava nasıl?"
+private const val tripWeatherPrompt = "Seyahatim için hava uygun mu?"
 
 @Composable
 fun TypingIndicator(c: HavamaniaColors) {

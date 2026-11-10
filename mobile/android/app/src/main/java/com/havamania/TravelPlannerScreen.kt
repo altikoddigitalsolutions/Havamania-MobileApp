@@ -1,5 +1,6 @@
 package com.havamania
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -22,8 +23,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 import java.time.LocalDate
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 enum class TravelFilter { UPCOMING, PAST, ARCHIVED }
+
+@Composable
+internal fun travelGuideBackAction(guideOpen: Boolean, closeGuide: () -> Unit, navigateBack: () -> Unit): () -> Unit {
+    BackHandler(enabled = guideOpen, onBack = closeGuide)
+    return if (guideOpen) closeGuide else navigateBack
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,13 +48,26 @@ fun TravelPlannerScreen(
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val plans by viewModel.plans.collectAsStateWithLifecycle()
+    val uploadRetrying by viewModel.uploadRetrying.collectAsStateWithLifecycle()
+    val deletionRetrying by viewModel.deletionRetrying.collectAsStateWithLifecycle()
+    val uploadSyncError by viewModel.uploadSyncError.collectAsStateWithLifecycle()
+    val deletionSyncError by viewModel.deletionSyncError.collectAsStateWithLifecycle()
+    val retrying = uploadRetrying || deletionRetrying
+    val pendingDeletions by viewModel.pendingDeletions.collectAsStateWithLifecycle()
+    val pendingUploads by viewModel.pendingUploads.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 
     var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    var planToEdit by remember { mutableStateOf<TravelPlan?>(null) }
-    var prefillPlan by remember { mutableStateOf<TravelPlan?>(null) }
+    val session by viewModel.sessionVersion.collectAsStateWithLifecycle()
+    val editorUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
+    var editor by rememberTravelEditor(editorUid)
+    var previousSession by remember { mutableStateOf(session) }
+    LaunchedEffect(session, editorUid) {
+        if (previousSession != 0L && previousSession != session) editor = TravelEditorContext(editorUid)
+        previousSession = session
+    }
 
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
@@ -54,6 +75,12 @@ fun TravelPlannerScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val today by viewModel.today.collectAsStateWithLifecycle()
+
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            calendarDateChanges().collect { viewModel.refreshToday() }
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -68,8 +95,8 @@ fun TravelPlannerScreen(
     }
 
     // UI Events (Snackbar)
-    LaunchedEffect(Unit) {
-        viewModel.uiEvent.collect { event ->
+    LaunchedEffect(viewModel, snackbarHostState) {
+        collectSessionMessages(viewModel.sessionVersion, viewModel.uiEvent) { event ->
             if (event.startsWith("DUPLICATE_TRIP|")) {
                 snackbarHostState.showSnackbar(event.substringAfter("|"))
             } else {
@@ -100,7 +127,7 @@ fun TravelPlannerScreen(
     var selectedDate by remember { mutableStateOf(today) }
 
     LaunchedEffect(initialCity, initialTripType, initialStartDate) {
-        if (initialCity != null) {
+        if (initialCity != null && !editor.initialHandled) {
             val start = try {
                 if (initialStartDate != null) LocalDate.parse(initialStartDate) else LocalDate.now()
             } catch(e: Exception) { LocalDate.now() }
@@ -111,15 +138,9 @@ fun TravelPlannerScreen(
                 if (initialTripType != null) TripType.valueOf(initialTripType) else TripType.VACATION
             } catch(e: Exception) { TripType.VACATION }
 
-            prefillPlan = TravelPlan(
-                city = initialCity,
-                tripType = type,
-                startDate = start,
-                endDate = start,
-                latitude = 0.0,
-                longitude = 0.0
-            )
-            showAddDialog = true
+            editor = editor.copy(open = true, initialHandled = true,
+                prefillCity = initialCity, prefillType = type.name, prefillDate = start.toString(),
+                prefillId = java.util.UUID.randomUUID().toString())
         }
     }
 
@@ -195,22 +216,39 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
-    var expandedGuidePlan by remember { mutableStateOf<TravelPlan?>(null) }
+    var expandedGuideId by remember(session, editorUid, selectedFilter, selectedDate) { mutableStateOf<String?>(null) }
+    val expandedGuidePlan = displayPlans.firstOrNull { it.id == expandedGuideId }
+    val toggleGuide: (TravelPlan) -> Unit = { plan ->
+        expandedGuideId = if (expandedGuideId == plan.id) null else plan.id
+    }
+    val goBack = travelGuideBackAction(expandedGuidePlan != null, { expandedGuideId = null }, onBack)
+
+    val tripListStatus: @Composable () -> Unit = {
+        TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
+        TripSyncStatusPanel(
+            pendingUploads, pendingDeletions, retrying, isOnline,
+            uploadSyncError, deletionSyncError,
+            onRetry = {
+                viewModel.retryPendingTripDeletions()
+                viewModel.retryPendingTripUploads()
+            }
+        )
+    }
 
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
                 title = "Seyahat Planlayıcı",
-                onBack = onBack,
+                onBack = goBack,
                 actions = {
                     IconButton(
-                        onClick = { showAddDialog = true },
+                        onClick = { editor = editor.create() },
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(themeColors.accent.copy(alpha = 0.1f))
                     ) {
-                        Icon(Icons.Rounded.Add, null, tint = themeColors.accent)
+                        Icon(Icons.Rounded.Add, "Seyahat ekle", tint = themeColors.accent)
                     }
                 }
             )
@@ -261,16 +299,16 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
-                                if (nextTrip != null) {
-                                    NextTripHero(nextTrip, today, onViewRoute)
-                                    Spacer(Modifier.height(themeStyles.spacingMD))
-                                }
-
                                 TravelCalendarStripe(
                                     selectedDate = selectedDate,
                                     onDateSelect = { selectedDate = it },
-                                    tripDates = tripDates
+                                    tripDates = tripDates,
+                                    today = today
                                 )
+                                if (nextTrip != null) {
+                                    Spacer(Modifier.height(themeStyles.spacingMD))
+                                    NextTripHero(nextTrip, today, onViewRoute)
+                                }
                             }
 
                             Column(
@@ -282,15 +320,16 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
+                                tripListStatus()
                                 TripListSection(
                                     filter = selectedFilter,
                                     plans = displayPlans,
                                     isLoading = isLoading && plans.isEmpty(),
                                     onFilterChange = { selectedFilter = it },
                                     selectedDate = selectedDate,
-                                    onAddClick = { showAddDialog = true },
+                                    onAddClick = { editor = editor.create() },
                                     onDelete = { deleteConfirmPlan = it },
-                                    onEdit = { planToEdit = it; showAddDialog = true },
+                                    onEdit = { editor = editor.edit(it.id) },
                                     onArchive = { viewModel.archiveTrip(it) },
                                     onUnarchive = { viewModel.unarchiveTrip(it) },
                                     onShowDetail = { planForSummary = it },
@@ -300,9 +339,8 @@ fun TravelPlannerScreen(
                                     focusId = focusId,
                                     highlight = highlight,
                                     today = today,
-                                    onToggleGuide = { plan ->
-                                        expandedGuidePlan = if (expandedGuidePlan?.id == plan.id) null else plan
-                                    }
+                                    onToggleGuide = toggleGuide,
+                                    expandedGuideId = expandedGuideId
                                 )
                             }
                         }
@@ -319,23 +357,23 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
-                                RichTravelGuideView(plan = expandedGuidePlan!!, today = today)
+                                RichTravelGuideView(plan = expandedGuidePlan, today = today)
                             }
                         }
                     }
                 } else {
                     // Phone layout: Single column
                     if (selectedFilter == TravelFilter.UPCOMING) {
-                        if (nextTrip != null) {
-                            NextTripHero(nextTrip, today, onViewRoute)
-                            Spacer(Modifier.height(themeStyles.spacingLG))
-                        }
-
                         TravelCalendarStripe(
                             selectedDate = selectedDate,
                             onDateSelect = { selectedDate = it },
-                            tripDates = tripDates
+                            tripDates = tripDates,
+                            today = today
                         )
+                        if (nextTrip != null) {
+                            Spacer(Modifier.height(themeStyles.spacingMD))
+                            NextTripHero(nextTrip, today, onViewRoute)
+                        }
                         Spacer(Modifier.height(themeStyles.spacingMD))
                     }
 
@@ -361,15 +399,16 @@ fun TravelPlannerScreen(
 
                     Spacer(Modifier.height(themeStyles.spacingMD))
 
+                    tripListStatus()
                     TripListSection(
                         filter = selectedFilter,
                         plans = displayPlans,
                         isLoading = isLoading && plans.isEmpty(),
                         onFilterChange = { selectedFilter = it },
                         selectedDate = selectedDate,
-                        onAddClick = { showAddDialog = true },
+                        onAddClick = { editor = editor.create() },
                         onDelete = { deleteConfirmPlan = it },
-                        onEdit = { planToEdit = it; showAddDialog = true },
+                        onEdit = { editor = editor.edit(it.id) },
                         onArchive = { viewModel.archiveTrip(it) },
                         onUnarchive = { viewModel.unarchiveTrip(it) },
                         onShowDetail = { planForSummary = it },
@@ -379,7 +418,9 @@ fun TravelPlannerScreen(
                         focusId = focusId,
                         highlight = highlight,
                         today = today,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        onToggleGuide = toggleGuide,
+                        expandedGuideId = expandedGuideId
                     )
                 }
 
@@ -388,20 +429,19 @@ fun TravelPlannerScreen(
         }
     }
 
-    if (showAddDialog) {
+    TravelEditorHost(
+        context = editor, plans = plans, owner = editorUid, loading = isLoading,
+        onRetry = { viewModel.loadPlans() }, onDismiss = { editor = editor.close() }
+    ) { basePlan, requireSelection ->
         AddTravelPlanDialog(
             viewModel = viewModel,
-            editPlan = planToEdit ?: prefillPlan,
-            onDismiss = {
-                showAddDialog = false
-                planToEdit = null
-                prefillPlan = null
-            },
+            editPlan = basePlan,
+            requireDestinationSelection = requireSelection,
+            onDismiss = { editor = editor.close() },
             onSave = { plan ->
-                viewModel.savePlan(plan)
-                showAddDialog = false
-                planToEdit = null
-                prefillPlan = null
+                val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
+                if (editor.owner == activeUid) viewModel.savePlan(plan)
+                editor = editor.close()
             }
         )
     }

@@ -1,5 +1,7 @@
 package com.havamania
 
+import androidx.activity.compose.BackHandler
+
 import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -29,7 +31,6 @@ import java.time.LocalDateTime
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
@@ -71,6 +72,8 @@ fun TravelRouteWeatherScreen(
     val startWeather by viewModel.startWeather.collectAsStateWithLifecycle()
     val endWeather by viewModel.endWeather.collectAsStateWithLifecycle()
     val analyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
+    val hasIncompleteForecast by viewModel.hasIncompleteForecast.collectAsStateWithLifecycle()
+    val analysisError by viewModel.analysisError.collectAsStateWithLifecycle()
     val analyzed by viewModel.isAnalyzed.collectAsStateWithLifecycle()
     val departureMillis by viewModel.departureMillis.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
@@ -78,7 +81,9 @@ fun TravelRouteWeatherScreen(
     val mapView = rememberMapViewWithLifecycle()
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var styleRef by remember { mutableStateOf<Style?>(null) }
-    var selected by remember { mutableStateOf<RouteWaypoint?>(null) }
+    val waypointsByMarkerId = remember(mapRef) { mutableMapOf<Long, RouteWaypoint>() }
+    var overlappingWaypoints by remember(tripId, routeState, waypoints) { mutableStateOf(emptyList<RouteWaypoint>()) }
+    var selected by remember(tripId, routeState, waypoints) { mutableStateOf<RouteWaypoint?>(null) }
 
     LaunchedEffect(tripId) {
         if (tripId != null) {
@@ -90,9 +95,16 @@ fun TravelRouteWeatherScreen(
         val map = mapRef ?: return@LaunchedEffect
         val style = styleRef ?: return@LaunchedEffect
 
-        val state = routeState as? RouteResult.Success ?: return@LaunchedEffect
-
+        val sourceId = "route-waypoints-source"
+        val layerId = "route-waypoints-layer"
+        val existingSource = style.getSource(sourceId) as? GeoJsonSource
+        waypointsByMarkerId.clear()
         map.clear()
+        val state = routeState as? RouteResult.Success
+        if (state == null) {
+            existingSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            return@LaunchedEffect
+        }
         val points = state.route.points.map { LatLng(it.latitude, it.longitude) }
 
         if (points.isNotEmpty()) {
@@ -104,13 +116,14 @@ fun TravelRouteWeatherScreen(
                 )
 
                 waypoints.forEach { wp ->
-                    map.addMarker(MarkerOptions()
+                    val marker = map.addMarker(MarkerOptions()
                         .position(LatLng(wp.location.latitude, wp.location.longitude))
                         .title(wp.placeName ?: "Ara Nokta")
                     )
+                    waypointsByMarkerId[marker.id] = wp
                 }
 
-                // Add GeoJSON source and SymbolLayer for persistent waypoint labels with empty-overwrite safeguard
+                // Update labels to match the current route waypoints.
                 val validWaypoints = waypoints.filter { !it.placeName.isNullOrBlank() }
                 val features = validWaypoints.map { wp ->
                     val point = Point.fromLngLat(wp.location.longitude, wp.location.latitude)
@@ -119,37 +132,11 @@ fun TravelRouteWeatherScreen(
                     feature
                 }
 
-                val sourceId = "route-waypoints-source"
-                val layerId = "route-waypoints-layer"
-                val existingSource = style.getSource(sourceId) as? GeoJsonSource
-
-                val action = if (features.isNotEmpty()) "UPDATE" else "KEEP_LAST_VALID"
-                val featureCollection = if (features.isNotEmpty()) {
-                    FeatureCollection.fromFeatures(features)
-                } else {
-                    null
-                }
-
-                if (BuildConfig.DEBUG) {
-                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "UPDATE_REASON=route_or_weather_state_change")
-                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "WAYPOINT_COUNT=${waypoints.size}")
-                    Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_COUNT=${features.size}")
-if (BuildConfig.DEBUG) {
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "FEATURE_NAMES=${validWaypoints.map { it.placeName }}")
-}
-if (BuildConfig.DEBUG) {
-                        Log.d("HAVAMANIA_MAP_LABEL_DEBUG", "SOURCE_ACTION=$action")
-}
-                }
-
+                val featureCollection = FeatureCollection.fromFeatures(features)
                 if (existingSource != null) {
-                    if (featureCollection != null) {
-                        existingSource.setGeoJson(featureCollection)
-                    }
+                    existingSource.setGeoJson(featureCollection)
                 } else {
-                    val initCollection = featureCollection ?: FeatureCollection.fromFeatures(emptyList())
-                    val geoJsonSource = GeoJsonSource(sourceId, initCollection)
-                    style.addSource(geoJsonSource)
+                    style.addSource(GeoJsonSource(sourceId, featureCollection))
                 }
 
                 if (style.getLayer(layerId) == null) {
@@ -191,32 +178,44 @@ if (BuildConfig.DEBUG) {
                     }
                 }
 
-                val builder = LatLngBounds.Builder()
-                points.forEach { builder.include(it) }
-                val bounds = builder.build()
-
-                kotlinx.coroutines.delay(500)
-                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 2000)
             } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
-                    Log.e("MapRoute", "Error fitting bounds", e)
+                    Log.e("MapRoute", "Error drawing route", e)
 }
             }
         }
     }
 
-    LaunchedEffect(mapRef) {
-        mapRef?.setOnMarkerClickListener { marker ->
-            val pos = marker.position
-            val matched = waypoints.find {
-                kotlin.math.abs(it.location.latitude - pos.latitude) < 0.001 &&
-                kotlin.math.abs(it.location.longitude - pos.longitude) < 0.001
-            }
-            if (matched != null) {
-                selected = matched
-                mapRef?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(matched.location.latitude, matched.location.longitude), 13.0), 1000)
-            }
-            true
+    val latestSelection by rememberUpdatedState(selected)
+    LaunchedEffect(mapRef, styleRef, routeState) {
+        val map = mapRef ?: return@LaunchedEffect
+        if (styleRef == null) return@LaunchedEffect
+        val route = (routeState as? RouteResult.Success)?.route ?: return@LaunchedEffect
+        if (route.points.size < 2) return@LaunchedEffect
+        kotlinx.coroutines.delay(500)
+        if (latestSelection != null) return@LaunchedEffect
+
+        try {
+            val bounds = LatLngBounds.Builder().apply {
+                route.points.forEach { include(LatLng(it.latitude, it.longitude)) }
+            }.build()
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150), 2000)
+        } catch (e: IllegalArgumentException) {
+            if (BuildConfig.DEBUG) Log.w("MapRoute", "Could not fit route bounds", e)
+        }
+    }
+
+    RouteMarkerSelection(mapRef, waypointsByMarkerId) { matches ->
+        if (matches.size == 1) {
+            selected = matches.single()
+        } else {
+            overlappingWaypoints = matches
+        }
+    }
+    if (overlappingWaypoints.isNotEmpty()) {
+        RoutePassageDialog(overlappingWaypoints, onDismiss = { overlappingWaypoints = emptyList() }) {
+            overlappingWaypoints = emptyList()
+            selected = it
         }
     }
 
@@ -235,7 +234,7 @@ if (BuildConfig.DEBUG) {
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = { viewModel.loadTrip(tripId ?: "") }) {
-                        Icon(Icons.Rounded.Refresh, null, tint = colors.accent)
+                        Icon(Icons.Rounded.Refresh, "Rotayı yenile", tint = colors.accent)
                     }
                 }
             )
@@ -260,7 +259,7 @@ if (BuildConfig.DEBUG) {
                         styleRef = style
                     })
 
-                    if (routeState == null) {
+                    if (routeState == null && errorMessage == null) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = colors.accent)
                         }
@@ -304,6 +303,9 @@ if (BuildConfig.DEBUG) {
                             departureMillis = departureMillis,
                             analyzing = analyzing,
                             analyzed = analyzed,
+                            hasIncompleteForecast = hasIncompleteForecast,
+                            analysisError = analysisError,
+                            onRetryRoute = { viewModel.loadTrip(tripId ?: "") },
                             onAnalyze = { viewModel.analyzeWeather() },
                             onSelect = { selected = it }
                         )
@@ -342,6 +344,9 @@ if (BuildConfig.DEBUG) {
                         departureMillis = departureMillis,
                         analyzing = analyzing,
                         analyzed = analyzed,
+                        hasIncompleteForecast = hasIncompleteForecast,
+                        analysisError = analysisError,
+                        onRetryRoute = { viewModel.loadTrip(tripId ?: "") },
                         onAnalyze = { viewModel.analyzeWeather() },
                         onSelect = { selected = it },
                         showTimeline = false
@@ -371,14 +376,23 @@ if (BuildConfig.DEBUG) {
                             Text(
                                 text = "Başlangıç noktası seçildiğinde rota burada gösterilecek.",
                                 style = HavamaniaTheme.typography.bodySmall,
-                                color = colors.textMuted,
+                                color = colors.textPrimary,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(32.dp)
+                                modifier = Modifier.padding(24.dp)
+                                    .background(colors.surface, RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
                             )
                         }
                     } else if (routeState is RouteResult.Error || routeState is RouteResult.NoRoute) {
                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
-                            Text("Harita verisi şu an yüklenemedi", color = colors.textMuted)
+                            Text(
+                                "Harita verisi şu an yüklenemedi",
+                                color = colors.textPrimary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(24.dp)
+                                    .background(colors.surface, RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                            )
                         }
                     }
                 }
@@ -411,100 +425,115 @@ if (BuildConfig.DEBUG) {
         }
 
         // Waypoint Detail Popup Overlay
-        if (selected != null) {
-            val wp = selected!!
-            val weather = wp.weather
-            val timeStr = wp.etaEpochMillis?.let {
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
-            } ?: "--:--"
-
+        selected?.let { wp ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
-                Surface(
-                    color = colors.surface,
-                    shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, colors.border.copy(alpha = 0.2f)),
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = wp.placeName ?: "Ara Nokta",
-                                    style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
-                                    color = colors.textPrimary
-                                )
-                                Text(
-                                    text = "Tahmini Geçiş: $timeStr",
-                                    style = HavamaniaTheme.typography.caption,
-                                    color = colors.textSecondary
-                                )
-                            }
-                            IconButton(onClick = { selected = null }) {
-                                Icon(Icons.Rounded.Close, null, tint = colors.textMuted)
-                            }
-                        }
-
-                        if (weather != null) {
-                            Spacer(Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
-                                        fontSize = 28.sp
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = WeatherUtils.getWeatherDisplayName(weather.weatherCode, LocalDateTime.now(), null, null),
-                                            style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = colors.textPrimary
-                                        )
-                                        Text(
-                                            text = "Sıcaklık: ${weather.temperatureC.toInt()}°C",
-                                            style = HavamaniaTheme.typography.bodySmall,
-                                            color = colors.textSecondary
-                                        )
-                                    }
-                                }
-                                if (weather.risk != RouteRisk.OK && !weather.riskReason.isNullOrBlank()) {
-                                    Surface(
-                                        color = colors.warning.copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = BorderStroke(1.dp, colors.warning.copy(alpha = 0.3f))
-                                    ) {
-                                        Text(
-                                            text = "⚠️ ${weather.riskReason}",
-                                            style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
-                                            color = colors.warning,
-                                            modifier = Modifier.padding(8.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                RouteWaypointDetailCard(wp, analyzed, onClose = { selected = null })
             }
         }
     }
 }
 
 @Composable
-private fun RouteContent(
+internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClose: () -> Unit) {
+    BackHandler(onBack = onClose)
+    val colors = HavamaniaTheme.colors
+    val weather = wp.weather
+    val timeStr = wp.etaEpochMillis?.let {
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+    } ?: "--:--"
+
+    Surface(
+        color = colors.surface,
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, colors.border.copy(alpha = 0.2f)),
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+    ) {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = wp.placeName ?: "Ara Nokta",
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        text = "Tahmini Geçiş: $timeStr",
+                        style = HavamaniaTheme.typography.caption,
+                        color = colors.textSecondary
+                    )
+                }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Rounded.Close, "Güzergâh ayrıntısını kapat", tint = colors.textMuted)
+                }
+            }
+
+            if (weather != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
+                            fontSize = 28.sp
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = routeWeatherDisplayName(weather.weatherCode, wp.etaEpochMillis),
+                                style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "Sıcaklık: ${weather.temperatureC.toInt()}°C",
+                                style = HavamaniaTheme.typography.bodySmall,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                }
+                if (weather.risk != RouteRisk.OK && !weather.riskReason.isNullOrBlank()) {
+                    Surface(
+                        color = colors.warning.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, colors.warning.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "⚠️ ${weather.riskReason}",
+                            style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+                            color = colors.warning,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = if (analyzed) "Tahmin alınamadı" else "Analiz tamamlanmadı",
+                    style = HavamaniaTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun RouteContent(
     trip: TravelPlan?,
     routeState: RouteResult?,
     waypoints: List<RouteWaypoint>,
@@ -513,6 +542,9 @@ private fun RouteContent(
     departureMillis: Long?,
     analyzing: Boolean,
     analyzed: Boolean,
+    hasIncompleteForecast: Boolean,
+    analysisError: String?,
+    onRetryRoute: () -> Unit,
     onAnalyze: suspend () -> Unit,
     onSelect: (RouteWaypoint) -> Unit,
     showTimeline: Boolean = true
@@ -532,15 +564,20 @@ private fun RouteContent(
 
         Spacer(Modifier.height(16.dp))
 
-        val tripStatus = remember(t) {
-            TravelStatusResolver.getStatus(t.startDate, t.endDate)
-        }
+        val now = java.time.Instant.now()
+        val tripStatus = TravelStatusResolver.getStatus(t.startDate, t.endDate, now.atZone(ZoneId.systemDefault()).toLocalDate())
         val isPast = tripStatus == TravelStatus.PAST
         val departureDateTime = t.departureDateTime
-        val now = LocalDateTime.now()
-        val isWeatherReady = departureDateTime != null && !isPast && ChronoUnit.HOURS.between(now, departureDateTime) <= 48
+        val isWeatherReady = TravelStatusResolver.isRouteWeatherEligible(t, now)
 
-        if (isPast) {
+        if (routeState is RouteResult.Error || routeState is RouteResult.NoRoute) {
+            Text(
+                text = if (routeState is RouteResult.NoRoute) "Sürüş rotası bulunamadı."
+                    else "Rota yüklenemedi.",
+                color = colors.textPrimary
+            )
+            TextButton(onClick = onRetryRoute) { Text("Rotayı tekrar yükle") }
+        } else if (isPast) {
             RoutePastTripCard(t, colors)
         } else if (t.departureTime == null) {
             RouteTimeMissingCard(colors)
@@ -548,10 +585,17 @@ private fun RouteContent(
             RouteWeatherNotReadyCard(departureDateTime, colors)
         } else if (!isWeatherReady && departureDateTime == null) {
             RouteTimeMissingCard(colors)
-        } else if (!analyzed) {
+        } else if (!analyzed && routeState is RouteResult.Success) {
+            analysisError?.let { Text(it, color = colors.textPrimary) }
             RouteAnalysisActionCard(analyzing, onAnalyze = { scope.launch { onAnalyze() } }, colors)
         } else if (routeState is RouteResult.Success) {
             val route = routeState.route
+            if (hasIncompleteForecast) {
+                Text(
+                    text = "Bazı güzergâh noktaları için hava tahmini alınamadı. Bu kesimlerde hava riski değerlendirilemedi.",
+                    color = colors.textPrimary
+                )
+            }
             val arrivalMillis = departureMillis?.let { it + (route.durationSeconds * 1000).toLong() }
 
             RouteMetricRow(
@@ -572,7 +616,7 @@ private fun RouteContent(
 }
 
 @Composable
-private fun TimelineContent(
+internal fun TimelineContent(
     trip: TravelPlan,
     route: RoutePath,
     waypoints: List<RouteWaypoint>,
@@ -588,21 +632,30 @@ private fun TimelineContent(
         LocalDateTime.ofInstant(Instant.ofEpochMilli(departureMillis), ZoneId.systemDefault()).format(timeFormatter)
     } else "--:--"
 
-    TimelineWaypointItem(trip.originCity ?: "Başlangıç", depTime, startWeather, isFirst = true) {}
+    val missingForecastLabel = if (analyzed) "Tahmin alınamadı" else "Analiz tamamlanmadı"
+    val startName = trip.originCity ?: "Başlangıç"
+    TimelineWaypointItem(startName, depTime, startWeather, isFirst = true, missingForecastLabel = missingForecastLabel, etaEpochMillis = departureMillis) {
+        route.origin?.let { onSelect(RouteWaypoint(it, 0.0, departureMillis, startName, startWeather)) }
+    }
 
     waypoints.forEach { wp ->
         val eta = if (wp.etaEpochMillis != null) {
             LocalDateTime.ofInstant(Instant.ofEpochMilli(wp.etaEpochMillis), ZoneId.systemDefault()).format(timeFormatter)
         } else "--:--"
 
-        TimelineWaypointItem(wp.placeName ?: "Ara Nokta", eta, wp.weather) { onSelect(wp) }
+        TimelineWaypointItem(wp.placeName ?: "Ara Nokta", eta, wp.weather, missingForecastLabel = missingForecastLabel, etaEpochMillis = wp.etaEpochMillis) { onSelect(wp) }
     }
 
-    val arrTime = if (departureMillis != null) {
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(departureMillis + (route.durationSeconds * 1000).toLong()), ZoneId.systemDefault()).format(timeFormatter)
+    val arrivalMillis = departureMillis?.plus((route.durationSeconds * 1000).toLong())
+    val arrTime = if (arrivalMillis != null) {
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(arrivalMillis), ZoneId.systemDefault()).format(timeFormatter)
     } else "--:--"
 
-    TimelineWaypointItem(trip.city, arrTime, endWeather, isLast = true) {}
+    TimelineWaypointItem(trip.city, arrTime, endWeather, isLast = true, missingForecastLabel = missingForecastLabel, etaEpochMillis = arrivalMillis) {
+        route.destination?.let {
+            onSelect(RouteWaypoint(it, route.distanceMeters, arrivalMillis, trip.city, endWeather))
+        }
+    }
 }
 
 @Composable
@@ -781,6 +834,56 @@ private fun RouteAnalysisActionCard(analyzing: Boolean, onAnalyze: () -> Unit, c
                 fillMaxWidth = false
             )
         }
+    }
+}
+
+@Composable
+internal fun RoutePassageDialog(
+    waypoints: List<RouteWaypoint>,
+    onDismiss: () -> Unit,
+    onSelect: (RouteWaypoint) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Bu noktadan geçişler") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                waypoints.forEachIndexed { index, waypoint ->
+                    val time = waypoint.etaEpochMillis?.let {
+                        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("HH:mm"))
+                    }
+                    TextButton(onClick = {
+                        onSelect(waypoint)
+                    }) {
+                        Text("${index + 1}. geçiş" + (time?.let { " · $it" } ?: ""))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Kapat") }
+        }
+    )
+}
+
+@Composable
+internal fun RouteMarkerSelection(
+    map: MapLibreMap?,
+    waypointsByMarkerId: Map<Long, RouteWaypoint>,
+    onSelect: (List<RouteWaypoint>) -> Unit
+) {
+    val select by rememberUpdatedState(onSelect)
+    DisposableEffect(map, waypointsByMarkerId) {
+        map?.setOnMarkerClickListener { marker ->
+            val waypoint = waypointsByMarkerId[marker.id]
+            if (waypoint != null) {
+                select(waypointsByMarkerId.values.filter { it.location == waypoint.location }
+                    .sortedBy { it.cumulativeDistanceMeters })
+            }
+            waypoint != null
+        }
+        onDispose { map?.setOnMarkerClickListener(null) }
     }
 }
 

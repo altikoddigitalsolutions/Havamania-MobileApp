@@ -10,6 +10,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.semantics.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,20 +42,46 @@ fun PersonalizationScreen(
     val themeStyles = HavamaniaTheme.styles
     val profileState by profileViewModel.profileState.collectAsState()
 
-    var selectedInterests by remember { mutableStateOf(setOf<String>()) }
-    var selectedStyles by remember { mutableStateOf(setOf<String>()) }
-    var weatherPrefs by remember { mutableStateOf(WeatherPreferences()) }
+    val owner by profileViewModel.activeUid.collectAsState()
+    val saveState by profileViewModel.personalizationSaveState.collectAsState()
+    val saving = saveState == ProfileSaveState.Saving
+    var draftOwner by rememberSaveable(owner) { mutableStateOf(owner) }
+    var initialized by rememberSaveable(owner) { mutableStateOf(false) }
+    val setSaver = remember { Saver<Set<String>, ArrayList<String>>(save = { ArrayList(it) }, restore = { it.toSet() }) }
+    val prefsSaver = remember { Saver<WeatherPreferences, String>(save = { Json.encodeToString(it) }, restore = { Json.decodeFromString(it) }) }
+    var selectedInterests by rememberSaveable(owner, stateSaver = setSaver) { mutableStateOf(emptySet<String>()) }
+    var selectedStyles by rememberSaveable(owner, stateSaver = setSaver) { mutableStateOf(emptySet<String>()) }
+    var weatherPrefs by rememberSaveable(owner, stateSaver = prefsSaver) { mutableStateOf(WeatherPreferences()) }
+    var expandedCategoryId by rememberSaveable(owner) { mutableStateOf<String?>(InterestsData.categories.firstOrNull()?.title) }
+    val editable = initialized && owner != null && !saving
 
-    var expandedCategoryId by remember { mutableStateOf<String?>(InterestsData.categories.firstOrNull()?.title) }
-
-    LaunchedEffect(profileState) {
-        if (profileState is ProfileState.Success) {
-            val profile = (profileState as ProfileState.Success).profile
+    LaunchedEffect(profileState, owner) {
+        val profile = (profileState as? ProfileState.Success)?.profile
+        if (draftOwner != owner) {
+            selectedInterests = emptySet()
+            selectedStyles = emptySet()
+            weatherPrefs = WeatherPreferences()
+            initialized = false
+            draftOwner = owner
+        }
+        if (!initialized && owner != null && profile != null && profile.uid == owner) {
             selectedInterests = profile.personalizationProfile?.selectedInterests?.toSet() ?: emptySet()
             selectedStyles = profile.personalizationProfile?.travelStyles?.toSet() ?: emptySet()
             weatherPrefs = profile.personalizationProfile?.weatherPreferences ?: WeatherPreferences()
+            initialized = true
         }
     }
+    LaunchedEffect(saveState) {
+        if (saveState == ProfileSaveState.Saved) {
+            profileViewModel.resetPersonalizationSave()
+            onComplete()
+        }
+    }
+    DisposableEffect(profileViewModel) { onDispose { profileViewModel.resetPersonalizationSave() } }
+    BackHandler(enabled = saving) { }
+
+    // Saved state may outlive an authentication change during process recreation.
+    if (draftOwner != owner) return
 
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
@@ -56,8 +89,8 @@ fun PersonalizationScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "KIŞISELLEŞTIRME",
-                onBack = onBack
+                title = "KİŞİSELLEŞTİRME",
+                onBack = { if (!saving) onBack() }
             )
         }
     ) { padding ->
@@ -98,7 +131,7 @@ fun PersonalizationScreen(
                     onToggle = { expandedCategoryId = if (expandedCategoryId == category.title) null else category.title },
                     selectedInterests = selectedInterests,
                     onInterestToggle = { id ->
-                        selectedInterests = if (selectedInterests.contains(id)) selectedInterests - id else selectedInterests + id
+                        if (editable) selectedInterests = if (selectedInterests.contains(id)) selectedInterests - id else selectedInterests + id
                     }
                 )
                 Spacer(Modifier.height(themeStyles.spacingMD))
@@ -120,7 +153,7 @@ fun PersonalizationScreen(
                         HavamaniaChip(
                             selected = selectedStyles.contains(style),
                             onClick = {
-                                selectedStyles = if (selectedStyles.contains(style)) selectedStyles - style else selectedStyles + style
+                                if (editable) selectedStyles = if (selectedStyles.contains(style)) selectedStyles - style else selectedStyles + style
                             },
                             label = style,
                             modifier = Modifier.minimumInteractiveComponentSize()
@@ -139,11 +172,11 @@ fun PersonalizationScreen(
                 onToggle = { expandedCategoryId = if (expandedCategoryId == "WEATHER_PREFS") null else "WEATHER_PREFS" }
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)) {
-                    PreferenceSwitch("Sıcağı Severim", weatherPrefs.likesHeat) { weatherPrefs = weatherPrefs.copy(likesHeat = it) }
-                    PreferenceSwitch("Serin Havayı Severim", weatherPrefs.likesCool) { weatherPrefs = weatherPrefs.copy(likesCool = it) }
-                    PreferenceSwitch("Yağmura Hassasım", weatherPrefs.rainSensitive) { weatherPrefs = weatherPrefs.copy(rainSensitive = it) }
-                    PreferenceSwitch("Rüzgara Hassasım", weatherPrefs.windSensitive) { weatherPrefs = weatherPrefs.copy(windSensitive = it) }
-                    PreferenceSwitch("Yüksek UV Hassasiyeti", weatherPrefs.uvSensitive) { weatherPrefs = weatherPrefs.copy(uvSensitive = it) }
+                    PreferenceSwitch("Sıcağı Severim", weatherPrefs.likesHeat, enabled = editable) { weatherPrefs = weatherPrefs.copy(likesHeat = it) }
+                    PreferenceSwitch("Serin Havayı Severim", weatherPrefs.likesCool, enabled = editable) { weatherPrefs = weatherPrefs.copy(likesCool = it) }
+                    PreferenceSwitch("Yağmura Hassasım", weatherPrefs.rainSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(rainSensitive = it) }
+                    PreferenceSwitch("Rüzgara Hassasım", weatherPrefs.windSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(windSensitive = it) }
+                    PreferenceSwitch("Yüksek UV Hassasiyeti", weatherPrefs.uvSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(uvSensitive = it) }
                 }
             }
 
@@ -151,17 +184,28 @@ fun PersonalizationScreen(
 
             HavamaniaPrimaryButton(
                 text = "TERCİHLERİ KAYDET",
+                enabled = editable,
+                isLoading = saving,
                 onClick = {
                     profileViewModel.updatePersonalization(
                         interests = selectedInterests.toList(),
                         travelStyles = selectedStyles.toList(),
                         weatherPrefs = weatherPrefs
                     )
-                    onComplete()
                 }
             )
 
+            (saveState as? ProfileSaveState.Failed)?.let { failure ->
+                Text(failure.message, color = themeColors.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+            if (!initialized) {
+                Text(if (profileState is ProfileState.Error) "Tercihler yüklenemedi." else "Tercihler yükleniyor...",
+                    color = themeColors.textSecondary)
+                if (profileState is ProfileState.Error) TextButton(onClick = { profileViewModel.refresh() }) { Text("Tekrar dene") }
+            }
             TextButton(
+                enabled = !saving,
                 onClick = onComplete,
                 modifier = Modifier.padding(top = themeStyles.spacingSM).minimumInteractiveComponentSize()
             ) {
@@ -275,7 +319,7 @@ fun PersonalizationAccordionItemSimple(
 }
 
 @Composable
-private fun PreferenceSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun PreferenceSwitch(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -284,7 +328,7 @@ private fun PreferenceSwitch(label: String, checked: Boolean, onCheckedChange: (
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = HavamaniaTheme.typography.bodyLarge, color = HavamaniaTheme.colors.textPrimary)
-        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp), style = HavamaniaTheme.typography.bodyLarge, color = HavamaniaTheme.colors.textPrimary)
+        HavamaniaToggle(checked = checked, enabled = enabled, modifier = Modifier.semantics { contentDescription = label }, onCheckedChange = onCheckedChange)
     }
 }

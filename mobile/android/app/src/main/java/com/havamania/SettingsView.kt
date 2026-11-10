@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -50,15 +53,20 @@ fun SettingsScreen(
     onNavigateToCities: () -> Unit = {},
     onNavigateToSmartAlerts: () -> Unit = {},
     themeViewModel: ThemeViewModel = viewModel(),
-    travelViewModel: TravelViewModel = viewModel(),
-    aiHistoryViewModel: AiHistoryViewModel = viewModel(),
-    notificationViewModel: NotificationViewModel = viewModel(),
     authViewModel: AuthViewModel = viewModel(),
-    profileViewModel: ProfileViewModel = viewModel()
+    cacheViewModel: SettingsCacheViewModel = viewModel()
 ) {
+    val consentViewModel: AssistantConsentSettingsViewModel = viewModel()
+    val consentState by consentViewModel.consent.state.collectAsStateWithLifecycle()
+    val cacheState by cacheViewModel.clearer.state.collectAsStateWithLifecycle()
+    val settingsIssue by themeViewModel.settingsIssue.collectAsStateWithLifecycle()
+    SettingsIssueDialog(settingsIssue, themeViewModel::dismissSettingsIssue, themeViewModel::loadSettings)
+    AssistantConsentDialog(consentState, consentViewModel.consent::save, consentViewModel.consent::revoke,
+        consentViewModel.consent::retry, consentViewModel.consent::dismiss)
     val scrollState = rememberScrollState()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    val systemNotificationsAllowed by rememberSystemNotificationAccess()
 
     val openLegal = { url: String ->
         try {
@@ -148,7 +156,7 @@ fun SettingsScreen(
             // 3. Genel
             SettingsGroupLabel("GENEL")
             SettingsCard {
-                SettingsClickRow("Dil", if (language == "TR") "Türkçe" else "English", Icons.Rounded.Language) {
+                SettingsClickRow("Dil", AppLanguageSupport.displayName(language), Icons.Rounded.Language) {
                     showLanguageDialog = true
                 }
                 SettingsDivider()
@@ -156,8 +164,10 @@ fun SettingsScreen(
                     themeViewModel.setTempUnit(if (tempUnit == TemperatureUnit.CELSIUS) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS)
                 }
                 SettingsDivider()
-                SettingsToggleRow("Bildirimler", "Uygulama içi duyurular", Icons.Rounded.Notifications, notificationsEnabled) {
-                    themeViewModel.setNotificationsEnabled(it)
+                NotificationSettingsSection(notificationsEnabled, systemNotificationsAllowed,
+                    themeViewModel::setNotificationsEnabled) {
+                    if (!openSystemNotificationSettings(context))
+                        Toast.makeText(context, "Android ayarları açılamadı.", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -180,6 +190,10 @@ fun SettingsScreen(
             // 5. Destek & Yasal
             SettingsGroupLabel("DESTEK VE YASAL")
             SettingsCard {
+                SettingsNavRow("Asistan izinleri", null, Icons.Rounded.PrivacyTip) {
+                    consentViewModel.consent.open()
+                }
+                SettingsDivider()
                 SettingsNavRow("KVKK Aydınlatma Metni", null, Icons.Rounded.Gavel) {
                     openLegal(LegalUrls.KVKK)
                 }
@@ -192,16 +206,7 @@ fun SettingsScreen(
                     openLegal(LegalUrls.TERMS_OF_USE)
                 }
                 SettingsDivider()
-                SettingsClickRow(
-                    title = "Önbelleği Temizle",
-                    value = "Hava verilerini yenile",
-                    icon = Icons.Rounded.Cached,
-                    isVertical = true
-                ) {
-                    travelViewModel.clearAllPlans()
-                    comingSoonTitle = "Hava durumu önbelleği temizlendi."
-                    showComingSoonDialog = true
-                }
+                WeatherCacheSettingsAction(cacheState, cacheViewModel::clearWeatherCache, cacheViewModel.clearer::dismiss)
             }
 
             Spacer(modifier = Modifier.height(themeStyles.spacingLG))
@@ -227,7 +232,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             val appVersion = BuildConfig.VERSION_NAME
-            val uid = authViewModel.currentUser?.uid ?: "legacy"
             val context = LocalContext.current
             val logoResId = context.resources.getIdentifier("havamania_logo_clean", "drawable", context.packageName)
 
@@ -338,6 +342,43 @@ private fun SettingsGroupLabel(text: String) {
 }
 
 @Composable
+internal fun WeatherCacheSettingsAction(state: WeatherCacheClearState, onClear: () -> Unit, onDismiss: () -> Unit) {
+    SettingsClickRow(
+        title = "Önbelleği Temizle",
+        value = if (state == WeatherCacheClearState.CLEARING) "Temizleniyor…" else "İndirilen hava verilerini kaldırır",
+        icon = Icons.Rounded.Cached,
+        isVertical = true,
+        enabled = state != WeatherCacheClearState.CLEARING,
+        onClick = onClear
+    )
+    if (state == WeatherCacheClearState.SUCCESS || state == WeatherCacheClearState.ERROR) {
+        val failed = state == WeatherCacheClearState.ERROR
+        HavamaniaDialog(
+            onDismissRequest = onDismiss,
+            title = "Önbellek temizliği",
+            text = if (failed) "Önbellek temizlenemedi. Lütfen tekrar deneyin." else "Hava durumu önbelleği temizlendi.",
+            confirmText = if (failed) "Tekrar dene" else "Tamam",
+            dismissText = if (failed) "Vazgeç" else null,
+            onConfirm = if (failed) onClear else onDismiss
+        )
+    }
+}
+
+@Composable
+internal fun SettingsIssueDialog(issue: SettingsIssue?, onDismiss: () -> Unit, onReload: () -> Unit) {
+    if (issue == null) return
+    val loading = issue == SettingsIssue.LOAD
+    HavamaniaDialog(
+        onDismissRequest = onDismiss,
+        title = if (loading) "Ayarlar yüklenemedi" else "Ayar kaydedilemedi",
+        text = if (loading) "Ayarlar okunamadı. Lütfen yeniden yükleyin." else "Değişiklik kaydedilemedi. Lütfen ayarı yeniden seçin.",
+        confirmText = if (loading) "Yeniden yükle" else "Tamam",
+        dismissText = if (loading) "Vazgeç" else null,
+        onConfirm = if (loading) onReload else onDismiss
+    )
+}
+
+@Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -388,13 +429,14 @@ private fun SettingsClickRow(
     icon: ImageVector,
     contentColor: Color = HavamaniaTheme.colors.textPrimary,
     isVertical: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button) { onClick() }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -411,15 +453,14 @@ private fun SettingsClickRow(
                         letterSpacing = 0.sp
                     ),
                     color = contentColor,
-                    maxLines = 1,
-                    softWrap = false
+                    softWrap = true
                 )
                 if (value != null) {
                     Text(
                         text = value,
                         style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
                         color = themeColors.textSecondary.copy(alpha = 0.7f),
-                        maxLines = 2
+                        softWrap = true
                     )
                 }
             }
@@ -466,7 +507,28 @@ private fun SettingsToggleRow(title: String, subtitle: String?, icon: ImageVecto
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
             }
         }
-        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange)
+        HavamaniaToggle(checked = checked, modifier = Modifier.semantics { contentDescription = title }, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+internal fun NotificationSettingsSection(enabled: Boolean, systemAllowed: Boolean,
+    onToggle: (Boolean) -> Unit, onSystemSettings: () -> Unit) {
+    Column {
+        SettingsToggleRow("Bildirimler", if (enabled) "Hava ve seyahat uyarıları" else "Hava ve seyahat uyarıları kapalı",
+            Icons.Rounded.Notifications, enabled, onToggle)
+        if (enabled) {
+            if (!systemAllowed) Text(
+                "Android bildirim izni kapalı. Bildirim alabilmek için sistem ayarlarından izin verin.",
+                style = MaterialTheme.typography.bodySmall,
+                color = HavamaniaTheme.colors.textSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            TextButton(onClick = onSystemSettings,
+                modifier = Modifier.padding(horizontal = 8.dp).heightIn(min = 48.dp)) {
+                Text("Android ayarlarını aç", color = HavamaniaTheme.colors.accent)
+            }
+        }
     }
 }
 
@@ -552,20 +614,30 @@ fun LanguageSelectionDialog(currentLanguage: String, onLanguageSelected: (String
     val themeColors = HavamaniaTheme.colors
     HavamaniaDialog(
         onDismissRequest = onDismiss,
-        title = "Dil Seç",
-        text = "",
+        title = "Uygulama dili",
+        text = "Uygulama şu anda Türkçe olarak kullanılabilir.",
         confirmText = "Kapat",
         onConfirm = onDismiss,
         content = {
-            Column {
+            Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 listOf("TR" to "Türkçe", "EN" to "English").forEach { (code, name) ->
+                    val enabled = AppLanguageSupport.isSupported(code)
+                    val selected = enabled && code == AppLanguageSupport.resolve(currentLanguage)
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onLanguageSelected(code) }.padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().selectable(
+                            selected = selected, enabled = enabled,
+                            role = androidx.compose.ui.semantics.Role.RadioButton,
+                            onClick = { if (enabled) onLanguageSelected(code) }
+                        ).padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = code == currentLanguage, onClick = { onLanguageSelected(code) })
+                        RadioButton(selected = selected, enabled = enabled, onClick = null)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(name, color = themeColors.textPrimary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(name, color = if (enabled) themeColors.textPrimary else themeColors.textSecondary)
+                            if (!enabled) Text("Henüz kullanılamıyor", style = MaterialTheme.typography.bodySmall,
+                                color = themeColors.textSecondary)
+                        }
                     }
                 }
             }

@@ -187,23 +187,31 @@ class AccountDeletionManager private constructor(private val app: Application) {
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     private suspend fun cleanLocalData(uid: String) {
+        withContext(Dispatchers.IO) {
+            check(app.getSharedPreferences("assistant_local_privacy", Context.MODE_PRIVATE)
+                .edit().remove("withdraw_pending_$uid").remove("health_blocked_$uid")
+                .remove("health_revision_$uid").commit())
+        }
+        withContext(Dispatchers.IO) { FcmTokenQueue.clearAccount(app) }
         WorkManager.getInstance(app).cancelUniqueWork("travel_notifications_daily").await()
+        WorkManager.getInstance(app).cancelUniqueWork("WeatherDailyUpdateWork").await()
         val firestore = FirebaseFirestore.getInstance()
         firestore.terminate().await()
         firestore.clearPersistence().await()
         val weather = WeatherDatabase.getDatabase(app).weatherDao()
-        weather.clearAllTravelPlans(uid)
-        weather.clearAllAiHistory(uid)
-        weather.clearAllWeatherCache()
-        WeatherRepository.getInstance(app).clearCurrentWeather()
-        NotificationDatabase.getDatabase(app).notificationDao().deleteAll(uid)
+        weather.deleteAccountData(uid)
+        WeatherRepository.getInstance(app).clearForAccountDeletion()
+        NotificationDatabase.getDatabase(app).notificationDao().deleteAccountData(uid)
+        NotificationDeliveryRecovery.shared.discardOwner(uid)
         app.dataStore.edit { preferences ->
             preferences.asMap().keys.filter { it.name.startsWith("havamania:$uid:") }
                 .forEach { preferences.remove(it) }
         }
         app.imageLoader.memoryCache?.clear()
         withContext(Dispatchers.IO) { app.imageLoader.diskCache?.clear() }
-        (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancelAll()
+        NotificationSessionEpoch.changed {
+            (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancelAll()
+        }
     }
 
     fun acknowledgeCompletion() {

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.account_deletion import AccountDeletion
 from app.models.user import User
+from app.services.chatbot_bridge import ChatbotBridgeClient
 from app.services.firebase_identity import firebase_app, verify_firebase_token
 
 logger = logging.getLogger(__name__)
@@ -92,8 +93,14 @@ def prepare_deletion(db: Session, key: str, token: str | None) -> str:
         raise HTTPException(401, "Invalid identity")
     if not isinstance(auth_time, (int, float)) or not 0 <= time.time() - auth_time <= 300:
         raise HTTPException(401, "Please authenticate again before deleting the account")
+    user_id = str(uuid5(NAMESPACE_URL, f"https://securetoken.google.com/{settings.firebase_project_id}/{uid}"))
+    # Same lock as the final ask gate: an already dispatched ask completes before
+    # a deletion job is accepted; later asks see the committed pending marker.
+    db.scalar(select(User).where(User.id == user_id).with_for_update())
     db.add(AccountDeletion(key_hash=digest, firebase_uid=uid,
                            project_id=settings.firebase_project_id,
+                           backend_user_id=user_id,
+                           platform_base_url=settings.chatbot_base_url.rstrip("/"),
                            storage_bucket=settings.firebase_storage_bucket, status="pending"))
     try:
         db.commit()
@@ -104,7 +111,8 @@ def prepare_deletion(db: Session, key: str, token: str | None) -> str:
     return digest
 
 
-def execute_deletion(db: Session, digest: str, gateway_factory=FirebaseDeletionGateway) -> bool:
+def execute_deletion(db: Session, digest: str, gateway_factory=FirebaseDeletionGateway,
+                     assistant_factory=ChatbotBridgeClient) -> bool:
     # Lock the durable job for the operation. A crash rolls back DB changes; external
     # deletion steps are idempotent and will run again using the same continuation key.
     job = db.scalar(select(AccountDeletion).where(AccountDeletion.key_hash == digest).with_for_update())
@@ -118,11 +126,18 @@ def execute_deletion(db: Session, digest: str, gateway_factory=FirebaseDeletionG
         settings = get_settings()
         if project != settings.firebase_project_id or job.storage_bucket != settings.firebase_storage_bucket:
             raise RuntimeError("Deletion job configuration changed; restore original project/bucket")
+        if not job.platform_base_url or job.platform_base_url != settings.chatbot_base_url.rstrip("/"):
+            raise RuntimeError("Deletion platform target missing or changed; verify original target")
+        user_id = str(uuid5(NAMESPACE_URL, f"https://securetoken.google.com/{project}/{uid}"))
+        if job.backend_user_id != user_id:
+            raise RuntimeError("Deletion user identity mismatch")
         gateway = gateway_factory(project)
         gateway.freeze(uid)
+        # Keep the durable job and SQL/Firebase identity until the platform confirms
+        # removal. A timeout may follow a successful deletion; /delete-user is idempotent.
+        assistant_factory().delete_user(user_id)
         gateway.remove_storage(uid)
         gateway.remove_documents(uid)
-        user_id = str(uuid5(NAMESPACE_URL, f"https://securetoken.google.com/{project}/{uid}"))
         for avatar in AVATAR_DIR.glob(f"{user_id}_*"):
             if avatar.is_file():
                 avatar.unlink(missing_ok=True)
@@ -133,6 +148,8 @@ def execute_deletion(db: Session, digest: str, gateway_factory=FirebaseDeletionG
         job.firebase_uid = None
         job.project_id = None
         job.storage_bucket = None
+        job.backend_user_id = None
+        job.platform_base_url = None
         db.commit()
         return True
     except Exception:

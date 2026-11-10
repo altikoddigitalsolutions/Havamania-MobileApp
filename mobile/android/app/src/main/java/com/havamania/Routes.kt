@@ -1,5 +1,7 @@
 package com.havamania
 
+import java.net.URLEncoder
+
 object Routes {
     // Auth Screens
     const val AUTH_WELCOME = "auth_welcome"
@@ -25,5 +27,9 @@ object Routes {
 
     // Akıllı Güzergâh Hava Durumu — tripId argümanı ile
     const val ROUTE_WEATHER = "sub_route_weather/{tripId}"
-    fun routeWeather(tripId: String) = "sub_route_weather/$tripId"
+    fun routeWeather(tripId: String) = "sub_route_weather/${encodeTripId(tripId)}"
+
+    internal fun calendarTrip(tripId: String) = "$CALENDAR_ROOT?focusId=${encodeTripId(tripId)}"
+
+    private fun encodeTripId(tripId: String) = URLEncoder.encode(tripId, "UTF-8").replace("+", "%20")
 }

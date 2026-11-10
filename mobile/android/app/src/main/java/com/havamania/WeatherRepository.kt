@@ -5,7 +5,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -14,8 +18,27 @@ import kotlinx.serialization.json.Json
  */
 class WeatherRepository(
     private val apiService: WeatherApiService = NetworkModule.apiService,
-    private val weatherDao: WeatherDao
+    private val weatherDao: WeatherDao,
+    private val accessAllowed: () -> Boolean = { true },
+    private val currentOwner: () -> String? = { null }
 ) {
+    private val cacheWrites = Mutex()
+    private val deletionEpoch = java.util.concurrent.atomic.AtomicLong()
+    private val stateGate = Any()
+    private var observedOwner = currentOwner()
+    private data class RequestSession(val epoch: Long, val owner: String?)
+    private fun current(session: RequestSession) =
+        session.epoch == deletionEpoch.get() && session.owner == currentOwner() && accessAllowed()
+
+    /** Idempotent across listeners; A -> B -> A invalidates the first A request. */
+    fun onAccountChanged(owner: String?) = synchronized(stateGate) {
+        if (owner != observedOwner) {
+            observedOwner = owner
+            deletionEpoch.incrementAndGet()
+            _currentWeatherState.value = null
+        }
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _currentWeatherState = MutableStateFlow<WeatherData?>(null)
@@ -29,7 +52,13 @@ class WeatherRepository(
             return INSTANCE ?: synchronized(this) {
                 INSTANCE?.let { return@synchronized it }
                 val database = WeatherDatabase.getDatabase(application)
-                val instance = WeatherRepository(weatherDao = database.weatherDao())
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                val instance = WeatherRepository(weatherDao = database.weatherDao(), accessAllowed = {
+                    val state = AccountDeletionManager.getInstance(application).state.value
+                    !state.pending && !state.busy
+                }, currentOwner = { auth.currentUser?.uid })
+                // Application-lifetime listener also fences requests with no Activity present.
+                auth.addAuthStateListener { instance.onAccountChanged(it.currentUser?.uid) }
                 INSTANCE = instance
                 instance
             }
@@ -53,12 +82,39 @@ class WeatherRepository(
     }
 
     fun clearCurrentWeather() {
-        _currentWeatherState.value = null
+        synchronized(stateGate) { _currentWeatherState.value = null }
+    }
+
+    /** Serialize deletion with writes already in progress; old requests stay fenced after recovery. */
+    suspend fun clearForAccountDeletion() {
+        cacheWrites.withLock {
+            synchronized(stateGate) {
+                deletionEpoch.incrementAndGet()
+                _currentWeatherState.value = null
+            }
+            weatherDao.clearAllWeatherCache()
+        }
+    }
+
+    private suspend fun FlowCollector<WeatherData>.emitCurrent(data: WeatherData, epoch: RequestSession) {
+        currentCoroutineContext().ensureActive()
+        val publish = synchronized(stateGate) {
+            if (current(epoch)) { _currentWeatherState.value = data; true } else false
+        }
+        if (publish && current(epoch)) emit(data)
+    }
+
+    /** Clear downloaded weather only. Account records and visible data are not a cache. */
+    suspend fun clearAllCachedWeather() {
+        weatherDao.clearAllWeatherCache()
     }
 
     /**
      * Şehir arama fonksiyonu
      */
+    suspend fun searchCityOrThrow(query: String): List<GeocodingResultDto> =
+        apiService.searchCity(cityName = query).results ?: emptyList()
+
     suspend fun searchCity(query: String): List<GeocodingResultDto> {
         return try {
             val response = apiService.searchCity(cityName = query)
@@ -87,7 +143,7 @@ class WeatherRepository(
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
-                android.util.Log.e("WeatherRepo", "fetchWeatherSnapshot failed for $cityName", e)
+                android.util.Log.e("WeatherRepo", "Could not fetch weather snapshot.")
 }
             null
         }
@@ -103,7 +159,10 @@ if (BuildConfig.DEBUG) {
         cityName: String,
         districtName: String? = null,
         forceRefresh: Boolean = false
-    ): Flow<WeatherData> = flow {
+    ): Flow<WeatherData> {
+        val epoch = synchronized(stateGate) { RequestSession(deletionEpoch.get(), currentOwner()) }
+        return flow {
+        if (!current(epoch)) return@flow
         val cacheKey = weatherCacheKey(cityName, districtName, lat, lon)
         val cachedEntity = try {
             weatherDao.getCachedWeather(cacheKey)
@@ -112,35 +171,45 @@ if (BuildConfig.DEBUG) {
         } catch (_: Exception) {
             null // A broken disposable cache must not prevent a network refresh.
         }
+        if (!current(epoch)) return@flow
         val cachedData = cachedEntity?.let {
             try { json.decodeFromString<WeatherData>(it.jsonData) } catch (_: Exception) { null }
         }
         val isCacheFresh = cachedEntity != null && weatherCacheIsFresh(cachedEntity.timestamp, System.currentTimeMillis())
         if (cachedData != null && cachedEntity != null) {
-            emit(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh))
+            emitCurrent(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh), epoch)
         }
         if (cachedData != null && isCacheFresh && !forceRefresh) return@flow
 
+        if (!current(epoch)) return@flow
         val domainData = try {
             val response = apiService.getFullWeather(lat = lat, lon = lon)
+            if (!current(epoch)) return@flow
             WeatherMapper.mapToDomain(response, cityName, districtName)
                 .copy(timestamp = System.currentTimeMillis(), isStale = false)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (!current(epoch)) return@flow
             if (cachedData == null) throw e
+            if (forceRefresh && isCacheFresh) {
+                emitCurrent(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = true), epoch)
+            }
             return@flow
         }
         try {
-            weatherDao.insertWeather(WeatherCacheEntity(cacheKey, json.encodeToString(domainData), domainData.timestamp))
+            cacheWrites.withLock {
+                if (current(epoch)) weatherDao.insertWeather(WeatherCacheEntity(cacheKey, json.encodeToString(domainData), domainData.timestamp))
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {
             // Show valid network data even if the disk is full or cache write fails.
         }
         // Keep emit outside exception handlers: downstream errors belong to the collector.
-        emit(domainData)
-    }.onEach { _currentWeatherState.value = it }
+        emitCurrent(domainData, epoch)
+        }
+    }
 }
 
 internal fun weatherCachePrefix(city: String, district: String?): String {

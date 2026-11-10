@@ -5,6 +5,7 @@ import android.util.Log
 import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.ensureActive
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
@@ -23,7 +24,7 @@ object TravelAnalysisEngine {
         apiService: WeatherApiService,
         repository: WeatherRepository
     ): TravelPlan {
-        val today = LocalDate.now()
+        val today = tripAnalysisToday(plan, LocalDate.now())
         val daysUntil = ChronoUnit.DAYS.between(today, plan.startDate).toInt()
         val status = TravelStatusResolver.getStatus(plan.startDate, plan.endDate, today)
 
@@ -45,7 +46,7 @@ object TravelAnalysisEngine {
         }
 
         // 2. 10 GÜN KURALI (Business Rule 1)
-        if (status == TravelStatus.UPCOMING && daysUntil > TRIP_ANALYSIS_WINDOW_DAYS) {
+        if (status == TravelStatus.UPCOMING && !TravelStatusResolver.isTripAnalysisEligible(plan.startDate, plan.endDate, today)) {
             return plan.copy(
                 isAnalyzing = false,
                 weatherAnalysisStatus = TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW,
@@ -67,7 +68,11 @@ object TravelAnalysisEngine {
             } else {
                 val geoResults = try {
                     withTimeout(5000) { repository.searchCity(plan.city) }
-                } catch (e: Exception) { emptyList() }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
+                    emptyList()
+                }
 
                 if (geoResults.isNotEmpty()) {
                     lat = geoResults[0].latitude
@@ -84,6 +89,8 @@ object TravelAnalysisEngine {
                 apiService.getFullWeather(lat = lat, lon = lon, days = 16)
             }
         } catch (e: Exception) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e(TAG, "Weather API fail", e)
 }
@@ -98,44 +105,19 @@ if (BuildConfig.DEBUG) {
             throw Exception("API hatası")
         }
 
-        // 4. ANALİZ ÜRETİMİ
-        val daily = response.daily
-        var snapshot: ForecastSnapshot? = null
-
-        if (daily != null) {
-            val tripDates = daily.time.map { LocalDate.parse(it) }
-            val overlapIndices = tripDates.indices.filter { i ->
-                val date = tripDates[i]
-                !date.isBefore(plan.startDate) && !date.isAfter(plan.endDate)
-            }
-
-            if (overlapIndices.isNotEmpty()) {
-                val maxCode = overlapIndices.mapNotNull { i -> daily.weatherCode.getOrNull(i) }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: 0
-                val avgMin = overlapIndices.mapNotNull { i -> daily.tempMin.getOrNull(i) }.takeIf { it.isNotEmpty() }?.average()
-                val avgMax = overlapIndices.mapNotNull { i -> daily.tempMax.getOrNull(i) }.takeIf { it.isNotEmpty() }?.average()
-
-                if (avgMin != null && !avgMin.isNaN() && avgMax != null && !avgMax.isNaN()) {
-                    val tempSnapshot = ForecastSnapshot(
-                        minTemp = avgMin,
-                        maxTemp = avgMax,
-                        precipitationProbability = overlapIndices.mapNotNull { i -> daily.precipProbMax?.getOrNull(i) }.maxOrNull(),
-                        windSpeed = overlapIndices.mapNotNull { i -> daily.windSpeedMax.getOrNull(i) }.maxOrNull()
-                    )
-                    val score = calculateTravelScore(tempSnapshot, plan.tripType)
-
-                    snapshot = ForecastSnapshot(
-                        precipitationProbability = tempSnapshot.precipitationProbability,
-                        minTemp = avgMin,
-                        maxTemp = avgMax,
-                        windSpeed = tempSnapshot.windSpeed,
-                        uvIndex = overlapIndices.mapNotNull { i -> daily.uvIndexMax?.getOrNull(i) }.maxOrNull(),
-                        conditionSummary = WeatherMapper.getWeatherCondition(maxCode),
-                        weatherCode = maxCode,
-                        travelScore = score
-                    )
-                }
-            }
+        // Missing fields or partial date coverage cannot produce a fresh full-trip analysis.
+        val forecastNow = java.time.Instant.now()
+        val forecastToday = tripForecastDate(response.timezone, forecastNow)
+        if (!TravelStatusResolver.isTripAnalysisEligible(plan.startDate, plan.endDate, forecastToday)) {
+            return plan.copy(isAnalyzing = false,
+                weatherAnalysisStatus = if (plan.endDate.isBefore(forecastToday)) TravelWeatherAnalysisStatus.WEATHER_FAILED
+                    else TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW)
         }
+        val forecastDaysUntil = ChronoUnit.DAYS.between(forecastToday, plan.startDate).toInt()
+        val baseSnapshot = buildTripForecastSnapshot(response.daily, maxOf(plan.startDate, forecastToday), plan.endDate,
+            timezone = response.timezone, now = forecastNow)
+            ?: throw IllegalStateException("Seyahat tarihlerinin tamamı için yeterli hava verisi yok.")
+        val snapshot = baseSnapshot.copy(travelScore = calculateTravelScore(baseSnapshot, plan.tripType))
 
         // Kişiselleştirme
         val interests = ThemeManager.getUserInterests(context, currentUid).first()
@@ -143,7 +125,7 @@ if (BuildConfig.DEBUG) {
 
         val aiResult = TravelAiHelper.generateTravelAiSuggestion(
             plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot,
-            daysUntil, tone = tone, personalization = personalization
+            forecastDaysUntil, tone = tone, personalization = personalization
         )
 
         // Parse AI Result to separate fields for the model (Stability)
@@ -185,7 +167,7 @@ if (BuildConfig.DEBUG) {
                     tripId = plan.id,
                     travelScore = snapshot.travelScore ?: 0,
                     rainRiskPercent = snapshot.precipitationProbability,
-                    averageTemperature = ((snapshot.minTemp!! + snapshot.maxTemp!!) / 2.0),
+                    averageTemperature = snapshot.averageTemperature ?: ((snapshot.minTemp!! + snapshot.maxTemp!!) / 2.0),
                     summary = weatherSum ?: "Hava durumu verisi alındı.",
                     recommendation = aiResult,
                     comparisonText = if (plan.lastForecastSnapshot != null && snapshot != null)
@@ -201,7 +183,7 @@ if (BuildConfig.DEBUG) {
     fun calculateTravelScore(snapshot: ForecastSnapshot, type: TripType): Int {
         val minT = snapshot.minTemp ?: 15.0
         val maxT = snapshot.maxTemp ?: 25.0
-        val avgTemp = (minT + maxT) / 2.0
+        val avgTemp = snapshot.averageTemperature ?: (minT + maxT) / 2.0
 
         val precip = snapshot.precipitationProbability ?: 0
         val wind = snapshot.windSpeed ?: 10.0

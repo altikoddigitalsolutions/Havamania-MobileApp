@@ -576,7 +576,7 @@ fun HavamaniaAuthField(
                 colors.accent.copy(alpha = borderAlpha),
                 RoundedCornerShape(20.dp)
             ),
-        placeholder = { Text(placeholder, color = colors.textMuted.copy(alpha = 0.5f)) },
+        label = { Text(placeholder, color = colors.textSecondary) },
         leadingIcon = { Icon(leadingIcon, null, tint = if (isFocused) colors.accent else colors.textMuted, modifier = Modifier.size(20.dp)) },
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,
@@ -621,12 +621,12 @@ fun HavamaniaAuthPasswordField(
                 colors.accent.copy(alpha = borderAlpha),
                 RoundedCornerShape(20.dp)
             ),
-        placeholder = { Text(placeholder, color = colors.textMuted.copy(alpha = 0.5f)) },
+        label = { Text(placeholder, color = colors.textSecondary) },
         leadingIcon = { Icon(Icons.Rounded.Lock, null, tint = if (isFocused) colors.accent else colors.textMuted, modifier = Modifier.size(20.dp)) },
         trailingIcon = {
             val image = if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                Icon(image, null, tint = colors.textMuted.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                Icon(image, if (passwordVisible) "Şifreyi gizle" else "Şifreyi göster", tint = colors.textMuted.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
             }
         },
         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),

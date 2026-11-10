@@ -1,5 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from uuid import uuid4
+
+from app.schemas.chatbot import PlatformChatbotReply
 
 
 def _auth_header(client):
@@ -26,11 +29,11 @@ def test_subscription_status_default_free(client):
     assert data["is_premium_active"] is False
 
 
-def test_validate_receipt_activates_subscription(client, monkeypatch):
+def test_validate_receipt_activates_subscription(client, monkeypatch, assistant_texts):
     from app.api.v1.routes import chatbot, weather
     monkeypatch.setattr(weather, "weather_service", SimpleNamespace(get_current=lambda **_: {
         "location": {"lat": 41, "lon": 29}, "provider": "local-test"}))
-    monkeypatch.setattr(chatbot, "chatbot_bridge_client", SimpleNamespace(ask=lambda **_: "Local test answer"))
+    monkeypatch.setattr(chatbot, "chatbot_bridge_client", SimpleNamespace(ask=lambda **kw: PlatformChatbotReply(answer="Local test answer", conversation_id=kw.get("conversation_id") or uuid4(), message_id=uuid4())))
     headers, _ = _auth_header(client)
 
     response = client.post(
@@ -47,6 +50,10 @@ def test_validate_receipt_activates_subscription(client, monkeypatch):
     premium_weather = client.get("/v1/weather/map-layers?lat=41&lon=29&layer=wind", headers=headers)
     assert premium_weather.status_code == 200
     assert premium_weather.json()["premium"] is True
+
+    docs = client.get("/v1/chatbot/consent", headers=headers).json()
+    assert client.post("/v1/chatbot/consent", headers=headers,
+                       json={"assistant_accepted": True, "consent_version": 2, "consent_hash": docs["text_hash"]}).status_code == 200
 
     premium_chatbot = client.post(
         "/v1/chatbot/ask/premium",

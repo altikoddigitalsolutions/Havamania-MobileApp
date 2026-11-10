@@ -10,14 +10,23 @@ import java.util.UUID
 @IgnoreExtraProperties
 data class AltikodChatMessage(
     val id: String = UUID.randomUUID().toString(),
-    val text: String,
-    val isUser: Boolean,
+    val text: String = "",
+    @get:com.google.firebase.firestore.PropertyName("user")
+    @set:com.google.firebase.firestore.PropertyName("user")
+    var isUser: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
-    val isFallback: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("fallback")
+    @set:com.google.firebase.firestore.PropertyName("fallback")
+    var isFallback: Boolean = false,
+    val platformMessageId: String? = null,
+    val disclaimer: String? = null,
     val retryPrompt: String? = null,
+    val retryRequestId: String? = null,
+    val retryNotBefore: Long? = null,
     val action: AssistantAction? = null
 )
 
+@Keep
 @Serializable
 enum class AssistantActionType {
     CREATE_TRAVEL_PLAN,
@@ -28,8 +37,8 @@ enum class AssistantActionType {
 @Serializable
 @IgnoreExtraProperties
 data class AssistantAction(
-    val type: AssistantActionType,
-    val label: String,
+    val type: AssistantActionType = AssistantActionType.NONE,
+    val label: String = "",
     val city: String? = null,
     val startDate: String? = null, // YYYY-MM-DD
     val tripName: String? = null

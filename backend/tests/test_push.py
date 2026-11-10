@@ -9,7 +9,7 @@ class StubPushProvider:
     def __init__(self):
         self.calls = []
 
-    def send(self, platform: str, token: str, title: str, body: str) -> bool:
+    def send(self, platform: str, token: str, title: str, body: str, **metadata) -> bool:
         self.calls.append((platform, token, title, body))
         return True
 
@@ -45,7 +45,8 @@ def test_send_critical_alert_respects_preferences(client, db_session):
 
     client.post(
         "/v1/devices/push-token",
-        json={"platform": "ios", "token": "ios_token_1234567890"},
+        json={"platform": "android", "token": "android_token_1234567890", "owner_protocol": 1,
+              "installation_id": "3d366a39-6faf-4c64-80ed-8cd07f52cf0a", "revision": 1},
         headers=headers,
     )
 

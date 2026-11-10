@@ -127,31 +127,6 @@ fun TravelListSkeleton() {
             .fillMaxSize()
             .padding(styles.pagePadding)
     ) {
-        // Hero Skeleton
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .clip(RoundedCornerShape(styles.radiusLarge))
-                .shimmerEffect()
-        )
-
-        Spacer(modifier = Modifier.height(styles.spacingLG))
-
-        // Calendar Stripe Skeleton
-        Row(horizontalArrangement = Arrangement.spacedBy(styles.spacingMD)) {
-            repeat(6) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 50.dp, height = 80.dp)
-                        .clip(RoundedCornerShape(styles.radiusSmall))
-                        .shimmerEffect()
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(styles.spacingLG))
-
         // List Skeletons
         repeat(3) {
             Box(

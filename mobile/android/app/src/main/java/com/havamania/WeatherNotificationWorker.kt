@@ -9,6 +9,9 @@ import androidx.work.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Arka planda hava durumunu kontrol eden ve bildirim gönderen Worker
@@ -18,22 +21,30 @@ class WeatherNotificationWorker(
     workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
+    private var executionEpoch = Long.MIN_VALUE
+
     override suspend fun doWork(): Result {
+        executionEpoch = NotificationSessionEpoch.capture()
         val application = applicationContext as? android.app.Application ?: return Result.failure()
         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-        val uid = auth.currentUser?.uid ?: "legacy"
+        val uid = auth.currentUser?.uid ?: return Result.success()
+        if (!canPublishFor(uid)) return Result.success()
 
         val repository = WeatherRepository.getInstance(application)
         val database = NotificationDatabase.getDatabase(application)
-        val notifRepo = NotificationRepository(database.notificationDao())
 
         try {
+            if (!com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(application, uid).first()) {
+                return Result.success()
+            }
             // 1. Fetch current weather for default city
             val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(application, uid).firstOrNull() ?: return Result.success()
 
             val weatherData = repository.getWeatherData(
                 defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.admin1
             ).firstOrNull() ?: return Result.retry()
+            currentCoroutineContext().ensureActive()
+            if (!canPublishFor(uid)) return Result.success()
 
             // 2. Check Smart Alerts
             val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(application, uid).first()
@@ -41,39 +52,55 @@ class WeatherNotificationWorker(
 
             // 3. Filter and Show Notifications (Business Rule 5: Deduplication)
             alerts.forEach { alert ->
+                currentCoroutineContext().ensureActive()
+                if (!canPublishFor(uid)) return Result.success()
                 val key = alert.deduplicationKey
-                val alreadyNotified = if (key.isNotEmpty()) {
-                    database.notificationDao().existsWithKey(uid, key)
-                } else false
+                val notificationItem = NotificationItem(
+                    id = key.takeIf { it.isNotBlank() }?.let { notificationEventRecordId(uid, "weather", it) }
+                        ?: java.util.UUID.randomUUID().toString(),
+                    userId = uid,
+                    actionType = NotificationActionType.WEATHER_HOME,
+                    deepLinkTarget = "havamania://app/weather",
+                    title = alert.title,
+                    message = alert.description,
+                    category = when(alert.id) {
+                        "rain" -> NotificationCategory.RAIN
+                        "uv" -> NotificationCategory.UV
+                        "storm" -> NotificationCategory.WARNING
+                        else -> NotificationCategory.GENERAL
+                    },
+                    severity = if (alert.severity == AlertSeverity.CRITICAL) "HIGH" else "NORMAL",
+                    deduplicationKey = if (key.isNotEmpty()) key else null
+                )
+                currentCoroutineContext().ensureActive()
+                if (!canPublishFor(uid)) return Result.success()
+                deliverLocalNotification(notificationItem, { database.notificationDao().reserveForDelivery(it) },
+                    database.notificationDao()::delete,
+                    complete = { database.notificationDao().completeDelivery(it.userId, it.id) },
+                    recovery = NotificationDeliveryRecovery.shared) { showNotification(it) }
 
-                if (!alreadyNotified) {
-                    val notificationItem = NotificationItem(
-                        userId = uid,
-                        title = alert.title,
-                        message = alert.description,
-                        category = when(alert.id) {
-                            "rain" -> NotificationCategory.RAIN
-                            "uv" -> NotificationCategory.UV
-                            "storm" -> NotificationCategory.WARNING
-                            else -> NotificationCategory.GENERAL
-                        },
-                        severity = if (alert.severity == AlertSeverity.CRITICAL) "HIGH" else "NORMAL",
-                        deduplicationKey = if (key.isNotEmpty()) key else null
-                    )
-                    notifRepo.insert(notificationItem)
-                    showNotification(alert.title, alert.description)
-                }
             }
 
             return Result.success()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             return Result.retry()
         }
     }
 
-    private fun showNotification(title: String, message: String) {
+    private fun canPublishFor(uid: String): Boolean =
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid == uid &&
+            NotificationSessionEpoch.capture() == executionEpoch &&
+            AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value.let { !it.pending && !it.busy }
+
+    private suspend fun showNotification(item: NotificationItem): Boolean {
+        val uid = item.userId
+        val title = item.title
+        val message = item.message
+        if (NotificationDatabase.getDatabase(applicationContext).notificationDao().isDeletedAccountHash(accountOwnerHash(uid))) return false
+        if (!canPublishFor(uid)) return false
         if (!PermissionHelper.hasNotificationPermission(applicationContext)) {
-            return
+            return false
         }
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "weather_updates"
@@ -95,10 +122,19 @@ class WeatherNotificationWorker(
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(notificationTapPendingIntent(applicationContext, item))
+            .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(1, notification)
+        currentCoroutineContext().ensureActive()
+        return postNotificationIfCurrent(uid, executionEpoch,
+            { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            { !canPublishFor(uid) || !PermissionHelper.canPostToChannel(applicationContext, channelId) },
+            enabled = { com.havamania.ui.theme.ThemeManager.getNotificationsEnabled(applicationContext, uid).first() },
+            stillReserved = { NotificationDatabase.getDatabase(applicationContext).notificationDao().ownsPendingDelivery(uid, item.id) }) {
+            notificationManager.notify(notificationSystemTag(item), 0, notification)
+        }
     }
 
     companion object {

@@ -5,5 +5,11 @@
     <application
         android:usesCleartextTraffic="true"
         tools:targetApi="28"
-        tools:ignore="GoogleAppIndexingWarning"/>
+        tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name=".TravelEditorTestActivity" android:exported="false" />
+        <!-- Shell-only entry point for process-death QA; absent from release. -->
+        <activity android:name=".TravelEditorProcessDeathActivity"
+            android:exported="true" android:permission="android.permission.DUMP"
+            android:process=":editor_test" android:taskAffinity="com.havamania.editor_test" />
+    </application>
 </manifest>

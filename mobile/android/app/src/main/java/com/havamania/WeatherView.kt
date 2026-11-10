@@ -55,10 +55,15 @@ fun HomeScreen(
     val selectedHourlyWeather by viewModel.selectedHourlyWeather.collectAsStateWithLifecycle()
     val selectedForecastDate by viewModel.selectedForecastDate.collectAsStateWithLifecycle()
     val selectedDailyForecast by viewModel.selectedDailyForecast.collectAsStateWithLifecycle()
+    val citySearchStatus by viewModel.citySearchStatus.collectAsStateWithLifecycle()
     val citySuggestions by viewModel.citySuggestions.collectAsStateWithLifecycle()
+    val registeredCities by themeViewModel.registeredCities.collectAsStateWithLifecycle()
     val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
     val profile = (profileState as? ProfileState.Success)?.profile
 
+    val cityMutationError by themeViewModel.cityMutationError.collectAsStateWithLifecycle()
+    val cityMutationErrorDetails by themeViewModel.cityMutationErrorDetails.collectAsStateWithLifecycle()
+    CityMutationErrorDialog(cityMutationError, themeViewModel::dismissCityMutationError, themeViewModel::retryCitySync, cityMutationErrorDetails)
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
     val todayRecommendation by viewModel.todayRecommendation.collectAsStateWithLifecycle()
     val userAboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()
@@ -89,11 +94,11 @@ fun HomeScreen(
     var showCitySwitcher by remember { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
 
-    LaunchedEffect(searchText) {
-        if (searchText.length >= 2) {
-            viewModel.searchCity(searchText)
-        }
+    val weatherSession by viewModel.weatherSession.collectAsStateWithLifecycle()
+    LaunchedEffect(searchText, showCitySwitcher, weatherSession) {
+        viewModel.searchCity(if (showCitySwitcher) searchText else "")
     }
+
 
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
@@ -103,40 +108,54 @@ fun HomeScreen(
     HavamaniaScreen(
         modifier = Modifier.pullRefresh(pullRefreshState)
     ) { padding ->
-        Crossfade(targetState = uiState, label = "state_transition", animationSpec = tween(1000)) { state ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (state) {
-                    is WeatherUiState.Loading -> HomeScreenLoading()
-                    is WeatherUiState.NoCity -> {
-                        NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
-                    }
-                    is WeatherUiState.Success -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            WeatherSuccessContent(
-                                data = state.data,
-                                selectedHourlyWeather = selectedHourlyWeather,
-                                selectedForecastDate = selectedForecastDate,
-                                selectedDailyForecast = selectedDailyForecast,
-                                recommendation = todayRecommendation,
-                                userInterests = userInterests,
-                                unreadCount = unreadNotificationsCount,
-                                onSelectHour = { viewModel.selectHour(it) },
-                                onSelectDaily = { viewModel.selectDailyForecast(it) },
-                                scrollState = scrollState,
-                                onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
-                                onCityClick = { showCitySwitcher = true },
-                                onNotificationsClick = onNavigateToNotifications
-                            )
-                        }
-                    }
-                    is WeatherUiState.Error -> {
-                        val isOffline = !isOnline
-                        HavamaniaErrorState(
-                            title = if (isOffline) "Bağlantı Yok" else "Hata",
-                            description = if (isOffline) "İnternet bağlantını kontrol et." else state.message,
-                            onRetry = { viewModel.refreshWeather() }
+        val state = uiState
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (state) {
+                is WeatherUiState.Loading -> HomeScreenLoading()
+                is WeatherUiState.NoCity -> {
+                    NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
+                }
+                is WeatherUiState.Success -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        WeatherSuccessContent(
+                            data = state.data,
+                            isOnline = isOnline,
+                            selectedHourlyWeather = selectedHourlyWeather,
+                            selectedForecastDate = selectedForecastDate,
+                            selectedDailyForecast = selectedDailyForecast,
+                            recommendation = todayRecommendation,
+                            userInterests = userInterests,
+                            unreadCount = unreadNotificationsCount,
+                            onSelectHour = { viewModel.selectHour(it) },
+                            onSelectDaily = { viewModel.selectDailyForecast(it) },
+                            scrollState = scrollState,
+                            onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
+                            onCityClick = { showCitySwitcher = true },
+                            onNotificationsClick = onNavigateToNotifications
                         )
                     }
+                }
+                is WeatherUiState.Error -> {
+                    WeatherLoadError(
+                        message = state.message,
+                        isOnline = isOnline,
+                        retryNeedsInternet = state.retryNeedsInternet,
+                        isRefreshing = isRefreshing,
+                        onChooseCity = { showCitySwitcher = true },
+                        onRetry = viewModel::refreshWeather
+                    )
+                }
+            }
+            if (state !is WeatherUiState.Success) {
+                IconButton(
+                    onClick = onNavigateToNotifications,
+                    modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Notifications,
+                        contentDescription = "Bildirimler",
+                        tint = themeColors.textPrimary
+                    )
                 }
             }
         }
@@ -149,64 +168,24 @@ fun HomeScreen(
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textMuted.copy(0.2f)) }
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
-                    Text(
-                        "Şehir Seç",
-                        style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    HavamaniaTextField(
-                        value = searchText,
-                        onValueChange = { searchText = it },
-                        placeholder = "Şehir ara...",
-                        leadingIcon = Icons.Rounded.Search
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 400.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(citySuggestions, key = { it.id }) { suggestion ->
-                            val currentData = (uiState as? WeatherUiState.Success)?.data
-                            val isSelected = currentData?.cityName == suggestion.getSafeCity() && currentData?.districtName == suggestion.getSafeDistrict()
-
-                            Surface(
-                                onClick = {
-                                    viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
-                                    themeViewModel.setDefaultCity(suggestion)
-                                    showCitySwitcher = false
-                                    searchText = ""
-                                },
-                                color = if (isSelected) themeColors.accent.copy(alpha = 0.1f) else Color.Transparent,
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            suggestion.getSafeDistrict() ?: suggestion.name,
-                                            style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                            color = if (isSelected) themeColors.accent else themeColors.textPrimary
-                                        )
-                                        Text(
-                                            suggestion.getSafeCity(),
-                                            style = HavamaniaTheme.typography.bodySmall,
-                                            color = themeColors.textMuted
-                                        )
-                                    }
-                                    if (isSelected) Icon(Icons.Rounded.Check, contentDescription = "Seçili", tint = themeColors.accent)
-                                }
-                            }
-                        }
+                WeatherCitySearchContent(
+                    query = searchText,
+                    onQueryChange = { searchText = it },
+                    suggestions = citySuggestions,
+                    status = citySearchStatus,
+                    onRetry = { viewModel.searchCity(searchText) },
+                    savedCities = registeredCities,
+                    isSelected = { suggestion ->
+                        val data = (uiState as? WeatherUiState.Success)?.data
+                        data?.cityName == suggestion.getSafeCity() && data?.districtName == suggestion.getSafeDistrict()
+                    },
+                    onSelect = { suggestion ->
+                        viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
+                        themeViewModel.setDefaultCity(suggestion, useManualLocation = true)
+                        showCitySwitcher = false
+                        searchText = ""
                     }
-                }
+                )
             }
         }
 
@@ -235,23 +214,19 @@ fun BoxScope.WeatherSuccessContent(
     scrollState: androidx.compose.foundation.ScrollState,
     onAskAiClick: (HavamaniaRecommendation) -> Unit,
     onCityClick: () -> Unit = {},
-    onNotificationsClick: () -> Unit = {}
+    onNotificationsClick: () -> Unit = {},
+    isOnline: Boolean = true
 ) {
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    val displayTime by remember(selectedHourlyWeather) {
-        derivedStateOf {
-            selectedHourlyWeather?.time?.let {
-                try {
-                    val hourStr = if (it == "24:00") "0" else it.split(":")[0]
-                    LocalTime.of(hourStr.toInt(), 0)
-                } catch (e: Exception) { LocalTime.now() }
-            } ?: LocalTime.now()
-        }
-    }
+    val locationNow = ForecastTime.localNow(data.timezone)
+    val selectedSun = data.dailyForecast.firstOrNull { it.date == selectedForecastDate.toString() }
+    val sunriseTime = selectedSun?.sunriseTime
+    val sunsetTime = selectedSun?.sunsetTime
+    val displayTime = selectedHourlyWeather?.let { ForecastTime.parseHour(it) }?.toLocalTime() ?: locationNow.toLocalTime()
 
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf {
@@ -259,14 +234,14 @@ fun BoxScope.WeatherSuccessContent(
         }
     }
 
-    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast) {
+    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast, locationNow, sunriseTime, sunsetTime) {
         derivedStateOf {
             val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
-            val sunrise = data.sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
-            val sunset = data.sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+            val sunrise = sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
+            val sunset = sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
             val now = if (selectedHourlyWeather != null) {
-                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(LocalDate.now()) }
-            } else { java.time.LocalDateTime.now() }
+                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(selectedForecastDate) }
+            } else { locationNow }
             WeatherUtils.getWeatherDisplayName(code, now, sunrise, sunset)
         }
     }
@@ -291,13 +266,13 @@ fun BoxScope.WeatherSuccessContent(
     ) {
         Spacer(modifier = Modifier.height(themeStyles.spacingSM))
 
-        if (data.isStale) {
-            val formattedTime = remember(data.timestamp) {
-                try {
-                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale("tr"))
-                    java.util.Date(data.timestamp).let { sdf.format(it) }
-                } catch (e: Exception) { "" }
+        if (data.isStale || !isOnline) {
+            val formattedTime = remember(data.timestamp, data.timezone) {
+                java.time.Instant.ofEpochMilli(data.timestamp)
+                    .atZone(ForecastTime.zone(data.timezone))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.forLanguageTag("tr-TR")))
             }
+            val status = if (isOnline) "Önbellekteki hava verisi" else "Çevrimdışı hava verisi"
             Surface(
                 color = themeColors.warning.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(12.dp),
@@ -313,13 +288,13 @@ fun BoxScope.WeatherSuccessContent(
                 ) {
                     Icon(
                         Icons.Rounded.Info,
-                        contentDescription = "Çevrimdışı / Eski Veri",
+                        contentDescription = null,
                         tint = themeColors.warning,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (formattedTime.isNotBlank()) "Çevrimdışı veri • Son güncelleme $formattedTime" else "Çevrimdışı veri",
+                        text = "$status • Son güncelleme $formattedTime",
                         style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.warning
                     )
@@ -349,8 +324,8 @@ fun BoxScope.WeatherSuccessContent(
                 time = displayTime,
                 latitude = data.latitude ?: 41.0082,
                 longitude = data.longitude ?: 28.9784,
-                sunriseTime = data.sunriseTime,
-                sunsetTime = data.sunsetTime,
+                sunriseTime = sunriseTime,
+                sunsetTime = sunsetTime,
                 parallaxOffset = scrollState.value * 0.15f,
                 modifier = Modifier.padding(horizontal = themeStyles.pagePadding)
             )
@@ -367,17 +342,7 @@ fun BoxScope.WeatherSuccessContent(
 
         // 3. HOURLY FORECAST
         EntranceAnimation(delayMillis = 250) {
-            val dateStr = selectedForecastDate.toString()
-            val today = LocalDate.now()
-            val currentHour = LocalTime.now().hour
-            val filteredHourly = remember(data.hourlyForecast, dateStr) {
-                data.hourlyForecast.filter { hour ->
-                    val isSelectedDay = hour.fullTime.startsWith(dateStr)
-                    if (isSelectedDay && selectedForecastDate == today) {
-                        try { val h = hour.time.split(":")[0].toInt(); h >= currentHour } catch (e: Exception) { true }
-                    } else isSelectedDay
-                }
-            }
+            val filteredHourly = ForecastTime.hoursForDate(data, selectedForecastDate)
 
             if (filteredHourly.isNotEmpty()) {
                 val hourlyWithSelection = remember(filteredHourly, selectedHourlyWeather) {
@@ -385,8 +350,8 @@ fun BoxScope.WeatherSuccessContent(
                 }
                 HourlyForecastRow(
                     items = hourlyWithSelection,
-                    sunriseTime = data.sunriseTime,
-                    sunsetTime = data.sunsetTime,
+                    sunriseTime = sunriseTime,
+                    sunsetTime = sunsetTime,
                     onItemSelect = { index -> onSelectHour(filteredHourly[index]) }
                 )
             }
@@ -409,10 +374,7 @@ fun BoxScope.WeatherSuccessContent(
 
         // 5. DAILY FORECAST
         EntranceAnimation(delayMillis = 450) {
-            val today = LocalDate.now()
-            val futureDaily = remember(data.dailyForecast) {
-                data.dailyForecast.filter { try { !LocalDate.parse(it.date).isBefore(today) } catch (e: Exception) { true } }
-            }
+            val futureDaily = ForecastTime.dailyFromToday(data)
             DailyForecastSection(
                 forecasts = futureDaily,
                 selectedDate = selectedForecastDate.toString(),
@@ -426,7 +388,7 @@ fun BoxScope.WeatherSuccessContent(
         EntranceAnimation(delayMillis = 550) {
             Column {
                 SectionLabel("HAVA DETAYLARI", Modifier.padding(horizontal = themeStyles.pagePadding + 8.dp))
-                WeatherDetailsPanel(data = data, modifier = Modifier.padding(horizontal = themeStyles.spacingMD))
+                WeatherDetailsPanel(data = data, sunriseTime = sunriseTime, sunsetTime = sunsetTime, solarNoon = ForecastSun.daylightMidpoint(sunriseTime, sunsetTime), modifier = Modifier.padding(horizontal = themeStyles.spacingMD))
             }
         }
 

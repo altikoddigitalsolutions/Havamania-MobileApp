@@ -1,7 +1,21 @@
 package com.havamania
 
 sealed interface AssistantResult {
-    data class Success(val content: String) : AssistantResult
+    data class Success(val content: String, val messageId: String? = null,
+        val disclaimer: String? = null) : AssistantResult
+    data object ConversationConflict : AssistantResult
+    data object AccountDeletionPending : AssistantResult
+    data object AccountDeleted : AssistantResult
+    data object RequestInProgress : AssistantResult
+    data object RequestConflict : AssistantResult
+    data object ModeDisabled : AssistantResult
+    data object TooLong : AssistantResult
+    data object ConsentRequired : AssistantResult
+    data object DailyLimit : AssistantResult
+    data class RateLimited(val retryAfterSeconds: Long?) : AssistantResult
+    data object Unavailable : AssistantResult
+    data object DuplicateRequest : AssistantResult
+    data object RequestExpired : AssistantResult
     data object ConfigurationError : AssistantResult
     data class HttpError(val code: Int) : AssistantResult
     data object NetworkError : AssistantResult

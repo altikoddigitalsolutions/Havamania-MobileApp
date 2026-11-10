@@ -40,6 +40,21 @@ class RouteSamplerTest {
         assertTrue(RouteSampler.sample(route).isEmpty())
     }
 
+    @Test
+    fun repeatedCoordinates_preserveSampleLocationsAndEtas() {
+        val start = GeoPoint(40.0, 29.0)
+        val middle = GeoPoint(41.0, 29.0)
+        val end = GeoPoint(42.0, 29.0)
+        val route = RoutePath(listOf(start, middle, end), 222_390.0, 7200.0)
+        val repeated = route.copy(points = listOf(start, start, middle, middle, end, end))
+
+        assertEquals(RouteSampler.sample(route), RouteSampler.sample(repeated))
+        val expected = EtaCalculator.assignEtas(route, RouteSampler.denseSampleForAnalysis(route), 0L)
+        val actual = EtaCalculator.assignEtas(repeated, RouteSampler.denseSampleForAnalysis(repeated), 0L)
+        assertTrue(expected.isNotEmpty())
+        assertEquals(expected, actual)
+    }
+
     // ---- ETA ----
 
     @Test
@@ -62,5 +77,15 @@ class RouteSamplerTest {
         val wp = RouteWaypoint(GeoPoint(0.5, 0.0), cumulativeDistanceMeters = 50_000.0)
         val result = EtaCalculator.assignEtas(route, listOf(wp), departureEpochMillis = 1000L)
         assertEquals(null, result[0].etaEpochMillis)
+    }
+
+    @Test
+    fun forecastPointsUseRoadEndpointsAndIncludeShortRouteMidpoint() {
+        val start = GeoPoint(40.0, 29.0)
+        val end = GeoPoint(41.0, 29.0)
+        val route = RoutePath(listOf(start, end), 100_000.0, 3600.0)
+        val points = route.forecastWaypoints(1000L)
+        assertEquals(listOf(start, GeoPoint(40.5, 29.0), end), points.map { it.location })
+        assertEquals(listOf(1000L, 1_801_000L, 3_601_000L), points.map { it.etaEpochMillis })
     }
 }

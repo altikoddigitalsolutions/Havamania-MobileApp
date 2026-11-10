@@ -22,6 +22,7 @@ android {
     namespace "com.havamania"
 
     defaultConfig {
+        buildConfigField "boolean", "FCM_TOKEN_SYNC_ENABLED", "false"
         applicationId "com.havamania.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -153,6 +154,7 @@ dependencies {
     // Firebase
     implementation platform("com.google.firebase:firebase-bom:33.1.1")
     implementation "com.google.firebase:firebase-auth-ktx"
+    implementation "com.google.firebase:firebase-messaging"
     implementation "com.google.firebase:firebase-firestore-ktx"
     implementation "com.google.firebase:firebase-storage-ktx"
     implementation "com.google.firebase:firebase-crashlytics-ktx"
@@ -163,6 +165,9 @@ dependencies {
 
     // Testing
     testImplementation "junit:junit:4.13.2"
+    androidTestImplementation platform("androidx.compose:compose-bom:2024.09.03")
+    androidTestImplementation "androidx.compose.ui:ui-test-junit4"
+    debugImplementation "androidx.compose.ui:ui-test-manifest"
     androidTestImplementation "androidx.test:runner:1.6.2"
     androidTestImplementation "androidx.test.ext:junit:1.2.1"
 }

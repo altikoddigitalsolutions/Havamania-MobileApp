@@ -8,6 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.job
+import kotlinx.coroutines.Job
 import java.time.ZoneId
 
 class TravelRouteViewModel(application: Application) : AndroidViewModel(application) {
@@ -36,11 +40,17 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     private val _endWeather = MutableStateFlow<WaypointWeather?>(null)
     val endWeather: StateFlow<WaypointWeather?> = _endWeather.asStateFlow()
 
-    private val _isAnalyzing = MutableStateFlow(false)
-    val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
+    private val analysis = RouteAnalysisRun()
+    val isAnalyzing = analysis.running
 
     private val _isAnalyzed = MutableStateFlow(false)
     val isAnalyzed: StateFlow<Boolean> = _isAnalyzed.asStateFlow()
+
+    private val _hasIncompleteForecast = MutableStateFlow(false)
+    val hasIncompleteForecast: StateFlow<Boolean> = _hasIncompleteForecast.asStateFlow()
+
+    private val _analysisError = MutableStateFlow<String?>(null)
+    val analysisError: StateFlow<String?> = _analysisError.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -53,21 +63,15 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
 
     override fun onCleared() {
         super.onCleared()
+        analysis.cancel()
         tripJob?.cancel()
         routeJob?.cancel()
     }
 
     fun loadTrip(tripId: String) {
         tripJob?.cancel()
-        routeJob?.cancel()
+        resetRoute()
         _trip.value = null
-        _routeState.value = null
-        _waypoints.value = emptyList()
-        _startWeather.value = null
-        _endWeather.value = null
-        _isAnalyzing.value = false
-        _isAnalyzed.value = false
-        _errorMessage.value = null
         _departureMillis.value = null
 
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
@@ -90,7 +94,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                     // Only recalculate route if essential fields changed or first load
                     calculateRoute(plan)
                 } else {
-                    routeJob?.cancel()
+                    resetRoute()
                     _trip.value = null
                     _routeState.value = null
                     _waypoints.value = emptyList()
@@ -100,20 +104,32 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private fun resetRoute() {
+        analysis.cancel()
+        routeJob?.cancel()
+        routeJob = null
+        _routeState.value = null
+        _waypoints.value = emptyList()
+        _startWeather.value = null
+        _endWeather.value = null
+        _isAnalyzed.value = false
+        _hasIncompleteForecast.value = false
+        _analysisError.value = null
+        _errorMessage.value = null
+    }
+
     private fun calculateRoute(plan: TravelPlan) {
         if (BuildConfig.DEBUG) {
-            Log.d("RouteVM", "Calculating route. OriginCity=${plan.originCity}, OriginLat=${plan.originLatitude}, OriginLon=${plan.originLongitude}")
+            Log.d("RouteVM", "Calculating route.")
         }
-        routeJob?.cancel()
+        resetRoute()
         routeJob = viewModelScope.launch {
             var origin = plan.originPoint?.let { GeoPoint(it.first, it.second) }
 
             if (origin == null) {
                 try {
-                    val currentLoc = locationTracker.getCurrentCity()
-                    if (currentLoc != null) {
-                        origin = GeoPoint(currentLoc.latitude, currentLoc.longitude)
-                    } else {
+                    origin = resolveDeviceRouteOrigin(locationTracker)
+                    if (origin == null) {
                         _errorMessage.value = "Rotayı oluşturmak için başlangıç konumuna ihtiyacımız var. Lütfen cihaz konumunu açın veya bir kalkış yeri seçin."
                         _routeState.value = RouteResult.Error("Konum alınamadı")
                         return@launch
@@ -131,7 +147,9 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             val dest = GeoPoint(plan.latitude, plan.longitude)
+            coroutineContext.ensureActive()
             val result = routeProvider.getRoute(origin, dest)
+            coroutineContext.ensureActive()
             _routeState.value = result
 
             if (result is RouteResult.Success) {
@@ -141,71 +159,46 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    suspend fun analyzeWeather() {
-        val plan = _trip.value ?: return
-        val routeResult = _routeState.value as? RouteResult.Success ?: return
-        val depMillis = _departureMillis.value ?: return
+    suspend fun analyzeWeather(): Unit = coroutineScope {
+        if (isAnalyzing.value) return@coroutineScope
+        val analysisRouteJob = routeJob ?: return@coroutineScope
+        val plan = _trip.value ?: return@coroutineScope
+        val routeResult = _routeState.value as? RouteResult.Success ?: return@coroutineScope
+        val depMillis = _departureMillis.value ?: return@coroutineScope
 
-        _isAnalyzing.value = true
+        if (!TravelStatusResolver.isRouteWeatherEligible(plan)) {
+            _analysisError.value = "Bu seyahatin güzergâh hava analizi henüz kullanılamıyor. Kalkış tarihini ve saatini kontrol edin."
+            return@coroutineScope
+        }
+
+        _analysisError.value = null
+        val currentAnalysis = coroutineContext.job
+        analysis.start(currentAnalysis)
         try {
-            // 1. Denser sampling for thorough risk analysis
-            val denseWaypoints = RouteSampler.denseSampleForAnalysis(routeResult.route)
-            val denseWithEtas = EtaCalculator.assignEtas(routeResult.route, denseWaypoints, depMillis)
-
-            // 2. Prepare batch points (Start + Dense + End)
-            val allPoints = mutableListOf<GeoPoint>()
-            val allEtas = mutableListOf<Long?>()
-
-            routeResult.route.origin?.let { allPoints.add(it) }
-            allEtas.add(depMillis)
-
-            denseWithEtas.forEach {
-                allPoints.add(it.location)
-                allEtas.add(it.etaEpochMillis)
+            val forecastPoints = routeResult.route.forecastWaypoints(depMillis)
+            val denseWithEtas = forecastPoints.drop(1).dropLast(1)
+            val weatherResults = weatherProvider.weatherAtBatch(
+                forecastPoints.map { it.location },
+                forecastPoints.map { it.etaEpochMillis }
+            )
+            if (routeJob !== analysisRouteJob) return@coroutineScope
+            if (weatherResults.all { it == null }) {
+                _analysisError.value = "Güzergâh için hava tahmini alınamadı. Daha sonra tekrar deneyin."
+                return@coroutineScope
             }
-
-            routeResult.route.destination?.let { allPoints.add(it) }
-            allEtas.add(depMillis + (routeResult.route.durationSeconds * 1000).toLong())
-
-            // 3. Fetch weather for ALL points
-            val weatherResults = weatherProvider.weatherAtBatch(allPoints, allEtas)
-            if (weatherResults.isEmpty()) return
-
-            _startWeather.value = weatherResults.first()
-            _endWeather.value = weatherResults.last()
 
             val middleWeather = weatherResults.drop(1).dropLast(1)
             val denseWithWeather = denseWithEtas.mapIndexed { idx, wp ->
                 wp.copy(weather = middleWeather.getOrNull(idx))
             }
 
-            // 4. Identify Hazards
-            val hazards = denseWithWeather.filter { it.weather?.risk != RouteRisk.OK }
-
-            // 5. Normal Adaptive Sampling (the "skeleton" of the timeline)
-            val normalIntermediate = RouteSampler.sample(routeResult.route)
-            val normalWithEtas = EtaCalculator.assignEtas(routeResult.route, normalIntermediate, depMillis)
-            val normalWithWeather = normalWithEtas.map { wp ->
-                // Find nearest weather from dense list to avoid extra network calls
-                val nearest = denseWithWeather.minByOrNull { GeoMath.haversineMeters(it.location, wp.location) }
-                wp.copy(weather = nearest?.weather)
-            }
-
-            // 6. Merge & Deduplicate (Strategic sampling)
-            val combined = (normalWithWeather + hazards).sortedBy { it.cumulativeDistanceMeters }
-            val finalWaypoints = mutableListOf<RouteWaypoint>()
-
-            combined.forEach { wp ->
-                // Use a larger threshold (50km) for normal points, but smaller (20km) to keep hazards
-                val threshold = if (wp.weather?.risk != RouteRisk.OK) 20_000.0 else 50_000.0
-                val tooClose = finalWaypoints.any {
-                    GeoMath.haversineMeters(it.location, wp.location) < threshold
+            // Keep location and ETA together with the weather that was actually sampled.
+            val normalWithWeather = RouteSampler.sample(routeResult.route).mapNotNull { point ->
+                denseWithWeather.minByOrNull {
+                    kotlin.math.abs(it.cumulativeDistanceMeters - point.cumulativeDistanceMeters)
                 }
-                if (!tooClose) finalWaypoints.add(wp)
-            }
-
-            // Limit total intermediate points to 7 to prevent overflow/noise
-            val limitedWaypoints = finalWaypoints.take(7)
+            }.distinctBy { it.cumulativeDistanceMeters }
+            val limitedWaypoints = RouteWaypointSelector.select(normalWithWeather, denseWithWeather)
 
             // 7. Resolve Location Names (only for final visible points)
             val geocodedWaypoints = limitedWaypoints.map { wp ->
@@ -213,16 +206,50 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                 wp.copy(placeName = name)
             }
 
+            if (routeJob !== analysisRouteJob) return@coroutineScope
+            _startWeather.value = weatherResults.first()
+            _endWeather.value = weatherResults.last()
             _waypoints.value = geocodedWaypoints
+            _hasIncompleteForecast.value = weatherResults.any { it == null }
             _isAnalyzed.value = true
 
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
 if (BuildConfig.DEBUG) {
                 Log.e("RouteVM", "Analysis failed", e)
 }
-            _errorMessage.value = "Hava durumu analizi başarısız oldu."
+            if (routeJob === analysisRouteJob) {
+                _analysisError.value = "Hava durumu analizi başarısız oldu."
+            }
         } finally {
-            _isAnalyzing.value = false
+            analysis.finish(currentAnalysis)
         }
+    }
+}
+
+internal suspend fun resolveDeviceRouteOrigin(tracker: LocationTracker): GeoPoint? =
+    tracker.getCurrentLocation()?.let { GeoPoint(it.latitude, it.longitude) }
+
+internal class RouteAnalysisRun {
+    private var job: Job? = null
+    private val _running = MutableStateFlow(false)
+    val running = _running.asStateFlow()
+
+    fun start(current: Job) {
+        job = current
+        _running.value = true
+    }
+
+    fun cancel() {
+        val previous = job
+        job = null
+        _running.value = false
+        previous?.cancel()
+    }
+
+    fun finish(current: Job) {
+        if (job !== current) return
+        job = null
+        _running.value = false
     }
 }

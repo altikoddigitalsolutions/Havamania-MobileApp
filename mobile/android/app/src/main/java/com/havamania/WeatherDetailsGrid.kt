@@ -32,7 +32,10 @@ import kotlin.math.roundToInt
 @Composable
 fun WeatherDetailsPanel(
     data: WeatherData,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sunriseTime: String? = data.sunriseTime,
+    sunsetTime: String? = data.sunsetTime,
+    solarNoon: String? = data.solarNoon
 ) {
     Column(
         modifier = modifier
@@ -52,9 +55,9 @@ fun WeatherDetailsPanel(
 
         // 3. Güneş Zamanları
         SunTimesCard(
-            sunrise = data.sunriseTime,
-            solarNoon = data.solarNoon,
-            sunset = data.sunsetTime
+            sunrise = sunriseTime,
+            solarNoon = solarNoon,
+            sunset = sunsetTime
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -277,12 +280,22 @@ fun SunTimesCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                SunTimeItem("Gün Doğumu", sunrise, themeColors)
-                Box(Modifier.width(1.dp).height(30.dp).background(themeColors.border.copy(alpha = 0.1f)))
-                SunTimeItem("Öğle", solarNoon, themeColors)
-                Box(Modifier.width(1.dp).height(30.dp).background(themeColors.border.copy(alpha = 0.1f)))
-                SunTimeItem("Gün Batımı", sunset, themeColors)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+                if (maxWidth < 300.dp || fontScale > 1.3f) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        SunTimeItem("Gün Doğumu", sunrise, themeColors)
+                        SunTimeItem("Gündüz ortası", solarNoon, themeColors)
+                        SunTimeItem("Gün Batımı", sunset, themeColors)
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        SunTimeItem("Gün Doğumu", sunrise, themeColors)
+                        SunTimeItem("Gündüz ortası", solarNoon, themeColors)
+                        SunTimeItem("Gün Batımı", sunset, themeColors)
+                    }
+                }
             }
         }
     }

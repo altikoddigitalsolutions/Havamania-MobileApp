@@ -80,10 +80,10 @@ object AiIntentParser {
             ?.value
     }
 
-    fun detectDate(text: String): LocalDate? {
+    fun detectDate(text: String, today: LocalDate = LocalDate.now()): LocalDate? {
         val lowerText = text.lowercase(Locale("tr"))
-        val today = LocalDate.now()
 
+        if (lowerText.contains("yarından sonra")) return today.plusDays(2)
         if (lowerText.contains("bugün")) return today
         if (lowerText.contains("yarın")) return today.plusDays(1)
         if (lowerText.contains("ertesi gün")) return today.plusDays(1)
@@ -98,7 +98,7 @@ object AiIntentParser {
         }
 
         // Specific date parsing (e.g., "24 Haziran")
-        val regex = Regex("(\\d{1,2})\\s+([a-zA-ZşŞğĞüÜıİöÖçÇ]+)")
+        val regex = Regex("(\\d{1,2})\\s+([a-zA-ZşŞğĞüÜıİöÖçÇ]+)(?:\\s+(\\d{4}))?")
         val match = regex.find(lowerText)
         if (match != null) {
             val day = match.groupValues[1].toIntOrNull()
@@ -106,9 +106,10 @@ object AiIntentParser {
             val month = turkishMonths[monthStr]
             if (day != null && month != null) {
                 return try {
-                    var date = LocalDate.of(today.year, month, day)
+                    val explicitYear = match.groupValues[3].toIntOrNull()
+                    var date = LocalDate.of(explicitYear ?: today.year, month, day)
                     // Eğer tarih geçtiyse ve çok eskiyse (örn 6 aydan fazla), gelecek yıl olarak düşün
-                    if (date.isBefore(today.minusDays(7))) {
+                    if (explicitYear == null && date.isBefore(today.minusDays(7))) {
                         date = date.plusYears(1)
                     }
                     date

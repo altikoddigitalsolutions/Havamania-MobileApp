@@ -40,7 +40,6 @@ fun PremiumProfileHeader(
     aboutMe: String,
     stats: Map<String, String>,
     onAvatarClick: () -> Unit,
-    onEditClick: () -> Unit,
     onStatClick: (String) -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
@@ -154,7 +153,7 @@ fun PremiumProfileHeader(
                 Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    personality.uppercase(),
+                    personality.uppercase(java.util.Locale.forLanguageTag("tr")),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, fontSize = 11.sp),
                     color = themeColors.accent
                 )
@@ -213,7 +212,7 @@ fun QuickActionsGrid(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Şehirler", Icons.Rounded.Map, Modifier.weight(1f), onManageCities)
-            QuickActionItem("AI Geçmişi", Icons.Rounded.History, Modifier.weight(1f), onAiHistory)
+            QuickActionItem("Asistan Geçmişi", Icons.Rounded.History, Modifier.weight(1f), onAiHistory)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             QuickActionItem("Seyahatlerim", Icons.Rounded.Route, Modifier.weight(1f), onMyTravels)

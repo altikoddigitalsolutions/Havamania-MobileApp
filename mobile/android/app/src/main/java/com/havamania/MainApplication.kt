@@ -6,11 +6,51 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.MainScope
 
 class MainApplication : Application() {
+  private val tokenQueueScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
   override fun onCreate() {
     super.onCreate()
     if (BuildConfig.DEBUG) {
         android.util.Log.d("HavamaniaApp", "🚀 Havamania starting...")
+    }
+
+    // Firebase/WorkManager automatic initialization belongs to the default process.
+    // Secondary processes must not schedule work through its uninitialized instance.
+    val processName = if (android.os.Build.VERSION.SDK_INT >= 28) {
+        Application.getProcessName()
+    } else {
+        val manager = getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        manager.runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
+    }
+    if (processName != packageName) return
+
+    // Auth can change while no Activity is visible. Remove the previous account's
+    // visible notifications from the system tray as well as resetting UI state.
+    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+    var notificationOwner = auth.currentUser?.uid
+    auth.addAuthStateListener { currentAuth ->
+        val nextOwner = currentAuth.currentUser?.uid
+        if (nextOwner != notificationOwner) {
+            notificationOwner = nextOwner
+            NotificationSessionEpoch.changed {
+                (getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+            }
+        }
+        tokenQueueScope.launch {
+            try {
+                // Release only interrupted reservations from an older app process. Do not replay stale payloads.
+                nextOwner?.let {
+                    NotificationDatabase.getDatabase(this@MainApplication).notificationDao().recoverInterruptedDeliveries(it)
+                    NotificationDeliveryRecovery.shared.retryForOwner(it)
+                }
+            }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { android.util.Log.w("NotificationRecovery", "Local delivery recovery could not complete") }
+            // A notification-database failure must not prevent independent token reconciliation.
+            try { FcmTokenQueue.reconcile(this@MainApplication) }
+            catch (error: kotlinx.coroutines.CancellationException) { throw error }
+            catch (_: Exception) { android.util.Log.w("FCM", "Token queue could not be reconciled") }
+        }
     }
 
     // Configure Crashlytics collection policy (auto-init handled by FirebaseInitProvider)

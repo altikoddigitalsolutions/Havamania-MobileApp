@@ -126,16 +126,16 @@ object WeatherHeroStyleManager {
         }
 
         // 1.1 Calculate Dynamic Sun/Moon Position and Size
-        val isDaytime = !selectedTime.isBefore(sunrise) && selectedTime.isBefore(sunset)
+        val isDaytime = !selectedTime.isBefore(rise) && selectedTime.isBefore(set)
+        val daylightProgress = if (isDaytime) {
+            val daylightSeconds = java.time.Duration.between(rise, set).seconds.toFloat()
+            val elapsedSeconds = java.time.Duration.between(rise, selectedTime).seconds.toFloat()
+            (elapsedSeconds / daylightSeconds.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        } else 0f
 
         val sunMoonPos = if (isDaytime) {
-            // progress = (currentTime - sunrise) / (sunset - sunrise)
-            val totalDayMinutes = java.time.Duration.between(sunrise, sunset).toMinutes().toFloat()
-            val minutesFromSunrise = java.time.Duration.between(sunrise, selectedTime).toMinutes().toFloat()
-            val t = (minutesFromSunrise / totalDayMinutes).coerceIn(0f, 1f)
-
-            val x = 0.1f + t * 0.8f
-            val y = 0.8f - (Math.sin(t * Math.PI).toFloat() * 0.65f)
+            val x = 0.1f + daylightProgress * 0.8f
+            val y = 0.8f - (Math.sin(daylightProgress * Math.PI).toFloat() * 0.65f)
             Offset(x, y)
         } else {
             // Moon path (approximate or fixed)
@@ -143,12 +143,8 @@ object WeatherHeroStyleManager {
         }
 
         val sunMoonSize = if (isDaytime) {
-            val totalDayMinutes = java.time.Duration.between(sunrise, sunset).toMinutes().toFloat()
-            val minutesFromSunrise = java.time.Duration.between(sunrise, selectedTime).toMinutes().toFloat()
-            val t = (minutesFromSunrise / totalDayMinutes).coerceIn(0f, 1f)
-
             // Largest around solar noon (t=0.5)
-            1.0f + (Math.sin(t * Math.PI).toFloat() * 0.4f)
+            1.0f + (Math.sin(daylightProgress * Math.PI).toFloat() * 0.4f)
         } else {
             1.3f // Night moon slightly larger
         }
@@ -816,7 +812,7 @@ fun PremiumWeatherContent(
                 Spacer(Modifier.width(6.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text((districtName ?: cityName).uppercase(), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
+                        Text((districtName ?: cityName).uppercase(java.util.Locale.forLanguageTag("tr")), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Şehir Seçiciyi Aç", tint = secondaryColor, modifier = Modifier.size(16.dp))
                     }
                     Text("Konumu değiştir", style = HavamaniaTheme.typography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))

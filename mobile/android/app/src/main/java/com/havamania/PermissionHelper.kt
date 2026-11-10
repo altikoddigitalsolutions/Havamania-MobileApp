@@ -21,6 +21,18 @@ import com.havamania.ui.theme.HavamaniaTheme
  */
 object PermissionHelper {
 
+    /** Call after creating the channel; an existing user-disabled channel stays disabled. */
+    fun canPostToChannel(context: Context, channelId: String): Boolean = try {
+        if (!hasNotificationPermission(context)) false
+        else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) true
+        else {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            manager != null && notificationChannelAllowsPosting(manager, channelId)
+        }
+    } catch (_: Exception) {
+        false // Unreadable system policy must not consume the delivery reservation.
+    }
+
     fun hasLocationPermission(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -29,7 +41,7 @@ object PermissionHelper {
     }
 
     fun hasNotificationPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val runtimeGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
@@ -37,6 +49,8 @@ object PermissionHelper {
         } else {
             true
         }
+        return notificationPostingAllowed(Build.VERSION.SDK_INT, runtimeGranted,
+            androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
     }
 }
 

@@ -167,7 +167,7 @@ fun PremiumScreen(
                     HavamaniaPrimaryButton(
                         text = "TAKİPTE KALIN",
                         onClick = onBack,
-                        modifier = Modifier.fillMaxWidth().height(60.dp)
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp)
                     )
                 }
             }
@@ -175,7 +175,7 @@ fun PremiumScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                "Abonelik ödemeleri Store hesabınızdan tahsil edilir ve dilediğiniz zaman iptal edilebilir.",
+                "Bu sürümde abonelik satışı yoktur; herhangi bir ücret tahsil edilmez.",
                 style = MaterialTheme.typography.labelSmall,
                 color = themeColors.textMuted,
                 textAlign = TextAlign.Center,

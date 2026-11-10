@@ -10,15 +10,44 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import com.havamania.ui.theme.AssistantTone
 import com.havamania.ui.theme.LocationMode
 import com.havamania.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+
+internal suspend fun resolveAutomaticWeatherCity(
+    savedCity: GeocodingResultDto?,
+    locate: suspend () -> GeocodingResultDto?,
+    display: (GeocodingResultDto?) -> Unit,
+    offerCityPicker: (() -> Unit)? = null,
+    waitForPicker: suspend () -> Unit = { delay(5_000) }
+): Unit = coroutineScope {
+    if (savedCity != null) display(savedCity)
+    val picker = if (savedCity == null && offerCityPicker != null) launch {
+        waitForPicker()
+        ensureActive()
+        offerCityPicker()
+    } else null
+    val currentCity = try {
+        locate()
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    } finally {
+        picker?.cancel()
+    }
+    currentCoroutineContext().ensureActive()
+    if (savedCity == null || (currentCity != null && currentCity != savedCity)) display(currentCity)
+}
 
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
@@ -72,6 +101,8 @@ class WeatherViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _citySearchStatus = MutableStateFlow(LocationSearchStatus.IDLE)
+    val citySearchStatus = _citySearchStatus.asStateFlow()
     private val _citySuggestions = MutableStateFlow<List<GeocodingResultDto>>(emptyList())
     val citySuggestions: StateFlow<List<GeocodingResultDto>> = _citySuggestions.asStateFlow()
 
@@ -89,36 +120,56 @@ class WeatherViewModel(
     private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
     val locationMode: StateFlow<LocationMode> = _locationMode.asStateFlow()
 
-    private var lastCity = "Balıkesir"
-    private var lastDistrict: String? = null
-    private var lastLat = 39.6484
-    private var lastLon = 27.8826
+    private data class WeatherSelection(
+        val uid: String,
+        val latitude: Double,
+        val longitude: Double,
+        val city: String,
+        val district: String?
+    )
+
+    private var weatherSelection: WeatherSelection? = null
 
     private var fetchJob: kotlinx.coroutines.Job? = null
     private var searchJob: kotlinx.coroutines.Job? = null
     private val accountTasks = AccountTaskScope(viewModelScope) { currentUid }
     private var locationJob: kotlinx.coroutines.Job? = null
 
+    private val _weatherSession = MutableStateFlow(0L)
+    val weatherSession = _weatherSession.asStateFlow()
+
+    private var observedUid: String? = null
     private val authListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+        val accountUid = firebaseAuth.currentUser?.uid
+        val newUid = accountUid ?: "legacy"
+        if (newUid != observedUid) {
+            observedUid = newUid
+            resetWeatherSession(newUid, accountUid)
+        }
+    }
+
+    private fun resetWeatherSession(newUid: String, accountUid: String?) {
         accountTasks.reset()
-        val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
-        if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing for $newUid")
+        if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing weather.")
 
         // Clear UI state to prevent showing old user's data
         fetchJob?.cancel()
+        weatherSelection = null
         locationJob?.cancel()
         searchJob?.cancel()
         _isRefreshing.value = false
+        _citySearchStatus.value = LocationSearchStatus.IDLE
         _citySuggestions.value = emptyList()
         currentUserInterests = emptySet()
         currentUserAboutMe = null
         currentPersonalization = null
-        repository.clearCurrentWeather()
+        repository.onAccountChanged(accountUid)
         _uiState.value = WeatherUiState.Loading
         _todayRecommendation.value = null
         _smartAlerts.value = emptyList()
 
         observeUserData(newUid)
+        _weatherSession.value++
     }
 
     init {
@@ -139,7 +190,7 @@ class WeatherViewModel(
         userDataJob = viewModelScope.launch {
             // Tone observation
             launch {
-                com.havamania.ui.theme.ThemeManager.getAssistantTone(getApplication(), uid).collect { tone ->
+                ThemeManager.getAssistantTone(getApplication(), uid).catch { emit(AssistantTone.DENGELI) }.collect { tone ->
                     _assistantTone.value = tone
                     updateRecommendation()
                 }
@@ -152,12 +203,9 @@ class WeatherViewModel(
                     .collect { _unreadNotificationCount.value = it }
             }
 
-            // City and Location Mode observation combined for better performance
             launch {
-                ThemeManager.getLocationMode(getApplication(), uid).combine(
-                    ThemeManager.getDefaultCity(getApplication(), uid)
-                ) { mode, city ->
-                    mode to city
+                ThemeManager.observeWeatherLocation(getApplication(), uid).catch {
+                    showWeatherPreferenceError(uid)
                 }.collect { (mode, city) ->
                     if (uid != currentUid) return@collect
                     locationJob?.cancel()
@@ -167,180 +215,152 @@ class WeatherViewModel(
                     }
 
                     if (mode == LocationMode.AUTO) {
-                        refreshWeatherWithCurrentLocation()
+                        refreshWeatherWithCurrentLocation(city)
                     } else if (city != null) {
-                        fetchWeather(city.latitude, city.longitude, city.name, city.district)
+                        loadSelectedCity(city.latitude, city.longitude, city.name, city.district)
                     } else if (uid == "legacy") {
                         // Guest user starts with Balıkesir if no default set
-                        fetchWeather(39.6484, 27.8826, "Balıkesir")
+                        loadSelectedCity(39.6484, 27.8826, "Balıkesir")
                     } else {
-                        _uiState.value = WeatherUiState.NoCity
+                        clearWeatherSelection()
                     }
                 }
             }
 
-            // Safety check: If nothing emitted NoCity or Success after a while, check again
-            launch {
-                kotlinx.coroutines.delay(5000) // Reduced to 5s
-                if (_uiState.value is WeatherUiState.Loading) {
-                    val currentCity = ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
-                    if (currentCity == null && uid != "legacy") {
-                        _uiState.value = WeatherUiState.NoCity
-                    }
-                }
-            }
         }
     }
 
-    fun refreshWeatherWithCurrentLocation() {
+    private fun showWeatherPreferenceError(uid: String) {
+        if (uid == currentUid && weatherSelection == null && _uiState.value is WeatherUiState.Loading) {
+            _uiState.value = WeatherUiState.Error(
+                "Şehir ayarları okunamadı. Lütfen tekrar deneyin.", retryNeedsInternet = false
+            )
+        }
+    }
+
+    private fun refreshWeatherWithCurrentLocation(savedCity: GeocodingResultDto?) {
         locationJob?.cancel()
         val uid = currentUid
         locationJob = viewModelScope.launch {
-            val city = locationTracker.getCurrentCity()
-            if (uid != currentUid) return@launch
-            if (city != null) {
-                fetchWeather(city.latitude, city.longitude, city.name, city.admin1)
-            } else {
-                // If failed, fall back to default city from settings
-                val defaultCity = com.havamania.ui.theme.ThemeManager.getDefaultCity(getApplication(), uid).firstOrNull()
-                if (uid != currentUid) return@launch
-                if (defaultCity != null) {
-                    fetchWeather(defaultCity.latitude, defaultCity.longitude, defaultCity.name, defaultCity.district)
-                } else {
-                    _uiState.value = WeatherUiState.NoCity
-                }
-            }
+            resolveAutomaticWeatherCity(
+                savedCity,
+                locate = { locationTracker.getCurrentCity() },
+                display = { city ->
+                    if (uid == currentUid) {
+                        if (city != null) {
+                            loadSelectedCity(city.latitude, city.longitude, city.getSafeCity(), city.getSafeDistrict())
+                        } else {
+                            clearWeatherSelection()
+                        }
+                    }
+                },
+                offerCityPicker = if (uid == "legacy") null else ({
+                    if (uid == currentUid && weatherSelection == null && _uiState.value is WeatherUiState.Loading) {
+                        clearWeatherSelection()
+                    }
+                })
+            )
         }
     }
 
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
-        // Business Rule 5: Deduplication
-        if (fetchJob?.isActive == true && lastLat == lat && lastLon == lon) return
+        locationJob?.cancel()
+        loadSelectedCity(lat, lon, cityName, districtName)
+    }
 
-        lastLat = lat
-        lastLon = lon
-        lastCity = cityName
-        lastDistrict = districtName
+    private fun loadSelectedCity(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
+        val selection = WeatherSelection(currentUid, lat, lon, cityName, districtName)
+        if (fetchJob?.isActive == true && weatherSelection == selection) return
+        weatherSelection = selection
+        loadWeather(selection, forceRefresh = false)
+    }
 
+    private fun clearWeatherSelection() {
         fetchJob?.cancel()
-        fetchJob = accountTasks.launch { ownerUid ->
-            _uiState.value = WeatherUiState.Loading
-
-            try {
-                // Wrap in timeout to prevent infinite loading
-                kotlinx.coroutines.withTimeout(20000) {
-                    repository.getWeatherData(lat, lon, cityName, districtName)
-                        .catch { e ->
-if (BuildConfig.DEBUG) {
-                                android.util.Log.e("WeatherVM", "Fetch error", e)
-}
-                            _uiState.value = WeatherUiState.Error(
-                                if (!isOnline.value) "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
-                                else "Hava durumu sunucularına şu an ulaşılamıyor. Lütfen daha sonra tekrar deneyin."
-                            )
-                        }
-                        .collect { data ->
-                            _uiState.value = WeatherUiState.Success(data)
-
-                            // Calculate Smart Alerts
-                            launch {
-                                val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
-                                _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
-                            }
-
-                            // Reset to today
-                            val todayDate = LocalDate.now()
-                            _selectedForecastDate.value = todayDate
-                            val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
-                            _selectedDailyForecast.value = todayForecast
-
-                            // Initial hourly selection: current hour or next available
-                            val nowHour = java.time.LocalTime.now().hour
-                            val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
-                            _selectedHourlyWeather.value = todayHourly.find {
-                                val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                                h >= nowHour
-                            } ?: todayHourly.firstOrNull()
-
-                            updateRecommendation()
-                        }
-                }
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                _uiState.value = WeatherUiState.Error("Zaman aşımı: Hava durumu verileri çok uzun sürdü.")
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                _uiState.value = WeatherUiState.Error("Hava durumu yüklenirken bir hata oluştu.")
-            }
-        }
+        weatherSelection = null
+        _isRefreshing.value = false
+        _uiState.value = WeatherUiState.NoCity
     }
 
     fun refreshWeather() {
-        if (!isOnline.value || _isRefreshing.value) {
+        val selection = weatherSelection?.takeIf { it.uid == currentUid }
+        if (selection == null) {
+            if (_uiState.value is WeatherUiState.Error) {
+                _uiState.value = WeatherUiState.Loading
+                observeUserData(currentUid)
+            }
             return
         }
+        if (!isOnline.value || _isRefreshing.value) return
+        loadWeather(selection, forceRefresh = true)
+    }
 
+    private fun loadWeather(selection: WeatherSelection, forceRefresh: Boolean) {
         fetchJob?.cancel()
+        _isRefreshing.value = forceRefresh
         fetchJob = accountTasks.launch { ownerUid ->
-            _isRefreshing.value = true
+            if (!forceRefresh) _uiState.value = WeatherUiState.Loading
             try {
-            repository.getWeatherData(lastLat, lastLon, lastCity, lastDistrict, forceRefresh = true)
-                .catch { e ->
-                    _isRefreshing.value = false
-                }
-                .collect { data ->
-                    _uiState.value = WeatherUiState.Success(data)
+                val completed = withTimeoutOrNull(20000) {
+                    var receivedForecast = false
+                    repository.getWeatherData(
+                        selection.latitude, selection.longitude, selection.city, selection.district,
+                        forceRefresh = forceRefresh
+                    ).collect { data ->
+                        receivedForecast = true
+                        _uiState.value = WeatherUiState.Success(data)
 
-                    // Calculate Smart Alerts
-                    launch {
-                        val config = com.havamania.ui.theme.ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
-                        _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
+                        launch {
+                            val config = ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
+                            _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
+                        }
+                        selectInitialForecast(data)
+                        updateRecommendation()
                     }
-
-                    val todayDate = LocalDate.now()
-                    _selectedForecastDate.value = todayDate
-                    val todayForecast = data.dailyForecast.find { it.date == todayDate.toString() } ?: data.dailyForecast.firstOrNull()
-                    _selectedDailyForecast.value = todayForecast
-
-                    // Initial hourly selection: current hour or next available
-                    val nowHour = java.time.LocalTime.now().hour
-                    val todayHourly = data.hourlyForecast.filter { it.fullTime.startsWith(todayDate.toString()) }
-                    _selectedHourlyWeather.value = todayHourly.find {
-                        val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                        h >= nowHour
-                    } ?: todayHourly.firstOrNull()
-
-                    _isRefreshing.value = false
-                    updateRecommendation()
+                    receivedForecast
                 }
+                when (completed) {
+                    null -> showWeatherError(selection, "Hava durumu isteği zaman aşımına uğradı. Lütfen tekrar deneyin.")
+                    false -> showWeatherError(selection, "Hava durumu verisi alınamadı. Lütfen tekrar deneyin.")
+                    true -> Unit
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                coroutineContext.ensureActive()
+                showWeatherError(selection,
+                    if (isOnline.value) "Hava durumu şu anda alınamıyor. Lütfen tekrar deneyin."
+                    else "İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin."
+                )
             } finally {
-                _isRefreshing.value = false
+                if (weatherSelection === selection) _isRefreshing.value = false
             }
         }
     }
 
-    fun selectDailyForecast(day: DailyForecast) {
-        val date = LocalDate.parse(day.date)
+    private fun showWeatherError(selection: WeatherSelection, message: String) {
+        if (weatherSelection === selection && selection.uid == currentUid && _uiState.value !is WeatherUiState.Success) {
+            _uiState.value = WeatherUiState.Error(message)
+        }
+    }
+
+    private fun selectInitialForecast(data: WeatherData) {
+        val now = java.time.Instant.now()
+        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
+        val days = ForecastTime.dailyFromToday(data, now)
+        val day = days.firstOrNull { it.date == today.toString() } ?: days.firstOrNull()
+        val date = day?.let { LocalDate.parse(it.date) } ?: today
         _selectedForecastDate.value = date
         _selectedDailyForecast.value = day
+        _selectedHourlyWeather.value = ForecastTime.hoursForDate(data, date, now).firstOrNull()
+    }
 
-        // Select first appropriate hour for the selected day
-        val currentUiState = _uiState.value
-        if (currentUiState is WeatherUiState.Success) {
-            val dayHourly = currentUiState.data.hourlyForecast.filter {
-                it.fullTime.startsWith(day.date)
-            }
-
-            if (day.isToday) {
-                val nowHour = java.time.LocalTime.now().hour
-                val futureHourly = dayHourly.filter {
-                    val h = it.time.split(":")[0].toIntOrNull() ?: 0
-                    h >= nowHour
-                }
-                _selectedHourlyWeather.value = futureHourly.firstOrNull()
-            } else {
-                _selectedHourlyWeather.value = dayHourly.firstOrNull()
-            }
-        }
+    fun selectDailyForecast(day: DailyForecast) {
+        val date = try { LocalDate.parse(day.date) } catch (_: Exception) { return }
+        _selectedForecastDate.value = date
+        _selectedDailyForecast.value = day
+        val data = (_uiState.value as? WeatherUiState.Success)?.data ?: return
+        _selectedHourlyWeather.value = ForecastTime.hoursForDate(data, date).firstOrNull()
     }
 
     fun selectHour(hour: HourlyWeather?) {
@@ -380,13 +400,19 @@ if (BuildConfig.DEBUG) {
 
     fun searchCity(query: String) {
         searchJob?.cancel()
-        if (query.length < 2) {
-            _citySuggestions.value = emptyList()
+        _citySearchStatus.value = LocationSearchStatus.IDLE
+        _citySuggestions.value = emptyList()
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.length < 2) {
             return
         }
+        _citySearchStatus.value = LocationSearchStatus.LOADING
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
-            _citySuggestions.value = repository.searchCity(query)
+            val result = fetchLocationSuggestions { repository.searchCityOrThrow(normalizedQuery) }
+            coroutineContext.ensureActive()
+            _citySuggestions.value = result.items
+            _citySearchStatus.value = result.status
         }
     }
 }

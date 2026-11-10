@@ -52,4 +52,34 @@ class RouteWeatherProviderTest {
     @Test fun `unknown ETA does not substitute midnight weather`() = runBlocking {
         assertNull(RouteWeatherProvider(api { _, _ -> response }).weatherAt(GeoPoint(41.0, 29.0), null))
     }
+    @Test
+    fun `ETA just outside either forecast boundary does not reuse the nearest sample`() = runBlocking {
+        val provider = RouteWeatherProvider(api { _, _ -> response })
+        val point = GeoPoint(41.0, 29.0)
+        assertNull(provider.weatherAt(point, eta - 1))
+        assertNull(provider.weatherAt(point, eta + 1))
+        assertNotNull(provider.weatherAt(point, eta))
+    }
+
+    @Test
+    fun `missing hourly sample is not replaced by adjacent forecasts`() = runBlocking {
+        val hourly = HourlyDto(
+            time = listOf("2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T15:00"),
+            temperature = listOf(20.0, 21.0, 22.0),
+            weatherCode = listOf(0, 0, 0)
+        )
+        val provider = RouteWeatherProvider(api { _, _ -> response.copy(hourly = hourly) })
+        val point = GeoPoint(41.0, 29.0)
+        assertNotNull(provider.weatherAt(point, eta + 45 * 60_000))
+        assertNull(provider.weatherAt(point, eta + 2 * 3_600_000))
+    }
+
+    @Test
+    fun routeWeatherLabelUsesEstimatedPassageTime() {
+        val zone = java.time.ZoneId.of("Europe/Istanbul")
+        val evening = Instant.parse("2026-09-15T18:00:00Z").toEpochMilli()
+        assertEquals("Güneşli", routeWeatherDisplayName(0, eta, zone))
+        assertEquals("Açık Gece", routeWeatherDisplayName(0, evening, zone))
+        assertEquals("Hava tahmini", routeWeatherDisplayName(0, null, zone))
+    }
 }

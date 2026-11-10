@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.withLock
 import com.google.firebase.auth.FirebaseAuth
 
 data class NotificationUiState(
@@ -17,8 +19,24 @@ data class NotificationUiState(
     val selectedIds: Set<String> = emptySet(),
     val isSelectionMode: Boolean = false,
     val activeFilter: NotificationFilter = NotificationFilter.ALL,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val owner: String? = null,
+    val loadFailed: Boolean = false
 )
+
+internal fun NotificationUiState.withSelection(ids: Set<String>): NotificationUiState =
+    copy(selectedIds = ids, isSelectionMode = ids.isNotEmpty())
+
+internal fun NotificationUiState.toggleVisibleSelection(): NotificationUiState {
+    val visibleIds = filteredNotifications.map { it.id }.toSet()
+    return withSelection(if (selectedIds == visibleIds) emptySet() else visibleIds)
+}
+
+internal fun Flow<List<NotificationItem>>.inboxReadResults(): Flow<Result<List<NotificationItem>>> =
+    map { Result.success(it) }.catch { error ->
+        if (error !is Exception || error is kotlinx.coroutines.CancellationException) throw error
+        emit(Result.failure(error))
+    }
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "NotificationVM"
@@ -30,14 +48,54 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
     private val _uiState = MutableStateFlow(NotificationUiState(isLoading = true))
     val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError = _actionError.asStateFlow()
+    private val actionTasks = AccountTaskScope(viewModelScope) { currentUid }
+    private val actionMutex = kotlinx.coroutines.sync.Mutex()
+    fun dismissActionError() { _actionError.value = null }
+    fun canOpenNotification(item: NotificationItem): Boolean {
+        val allowed = canOpenOwnedNotification(item.userId, auth.currentUser?.uid,
+            AccountDeletionManager.getInstance(getApplication()).state.value.pending) &&
+            _uiState.value.notifications.any { it.id == item.id && it.userId == item.userId }
+        if (!allowed) _actionError.value = "Bu bildirim mevcut hesap için kullanılamıyor."
+        return allowed
+    }
+
+    private fun notificationAction(
+        owner: String = currentUid,
+        onSuccess: () -> Unit = {},
+        action: suspend (String) -> Unit
+    ) {
+        if (owner != currentUid) return
+        actionTasks.launch { uid ->
+            try {
+                actionMutex.withLock {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (uid != owner || uid != currentUid) return@withLock
+                    action(uid)
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (uid == currentUid) { _actionError.value = null; onSuccess() }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (uid == currentUid) _actionError.value = "İşlem tamamlanamadı. Lütfen tekrar deneyin."
+            }
+        }
+    }
+
+    private val deleteAllRunner = AssistantTaskRunner(viewModelScope, { currentUid }, {}, 20_000)
     private var collectJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val newUid = firebaseAuth.currentUser?.uid ?: "legacy"
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Auth state changed. Re-initializing notifications for $newUid")
+            Log.d(TAG, "Auth state changed. Re-initializing notifications.")
         }
-        _uiState.value = NotificationUiState(isLoading = true)
+        actionTasks.reset()
+        _actionError.value = null
+        deleteAllRunner.reset()
+        _uiState.value = NotificationUiState(isLoading = true, owner = newUid)
         didSeedInThisSession = false
         startCollectingNotifications(newUid)
     }
@@ -52,52 +110,25 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         collectJob?.cancel()
+        actionTasks.reset()
+        _actionError.value = null
+        deleteAllRunner.reset()
     }
 
     private fun startCollectingNotifications(uid: String) {
         collectJob?.cancel()
         collectJob = viewModelScope.launch {
-            try {
-                repository.getAllNotificationsFlow(uid)
-                    .catch { e ->
-if (BuildConfig.DEBUG) {
-                            Log.e(TAG, "Catch block: Failed to fetch notifications. Emitting empty for $uid.", e)
-}
-                        emit(emptyList())
-                    }
-                    .collect { list ->
-                        if (uid != currentUid) return@collect
-                        if (BuildConfig.DEBUG) {
-                            Log.d("Notifications", "collected size=${list.size} for $uid")
-                        }
-
-                        // If user is legacy, we might want to seed.
-                        // If user is authenticated, we start clean (size 0).
-                        if (list.isEmpty() && uid == "legacy") {
-                            if (BuildConfig.DEBUG) {
-                                Log.d("Notifications", "Legacy user list is empty. Forcing DefaultNotifications.")
-                            }
-                            updateStateWithList(DefaultNotifications.create(uid))
-
-                            if (!didSeedInThisSession) {
-                                didSeedInThisSession = true
-                                withContext(Dispatchers.IO) {
-                                    repository.seedInitialDataIfNeeded(getApplication(), uid)
-                                }
-                            }
-                        } else {
-                            updateStateWithList(list)
-                        }
-                    }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                if (uid != currentUid) return@launch
-if (BuildConfig.DEBUG) {
-                    Log.e(TAG, "Fatal error in collect chain for $uid", e)
-}
-                updateStateWithList(emptyList())
+            repository.getAllNotificationsFlow(uid).inboxReadResults().collect { result ->
+                if (uid != currentUid || _uiState.value.owner != uid) return@collect
+                updateStateWithList(result.getOrNull().orEmpty(), loadFailed = result.isFailure)
             }
         }
+    }
+
+    fun retryLoad(owner: String?) {
+        if (owner == null || owner != currentUid || owner != _uiState.value.owner || !_uiState.value.loadFailed) return
+        _uiState.update { it.copy(isLoading = true, loadFailed = false) }
+        startCollectingNotifications(owner)
     }
 
     fun ensureSeeded() {
@@ -106,16 +137,18 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    private fun updateStateWithList(list: List<NotificationItem>) {
+    private fun updateStateWithList(list: List<NotificationItem>, loadFailed: Boolean = false) {
         _uiState.update { current ->
             val filtered = filterNotifications(list, current.activeFilter)
+            val selected = if (current.selectedIds.isEmpty()) emptySet() else
+                filtered.mapNotNullTo(mutableSetOf()) { it.id.takeIf(current.selectedIds::contains) }
             current.copy(
                 notifications = list,
                 filteredNotifications = filtered,
                 unreadCount = list.count { !it.isRead },
                 isLoading = false,
-                isSelectionMode = current.isSelectionMode && filtered.isNotEmpty()
-            )
+                loadFailed = loadFailed
+            ).withSelection(selected)
         }
     }
 
@@ -136,38 +169,33 @@ if (BuildConfig.DEBUG) {
 
     fun setFilter(filter: NotificationFilter) {
         _uiState.update { current ->
+            if (current.activeFilter == filter) return@update current
             val filtered = filterNotifications(current.notifications, filter)
             current.copy(
                 activeFilter = filter,
-                filteredNotifications = filtered,
-                selectedIds = if (current.isSelectionMode) emptySet() else current.selectedIds,
-                isSelectionMode = false
-            )
+                filteredNotifications = filtered
+            ).withSelection(emptySet())
         }
     }
 
-    fun toggleSelection(id: String) {
+    fun toggleSelection(item: NotificationItem) {
         _uiState.update { current ->
+            val id = item.id
+            if (item.userId != currentUid || current.owner != item.userId ||
+                current.filteredNotifications.none { it.id == id }) return@update current
             val newSelected = if (current.selectedIds.contains(id)) {
                 current.selectedIds - id
             } else {
                 current.selectedIds + id
             }
-            current.copy(
-                selectedIds = newSelected,
-                isSelectionMode = newSelected.isNotEmpty()
-            )
+            current.withSelection(newSelected)
         }
     }
 
-    fun selectAll() {
-        _uiState.update { current ->
-            val allIds = current.filteredNotifications.map { it.id }.toSet()
-            val newSelected = if (current.selectedIds.size == allIds.size) emptySet() else allIds
-            current.copy(
-                selectedIds = newSelected,
-                isSelectionMode = newSelected.isNotEmpty()
-            )
+    fun selectAll(owner: String?) {
+        _uiState.update { state ->
+            if (owner == null || owner != currentUid || owner != state.owner) state
+            else state.toggleVisibleSelection()
         }
     }
 
@@ -175,64 +203,44 @@ if (BuildConfig.DEBUG) {
         _uiState.update { it.copy(selectedIds = emptySet(), isSelectionMode = false) }
     }
 
-    fun deleteNotification(id: String) {
-        viewModelScope.launch {
-            repository.delete(id)
-            _uiState.update { it.copy(selectedIds = it.selectedIds - id) }
-        }
+    fun deleteNotification(item: NotificationItem) = notificationAction(
+        owner = item.userId,
+        onSuccess = { _uiState.update { it.withSelection(it.selectedIds - item.id) } }
+    ) { uid -> repository.delete(uid, listOf(item.id)) }
+
+    fun deleteSelected(selection: NotificationUiState) {
+        val owner = selection.owner ?: return
+        val ids = selection.selectedIds.toList()
+        if (ids.isNotEmpty()) notificationAction(owner, ::clearSelection) { uid -> repository.delete(uid, ids) }
     }
 
-    fun deleteSelected() {
-        val idsToDelete = _uiState.value.selectedIds.toList()
-        if (idsToDelete.isEmpty()) return
+    fun markAsRead(item: NotificationItem) =
+        notificationAction(owner = item.userId) { uid -> repository.markAsRead(uid, listOf(item.id)) }
 
-        viewModelScope.launch {
-            repository.delete(idsToDelete)
-            clearSelection()
-        }
+    fun toggleReadStatus(item: NotificationItem) =
+        notificationAction(owner = item.userId) { uid -> repository.toggleReadStatus(uid, item.id, item.isRead) }
+
+    fun markSelectedAsRead(selection: NotificationUiState) {
+        val owner = selection.owner ?: return
+        val ids = selection.selectedIds.toList()
+        if (ids.isNotEmpty()) notificationAction(owner, ::clearSelection) { uid -> repository.markAsRead(uid, ids) }
     }
 
-    fun markAsRead(id: String) {
-        viewModelScope.launch {
-            repository.markAsRead(id)
-        }
+    fun markAllAsRead(owner: String?) {
+        if (owner != null) notificationAction(owner) { uid -> repository.markAllAsRead(uid) }
     }
 
-    fun toggleReadStatus(id: String) {
-        val item = _uiState.value.notifications.find { it.id == id } ?: return
-        viewModelScope.launch {
-            repository.toggleReadStatus(id, item.isRead)
-        }
-    }
-
-    fun markSelectedAsRead() {
-        val ids = _uiState.value.selectedIds.toList()
-        if (ids.isEmpty()) return
-
-        viewModelScope.launch {
-            repository.markAsRead(ids)
-            clearSelection()
-        }
-    }
-
-    fun markAllAsRead() {
-        viewModelScope.launch {
-            repository.markAllAsRead(currentUid)
-        }
-    }
-
-    fun deleteAllNotifications() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val uid = currentUid
+    fun deleteAllNotifications(owner: String, onResult: (Boolean) -> Unit) {
+        if (owner != currentUid) return
+        deleteAllRunner.start(
+            operation = { uid ->
+                if (uid != owner || uid != currentUid) throw kotlinx.coroutines.CancellationException()
                 repository.deleteAll(uid)
                 com.havamania.ui.theme.ThemeManager.saveHasSeededNotifications(getApplication(), true, uid)
-            } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                    Log.e("NotificationVM", "Error in deleteAllNotifications", e)
-}
-            }
-        }
+            },
+            onSuccess = { clearSelection(); onResult(true) },
+            onError = { onResult(false) }
+        )
     }
 
     fun deleteTravelNotifications() {

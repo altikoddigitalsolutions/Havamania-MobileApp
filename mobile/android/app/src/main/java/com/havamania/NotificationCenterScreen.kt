@@ -16,6 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -31,6 +35,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.havamania.ui.theme.HavamaniaDialog
 import com.havamania.ui.theme.HavamaniaTheme
 import com.havamania.ui.theme.HavamaniaTopBar
@@ -43,62 +51,42 @@ import kotlin.math.roundToInt
 @Composable
 fun NotificationCenterScreen(
     onBack: () -> Unit,
-    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
+    onOpenNotification: (String?) -> Boolean,
     viewModel: NotificationViewModel = viewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val actionError by viewModel.actionError.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
-    var showDeleteAllDialog by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var clockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                clockMillis = System.currentTimeMillis()
+                kotlinx.coroutines.delay(60_000)
+            }
+        }
+    }
+    var deleteAllOwner by remember(state.owner) { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(actionError) {
+        actionError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissActionError()
+        }
+    }
 
     // To prevent double clicks/crashes during rapid navigation
     val processingIds = remember { mutableStateListOf<String>() }
 
-    val handleNotificationClick = remember(onNavigateToDetail) {
-        { notification: NotificationItem ->
+    val handleNotificationClick = remember(onOpenNotification, viewModel) {
+        click@{ notification: NotificationItem ->
+            if (!viewModel.canOpenNotification(notification)) return@click
             if (!processingIds.contains(notification.id)) {
                 processingIds.add(notification.id)
-                viewModel.markAsRead(notification.id)
-
                 try {
-                    when (notification.actionType) {
-                        NotificationActionType.WEATHER_HOME,
-                        NotificationActionType.HOURLY_FORECAST,
-                        NotificationActionType.DAILY_FORECAST,
-                        NotificationActionType.UV_DETAIL,
-                        NotificationActionType.WEATHER_ALERT -> {
-                            onNavigateToDetail(Routes.WEATHER_ROOT, null)
-                        }
-                        NotificationActionType.TRAVEL_CALENDAR -> {
-                            onNavigateToDetail(Routes.CALENDAR_ROOT, null)
-                        }
-                        NotificationActionType.TRAVEL_DETAIL -> {
-                            val tripId = notification.targetId
-                            if (!tripId.isNullOrBlank()) {
-                                onNavigateToDetail("${Routes.CALENDAR_ROOT}?focusId=$tripId", mapOf("focusId" to tripId))
-                            } else {
-                                onNavigateToDetail(Routes.CALENDAR_ROOT, null)
-                            }
-                        }
-                        NotificationActionType.WEEKLY_SUMMARY -> {
-                            onNavigateToDetail(Routes.AI_ROOT, null)
-                        }
-                        NotificationActionType.APP_UPDATE -> {
-                            onNavigateToDetail(Routes.PROFILE_ROOT, null)
-                        }
-                        NotificationActionType.NONE -> {
-                            // If there's a deepLinkTarget as fallback
-                            notification.deepLinkTarget?.let { target ->
-                                 onNavigateToDetail(target, notification.relatedTripId?.let { mapOf("tripId" to it) })
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                        android.util.Log.e("NotificationCenter", "Navigation failed", e)
-}
-                    onNavigateToDetail(Routes.WEATHER_ROOT, null)
+                    openNotificationAndMarkRead(notification, onOpenNotification, viewModel::markAsRead)
                 } finally {
                     // Small delay to prevent instant re-clicks
                     scope.launch {
@@ -114,18 +102,20 @@ if (BuildConfig.DEBUG) {
         viewModel.ensureSeeded()
     }
 
-    if (showDeleteAllDialog) {
+    deleteAllOwner?.let { owner ->
         HavamaniaDialog(
-            onDismissRequest = { showDeleteAllDialog = false },
-            title = "Tümünü Sil?",
+            onDismissRequest = { deleteAllOwner = null },
+            title = "Tüm bildirimler silinsin mi?",
             text = "Tüm bildirimler kalıcı olarak silinecektir. Bu işlem geri alınamaz.",
             confirmText = "Sil",
             confirmColor = themeColors.error,
             icon = Icons.Rounded.DeleteForever,
             onConfirm = {
-                viewModel.deleteAllNotifications()
-                scope.launch {
-                    snackbarHostState.showSnackbar("Tüm bildirimler silindi")
+                deleteAllOwner = null
+                viewModel.deleteAllNotifications(owner) { success ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(if (success) "Tüm bildirimler silindi." else "Bildirimler silinemedi. Lütfen tekrar deneyin.")
+                    }
                 }
             }
         )
@@ -140,19 +130,19 @@ if (BuildConfig.DEBUG) {
                 },
                 actions = {
                     if (state.isSelectionMode) {
-                        IconButton(onClick = { viewModel.selectAll() }) {
-                            Icon(Icons.Rounded.SelectAll, contentDescription = "Tümünü Seç", tint = themeColors.textPrimary)
-                        }
-                        IconButton(onClick = { viewModel.markSelectedAsRead() }) {
+                        val selection = state
+                        NotificationSelectAllButton(selection) { viewModel.selectAll(selection.owner) }
+                        IconButton(onClick = { viewModel.markSelectedAsRead(selection) }) {
                             Icon(Icons.Rounded.DoneAll, contentDescription = "Seçilenleri Okundu Yap", tint = themeColors.accent)
                         }
-                        IconButton(onClick = { viewModel.deleteSelected() }) {
+                        IconButton(onClick = { viewModel.deleteSelected(selection) }) {
                             Icon(Icons.Rounded.Delete, contentDescription = "Seçilenleri Sil", tint = themeColors.error)
                         }
                     } else {
                         if (state.notifications.isNotEmpty()) {
+                            val owner = state.owner
                             IconButton(
-                                onClick = { showDeleteAllDialog = true }
+                                onClick = { deleteAllOwner = owner }
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Delete,
@@ -160,7 +150,7 @@ if (BuildConfig.DEBUG) {
                                     tint = themeColors.error
                                 )
                             }
-                            IconButton(onClick = { viewModel.markAllAsRead() }) {
+                            IconButton(onClick = { viewModel.markAllAsRead(owner) }) {
                                 Icon(Icons.Rounded.DoneAll, contentDescription = "Tümünü Okundu Yap", tint = themeColors.accent)
                             }
                         }
@@ -179,36 +169,22 @@ if (BuildConfig.DEBUG) {
                 onFilterChange = { viewModel.setFilter(it) }
             )
 
-            if (state.isLoading && state.notifications.isEmpty()) {
+            if (state.loadFailed) {
+                val owner = state.owner
+                NotificationLoadError { viewModel.retryLoad(owner) }
+            } else if (state.isLoading && state.notifications.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = themeColors.accent)
                 }
             } else {
-                val notificationsToShow = state.notifications
-
-                // Filter & Group logic
-                val filteredList = remember(notificationsToShow, state.activeFilter) {
-                    val base = when (state.activeFilter) {
-                        NotificationFilter.ALL -> notificationsToShow
-                        NotificationFilter.UNREAD -> notificationsToShow.filter { !it.isRead }
-                        NotificationFilter.TRAVEL -> notificationsToShow.filter { it.category == NotificationCategory.TRAVEL }
-                        NotificationFilter.RAIN -> notificationsToShow.filter { it.category == NotificationCategory.RAIN }
-                        NotificationFilter.UV -> notificationsToShow.filter { it.category == NotificationCategory.UV }
-                        NotificationFilter.WARNING -> notificationsToShow.filter { it.category == NotificationCategory.WARNING }
-                        NotificationFilter.SUMMARY -> notificationsToShow.filter { it.category == NotificationCategory.SUMMARY }
-                        NotificationFilter.UPDATE -> notificationsToShow.filter { it.category == NotificationCategory.UPDATE }
-                        NotificationFilter.GENERAL -> notificationsToShow.filter { it.category == NotificationCategory.GENERAL }
-                        NotificationFilter.SYSTEM -> notificationsToShow.filter { it.category == NotificationCategory.SYSTEM }
-                    }
-
-                    // Tekrar edenleri grupla (Başlık ve Mesaj aynı olanları en yeniye göre teke düşür)
-                    base.groupBy { it.getSafeTitle() + it.getSafeMessage() }
-                        .mapNotNull { it.value.maxByOrNull { n -> n.createdAt } }
-                        .sortedByDescending { it.createdAt }
+                val visibleNotifications = state.filteredNotifications
+                val filteredList = remember(visibleNotifications) {
+                    notificationDisplayOrder(visibleNotifications)
                 }
 
                 if (filteredList.isEmpty()) {
                     EmptyNotificationState(
+                        hasNotifications = state.notifications.isNotEmpty(),
                         onResetFilter = { viewModel.setFilter(NotificationFilter.ALL) }
                     )
                 } else {
@@ -222,13 +198,14 @@ if (BuildConfig.DEBUG) {
 
                             SwipeableNotificationItem(
                                 notification = notification,
+                                clockMillis = clockMillis,
                                 isSelected = isSelected,
                                 isSelectionMode = state.isSelectionMode,
                                 onClick = { handleNotificationClick(notification) },
-                                onLongClick = { viewModel.toggleSelection(notification.id) },
-                                onDelete = { viewModel.deleteNotification(notification.id) },
-                                onToggleRead = { viewModel.toggleReadStatus(notification.id) },
-                                onToggleSelection = { viewModel.toggleSelection(notification.id) },
+                                onLongClick = { viewModel.toggleSelection(notification) },
+                                onDelete = { viewModel.deleteNotification(notification) },
+                                onToggleRead = { viewModel.toggleReadStatus(notification) },
+                                onToggleSelection = { viewModel.toggleSelection(notification) },
                                 onNavigateToDetail = { screen, params ->
                                     handleNotificationClick(notification)
                                 }
@@ -252,7 +229,8 @@ fun SwipeableNotificationItem(
     onDelete: () -> Unit,
     onToggleRead: () -> Unit,
     onToggleSelection: () -> Unit,
-    onNavigateToDetail: (String, Map<String, String>?) -> Unit
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
+    clockMillis: Long = System.currentTimeMillis()
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -353,6 +331,19 @@ fun SwipeableNotificationItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .semantics {
+                    val readStatus = if (notification.isRead) "Okundu" else "Okunmadı"
+                    stateDescription = if (isSelectionMode) {
+                        "${if (isSelected) "Seçili" else "Seçili değil"}, $readStatus"
+                    } else readStatus
+                    customActions = if (isSelectionMode) emptyList() else listOf(
+                        CustomAccessibilityAction(if (notification.isRead) "Okunmadı olarak işaretle" else "Okundu olarak işaretle") {
+                            onToggleRead(); true
+                        },
+                        CustomAccessibilityAction("Bildirimi sil") { onDelete(); true },
+                        CustomAccessibilityAction("Bildirimi seç") { onToggleSelection(); true }
+                    )
+                }
                 .pointerInput(notification.id, isSelectionMode) {
                     if (!isSelectionMode) {
                         detectHorizontalDragGestures(
@@ -376,6 +367,11 @@ fun SwipeableNotificationItem(
                     }
                 }
                 .combinedClickable(
+                    onClickLabel = when {
+                        isSelectionMode && isSelected -> "Bildirim seçimini kaldır"
+                        isSelectionMode -> "Bildirimi seç"
+                        else -> null
+                    },
                     onClick = {
                         if (offsetX.value != 0f) {
                             scope.launch { offsetX.animateTo(0f) }
@@ -388,6 +384,7 @@ fun SwipeableNotificationItem(
         ) {
             NotificationCard(
                 notification = notification,
+                clockMillis = clockMillis,
                 isSelected = isSelected,
                 isSelectionMode = isSelectionMode,
                 onToggleSelection = onToggleSelection,
@@ -403,19 +400,13 @@ fun NotificationCard(
     isSelected: Boolean,
     isSelectionMode: Boolean,
     onToggleSelection: () -> Unit,
-    onNavigateToDetail: (String, Map<String, String>?) -> Unit
+    onNavigateToDetail: (String, Map<String, String>?) -> Unit,
+    clockMillis: Long = System.currentTimeMillis()
 ) {
     val themeColors = HavamaniaTheme.colors
 
-    // Dynamic time calculation (Business Rule 7)
-    var timeStr by remember { mutableStateOf(NotificationDateFormatter.formatCreatedAt(notification.createdAt)) }
-
-    // Refresh time every minute
-    LaunchedEffect(notification.createdAt) {
-        while(true) {
-            timeStr = NotificationDateFormatter.formatCreatedAt(notification.createdAt)
-            kotlinx.coroutines.delay(60000)
-        }
+    val timeStr = remember(notification.createdAt, clockMillis) {
+        NotificationDateFormatter.formatCreatedAt(notification.createdAt, java.time.Instant.ofEpochMilli(clockMillis))
     }
 
     val eventTimeStr = remember(notification.eventAt) {
@@ -525,7 +516,7 @@ fun NotificationCard(
                             border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.15f))
                         ) {
                             Text(
-                                text = notification.actionLabel.uppercase(),
+                                text = notification.actionLabel,
                                 style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, fontSize = 10.sp),
                                 color = themeColors.accent,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -591,6 +582,7 @@ fun NotificationFilterRow(
 fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     Surface(
+        selected = isSelected,
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
         color = if (isSelected) themeColors.accent else themeColors.surface.copy(alpha = 0.5f),
@@ -603,13 +595,35 @@ fun FilterChip(isSelected: Boolean, label: String, onClick: () -> Unit) {
                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                 fontSize = 11.sp
             ),
-            color = if (isSelected) Color.White else themeColors.textPrimary
+            color = if (isSelected) themeColors.onAccent else themeColors.textPrimary
         )
     }
 }
 
 @Composable
-fun EmptyNotificationState(onResetFilter: () -> Unit) {
+internal fun NotificationSelectAllButton(selection: NotificationUiState, onClick: () -> Unit) {
+    val allSelected = selection.filteredNotifications.isNotEmpty() &&
+        selection.filteredNotifications.all { it.id in selection.selectedIds }
+    IconButton(onClick = onClick) {
+        Icon(
+            if (allSelected) Icons.Rounded.Close else Icons.Rounded.SelectAll,
+            contentDescription = if (allSelected) "Seçimi kaldır" else "Tümünü seç",
+            tint = HavamaniaTheme.colors.textPrimary
+        )
+    }
+}
+
+@Composable
+internal fun NotificationLoadError(onRetry: () -> Unit) {
+    HavamaniaErrorState(
+        title = "Bildirimler yüklenemedi",
+        description = "Bildirim listesi cihazdan okunamadı.",
+        onRetry = onRetry
+    )
+}
+
+@Composable
+fun EmptyNotificationState(hasNotifications: Boolean, onResetFilter: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -629,22 +643,26 @@ fun EmptyNotificationState(onResetFilter: () -> Unit) {
         }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Herhangi bir bildirim bulunamadı.",
+            text = if (hasNotifications) "Bu filtrede bildirim yok" else "Henüz bildirim yok",
             style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black),
             color = themeColors.textPrimary,
             textAlign = TextAlign.Center
         )
         Text(
-            text = "Seçili filtreye uygun kayıt yok.",
+            text = if (hasNotifications) "Tüm bildirimleri görmek için filtreyi temizle."
+                else "Yeni bildirimler burada görünecek.",
             style = HavamaniaTheme.typography.bodySmall,
             color = themeColors.textSecondary,
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 8.dp),
+            textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(32.dp))
-        HavamaniaPrimaryButton(
-            text = "FİLTREYİ TEMİZLE",
-            onClick = onResetFilter,
-            height = 48.dp
-        )
+        if (hasNotifications) {
+            Spacer(modifier = Modifier.height(32.dp))
+            HavamaniaPrimaryButton(
+                text = "Filtreyi temizle",
+                onClick = onResetFilter,
+                height = 48.dp
+            )
+        }
     }
 }

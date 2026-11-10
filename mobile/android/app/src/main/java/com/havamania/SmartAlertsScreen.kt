@@ -10,6 +10,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -193,7 +195,7 @@ fun AlertToggleRow(
             )
         }
 
-        HavamaniaToggle(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        HavamaniaToggle(checked = checked, modifier = Modifier.semantics { contentDescription = title }, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

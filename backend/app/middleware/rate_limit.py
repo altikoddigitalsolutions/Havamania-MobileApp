@@ -1,5 +1,6 @@
 import time
 from collections import defaultdict, deque
+from math import ceil
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -41,7 +42,9 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         if len(window) >= self.max_requests:
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Rate limit exceeded"},
+                content={"detail": "Rate limit exceeded", "error": "rate_limited",
+                         "message": "Çok hızlı istek gönderildi. Lütfen kısa bir süre bekleyin."},
+                headers={"Retry-After": str(max(1, ceil(self.window_seconds - (now - window[0]))))},
             )
 
         window.append(now)

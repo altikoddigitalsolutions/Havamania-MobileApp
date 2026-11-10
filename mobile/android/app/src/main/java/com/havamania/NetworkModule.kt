@@ -2,10 +2,52 @@ package com.havamania
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.ProtocolException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+
+internal fun weatherRetryInterceptor(pause: (Long) -> Unit = { Thread.sleep(it) }) = Interceptor { chain ->
+    val request = chain.request()
+    if (request.method != "GET") return@Interceptor chain.proceed(request)
+
+    val lastAttempt = 2
+    for (attempt in 0..lastAttempt) {
+        if (chain.call().isCanceled()) throw IOException("Canceled")
+        if (attempt > 0) {
+            try {
+                pause(NetworkModule.calculateBackoffMillis(attempt - 1))
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw InterruptedIOException("Request interrupted").apply { initCause(interrupted) }
+            }
+            if (chain.call().isCanceled()) throw IOException("Canceled")
+        }
+
+        val response = try {
+            chain.proceed(request)
+        } catch (error: IOException) {
+            if (error is SSLHandshakeException || error is SSLPeerUnverifiedException || error is ProtocolException) {
+                throw error
+            }
+            if (chain.call().isCanceled() || Thread.currentThread().isInterrupted || attempt == lastAttempt) throw error
+            if (BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "Retrying weather request after an I/O failure")
+            continue
+        }
+        if (chain.call().isCanceled()) {
+            response.close()
+            throw IOException("Canceled")
+        }
+        if (response.code !in 500..599 || attempt == lastAttempt) return@Interceptor response
+        response.close()
+    }
+    error("Weather retry loop did not finish")
+}
 
 object NetworkModule {
     private const val BASE_URL = "https://api.open-meteo.com/"
@@ -26,72 +68,7 @@ object NetworkModule {
         .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
         .callTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
-        })
-        .addInterceptor { chain ->
-            val request = chain.request()
-            // GET-only safety
-            if (request.method != "GET") {
-                return@addInterceptor chain.proceed(request)
-            }
-
-            var response: okhttp3.Response? = null
-            var error: Exception? = null
-            var tryCount = 0
-            val maxLimit = 2 // Total 3 attempts
-
-            while (tryCount <= maxLimit) {
-                try {
-                    if (tryCount > 0) {
-                        try {
-                            val backoff = calculateBackoffMillis(tryCount - 1)
-                            Thread.sleep(backoff)
-                        } catch (ie: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            response?.close()
-                            throw java.io.InterruptedIOException("Request interrupted").initCause(ie)
-                        }
-                    }
-
-                    response?.close()
-                    response = null
-                    if (chain.call().isCanceled()) throw java.io.IOException("Canceled")
-                    response = chain.proceed(request)
-
-                    val resp = response
-                    if (resp == null) {
-                        tryCount++
-                        continue
-                    }
-
-                    // Retry ONLY 5xx server errors. Do not retry 4xx, 429, or successful responses.
-                    if (resp.isSuccessful || resp.code < 500) {
-                        return@addInterceptor resp
-                    }
-                } catch (e: Exception) {
-                    if (chain.call().isCanceled() || Thread.currentThread().isInterrupted) throw e
-                    error = e
-                    if (e is java.io.IOException || e is java.net.SocketTimeoutException) {
-                        if (BuildConfig.DEBUG) {
-                            android.util.Log.w("NetworkModule", "Retry attempt ${tryCount + 1} due to: ${e.message}")
-                        }
-                    } else {
-                        response?.close()
-                        throw e
-                    }
-                }
-                tryCount++
-            }
-
-            response?.let {
-                if (it.code >= 500) {
-                    return@addInterceptor it
-                }
-            }
-
-            response ?: throw error ?: java.io.IOException("Unknown network error")
-        }
+        .addInterceptor(weatherRetryInterceptor())
         .build()
 
     val apiService: WeatherApiService by lazy {

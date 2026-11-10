@@ -1,17 +1,143 @@
-# Android yayın öncelikleri — 15 Eylül 2026
+# Android yayın kontrol listesi — 30 Ekim 2026
 
-Kullanıcı kararı: bu aşamada yalnızca yerel testler. Canlı dağıtım veya gerçek kullanıcı hesabı silme yapılmadı.
+Bu belge sekiz ana başlığın tek takip listesidir. Bir alt testin geçmesi bütün başlığı kapatmaz. Kullanıcı tercihi: yerel doğrulama; canlı dağıtım, gerçek hesap silme veya satın alma yapılmaz. Ayrıntılı son denetim: [22 Ekim raporu](YAYIN_DENETIMI_2026-10-22.md).
 
-| Sıra | İş | Son durum |
-| --- | --- | --- |
-| 1 | Tam ve yeniden denenebilir hesap silme | Kod, sahte servis testleri, SQL ilişki temizliği ve yerel Firebase kural testleri tamamlandı. Canlı özellik kapalı; uçtan uca test hesabı/dağıtım bekliyor. |
-| 2 | Veritabanı geçişleri | İstek başına DDL kaldırıldı; Alembic 0011–0013 eklendi. Eksik Android geçişleri düzeltildi. SQLite ve gerçek tablette veri koruma doğrulandı; PostgreSQL testi bekliyor. |
-| 3 | Firebase/backend entegrasyonu | Yerel kurallarda sahiplik ve silme sonrası erişim engeli doğrulandı. Canlı proje, servis hesabı, bucket ve API alan adı doğrulaması ertelendi. |
-| 4 | Hava önbelleği ve saat dilimi | Koordinat ayrımı, 100 kayıt sınırı, disk hatasında ağ verisini gösterme, konuma göre seçili saat ve UTC rota sorguları düzeltildi. Tüm rota risk örnekleme ve astronomi senaryoları henüz doğrulanmadı. |
-| 5 | Cihaz dayanıklılığı | Oturum değişimi, dinleyici birikimi ve konum isteği iptali düzeltildi; 8 yeni yerel senaryo eklendi. Manuel izin/rotasyon, süreç ölümü ve uzun kullanım matrisi açık. [Ayrıntı](CIHAZ_DAYANIKLILIGI.md). |
-| 6 | Tasarım ve erişilebilirlik | Yeni kurtarma ekranı kaydırma/klavye alanı ve 48 dp düğmeyle hazır. Tüm ekranların büyük yazı, TalkBack, telefon/tablet ve iki tema incelemesi tamamlanmadı. |
-| 7 | Üretim hizmetleri / mağaza | Ticari hava/rota sağlayıcısı, yasal sayfalar, Data Safety, hesap silme web bağlantısı ve mağaza görselleri bekliyor. |
-| 8 | İmzalı release AAB | Gerçek yükleme anahtarı ve release/R8 cihaz testi bekliyor. |
+## 30 Ekim son devam — Platform ask sözleşmesi
+
+Sunucu anahtarı/HTTPS koruması, konuşma kimliği, ton, sınırlı şehir/hava/seyahat bağlamı ve ilgi alanı opt-out/temizleme davranışı eklendi. Sohbet kaydı aktif UUID’yi koruyor; cevap metadata/uyarısı saklanıyor. Son yerel kanıt: **112 backend testi**, 6 atlanan PostgreSQL testi; **203 Android JVM testi**, debug derleme ve Ruff başarılı. Bu tur cihaz/PG yeniden koşulmadı. Ayrıntılı güncel sözleşme: ASISTAN_PLATFORM_KOPRUSU.md.
+
+Sıradaki yerel işler: platform rıza metni adaptörü ve hesap silme işine platform verisi silme/yeniden deneme. Gerçek anahtar, canlı ortam, hukuki onay, profil Firebase–SQL senkronizasyonu ve mağaza/release bağımlılıkları açık. Yayın öncesi backend yapılandırması/0014–0015 ve onaylanmış metinler birlikte doğrulanmalı. Bu alt düzeltmeler geniş maddeleri otomatik kapatmaz.
+
+## 30 Ekim son devam — Android asistan izinleri
+
+Asistan ve Ayarlar’a sunucu rıza metni, ayrı isteğe bağlı sağlık kutusu, geri çekme ve 428/409 yeniden onay akışı bağlandı. Hesap değişiminde bellek/bekleyen soru temizleniyor; onay sunucudan doğrulanıyor. Android **196 JVM testi**, debug/test paketi derlemesi ve tablette **2 izole ekran testi** geçti (koyu %200 yazı, açık tema/sağlık olmadan kabul). Backend rıza alt paketi **11 test** ve Ruff geçti. Önceki 95 backend / 6 PostgreSQL sonucu önceki turun kanıtıdır; bu tur genel backend/PG yeniden koşulmadı.
+
+Geniş maddeler kapanmadı. Sonraki yerel iş: platform köprüsü sunucu anahtarı ve güncel istek/yanıt sözleşmesi; konuşma kimliği, ton ve şehir/hava/seyahat bağlamı. Onaylanmış hukuki metin, gerçek Firebase/backend/platform testi ve mağaza/release bağımlılıkları hâlâ açık. Canlı dağıtım veya gerçek hesapta onay değişikliği yapılmadı. Ayrıntılar ASISTAN_RIZA_SOZLESMESI.md ve YAYIN_DURUM_RAPORU.md içinde.
+
+## 27 Ekim güncel durum
+
+Ana listedeki işaretler sayıldı: **59 geniş madde, 22 tamamlanan, 37 açık**. Aşağıdaki yerel düzeltmeler geniş canlı/cihaz matrislerini otomatik kapatmaz. Eski tarihlerdeki test sayıları tarihsel kayıttır.
+
+| Alan | Güncel kanıt ve açık sınır |
+|---|---|
+| Seyahat senkronizasyonu | UID/sürüm bazlı kalıcı gönderme/silme takibi, yeniden deneme ve görünür durumlar eklendi. Kapalı uygulamada iş yürütme, çok cihaz çatışması ve canlı entegrasyon açık. |
+| Yerel yükleme | Tek Room akışı, iptal/UID koruması, IO dönüşümü ve hata/yeniden deneme eklendi. Gerçek bozuk veritabanı/oturum entegrasyonu açık. |
+| Seyahat formu | Koordinat doğrulaması, dar/büyük yazı tarih yerleşimi, kaydedilebilir taslak ve üst düzenleme bağlamı eklendi. Gerçek Activity recreate ve ayrı debug sürecinin ölümü test edildi; üretim navigasyonu/Auth/Room yeniden açılış matrisi açık. |
+| Arama ve UI | Boş/yükleme/hata ayrımı, eski sonuç temizliği ve yeniden deneme eklendi; seçili bileşenlerde klavye/%200 yazı testleri var. Bütün ekranlar, temalar, yatay ve TalkBack matrisi açık. |
+| Hesap silme / güvenlik / Firebase | Yerel kanıtlar önceki kayıtlarda; gerçek silinebilir hesap, canlı kurallar/backend bağlantısı ve güvenlik dağıtımı açık. |
+| Backend migration | Önceki yerel PostgreSQL doğrulaması geçerli kayıt; üretim sürümü/yedek/staging provası açık. Bu devamda yeniden koşulmadı. |
+| Hava / rota / kişiselleştirme | Önceki alt düzeltmeler korunuyor. 10 gün/48 saat, saat dilimleri, risk/eksik veri ve karşılaştırmalı kişiselleştirme matrisi açık. |
+| Üretim / mağaza / release | Avatar/Blaze, yasal metinler, Play Console, servis kapasitesi, imzalı R8 AAB, gerçek 16 KB ve Play iç test açık. |
+
+Son tamamlanmış Android JVM koşusu: **183 test, 0 hata**; debug derleme başarılı. Cihaz sonuçları tarih/senaryo bazında [yayın durum raporunda](YAYIN_DURUM_RAPORU.md); farklı turları toplayarak tam uygulama testi sonucu çıkarılmaz. Önceki backend/kurallar/PostgreSQL/lint sayıları bu devamda yeniden doğrulanmış sayılmaz. 27 Ekim Git gönderim kapsamı: `4c919c0` sonrasındaki form/taslak, süreç yeniden açılışı, yerel yükleme ve 48 saat düzeltmeleri ile testleri. Tarihsel tur sonlarındaki push notları o turun durumudur.
+
+Mevcut yerel sıra: yükleme hata panelinin cihaz doğrulaması → hava verisinin 10 gün/48 saat sınırları ve eksik veri davranışı → kalan dayanıklılık/UI matrisleri. Canlı ortam ve mağaza bağımlılıkları açık tutulur. Ayrıntılı tarihsel kayıt aşağıdadır.
+
+## 1. Hesap silme ve veri temizliği — AÇIK
+
+- [x] Yeniden denenebilir sunucu devam kaydı ve cihaz kurtarma akışı.
+- [x] Hesap/Firestore alt koleksiyonları/Storage/backend/cihaz temizliğine yönelik yerel testler.
+- [ ] Staging üzerinde avatar, seyahat, AI geçmişi ve backend kayıtları olan test hesabıyla uçtan uca silme.
+- [ ] Her silme aşamasında bağlantı/süreç kesintisi, yeniden giriş ve yeniden deneme matrisi.
+- [ ] Firebase kurallarının ve backend silme özelliğinin kontrollü üretim dağıtımı.
+
+## 2. Backend migration — YEREL POSTGRESQL DOĞRULANDI
+
+- [x] İstek sırasında şema değiştirme kaldırıldı; Alembic 0011–0013 kullanılıyor.
+- [x] PostgreSQL 16.12 üzerinde sıfırdan kurulum ve tekrar `upgrade head`.
+- [x] Eski UNIQUE kısıtı ve bağımsız UNIQUE indeksi olan iki yükseltme yolu; verilerin korunması ve aynı kullanıcıya birden çok cihaz.
+- [x] Çakışan token'da veri silmeden durma, düzeltildikten sonra yeniden yükseltme; FK cascade davranışı.
+- [x] PostgreSQL'in kısıtla birlikte kaldırdığı indeksi tekrar silme hatası düzeltildi.
+- [x] CI'a ayrı PostgreSQL migration işi eklendi (uzak CI henüz çalıştırılmadı).
+- [ ] Üretim PostgreSQL sürümü/uzantılarıyla eşleşme, yedek, staging veri kopyası ve operasyonel dağıtım provası.
+
+## 3. Canlı Firebase–backend ve kurallar — AÇIK
+
+- [x] Yerel Firestore/Storage emülatöründe sahiplik ve silme sonrası erişim engeli: 4 test.
+- [x] Gerçek Firebase SDK dönüştürücüsüyle AI geçmişi ve eski belge okuma: 2 cihaz testi, ağ çağrısız.
+- [ ] Gerçek test hesabıyla giriş, asistan, fotoğraf yükleme/silme.
+- [ ] Proje, bucket, servis hesabı, token doğrulama ve API alan adı eşleşmesi.
+- [ ] Canlı kurallarda kullanıcılar arası erişim ve iptal edilmiş token kontrolü.
+
+### Firebase ve senkronizasyon için ek zorunlu kontroller
+
+- [ ] Firebase yaşam döngüsü: Auth oturumu/token yenileme, Firestore/Storage dinleyici hata ve yeniden bağlanma, tek aktif dinleyici, çıkış/hesap değişiminde iptal; eski hesabın verisinin yeni ekrana taşınmaması.
+- [ ] Firebase–cihaz eşitlemesi: profil/avatar/tercihler, şehirler/varsayılan şehir, seyahatler ve AI geçmişi için kaynak sahipliği; Room/DataStore/Firestore tutarlılığı, ilk açılış uzlaştırması, çevrimdışı yazma ve yeniden bağlanma, süreç ölümü sonrası kalıcı gönderme/silme kuyruğu, idempotent yeniden deneme ve silinen verinin geri gelmemesi.
+- [ ] Uçtan uca genel senkronizasyon: iki cihazda eşzamanlı düzenleme/silme çatışmaları, zaman/sürüm sıralaması, Firebase–backend eşleşmesi ve kısmi başarısızlıkların kurtarılması; yükleniyor/bekleyen/senkronize/hata/gerçek boş durumlarının doğru gösterilmesi. Önce yerel/emülatör testleri; staging ve çok cihazlı canlı doğrulama ayrıca açık kalır.
+
+- [ ] Profil fotoğrafı / Firebase Blaze hazırlığı: mevcut özellik bayrağı ve Storage akışı, proje/bucket yapılandırması, güncel plan gereksinimleri ve maliyet kontrolü; fotoğraf seçme/izin reddi, boyut ve içerik doğrulama, sıkıştırma, yükleme ilerlemesi/iptal/yeniden deneme, eski avatarın silinmesi, önbellek yenileme ve hesaplar arası erişim. Ücretli plana geçiş ayrı operasyon adımıdır; bu madde tamamlandı sayılmaz.
+- [ ] Kapsamlı güvenlik denetimi: depoya/APK'ya/loglara sızan sırlar ve kişisel veri, bağımlılık açıkları, Android exported bileşenler/deep link/izinler/yedekleme/ağ güvenliği, backend kimlik ve nesne sahipliği doğrulaması, girdi/dosya kontrolleri, kötüye kullanım sınırları ve Firestore/Storage kuralları. Bulgular önem derecesi ve tekrar testiyle izlenir.
+
+- [ ] Gerçek kişiselleştirme: ilgi alanı, tercih ve kullanıcı açıklamasının öneri seçimi/sıralaması ile asistan bağlamına etkisi; tercih değişikliği, kapatma, veri yokluğu ve A→B geçişi. Aynı hava/rota/soru için farklı tercihlerle karşılaştırmalı davranış testleri; güvenlik uyarıları tercihle bastırılmaz. Kabul ölçütleri: [mimari ve kalite matrisi](MIMARI_VE_URUN_KALITESI.md).
+
+## 4. Hava verisinin doğruluğu — KISMEN TAMAM
+
+- [x] Koordinatlı önbellek, 100 kayıt sınırı, bozuk disk ve çevrimdışı geri dönüş testleri.
+- [x] UTC rota sorguları ve tahmin konumuna göre saat seçiminin temel testleri.
+- [x] Görünümdeki 7 nokta sınırının geç tehlikeleri gizlemesi düzeltildi; eksik verili noktalar korunuyor.
+- [x] Geometrik uzunluk/sağlayıcı mesafe farkında tüm rota boyunca örnekleme ve orantılı ETA testi.
+- [ ] Tüm tarih/astronomi görünümleri, yaz saati geçişleri, cihaz/konum saat dilimi farkları.
+- [ ] Örnekler arasındaki hava riskleri, rüzgar/veri kalitesi ve uzun rota senaryoları; örnekleme tam güvenlik garantisi değildir.
+
+- [ ] 10 gün / 48 saat kuralları: ürün kuralının tüm ekran/API/asistan/rota yollarında tek tanımı; sınır anları, konum saat dilimi, sağlayıcıdan eksik gün/saat, eski önbellek ve ufuk dışı taleplerde açık durum. Veri yokken tahmin üretmiş gibi gösterilmez.
+
+## 5. Gerçek cihaz dayanıklılığı — KISMEN TAMAM
+
+- [x] Hesaba bağlı iş iptali, geç sonuç korumaları ve konum ölçümü zaman aşımı.
+- [x] Eski hesap için arka plan seyahat bildirimi yayımlamadan önce sahiplik/silme kontrolü.
+- [x] SM-T500/Android 12: 2 veritabanı + 2 Firebase model + 3 ortak arayüz testi.
+- [ ] İnternet kes/kurtar, izin reddi/geri çekme, GPS kapalı/açık, arka plan ve süreç ölümü.
+- [ ] Gerçek A→B geçişi, bekleyen bildirim/deep link ve uzun süreli bellek/pil testi.
+- [ ] Konumdan adres çözümlemenin toplam zaman aşımı (eski Geocoder API).
+
+- [ ] Kod erişilebilirliği ve tekrar denetimi: Android, backend, React Native, test/CI; ölü kod, çift dinleyici/iş, sahte başarı ve eksik entegrasyonların doğrulanarak temizlenmesi.
+
+- [ ] Veri, kaynak ve proje temizliği: kullanılmayan dosya/asset/bağımlılıklar, geçici fotoğraf ve önbellekler, eski işler/dinleyiciler, test verileri ve hassas logların saklama/temizleme davranışı. Kod tekrar denetimiyle birlikte ele alınır; kullanıcı verisi veya platform girişleri kullanım kanıtı olmadan silinmez.
+
+- [ ] Mimari ve kod organizasyonu: UI–ViewModel–repository–veri kaynağı sorumlulukları, bağımlılık yönleri, durum sahipliği, DI/yaşam döngüsü, coroutine iptali ve hata sözleşmeleri; Kotlin/Compose, RN ve FastAPI girişlerinin/iş kurallarının haritalanması, paralel RN/Native ayrışmalarının test edilmesi.
+- [ ] Teknik borç planı: doğrulanmış borçları etki/risk/öncelik, dosya ve kapanış testiyle kaydet; lint/bağımlılık/CI açıkları ve büyük sınıfları davranış koruyan küçük değişikliklerle azalt. Sırf mimari görünüm için toplu yeniden yazım yapılmaz.
+
+## 6. Tasarım bütünlüğü ve erişilebilirlik — KISMEN TAMAM
+
+- [ ] Tüm ekranların canlı görsel incelemesi: ekran görüntüsü/tema/ölçek kaydı, tipografi, büyük-küçük harf, yazım, yerleşim, buton ve tasarım bütünlüğü; premium görsel dil için ortak font ailesi/ağırlık/ölçek, boşluk/ikon/renk/köşe sistemi ve tutarlı Türkçe terminoloji; İ/i/ı/I dönüşümleri ve kullanıcı metninin korunması; bulgu ve tekrar doğrulama matrisi. Her ekranın boş/dolu, yükleniyor/hata, çevrimdışı, izin ve hesap değişimi durumları ayrı denetlenir; şehir/seyahat eklemeden önce ve sonra dahil. Ayrıntılar: [durum matrisi](EKRAN_DURUMLARI_VE_KOD_DENETIMI.md).
+
+- [x] Profil kaydı onay/hata durumu, çift tıklama engeli, taslağın snapshot ile ezilmesini önleme.
+- [x] Profil klavye boşluğu, büyüyen bio alanı ve hesap bazlı kaydedilebilir taslak.
+- [x] Ortak düğmede yükleme adı/durum semantiği; dolu alan etiketi; %200 yazıda büyüyen düğme cihaz testleri.
+- [x] Premium satış/ücret metni gerçek davranışla tutarlı.
+- [ ] Bütün ekranlar: açık/koyu/mevsimsel tema, telefon/tablet, yatay, %200 yazı, TalkBack ve kontrast.
+- [ ] Profil taslağı için gerçek rotasyon/süreç ölümü ve kayıt sırasında geri navigasyon uçtan uca testi.
+
+- [ ] Buton, sahne ve ekran geçişlerinde akıcılık: hızlı/çift tıklama, ileri/geri ve sekme dönüşü, modal/klavye açılışı, animasyon tutarlılığı, boş ekran/parlama/yerleşim sıçraması, gereksiz yeniden oluşturma, ana iş parçacığı yükü ve kare süreleri. Telefon/tablet ve düşük kaynaklı cihazda ölçüm; animasyonlar kapalıyken ve erişilebilirlik açıkken kullanılabilirlik; önce/sonra kayıt ve ölçümle doğrulama.
+
+## 7. Üretim servisleri ve mağaza — AÇIK
+
+- [ ] Hava/rota/harita üretim sağlayıcısı, ticari lisans/kota ve hata durumları.
+- [ ] KVKK / Gizlilik Politikası / Kullanım Koşulları ve yasal sayfalar: gerçek veri envanteri, amaç/saklama/silme, üçüncü taraflar ve aktarım, kullanıcı başvuru/iletişim yolu; gerekli aydınlatma ve rıza akışlarının değerlendirilmesi, çalışan hesap silme web yolu, uygulama içi ve mağaza bağlantıları, sürüm/tarih ve Data Safety tutarlılığı. Güncel mevzuat ve işletme bilgileriyle doğrulama; mevcut metinler incelenmeden uygun sayılmaz.
+- [ ] Play Console hesap kuruluşu ve yükleme hazırlığı: hesap türü/kuruluş bilgileri, güncel kimlik doğrulama ve test gereksinimleri, yetkiler, uygulama kaydı, paket kimliği/imzalama, mağaza taslağı ve imzalı AAB iç test yükleme akışı. Hesap açma, ödeme, yükleme ve yayın birbirinden ayrı izlenir; 8. başlığın paket/Play testleriyle birlikte kapanır.
+- [ ] Data Safety, içerik derecelendirmesi, test erişimi ve mağaza görselleri.
+- [ ] Çoklu sunucu rate limit, PostgreSQL kapasitesi, gözlemleme ve yedekten dönüş.
+- [ ] Eski React Native CI: bulunmayan SignUpScreen import’u RegisterScreen olarak düzeltildi; bağımlılık kurulumu ve Jest/TypeScript doğrulaması açık (native Android’den ayrı).
+
+## 8. İmzalı release AAB — AÇIK
+
+- [x] compile/target SDK 36, debug APK'nın altı yerel kütüphanesinde 16 KB ELF ve zipalign kontrolü.
+- [ ] Gerçek yükleme anahtarı/keystore, uygulama kimliği ve versionCode doğrulaması.
+- [ ] R8 küçültülmüş imzalı AAB üretimi ve release cihaz testi.
+- [ ] Gerçek 16 KB Android cihaz/emülatör testi.
+- [ ] Play iç test ve pre-launch raporu; gerekli hesap türü test şartları.
+
+## Önceki doğrulama — 22 Ekim
+
+- Android: **102 birim testi geçti; önceki cihaz koşusunda 7 test geçti**; debug derleme ve lint başarılı (**0 hata, 199 uyarı, 1 ipucu**).
+- Backend: **64 test geçti**, Ruff temiz. Standart koşuda PostgreSQL testleri atlanır; aşağıdaki ayrı koşuda gerçekten çalıştırıldı.
+- PostgreSQL 16.12: **4 test geçti**; yalnızca oluşturduğumuz izole localhost kümesi kullanıldı ve kapatıldı.
+- Firebase kuralları: **4 yerel emülatör testi geçti**.
+- Toplam **181 farklı test için başarılı sonuç kaydı**; bu sayı bütün uygulamanın veya canlı ortamın doğrulandığı anlamına gelmez.
+- APK SHA-256: `229EBD2786862B44771477FC4F72A446938393B10153115D6DDB4522DCF8F147`.
+- PostgreSQL tekrar koşusu: `.venv/Scripts/python.exe tools/run_postgres_audit.py --pg-bin "C:/Program Files/PostgreSQL/16/bin"`.
+
+## Geçmiş sonuçlar
 
 ## Önceki tur doğrulama (07b268f)
 
@@ -28,7 +154,7 @@ Kullanıcı kararı: bu aşamada yalnızca yerel testler. Canlı dağıtım veya
 - Backend ve Firebase kural testleri bu tur yeniden çalıştırılmadı; bu bileşenlerde değişiklik yok.
 - Detaylar ve açık cihaz matrisi: [cihaz dayanıklılığı raporu](CIHAZ_DAYANIKLILIGI.md).
 
-## Son debug APK
+## Önceki debug APK (5d1e52a)
 
 Yol: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 
@@ -37,3 +163,305 @@ SHA-256: `5268567EB63FDDFAB99410543E9A071C6E2382C72418AB531EFB6D26ABAD61CB`
 ARM64/x86_64 altı kütüphanenin ELF LOAD hizalaması 16384 bayt. Gerçek 16 KB cihaz testi henüz yapılmadı. Bu paket Google Play yükleme paketi değildir.
 
 Hesap silme mimarisi, kalan veri saklama kapsamı ve dağıtım sırası: [teknik rapor](HESAP_SILME_VE_SUNUCU_GECISLERI.md).
+
+## Saat dilimi devam turu
+
+Takip: **45 madde; 22 tamamlandı, 23 açık**. Dördüncü başlık üzerinde çalışılıyor; ilk üç başlıktaki canlı ortam gerektiren maddeler açık kalıyor. Tahmin ekranı ve ViewModel konum saat dilimine geçirildi; gece yarısı, eski önbellek, yanlış bugün işareti ve yaz saati başlangıcı için 7 yeni test geçti. 85 birim testi, debug derleme ve lint bu tur yeniden çalıştırıldı; diğer test sayıları önceki başarılı koşulara aittir. Astronomi ve yaz saati bitişi kapsamı hâlâ açık.
+## Güneş saatleri devam turu
+
+Seçilen güne ait doğuş/batış verileri ana kart, saatlik tahmin ve güneş zamanları paneline bağlandı. Eksik/yanlış tarihli veriler başka günden alınmıyor; eski önbellek uyumlu. Gün batımı sınırı düzeltildi. Yeni 5 testle **90 Android birim testi geçti**; debug APK üretildi ve altı yerel kütüphanenin 16 KB ELF/zipalign kontrolleri yenilendi. Cihaz ve backend testleri bu tur tekrarlanmadı. Güncel APK SHA-256: `2CA9F522446B4CD1ABF6D622C04E60D124EE70D9973F592B62D93AB1C7BB4CDD`.
+
+Geniş astronomi maddesi açık: AI günlük yanıtındaki zaman seçimi, kutup günü/gecesi, yaz saati bitişi ve cihaz doğrulaması gerekiyor. Takip sayısı **22 tamamlanan / 23 açık** olarak devam ediyor.
+Bu turun lintDebug kontrolü de başarıyla tamamlandı.
+## AI günlük tahmin devam turu
+
+AI tarihli hava yanıtı konumun tarihini kullanıyor; günlük özet cihazın gece/gündüz saatinden bağımsız. Yarından sonra ve açık yıl ayrıştırması düzeltildi. Eksik gün için başka günün tahmini kullanılmıyor; eski önbellek belirtiliyor. **97 Android birim testi (7 yeni) geçti**, debug APK üretildi. Önceki düzeltmeler aynı birim test koşusuna dahil; canlı ortam ve cihaz testleri bu tur yeniden koşulmadı.
+
+Açık alt kontroller: kutup günü/gecesi, yaz saati bitişi, geçersiz tarih sorusunu netleştirme, alternatif AI yanıt yolu ve yerel AI işlerinin hesap değişimi/hata yaşam döngüsü. Ayrıntılar 22 Ekim denetim raporunda. 45 geniş takip maddesinde 22 tamamlanan / 23 açık durumu sürüyor.
+AI tarih turunda testDebugUnitTest, assembleDebug ve lintDebug birlikte başarıyla tamamlandı.
+
+## Asistan istek yaşam döngüsü devam turu
+
+Hesap değişimi/sohbet sıfırlama/geçmiş sohbet açma sırasında bekleyen yanıt geçersiz kılınıyor. Yerel ve uzak yanıtlar aynı çift gönderim, hata ve zaman aşımı yönetimini kullanıyor. İptali dikkate almayan geç sonuçlar ve eski isteğin yeni yükleme durumunu temizlemesi için koruma eklendi. **102 birim testi (5 yeni) geçti**; debug APK üretildi. Gerçek cihaz hesap değişimi matrisi açık; önceki cihaz/backend sonuçları bu tur tekrarlanmadı.
+
+Sıradaki bağlantılı kontrol: otomatik hava yükleme ve seyahat gözlemleme işlerinde iptal/hesap sahipliği; ardından 4. başlığın kutup günü/gecesi ve yaz saati bitişi kapsamı. Geniş takip listesi 22 tamamlanan / 23 açık madde.
+Asistan yaşam döngüsü turunda testDebugUnitTest, assembleDebug ve lintDebug birlikte başarıyla tamamlandı.
+Güncel lint: 0 hata, 196 uyarı, 1 ipucu; üstteki önceki 199 uyarılık sonuç bu turda 196 oldu.
+## Arka plan işleri ve UI devam turu
+
+Asistanın otomatik veri işleri hesaba bağlı iptal ve yayın kontrollerine alındı. Giriş/asistan/ayarlar/geçmiş/güneş panelinde erişilebilirlik ve esnek yerleşim düzeltmeleri yapıldı. **102 birim testi ve son koşuda 10 cihaz testi geçti.** İlk cihaz koşusundaki 3 geçici Activity hiyerarşisi hatası ayrıntılı raporda kayıtlı. UI tarama bulguları ve sonraki düzeltmeler [ekran bazlı alt listede](UI_DENETIMI_2026-10-22.md); bütün ekranlar görsel olarak onaylanmış değil. Ana listedeki geniş 5/6. başlıklar açık kalıyor.
+## Kişiselleştirme devam turu
+
+Kişiselleştirme ekranının kayıt sonucunu beklemeden kapanması ve snapshot ile taslağı ezmesi düzeltildi. Hesap bazlı saklanabilir taslak, onay/hata/yeniden deneme, zaman aşımı ve çift gönderim koruması eklendi; uzun hassasiyet metni ile anahtar yerleşimi iyileştirildi. **106 birim testi geçti**, debug APK üretildi. Önceki 10 cihaz testi bu tur tekrar çalıştırılmadı; gerçek rotasyon/süreç ölümü matrisi açık.
+
+Sonraki UI işi: profil AboutMeSheet klavye/büyük yazı ve seyahat ekleme düğmesi, ardından geçmiş detayındaki işlevsiz eylemler. Ayrıntılı durum UI_DENETIMI_2026-10-22.md dosyasında. Geniş 6. başlık henüz kapanmadı.
+Kişiselleştirme turunda lintDebug de başarıyla tamamlandı.
+## Hakkımda / seyahat ekleme devam turu
+
+Hakkımda penceresinde klavye boşluğu, esnek alan/düğme, kaydedilebilir taslak, kayıt onayı/hata/yeniden deneme ve eski hesap sonucunu engelleme tamamlandı. Seyahat ekleme eylemi adlandırıldı, 48 dp oldu. **106 birim testi ve son tablet koşusunda 12 cihaz testi geçti.** Yeni iki cihaz testi izole Hakkımda içeriğinde saved-state taslak geri yükleme ve %200 yazı/küçük alanda kaydet eylemine erişimi doğrular. İlk koşu test temasının ekran boyutu sağlamaması nedeniyle çöktü; test kurulumu düzeltildikten sonra 12/12 geçti. Gerçek Firebase ve tam uygulama süreç ölümü testi değildir.
+
+Sıradaki UI düzeltmesi: AI geçmiş detayındaki işlevsiz eylemler ve yükleniyor/kayıt bulunamadı ayrımı.
+Hakkımda turunda lintDebug de başarıyla tamamlandı.
+
+## Geçmiş detayı devam turu
+Yükleme/yokluk/hata ayrımı, yeniden deneme, eski hesap/istek sonucu koruması ve işlevsiz geçmiş eylemlerinin gizlenmesi tamamlandı. 111 JVM testi, debug derleme ve lint geçti (0 hata, 194 uyarı). Bu tur cihaz testleri çalıştırılmadı. Ekran görüntülerinin önceki izole test saatleriyle eşleşmesi ayrıntılı rapora kaydedildi. Tam cihaz matrisi ve canlı doğrulamalar açık; 22/45 tamamlandı, 23 geniş madde açık. Sonraki UI incelemesi şehir araması ve bildirim eylemleri.
+
+## Şehir araması / bildirim erişilebilirliği devam turu
+
+Şehir ekranı artık kısa ve boş sorguyu da ViewModel'e iletiyor. Her yeni sorguda eski öneriler temizleniyor, sorgu trim ediliyor ve iptal edilmiş işin sonuç yayınlaması ensureActive ile engelleniyor. Ülke metni sabit Türkiye yerine veriden geliyor. Arama etiketi, varsayılan/sil eylem adları ve uzun öneri metni için ağırlık eklendi. Bildirim kartına kaydırma gerektirmeyen erişilebilir sil/okundu/seç eylemleri ve okunma/seçim durumu eklendi. Tam ekran klavye/büyük yazı ve gerçek TalkBack doğrulaması açık; tablet testleri bu tur çalıştırılmadı.
+
+Güncel kullanıcı özeti: [Yayın durum raporu](YAYIN_DURUM_RAPORU.md). Ana 45 madde: 22 tamamlanan, 23 açık. Alt düzeltmeler tüm cihaz matrisinin tamamlandığı anlamına gelmez.
+
+## AI geçmişi silme devam turu
+Tek/toplu silmede onay bekleme, görünür hata/yeniden deneme, 30 saniye sınırı ve hesap değişimi koruması eklendi. Üç yeni birim testi eklendi. Genel senkronizasyon ve canlı doğrulama açık; ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. 22/45 tamamlandı, 23 geniş madde açık.
+
+## Geçmiş senkronizasyonu devam turu
+Aktif dinleyicide uzaktan silme, yeni yerel sürümün korunması ve aynı ViewModel kayıt/silme sıralaması eklendi. Kalıcı ilk-açılış uzlaştırması ve cihazlar arası çatışmalar açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında; 22/45 tamamlandı, 23 geniş madde açık.
+
+## Sohbet kayıt onayı devam turu
+Kaydet ve bitir onay bekliyor; hata sohbeti koruyor, aynı ViewModel'deki yeniden deneme aynı kayıt kimliğini kullanıyor. Dört birim testi eklendi. İlk açılış uzlaştırması için kalıcı senkronizasyon durumu/migration işi açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. Ana durum 22/45 tamamlanan, 23 açık geniş madde.
+
+## Kalıcı geçmiş doğrulaması turu
+Room 17→18 ve syncedUpdatedAt ile tam sunucu snapshot'ına dayalı güvenli uzlaştırma eklendi. Bilinmeyen/pending/eski kayıtlar korunuyor. Kalıcı yeniden yükleme kuyruğu, süreç ölümü sonrası kayıt kimliği ve çok cihazlı çatışmalar açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. Ana liste 22/45 tamamlanan, 23 açık geniş madde.
+
+## Bekleyen kayıt kuyruğu turu
+Room 18→19 ve pendingUpload; yeniden açılışta aynı kimlikle gönderme, kullanıcı/sürüm bazlı onay ve görünür manuel yeniden gönderme eklendi. Kapalı uygulamada arka plan gönderimi, kalıcı silme tombstone'u ve çok cihazlı çatışmalar açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. 22/45 tamamlanan, 23 açık geniş madde.
+
+## Geniş kalite denetimi
+Kullanıcının 20 kategorili raporu KAPSAMLI_KALITE_DENETIMI_2026-10-22.md dosyasında takip ediliyor. Bildirim kimliği/boş liste/silme sonucu, ortak metin biçimi, şehir kaydırması ve lifecycle saat iyileştirmesi uygulandı. Kalıcı silme devam kaydı ve tüm cihaz/release/canlı matrisleri açık. 22/45 tamamlanan, 23 açık geniş madde korunuyor.
+
+## Kalıcı silme devam kaydı
+Room 19→20, kullanıcı/kimlik bazlı bekleyen ve tamamlanmış silme işaretleri; yeniden açılışta yüklemeden önce silme; aynı süreçte paylaşılan işlem kilidi eklendi. Canlı kesinti/çok cihaz ve arka plan yürütmesi açık. Ayrıntılar YAYIN_DURUM_RAPORU.md dosyasında. 22/45 tamamlanan, 23 açık geniş madde.
+
+27 Ekim yeni Git gönderim kapsamı: `7599ac9` sonrasındaki eksik hava verisi, risk/sıcaklık özeti, saat dilimi/zaman etiketi, konum değişimi temizliği ve sürüm koşullu analiz yazıları ile testleri. Son JVM koşusu 183 test başarılı; tarihsel “Push yapılmadı” notları ilgili turun durumudur. Saat dilimi bilinmeyen ilk açılış ve takvim filtreleri açık kalır.
+
+## 30 Ekim 2026 — Asistan entegrasyonu devamı
+
+Asistan köprüsünde hata cevabının başarılı sayılması ve hak tüketimi düzeltildi; ConnectError dışındaki otomatik tekrarlar kaldırıldı. Yerel backend: 77 geçti, 4 atlandı; Ruff geçti. Bu alt düzeltme ana listedeki geniş maddeleri kapatmaz. Platform sözleşmesi, sunucu rızası/veri minimizasyonu, hesap silme bağlantısı, atomik kota/istek tekilleştirme ve Android bağlam/sohbet/ton akışı açık. Detaylar YAYIN_DURUM_RAPORU.md içindeki 30 Ekim kaydında. Canlı test yapılmadı.
+
+30 Ekim devam: paralel kota için atomik koşullu SQL rezervasyonu ve hata iadesi eklendi; normal/premium ortak akış. Backend 79 geçti, 4 atlandı; 16 paralel yerel SQLite istek/3 hak testi geçti. Kalıcı request_id, süreç çökmesi kurtarması, tekrar gönderim tekilleştirme ve PostgreSQL eşzamanlılık doğrulaması açık; ana madde kapanmadı.
+
+30 Ekim kalıcı istek devamı: 0014 migration ile UID/request_id unique kayıt, atomik kota+istek yazımı ve süresi geçen rezervasyonun tek sefer iadesi eklendi. Backend 82 geçti, 5 atlandı; ayrı yerel PostgreSQL denetimi 5 geçti. Mobil request_id/tekrar akışı, platform idempotency ve sonuç kurtarma, rıza/veri minimizasyonu açık. 0014 üretime uygulanmadı; sıradaki Android sabit mesaj kimliği ve 409 davranışı.
+
+30 Ekim Android devamı: kullanıcı mesajı UUID'si request_id olarak gönderiliyor; tekrar aynı kimlikle, kullanıcı balonu çoğaltılmadan yapılır. 409 duplicate/expired ayrı açıklama ve terminal davranış; hata balonunda yeniden deneme düğmesi eklendi, salt okunur geçmiş dışlandı. Dört yeni testle ilk JVM koşusu 187/0 hata ve debug derleme başarılı. Canlı/tablet görsel kontrol, platform sonuç kurtarma ve kaydedilmemiş sohbet süreç ölümü açık. Sıradaki kota 429 ve Android hata ayrımı; yayın öncesi backend+0014 gerekir.
+
+30 Ekim hata sözleşmesi devamı: yerel günlük kota 429 daily_limit; genel hız sınırı 429 rate_limited ve Retry-After. Android kota/hız sınırı/servis/zaman aşımı ayrımı ve bekleme sırasında kapalı tekrar düğmesi eklendi. Backend 84 geçti, 5 atlandı; Ruff temiz. Platformun kendi 428/429 aktarımı, UTC/İstanbul geçişi, canlı/tablet matrisi açık. Sıradaki sunucu rıza kaydı ve sağlık verisi minimizasyonu.
+
+30 Ekim rıza devamı: 0015 ile sunucuda rıza+audit, GET/POST consent, sürüm/hash doğrulaması ve onaysız profil sağlık alanının çıkarılması eklendi. Metin yoksa 503, güncel onay yoksa 428; otomatik onay yok. Backend 95 geçti, 6 atlandı; ayrı PostgreSQL 6 geçti. Yeni sözleşme ASISTAN_RIZA_SOZLESMESI.md. Android rıza/onay ekranı henüz bağlanmadığı için bu backend aşaması tek başına yayımlanmamalı. Sıradaki Android ayrı onay/geri çekme ve 428/409 akışı; canlı/hukuki/platform bağımlılıkları açık.
+
+30 Ekim devam: Platform izin metni adaptörü eklendi; canlı etkinleştirme açık. Onay yazımında güncel metin yeniden doğrulanır. Sırada platform delete-user ve kalıcı hesap silme entegrasyonu.
+
+30 Ekim devam: Platform delete-user mevcut kalıcı hesap silme işine bağlandı; 47 hedefli yerel test geçti. Sırada platform hedefini iş bazında sabitleme ve silme sırasında eşzamanlı asistan isteklerini engelleme incelemesi. Gerçek servis/Firebase ve worker dağıtımı açık.
+Son yerel backend sonucu: 136 geçti / 6 PostgreSQL testi atlandı. Bu sonuç canlı Firebase/platform silme doğrulaması değildir.
+
+30 Ekim son devam: silme işi platform URL'si ve UUID'ye bağlandı (0016); ask için kota öncesi/sonrası silme engeli ve PostgreSQL kullanıcı satır kilidi eklendi. 41 hedefli test + örtüşen 17 silme testi; ayrıca izole PostgreSQL 16 üzerinde 8 test geçti. Eski işlerin bilinmeyen platform hedefi operatör doğrulaması gerektirir. Sırada Android silme-hatası sunumu ve diğer backend yazma yollarında silme izolasyonu. Canlı/üretim işleri açık.
+
+30 Ekim son adım: Ortak backend hesap silme erişim engeli (profil/cihaz/abonelik/Firebase/login/refresh) ve Android asistan terminal hata metni eklendi. 144 backend + ayrı PostgreSQL 8 + Android JVM 204 geçti; debug APK derlendi. Son auth düzenlemesi için örtüşen 9 hedefli test de geçti. Sırada arka plan bildirim/iş üreticilerinin silme sırasında davranışı ve uygulama genelinde ortak silme-durumu sunumu. Canlı/mağaza engelleri kapanmadı.
+
+30 Ekim bildirim adımı: backend push/ingestion silme engeli, uyarı geçerliliği ve sahte demo uyarı üretiminin kaldırılması; eski Android hava worker UID/silme/izin ve coroutine iptal kontrolleri; silmede eski hava işinin iptali eklendi. 17 hedefli backend ve 205 Android JVM testi geçti; debug APK derlendi. Gerçek FCM/cihaz iş testi açık. Sırada tekrarlanan backend bildirimlerinin idempotency incelemesi ve uygulama genelinde silme/bildirim-hesap geçişleri.
+
+30 Ekim gönderim adımı: 0017 ile kalıcı Alert/kullanıcı/token-hash gönderim hakkı eklendi; tekrar kuyruk ve 16 paralel PostgreSQL çağrısı tek sağlayıcı denemesi yapar. 34 hedefli test ve PostgreSQL 9 geçti. Belirsiz/çökmüş gönderim körlemesine tekrarlanmaz; kayıp ihtimali ve SDK/cihaz exactly-once sınırı açık. Ayrıntı BILDIRIM_GONDERIM_SOZLESMESI.md. Sırada Android bildirim tıklama/hesap geçişi ve olay kimliğiyle güvenilir tekrar protokolü.
+Son arka plan test dosyası: 16 geçti; önceki hedefli paketle örtüşür. Android bu adımda değişmedi. Canlı migration ve FCM denemesi açık.
+
+30 Ekim Android bildirim adımı: PendingIntent UID/ID, cold/warm launch sahiplik kontrolü, hesap bazlı nav controller, auth değişiminde tray temizliği, bildirim merkezi güncel-kayıt kontrolü ve rota allowlist/ID encoding eklendi. Gerçek cihaz Activity/PendingIntent ve process-death kontrolü açık. Sırada token devri/gecikmiş FCM ve bildirim tıklaması cihaz matrisi; backend olay kimliği ve güvenilir tekrar sözleşmesi açık kalıyor.
+Android son doğrulama: 208 JVM testi geçti, debug APK derlendi. Bildirim tıklaması Activity/PendingIntent/hesap geçişi cihaz testi hâlâ açık; JVM policy testleri bunun yerine geçmez.
+
+30 Ekim token devri: atomik kayıt + sahiplik koşullu unregister tamamlandı; 22 hedefli backend ve izole PostgreSQL 10 testi geçti. Yeni yayın engeli açıkça doğrulandı: aktif Kotlin'de FCM service/token senkronizasyonu eksik. Sırada FCM_HESAP_IZOLASYONU.md tasarımındaki alıcı, session-generation ve owner/event protokolünü uygulama. Geç A REGISTER, gecikmiş notification payload ve gerçek FCM teslimi kapanmış sayılmaz.
+
+30 Ekim FCM alıcı aşaması: Kotlin messaging service + owner/event/expiry zarf kontrolü, hesap epoch'u ve Room primary-key dedup eklendi. Auto-init kapalı. Token/auth kayıt kuyruğu ve server data-only/capability geçişi sırada; FCM yayın engeli kapanmadı. Cihaz Room/Service concurrency ve gerçek teslim açık.
+FCM alıcı doğrulaması: 216 Android JVM testi geçti, debug APK başarılı; birleşik manifest non-exported/auto-init=false kontrol edildi. Backend kayıt kuyruğu ve sunucu data-only/capability sözleşmesi sırada.
+
+30 Ekim token kuyruğu: kalıcı yerel revision journal + SDK/auth/silme callback bağlantıları ve owner-bound data mesaj provider'ı eklendi. HTTP gönderim adaptörü bağlı değil; FCM auto-init ve backend FCM_OWNER_PROTOCOL_ENABLED kapalı. Backend 168 geçti / 10 PG atlandı; son provider 9 geçti. Sırada sunucuda revision CAS/tombstone + capability ve makbuz sözleşmesi; sonra WorkManager/gateway ve cihaz testleri. Eski REGISTER'ın B kaydını geri alması henüz kapanmadı.
+
+30 Ekim backend token revision: 0018 ve token-hash bazlı CAS/tombstone + capability eklendi; eski REGISTER ve legacy downgrade engellendi. İlgili 26 test ve ayrı PostgreSQL 12 geçti; önceki token kuyruğu son kaynaklarıyla Android JVM 222 geçti, debug APK başarılı. Sırada gerçek gateway/WorkManager + server makbuz doğrulama; offline logout/rotation/reinstall ve cihaz testleri açık. FCM etkinleştirme/migration canlıya uygulanmadı.
+Son backend sonucu: 173 geçti / 12 opt-in PG normal pakette atlandı; ayrı izole PG audit 12 geçti. Mevcut SDK deprecation uyarıları sürüyor. Gerçek gateway henüz bağlanmadı.
+
+P1 — Kullanıcı bildirimi (30 Ekim): Asistan izin ekranında Tekrar dene aynı duruma dönüyor; geri çekme ikinci durum gösteriyor. Görsel dosyaları erişilemediği için hata metni/başarı varsayılmadı. Yerel kod tüm GET hatalarını tek bağlantı mesajına indiriyor; 401/403/404/503/timeout ayrımı, retry ve revoke başarı/başarısızlık testleri düzeltme sırasına eklendi. FCM işleri bu maddeyi kapatmaz. Canlı endpoint/metin yapılandırması henüz doğrulanmadı.
+
+P1 asistan izin kaydı görselle doğrulandı: metin alınamıyor ve izin geri çekilemiyor (başarı yok). Ayrıca kısa hata için %92 yüksekliğe zorlanan boş tablet dialog'u ve revoke hatasından sonra metin yükleyen belirsiz Tekrar dene akışı eklendi. Aynı P1 maddesinin kapsamıdır; mükerrer yeni sorun sayılmadı. Gerçek servis hata nedeni henüz bilinmiyor.
+
+P1 asistan izin istemcisi: hata ayrımı, doğru işlem retry, başarısız revoke'da yerel/persist edilmiş gönderim engeli, açık başarı mesajı ve kompakt/scrollable dialog eklendi. İlk 227 JVM testi ve tablette 4/4 izole dialog testi geçti. Son reopen/no-auto-POST testi dahil final 227 JVM testi ve debug APK derlemesi geçti; son APK adb install -r ile tablete yüklendi. Gerçek endpoint/auth/servis nedeni loglarda bulunamadı; P1 uçtan uca kısmı açık, canlı test yapılmadı. FCM gateway/WorkManager sonraki sırada korunuyor.
+
+30 Ekim yerel güvenlik/telemetri devamı: hava snapshot boyutu ve saat farkı, güvenli API doğrulama cevabı, köprü traceback, Sentry hata raporu, metrik etiketleri ve takip kimliği kontrolleri uygulandı. Detay/test kanıtları ASISTAN_PLATFORM_V3.md ve YAYIN_DURUM_RAPORU.md içinde. Bunlar canlı asistan bağlantısını veya FCM yayın engellerini kapatmaz. FCM gerçek gateway/WorkManager/makbuz doğrulaması, cihaz hesap geçişleri ve canlı asistan izin/sohbet doğrulaması sırada korunur.
+
+FCM devamı: Android Retrofit kayıt/makbuz adaptörü ve 4 yeni test eklendi; 240 JVM ve debug APK başarılı. Sırada WorkManager ile UID/epoch bağlı auth/401 yenileme, 409/429 politikası ve cihaz testleri var. FCM etkinleştirme kapalı; bu adım uçtan uca senkronizasyonu tamamlamaz.
+
+FCM WorkManager devamı: planlama ve kalıcı retry çekirdeği kapalı flag arkasında uygulandı; 246 JVM testi ve APK başarılı. Sırada cihazda Worker/AtomicFile/process-death/offline doğrulaması, ilk token bootstrap/rotation ve server unbind-kurtarma var. Canlı rollout ve kimlik eşleşmesi kontrolü olmadan flag açılmayacak.
+
+2 Kasım FCM devamı: AtomicFile gerçek cihaz alt adımı 5/5 ve JVM 247/247 geçti; boyut/UTF-8/tutarlı metadata düzeltildi. Worker/process-death/offline cihaz matrisi hâlâ açık; gerçek güç kesintisi veya canlı FCM doğrulaması yapılmadı. İlk token bootstrap, rotation/reinstall, server unbind ve staging rollout sırası korunuyor.
+
+2 Kasım Worker kararları: 253 JVM ve cihazda 8 seçili test geçti. Kapalı flag gerçek WorkManager girişi doğrulandı; açık flag auth/HTTP, gerçek süreç ölümü/offline, retry deadline disk yazım hataları ve ilk token/unbind/rotation matrisi hâlâ açık. Son değişiklikler push edilmedi.
+
+2 Kasım retry/disk devamı: 429 deadline/ack yazımında önce/sonra hata enjeksiyonu yerelde düzeltildi; 260 JVM ve 9 seçili cihaz testi başarılı. Belirsiz sonuç için 24 saat + 3 dakika koruma vardır; FCM açılmadan bu gecikme/kurtarma politikası değerlendirilmeli. Gerçek süreç ölümü, saat değişimi, offline cihaz matrisi, ilk token/unbind/rotation ve canlı staging açık. Son değişiklikler push edilmedi.
+
+2 Kasım auth devamı: geçersiz kullanıcı SDK hatası ve kalıcı authRequired engeli eklendi; 264 JVM ve cihazda 11 seçili test başarılı. Kurtarma durumunun ayarlarda sunumu, ilk token alma, logout server unbind, gerçek saat/process-death/offline/staging matrisi açık. Son değişiklikler push edilmedi.
+
+2 Kasım kritik öncelik: önbellek düğmesinin yerel seyahatleri silmesi düzeltildi; 267 JVM ve 3 izole cihaz testi geçti. FCM yeniden giriş/kurtarma UI adımı açık tutuluyor. Ayarlar eylem-açıklama tutarlılığı incelemesi devam ediyor; son düzeltmeler push edilmedi.
+
+2 Kasım ayarlar devamı: desteklenmeyen İngilizce seçiminin çalışıyor gibi görünmesi düzeltildi; 269 JVM ve 4 seçili ayarlar UI testi geçti. Önbellek veri koruma testi önceki koşuda başarılı. Tam native çok dillilik/assistant language wire, bildirim kurtarma UI ve bildirim izin-açıklama kontrolleri açık. AYARLAR_KONTROL_RAPORU.md eklendi; son değişiklikler push edilmedi.
+
+2 Kasım bildirim ayarları: uygulama tercihi/sistem izni ayrımı ve Android 13 öncesi gerçek sistem kontrolü düzeltildi; 271 JVM ve 4 cihaz arayüz/lifecycle testi geçti. Android 13+ gerçek ret/kalıcı ret, OEM/kanal davranışı ve FCM auth kurtarma UI açık. Son değişiklikler push edilmedi.
+
+2 Kasım ayar dayanıklılığı: 20 tercih akışında okuma hatası ve 14 temel yazımda disk hatası/UID bağlı sonuç kontrolü eklendi. 277 JVM ve 2 izole tablet UI testi geçti. Sırada şehir/profil/bulut yazımları ve toplu sıfırlama hata/hesap izolasyonu, paylaşılan hava durumu temizliğinin geçiş etkisi incelemesi ve FCM auth kurtarma UI var. Canlı servis/mağaza yayın engelleri korunuyor; son değişiklikler push edilmedi.
+
+2 Kasım şehir işlemleri: aynı ThemeViewModel örneğindeki düzenlemeler sıraya alındı; disk sonrası UID/iptal kontrolleri, görünür işlem hatası ve varsayılan şehir silme engeli eklendi. 282 JVM ve 2 izole tablet UI testi geçti. Kalıcı şehir senkronizasyon kuyruğu/snapshot uzlaştırması, farklı ViewModel/cihaz eşzamanlılığı, profil gözlemcileri ve reset akışları açık; FCM auth kurtarma ve önceki yayın engelleri korunuyor. Son değişiklikler push edilmedi.
+
+2 Kasım şehir dinleyicisi izolasyonu: callback/disk/yayın aşamalarında UID, iptal ve dinleyici sürümü kontrolü eklendi; 288 JVM ve debug APK başarılı. Kalıcı şehir kuyruğu, aynı oturum snapshot uzlaştırması, offline retry, çok örnek/cihaz çatışmaları, profil/reset ve FCM kurtarma adımları açık. Bu adım canlı Firebase doğrulaması değildir; push edilmedi.
+
+2 Kasım kalıcı şehir kuyruğu: yerel listeyle atomik istenen durum/UUID kaydı, açılışta UID bağlı yeniden gönderme ve yalnız uzak yazı onayı+sunucu snapshot eşleşmesiyle temizleme eklendi. Uzak onay yerel düzenleme kilidini tutmuyor. 292 JVM ve tablette 1 izole kalıcı depolama testi geçti. Varsayılan şehir kuyruğu, snapshot sıralaması, çok örnek/cihaz çatışmaları, backoff/kalıcı hata ayrımı, WorkManager ve canlı offline/Firebase doğrulaması açık. Profil/reset, FCM kurtarma ve diğer yayın engelleri korunuyor; push edilmedi.
+
+2 Kasım snapshot sırası: her şehir dinleyicisi için tek tüketici ve yalnız son bekleyen snapshot'ı tutan sınırlı kanal eklendi. 295 JVM ve debug APK başarılı. Aynı dinleyicinin eski/yeni kayıtlarının birbirini geçmesi engellendi. Varsayılan konum kuyruğu, yerel düzenleme ile UI yayın sırası, çok örnek/cihaz çatışması, kontrollü retry ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım varsayılan konum: seçimle atomik UID/UUID gönderim kaydı, oturum açılışında retry ve yalnız onay+sunucu eşleşmesiyle temizleme eklendi. Eski profil bekleyen seçimi ezmez; şehir listesi sonradan gelince eşleştirme yinelenir. 295 mevcut JVM testi ve tablette 2 izole depolama testi geçti. Sırada aynı adlı konumlar için kimlik sözleşmesi, yerel/sunucu yayın yarışı, çok örnek/cihaz sırası, kontrollü retry, profil/reset ve FCM kurtarma var. Canlı Firebase/offline/mağaza engelleri açık; push edilmedi.
+
+2 Kasım konum yayın yarışı: şehir/varsayılan state için DataStore akışı tek kalıcı kaynak yapıldı; geciken metod dönüşlerinin doğrudan state yazımı kaldırıldı. Çağrılmayan resetCities/resetAllData kaldırıldı. 295 JVM ve tablette 4 izole depolama testi geçti. Yerel kararların kalıcı veriden atomik doğrulanması, çok örnek/cihaz gönderim sırası, konum kimliği sözleşmesi, kontrollü retry ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım atomik şehir kararları: ekleme/silme doğrulaması UI state'inden DataStore edit içine taşındı. Aynı kimlik, son/varsayılan/bulunmayan kayıt kontrolleri kalıcı veriden yapılır; reddedilen işlem kuyruk/uzak isteği değiştirmez. 295 JVM ve tablette 5 izole depolama testi geçti. Çok örnek/cihaz uzak yazım sırası, konum kimliği sözleşmesi, retry/backoff, canlı doğrulama, profil/temizlik ve FCM kurtarma maddeleri açık; push edilmedi.
+
+2 Kasım uzak gönderim sırası: aynı süreçte paylaşılan, sınırlı kilit tablosu ile şehir/varsayılan gönderimi sıraya alındı. Payload kilit alındıktan sonra yeniden okunur; onaylı değer tekrar gönderilmez. 299 JVM ve debug APK başarılı. Kontrollü retry/backoff, offline bekleyen görev birleştirme, çok cihaz sunucu protokolü, hesap silme yarışları, konum kimliği ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım offline gönderim talepleri: aynı oturum/kaynak için tek aktif eylem ve tek takip sinyali eklendi; hata/iptalde otomatik tekrar yok. Konum hata penceresine Eşitlemeyi tekrar dene eklendi; son kalıcı kuyruk okunur. 303 JVM ve tablette 4 izole UI testi geçti. Kalıcı backoff/jitter, hata sınıflaması, WorkManager, hesap silme/gönderim yarışı ve canlı offline/Firebase doğrulaması açık; push edilmedi.
+
+2 Kasım kalıcı retry: şehir/varsayılan kaydına UID/UUID bağlı hata kategorisi ve jitter'lı 30 sn→en çok 2250 sn bekleme eklendi. Bekleme/engelde ağ yok; auth oturum hazırlığı ve açık kullanıcı kurtarması ayrıldı. 307 JVM ve tablette 3 izole depolama testi geçti. Kuyrukta öğe bazlı devam, açıklayıcı bekleme/ret UI, disk hatası/saat matrisi, WorkManager ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım öğe bazlı devam: bekleme/engel/hata dönen şehir kaydı sonraki öğeyi durdurmuyor. Bekleme dakikası, auth ve sunucu reddi için güvenli açıklamalar eklendi. 312 JVM ve tablette 6 izole UI testi geçti. Hiç yanıt dönmeyen isteğin bekletmesi, toplu durum sunumu, retry disk hatası/saat garantileri, WorkManager ve canlı doğrulama açık; push edilmedi.
+
+2 Kasım yanıtsız istek/disk güvenliği: gönderim öncesi UID/UUID CAS ile durable 2310 sn fence ve 60 sn yerel await timeout eklendi. Timeout onay değil; sonraki öğeye geçilebilir. Sonraki hata/onay disk yazımı başarısız olsa da fence korunur; belirsizlikte yaklaşık 39 dk bekleme maliyeti vardır. 316 JVM ve tablette 2 izole depolama testi geçti. Saat değişimi, gerçek SDK geç yanıt/offline, hesap silme yarışı ve WorkManager açık; push edilmedi.
+
+2 Kasım hesap silme/konum yarışı: pending/busy durumunda dispatcher read/send/ack/failure ve bütün CitySyncStore edit transform'ları engellendi; temizlik sonrası eski konum yazımları yerel anahtarları geri oluşturmuyor. 319 JVM ve tablette 2 izole depolama testi geçti. Başlamış uzak Firestore yazısının sunucuda reddi, diğer depoların tam yazım matrisi, saat değişimi/WorkManager ve canlı silme doğrulaması açık; push edilmedi.
+
+2 Kasım saat dayanıklılığı: şehir retry'si elapsedRealtime+boot kimliğiyle ölçülür; duvar saati aynı açılışta erken gönderim/uzun bekleme oluşturmaz. Reboot/eski metadata için UUID CAS ile sınırlı kalıcı bekleme yeniden kurulur. 323 JVM ve tablette 2 izole depolama testi geçti. Gerçek reboot/OEM matrisi, fallback UX, WorkManager, diğer depoların silme guard'ı ve canlı servis doğrulaması açık; push edilmedi.
+
+2 Kasım profil silme koruması: otomatik profil oluşturma sunucu yokluğu+UID/iptal/pending-busy kontrolüne bağlandı; profil snapshot DataStore transform'u silme sırasında yazmıyor. 328 JVM ve tablette 2 izole depolama testi geçti. Öncelikli sırada çok istemci profil oluşturmayı atomik/create-if-absent yapmak ve geç profil hata yayınını guard'lamak var; tekil profil/tercih, avatar, diğer depolar ve canlı silme matrisi açık. Push edilmedi.
+
+2 Kasım profil oluşturma yarışı: ayrı get/set yerine transaction içinde create-if-absent; retry callback'inde canlı Job/UID/silme guard'ı ve geç profil hata yayını koruması eklendi. 331 JVM ve debug APK başarılı. Gerçek Firestore transaction/kurallar testi açık; sırada tekil profil/tercih, avatar ve kişiselleştirme silme/oturum matrisi var. Önceki paket b69f579 push edildi; bu ek değişiklikler henüz push edilmedi.
+
+2 Kasım tekil profil: Auth/Firestore/yerel yazımlar arasında UID/iptal/silme aşama guard'ları, atomik ad-bio/ilgi-onboarding cache ve ProfileSaveController reset generation kontrolü eklendi. 337 JVM ve tablette 1 mevcut izole profil depolama testi geçti. Sırada avatar uzak yazım/silme ve hata/log gizliliği, atomik ilgi alanı güncellemesi, iptal UI matrisi ve diğer depolar var; canlı Firebase açık. Bu ekler henüz push edilmedi.
+
+3 Kasım avatar: tek ViewModel'de upload/delete single-flight, UID/iptal/silme aşama guard'ları, iptalde upload cancel talebi, yalnız object-not-found toleransı ve güvenli sabit hata metinleri eklendi. URI/indirme URL logları kaldırıldı; sonuç bitmap'i recycle edilir. 342 JVM ve debug APK başarılı. Gerçek Storage/Blaze/izin/kota, orphan kurtarma, çok cihaz çatışması ve büyük/EXIF görsel matrisi açık; sırada atomik ilgi alanı güncellemesi ve avatar görsel hazırlama doğrulaması var. Henüz push edilmedi.
+
+3 Kasım ilgi alanı: eski UI listesini bütünüyle yazan toggle yolu yerine açık seçim niyeti ve transaction'ın güncel listesini kullanan hedefli güncelleme eklendi. 346 JVM ve debug APK başarılı. Canlı/emulator çakışması, chip pending/offline UX, tam kişiselleştirme formuyla eşzamanlılık ve avatar görsel hazırlama matrisi açık. Avatar ve bu ekler henüz push edilmedi.
+
+3 Kasım görsel hazırlama: tüm 8 EXIF yönü, örneklenmiş decode, oranı koruyan en çok 512 piksel JPEG ve bitmap/stream sahipliği ayrı işleyiciye taşındı. 349 JVM ve tablette 4 sentetik görsel testi geçti. Gerçek galeri/codec/URI izni, düşük bellek, çıktı metadata gizliliği ve gerçek Storage matrisi açık; tam kişiselleştirme formuyla çakışma ve diğer depoların silme kontrolleri de korunuyor. Henüz push edilmedi.
+
+3 Kasım avatar metadata/hata: özel kaynak EXIF alanlarının yeni JPEG'e taşınmaması doğrulandı; decode sonrası stream.close hatasında bitmap sahipliği ve ek iptal kontrolü düzeltildi. 349 JVM ve tablette 8 sentetik görsel testi geçti (4 yeni). Gerçek galeri/codec, XMP/IPTC/ICC, URI içeriğinin okumalar arasında değişmesi, düşük bellek ve Storage canlı matrisi açık. Henüz push edilmedi.
+
+3 Kasım avatar kaynak tutarlılığı: URI tek kez açılır; EXIF/bounds/decode aynı, bellekte parçalı ve en çok 20 MB kaynak görüntüsünden yapılır. Büyük kaynak açık mesajla reddedilir. 353 JVM ve tablette 9 sentetik görsel testi geçti. Gerçek galeri/codec, bloklanan sağlayıcı, düşük bellek, ek metadata ve Storage canlı matrisi açık. Henüz push edilmedi.
+
+3 Kasım format/akış: şeffaf bitmap JPEG öncesi beyaz zemine birleştirilir; kaynak okuyucu tam uzunluk ve parça aşan mark/reset/skip destekler. 356 JVM ve tablette 13 sentetik görsel testi geçti. Gerçek galeri/HEIC/animasyon/codec, düşük bellek ve canlı Storage doğrulaması açık. Diğer depo hesap silme matrisi ve önceki yayın engelleri sırada korunur. Henüz push edilmedi.
+
+3 Kasım bildirim deposu: Room 5→6, hesap temizliğiyle atomik SHA-256 UID engeli ve geç insert/incoming/update koruması eklendi. Çapraz UID aynı-id overwrite engellendi; normal inbox temizliği gelecekteki bildirimleri kapatmıyor. 357 JVM ve tablette 4 izole Room/migration testi geçti (4→6, 5→6). Seyahat/AI deposu, geç OS bildirim yayını, yerel hash işaretinin gizlilik metninde değerlendirilmesi ve canlı silme/FCM açık. Henüz push edilmedi.
+
+3 Kasım seyahat/AI deposu: Room 22→23 ve atomik hesap temizliği+özet engeli eklendi; plan/AI/analiz ve kuyruk geç yazımları korumalı yollarda reddedilir. SHA-256 helper iki depoda ortaklaştırıldı. 357 JVM ve tablette 8 izole Room testi geçti; 11→23, 20→23, 22→23 yolları doğrulandı. Paylaşılan hava cache'i geç yanıtı, OS bildirim yayını ve canlı silme/uzak işlem matrisi açık. Henüz push edilmedi.
+
+3 Kasım geç hava yanıtı: hesap temizliği repository epoch'unu artırır; cache yazımıyla aynı kilitte temizler. Eski cold flow/yanıt/hata silme kurtarması sonrasında da geçersizdir; pending silmede yeni akış başlamaz. 357 JVM ve tablette 5 izole Room/sahte API testi geçti. Sırada OS bildirimi geç gönderim guard'ı ve silme dışı A/B/A ortak hava state'i kontrolü var; canlı servis matrisi açık. Henüz push edilmedi.
+
+3 Kasım OS yayın yarışı: hava/seyahat/FCM data-only notify çağrıları canlı UID/epoch/Job/izin/silme kontrolleriyle ortak kapıya alındı; epoch+cancelAll aynı kapıda sıralanır. Worker epoch ve kalıcı DB hesap engeli kontrolü, route analizinde iptal propagasyonu eklendi. 361 JVM ve debug APK başarılı. Gerçek OS/OEM/SDK auth matrisi, app tercihi hazırlıkta kapanması, ilk açılış tepsi temizliği ve server data-only rollout açık. Sırada silme dışı A/B/A ortak hava state'i ve diğer yayın kontrolleri var. Henüz push edilmedi.
+
+
+3 Kasım — normal hesap geçişinde ortak hava durumu
+- Sorun: hesap silmede istek generation kontrolü vardı; normal hesap değişiminde eski hava akışı, özellikle A→B→A dönüşünde, ortak görünür veriyi yeniden doldurabiliyordu. Farklı ViewModel dinleyicileri aynı hesap için de ortak veriyi temizliyordu.
+- Düzeltme: repository istekleri UID ve generation yakalar; uygulama ömürlü Auth dinleyicisi hesap değişiminde generation artırıp görünür veriyi temizler. Yayından önce canlı UID de denetlenir. Weather/Theme dinleyicileri aynı hesaba tekrarlanan çağrılarda idempotent olan aynı yolu kullanır. Görünür veri yayını ve sıfırlama kısa ortak kilitte sıralanır.
+- Kapsam: genel koordinat bazlı hava önbelleği normal hesap geçişinde silinmez; hesap silmede önceki tam cache temizliği korunur. Daha önce başlamış genel cache yazımı normal geçişte tamamlanabilir; eski hesabın görünür durumuna yayın yapamaz.
+- Doğrulama: 361 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 6/6 izole Room/sahte API testi başarılı. İki yeni test A→B→A, eski cold flow, yinelenen hesap callback, çıkış ve Auth callback gecikmesini kapsıyor; dört mevcut hesap silme testi de geçti. Gerçek Firebase/hava servisi ve kullanıcı verisi kullanılmadı.
+- Açık: gerçek Firebase SDK ile hızlı A/B/A, süreç yaşam döngüsü ve tüm ekran görsel matrisi; asistan snapshot çağrılarının tüketici yaşam döngüsü. Sonraki adım: bildirim hazırlanırken uygulama içi bildirim tercihi kapatıldığında son yayın kontrolü. Önceki paket e925253 GitHub'a gönderildi; bu ek değişiklik henüz push edilmedi.
+
+
+3 Kasım — bildirim tercihi hazırlık sırasında kapatılırsa geç gönderim
+- Sorun: hava/seyahat/FCM data-only yolları uygulama içi tercihi yalnız hazırlık başlangıcında okuyordu; uzun hazırlık sırasında kapatılan tercih son notify öncesinde denetlenmiyordu.
+- Düzeltme: üç yol da son gönderim yardımcısında UID'ye ait güncel DataStore tercihini okur. Tercih kaydı ile son okuma+senkron notify aynı coroutine Mutex'i kullanır. Tamamlanan kapatma kaydından sonra yeni bir post kabul edilmez. Tercih okuma hatası kapalı davranır; iptal kontrolü bekleme/okuma sonrasında yeniden yapılır. Ağ ve Room hazırlığı bu kilidin dışındadır.
+- Sınır: native notify zaten kabul edilmişse ayar kaydı onun bitmesini bekler; mevcut tepsi bildirimleri bu adımda kaldırılmaz. Uygulama içi inbox/dedup kaydı önceden yazılmış olabilir; OS yayın başarısı/kayıt telafisi ayrı açık iş olarak korunur. FCM notification payload'ın SDK tarafından otomatik gösterilmesi bu data-only korumasının dışındadır; server data-only sözleşmesi ve rollout doğrulaması açık.
+- Doğrulama: 365 JVM testi (0 hata) ve debug APK başarılı. Dört yeni test: hazırlıktan sonra kapatma, bekleyen tercih kaydını izleyip son değeri okuma, okuma sırasında iptal ve okuma hatasında post etmeme/kilidi bırakma. Post sahte callback ile doğrulandı; bu adımda gerçek OS bildirimi veya Firebase çağrısı yapılmadı.
+- Sonraki: bildirim kaydı ile OS gönderiminin başarısızlık/yeniden deneme/dedup davranışı; gerçek OS izin/kanal/OEM ve Firebase uçtan uca matrisi. Canlı FCM açılmadı; henüz push edilmedi.
+
+
+3 Kasım — FCM başarısız/engellenmiş gönderimin dedup kaydını serbest bırakma
+- Sorun: inbox kaydı oluşturulup TTL/izin/oturum/tercih veya gönderim hatası nedeniyle notify yapılamazsa sonraki aynı event duplicate sayılıyordu. Insert sonrası iptalde oturum temizliği de atlanabiliyordu.
+- Düzeltme: deliverFcmRecord yeni kaydın sahipliğini gönderim sonucuna kadar taşır. Son yayın false dönerse, hata verirse veya hazırlık iptal olursa yalnız o girişimin yeni kaydı NonCancellable yerel temizliğiyle silinir. Duplicate girişim mevcut kayda dokunmaz; senkron native notify başarıyla döndüğünde kayıt korunur. Insert sonrası iptal/oturum değişimi de temizlik yapar.
+- Doğrulama: 370 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 2/2 yeni izole Room testi başarılı. Beş yeni JVM testi başarısız/atlanmış gönderimde yeniden deneme, başarı sonrası dedup, çapraz kayıt koruması, insert sonrası/hazırlık sırasında iptal ve eşzamanlı duplicate sahipliğini kapsar. Cihaz testleri gerçek Room üzerinde retry/dedup/UID temizliği ve iptal temizliğini doğrular. Native post sahte callback; gerçek Firebase veya OS bildirimi kullanılmadı.
+- Sınırlar: native notify'nin hatasız dönmesi tepside görünme kanıtı değildir (kanal/OEM/OS matrisi açık). Süreç ölümü, DB temizleme hatası veya insert sonucunun iptalle belirsiz kaldığı pencere için kalıcı teslim journal/kurtarma henüz yok. Yerel otomatik yeniden teslim planlanmaz; bu düzeltme aynı geçerli event yeniden geldiğinde denemeyi mümkün kılar. FCM server rollout ve gerçek cihaz bildirimi hâlâ açık; aktivasyon flag'leri değiştirilmedi.
+- Sonraki: hava/seyahat bildirimlerinde inbox/dedup/daily tracking ile sistem gönderiminin telafisi, atomik dedup ve süreç ölümünde kalıcı teslim kurtarması. Diğer yayın engelleri korunur. Henüz push edilmedi.
+
+
+3 Kasım — hava/seyahat yerel gönderim telafisi ve atomik dedup
+- Sorun: hava/route bildirimlerinde ayrı exists+insert yarışı vardı; inbox kaydı sonrası engellenmiş native post gelecekteki denemeleri bastırabiliyordu. Seyahat günlük tarihi post yapılmasa da yazılıyordu; günlük tarih varsa tüm route kontrolü de atlanıyordu.
+- Düzeltme: NotificationDao.reserveForDelivery transaction'ı UID silme engeli, id sahipliği ve UID+dedup anahtarını tek işlemde denetleyip IGNORE insert yapar; şema değişmez. Yerel teslim yardımcısı reserve/post/başarısızlık temizliğini süreç içi Mutex'te sıralar; ikinci görev henüz tamamlanmamış girişimi başarı sayamaz. false/hata/iptalde yalnız yeni ayrılmış kayıt NonCancellable temizlenir. Başarılı veya daha önce kayıtlı event tekrar yazılmaz; isRead korunur. Hava worker'ı hata yutan repository insert yolundan çıkarıldı.
+- Seyahat: showSystemNotification Boolean sonuç döndürür; SKIPPED sonucunda günlük tarih işaretlenmez. Gönderim hataları cancellation korunarak WorkManager retry'ına dönüşür. Günlük özet daha önce gönderilmişse route kontrolü yine çalışabilir. Güzergâh ready/daily bildirimleri de aynı teslim yardımcısını kullanır.
+- Doğrulama: 374 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 5/5 izole Room testi başarılı (2 yeni teslim testi + 3 mevcut hesap silme/migration testi). Dört yeni JVM testi reservation sonucu, false/hata telafisi, iptal temizliği ve eşzamanlı ikinci girişimin temizlik sonrasına kadar beklemesini kapsar. Cihazda aynı UID+key için 30 eşzamanlı rezervasyondan yalnız biri kayıt açtı; A/B ayrımı, silme engeli, retry/dedup ve isRead korunması geçti. Native post sahte callback; gerçek Worker/OS/Firebase uçtan uca çalıştırılmadı.
+- Sınırlar: önceden kalmış kayıtlar teslim edildi varsayımıyla korunur; eski başarısız kayıtları otomatik onarma yok. Süreç ölümü, belirsiz native notify sonucu, insert sonucunda iptal veya cleanup disk hatası kalıcı teslim journal'ı gerektirir. Mutex varsayımı tek varsayılan uygulama sürecidir; çok süreçli teslim protokolü kurulmadı. Başarılı notify tepside gösterim kanıtı değildir. İzin/tercih kapalıysa yerel otomatik retry yok, sonraki normal çalışma denemesi engellenmez. Gerçek Worker/OS/Firebase matrisi açık.
+- Sonraki: süreç ölümünde kalıcı teslim journal/kurtarma ve OS kanal/izin kontrolü; hava sistem bildirimindeki sabit id ile birbirini ezme ve rota/özet günlük takip davranışının canlı cihaz matrisi de sırada. Henüz push edilmedi.
+
+
+3 Kasım — sistem bildirim kanalı/grup engelinde teslim tüketmeme
+- Bulgu: uygulama düzeyindeki runtime izin ve areNotificationsEnabled kontrolü zaten vardı; ilgili kanal IMPORTANCE_NONE olduğunda veya grubu engellendiğinde native notify hatasız dönüp yerel kayıt/daily işaretini tüketebiliyordu.
+- Düzeltme: hava/seyahat/FCM data-only son post kapısında PermissionHelper.canPostToChannel çağrısı yapar. Kanal oluşturulduktan sonra güncel uygulama izni+kanal importance+API 28 ve üzeri group.isBlocked okunur. Eksik kanal/grup ve okunamayan sistem politikası gönderimi durdurur. API 26 öncesi mevcut uygulama izin politikası kullanılır. MIN/LOW gibi sessiz kanallar açık kabul edilir. Kanal id/ayarları değiştirilmez, kullanıcı engeli yeni kanal açılarak aşılmaz.
+- Etki: kapalı kanal false sonucu önceki teslim telafisini tetikler; o girişimin yeni kaydı temizlenir ve seyahat günlük tarihi yazılmaz. Native notify zaten başladıktan sonraki sistem değişikliği atomik yakalanamaz; hatasız notify tepsi görünürlüğünün garantisi değildir.
+- Doğrulama: 378 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 2/2 gerçek kanal API testi başarılı. Dört yeni JVM testi API<26, eksik/NONE/geçersiz importance, sessiz açık kanal ve API 28+ grup engeli politikasını kapsar. Cihaz testleri yalnız rastgele test kanalları/grubu oluşturup siler; eksik/kapalı/sessiz kanal, yeniden oluşturmanın kapalı kanalı açmaması ve grup silinmesinden sonra reddetme doğrulandı. Gerçek kullanıcı tarafından grup engeli/API 33+ izin/notify görünürlüğü doğrulanmadı.
+- Açık/sıradaki: süreç ölümünde kalıcı teslim journal/kurtarma; API 33+ gerçek izin reddi, kullanıcı tarafından grup engeli ve OEM/tepsi matrisi; sabit hava notify id ve diğer yayın engelleri. Gerçek kullanıcı kanalı/izni değiştirilmedi, gerçek OS bildirimi/FCM gönderilmedi. Henüz push edilmedi.
+
+
+3 Kasım — kalıcı teslim takibi ve önceki süreçten kalan rezervasyonu kurtarma
+- Room 6→7: notification_pending_deliveries(notificationId,userId,processId) eklendi. Bildirim+pending aynı transaction'da yazılır; foreign key ON DELETE CASCADE ile inbox/hesap temizliği journal'ı da temizler. Önceki sürüm kayıtları değiştirilmez.
+- Uygulama çalışma kimliği yalnız bellekteki tek UUID'dir. Auth başlangıcında aynı UID'nin eski süreç pending kayıtları temizlenir; reserve işlemi de aynı kurtarmayı transaction içinde yapar. Güncel süreç ve diğer UID'nin kayıtları korunur. Yeni deneme güncel hava/seyahat verisinden üretilir; eski payload doğrudan replay edilmez.
+- Hava/seyahat/FCM üretim yolları native post başarıyla döndükten sonra NonCancellable yerel onayla pending işaretini kaldırır. İptal, kaydedilmiş başarılı post'un onayını atlamaz. Onay hatasında mevcut kayıt+pending korunur; false/hata/iptal telafisi önceki gibi çalışır. Pending mevcut event hiçbir zaman ALREADY_RECORDED/başarı sayılmaz; aynı süreçte eşzamanlı FCM kopyası ya da onayı belirsiz event SKIPPED olur.
+- Doğrulama: 381 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 11/11 izole Room/migration testi başarılı. Beş yeni cihaz testi DB yeniden açılışı+farklı süreç kimliğiyle A/B ve current-process ayrımı, stale ack, pending != delivered, FCM yeniden gelen event, FK temizlik, journal insert hatasında transaction rollback ve 6→7 migration yolunu kapsar. Mevcut 4→7, 5→7, hesap silme ve eşzamanlı dedup testleri de geçti. Üç yeni JVM testi yerel/FCM post→ack sırasını, ack hatasında kaydı korumayı ve iptal sırasında onayı doğrular. İlk derleme, pending/başarı ayrımı eklenince cihaz testine geçmeden durduruldu; bu sonuçlar son kaynaklarla yeniden çalıştırılan başarılı pakete aittir.
+- Kapsam/sınır: DB kapat/aç ve farklı süreç kimliğiyle yeniden açılış simülasyonu yapılır; fiziksel force-stop/kill, gerçek Firebase Auth callback ve OS bildirim teslim matrisi henüz doğrulanmadı. Bu bir otomatik eski mesaj gönderme kuyruğu değildir: hava/seyahat sonraki normal Worker çalışmasında, FCM geçerli olay yeniden geldiğinde denenebilir. Uygulama kapalıyken hemen yeniden yürütme garantisi yok. Native notify ile DB ack iki farklı sistemdir; tam arada kapanırsa gönderilmiş olay yeniden denenebilir (exactly-once garantisi yok). Süreç içi ack/cleanup disk hatası pending'i bir sonraki süreç kurtarmasına kadar bekletebilir. Tek varsayılan süreç varsayımı korunur; eski sürümde journal'sız kalmış başarısız kayıtlar otomatik onarılmaz.
+- Sıradaki: olay bazlı kararlı sistem bildirim kimlikleri (özellikle random route id/sabit hava id), post-ack belirsizliği ve gerçek lifecycle/izin/kanal/OEM matrisi; aynı süreç disk hatası için geri kazanım ve inbox'ta pending görünürlüğü ayrıca değerlendirilecek. Önceki tüm yayın engelleri korunur; henüz push edilmedi.
+
+
+3 Kasım — kararlı olay kimlikleri ve sistem tepsisinde çakışma kontrolü
+- Sorun: tüm hava uyarıları notify(1) ile birbirini eziyordu; seyahat notify(id.hashCode()) 32-bit çakışmaya açıktı. Route ready/daily rastgele kayıt id'leri, post→ack arası kapanıştan sonra yeni denemede farklı sistem bildirimi oluşturabiliyordu.
+- Düzeltme: kullanıcı/kind/event alanları uzunluklarıyla çerçevelenip SHA-256 ile kararlı kayıt kimliği üretilir. Anahtarlı hava uyarıları ve route ready/daily bu kimliği kullanır. Sistem etiketi kullanıcı+dedup anahtarından (anahtar yoksa ayrı record namespace'inde kayıt id'sinden) üretilir. Hava/seyahat/FCM notify(tag,0) kullanır; aynı event aynı etiketle güncellenir, farklı event veya UID ayrı kalır. Üç builder'da setOnlyAlertOnce(true) etkin; aktif entry güncellemesinde tekrar uyarı istenmez. Hashlenmiş etiket gizlilik/anonimlik garantisi değildir.
+- Doğrulama: 385 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 6/6 izole Room kurtarma testi başarılı (1 yeni kimlik testi + 5 mevcut test). Dört yeni JVM testi owner/kind/event ayrımı, uzunluk çerçevesi/Unicode, yeniden oluşturulan kayıtta sabit tag, Aa/BB Java hash çakışması ve key/record namespace ayrımını doğrular. Yeni cihaz testi gerçek DB kapat/aç sonrası aynı event tag'inin korunmasını ve ayrı storm event'inin ezilmemesini sahte native sink ile kontrol eder. Gerçek OS tepsisine bildirim gönderilmedi.
+- Sınırlar: gerçek OS post/tepsi/ses/dismiss/OEM matrisi çalıştırılmadı. Testte native sink sahte map'tir; Android'in etiket+id sözleşmesiyle kimlik eşlemesi kontrol edilir. Önceki sürümdeki integer/raw-FCM tag tepsi kayıtları otomatik dönüştürülmez. Kullanıcı bildirimi kaldırmışsa sonraki kabul edilmiş deneme yeniden görünür; iki sistem arasında exactly-once garantisi yok. Anahtarsız hava uyarısında mevcut rastgele fallback korunur; engine'in mevcut uyarıları anahtarlıdır.
+- Sıradaki: pending bildirimlerin inbox/okunmamış sayacı görünürlüğü ve aynı süreç ack/cleanup disk hatası kurtarması; hava bildirimi tap/deep-link davranışı ve gerçek OS/lifecycle matrisi de kontrol edilecek. Önceki tüm yayın engelleri korunur. Henüz push edilmedi.
+
+
+3 Kasım — onaysız teslimin inbox ve okunmamış sayacında erken görünmesi
+- Bulgu: bildirim+journal transaction'ı doğruydu ancak UI liste/okunmamış sorguları pending satırları da okuyordu. Henüz kullanıcıya sunulmayan kayıt kısa süre listede görünebilir; 'tümünü okundu' işlemi onay gelmeden kaydı okuyabilir ve yeni bildirimi okunmuş başlatabilirdi.
+- Düzeltme: görünür liste ve badge sorguları NOT EXISTS pending filtresi kullanır. Liste eşit createdAt değerlerinde id ile kararlı sıralanır. Tekil okundu/okunmadı ve toplu okundu işlemleri de pending kayıtları dışlar. Onay yalnız journal satırını sildiğinde Room'un iki tabloyu izleyen Flow'u görünürlüğü açar. Kullanıcı UID koşulu tüm sorgularda korunur. Şema/migration değişmedi.
+- Depolama teşhis amacıyla getAllNotificationsFirst/getTotalCountFirst rezervasyonları da saymayı sürdürür; UI görünür Flow sorgularını kullanır. Mevcut journal'sız eski kayıtlar görünür kalır. Hesap/inbox silme işlemleri pending temizliğini de yapmayı sürdürür.
+- Doğrulama: 385 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 9/9 izole Room testi başarılı (3 yeni görünürlük + 6 mevcut kurtarma testi). Yeni testler teslim onayında yalnız journal değişmesine rağmen liste ve badge Flow güncellenmesini, pending sırasında boş UI/sıfır badge, tekil/toplu okundu/okunmadı işleminden pending kaydı dışlamayı, A/B sayaç ayrımını, iptal/false telafisini ve DB yeniden açılışında pending gizli/legacy görünür kalmasını doğrular. Gerçek Compose render/OS bildirimi veya Firebase çağrısı yapılmadı.
+- Sınırlar: gerçek Compose ekranı/badge render, OS notify görünürlüğü ve Firebase akışı bu adımda çalıştırılmadı; Room gözlemi ve kayıt durumları izole DB üzerinde kontrol ediliyor. Onay/disk hatasında satır gizli kalır; önceki süreç kurtarması korunur, aynı süreç hata kurtarması hâlâ sıradadır.
+- Sıradaki: aynı süreç ack/cleanup disk hatası kurtarması; hava bildirimine tap/deep-link, görünür liste ve sayaç gerçek UI matrisi; önceki yayın engelleri korunur. Henüz push edilmedi.
+
+
+3 Kasım — aynı süreçte ACK/cleanup yazım hatası sonrası yeniden kazanım
+- Bulgu: kalıcı pending kaydı yeniden açılışı kurtarıyordu; aynı süreçte ACK veya telafi DELETE hatası kalırsa pending yeni denemeleri engelliyor ve UI gizli kalıyordu.
+- Düzeltme: NotificationDeliveryRecovery süreç ömürlü, UID+id bazlı ve Mutex ile sıralı bir yerel işlem listesi tutar. Native post başarılıysa yalnız ACK; başarısız/iptal/sahiplik kaybında yalnız DELETE kaydedilip denenir. Başarısız veya iptal edilmiş retry listeden düşmez. Yeni hava/seyahat/FCM girişimi rezervasyondan önce o UID'nin işlemlerini dener; retry hata verirse yeni reserve/post yapılmaz. Kaydedilen işlem native post içermez. Hesap kontrolü de yerel recovery'yi dener; hesap silme sonrası o UID'nin RAM işlemleri bırakılır. Bildirim DB hatası bağımsız FCM token reconcile çağrısını artık atlatmaz.
+- Varsayılan test yardımcıları izole registry alabilir; üretimde tüm hava/route/seyahat/FCM teslim yolları shared registry'ye bağlandı. Kalıcı journal ve önceki süreç kurtarması korunur; schema değişmedi. Loglara hesap/mesaj/anahtar yazılmaz.
+- İptal/hata bütünlüğü: cleanup da hata verirse asıl CancellationException/post hatası korunur; cleanup hatası suppressed olarak eklenir ve işlem retry listesinde kalır. Bu koruma yerel teslim, FCM teslim ve FCM insert sonrası oturum kontrolünde uygulanır.
+- Doğrulama: 394 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 11/11 izole Room testi başarılı (2 yeni gerçek SQL hata enjeksiyonu + 3 görünürlük + 6 kurtarma). Dokuz yeni JVM testi ACK retry/no-repost, DELETE retry-before-reserve, UID ayrımı/discard, hata ve iptalde işlem koruması, eşzamanlı retry ve FCM davranışını kapsar; cleanup hatasının asıl iptal/post hatasını örtmemesi de doğrulanır. Cihaz testlerinde SQLite trigger ile ACK/DELETE geçici olarak reddedildi; trigger kaldırılınca aynı süreçte ACK ile görünürlük/sayaç açıldı ve ikinci post yapılmadı; cleanup sonrası yeni rezervasyon başarılı, diğer UID korunmuştu. Gerçek OS post/FCM, fiziksel disk doluluğu ve Auth callback uçtan uca doğrulanmadı. Sonuçlar iptal koruması dahil son kaynaklarla başarılı tekrar koşumuna aittir.
+- Sınırlar: timer/sonsuz retry döngüsü eklenmedi; tekrar uygun teslim girişimi veya Auth callback'inde çalışır. Yeni tetikleyici yoksa bekleyen işlem bekler. Süreç ölürse RAM listesi kaybolur; mevcut kalıcı pending journal ve önceki süreç kurtarması devralır. SQL trigger ile hata enjeksiyonu fiziksel disk doluluğu/bozuk depolama kanıtı değildir. Gerçek OS/FCM/Auth ve force-stop matrisi açık. Native post-ACK tam arası kapanışta exactly-once garantisi hâlâ yok. Aktif teslim sırasında kullanıcı tüm inbox'ı silerse oluşabilecek silme/ACK yarışı ayrıca incelenecek.
+- Sıradaki: hava bildirimi tap/deep-link ve bildirim girişlerinin hesabı/izin/kanal matrisi; aktif gönderim sırasında inbox silme ve gerçek UI kontrolleri sırada korunur. Önceki tüm yayın engelleri korunur. Henüz push edilmedi.
+
+
+3 Kasım — hava bildirimi tap eylemi ve kayda bağlı güvenli yönlendirme
+- Bulgu: WeatherNotificationWorker contentIntent oluşturmuyordu; seyahat/FCM intent'leri CLEAR_TASK ile uygulama görevini sıfırlıyordu. Activity yalnız intent sahibini denetliyor, kaydın varlığını/onayını ve URI'nin kayıtla eşleşmesini doğrulamadan handleDeepLink çağırıyordu.
+- Düzeltme: üç gönderim yolu ortak immutable PendingIntent kullanır; action kullanıcı+olay tag'ine bağlı, extras owner/id taşır. Yeni intent NEW_TASK|CLEAR_TOP|SINGLE_TOP kullanır, CLEAR_TASK kaldırıldı. Hava kaydı WEATHER_HOME eylemi taşır. Activity gelen URI'yi yönlendirme için kullanmaz; owner/id/epoch isteğini tutup görünür yerel kaydı UID ile yükler. Okuma öncesi/sonrası canlı UID, pending/busy silme ve session epoch denetlenir; eksik/pending/başka hesaba ait kayıt açılmaz. Yeni tap eski async sorgunun yerini alır; cancellation korunur. Geçerli kayıt kendi izinli action/deepLink eşlemesinden navigate edilir (launchSingleTop).
+- Legacy uyumluluğu: yalnız TRAVEL kategorisindeki yerel /route/{tek kodlanmış id} ve /calendar?focusId={tek kodlanmış id} kayıtları kanonik ve kodlanmış iç rotaya dönüştürülür. Ek query/fragment/path parçaları, kontrol karakteri, bozuk escape, dış adres ve 200 karakteri aşan trip id reddedilir. Genel bildirimler bu trip fallback'ini kullanamaz; mevcut güvenli action eşlemeleri korunur.
+- Doğrulama: 400 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 5/5 izole test başarılı (2 yeni tap + 3 görünürlük). Altı yeni JVM testi doğru kayıt, disk okumadan önce oturum/ID reddi, eksik/yanlış kimlik, okuma sırasında A→B/A→B→A, iptal propagasyonu ve legacy trip hedefinin güvenli kanonikleştirilmesini doğrular. Cihazda gerçek PendingIntent nesnelerinde aynı olayın eşleşmesi, farklı event/UID ayrımı, immutable ve CLEAR_TASK yokluğu; gerçek Room ile pending/ack/deleted/yanlış UID çözümlemesi geçti. PendingIntent.send çağrılmadı; gerçek Activity/NavHost/OS bildirimi veya Firebase uçtan uca doğrulanmadı.
+- Sınırlar: PendingIntent gönderilmedi; gerçek Activity cold/warm açılış, ekran rotasyonu, Compose/NavHost ekranı, OS tepsisi ve gerçek Auth/FCM matrisi açık. Eski sürümdeki CLEAR_TASK PendingIntent'ler geri dönük değiştirilmez. Kayıt okunması ile silme arasında tüm sistemleri kapsayan atomik kilit yok; bağlı seyahatin ayrıca silinmiş olması hedef ekranın kendi sahiplik/varlık kontrollerine bağlıdır. DB okuma hatasında fail-closed, bu akış için kullanıcıya özel hata/retry UX ve system tap sonrası okundu işaretleme ayrıca incelenecek.
+- Sıradaki: aktif teslim sırasında inbox temizleme/silme yarışı; bildirim tap/read UX ve gerçek UI/lifecycle matrisi. Önceki tüm yayın engelleri korunur. Henüz push edilmedi.
+
+
+3 Kasım — kullanıcı ekran raporu: asistan izin düğmeleri (ÖNCELİKLİ, canlı nedeni açık)
+- Kullanıcı retry/revoke/Vazgeç'in tepkisiz olduğunu bildirdi. Görselde servis bağlantı hatası var; buradan sunucu/DNS/TLS/token kaynağı belirlenemez ve bu bağlantı hatası çözüldü sayılmaz. Önceki asistan sorunu unutulmadı; yerel etkileşim alt işi sıranın önüne alındı. Bildirim silme yarışı sırada korunur.
+- Kesin kod bulgusu: Dialog ve controller busy durumunda kapatmayı reddediyordu. Pencere artık busy dahil kapanır; busy düğmesi Kapat olarak adlandırılır ve işlem türü/progress ile arka planda tamamlanacağı belirtilir. Gizlenmiş pencere geç load/save/stale/revoke sonucu ile yeniden açılmaz. Açık işlem yeniden açılırsa iptal edilip kopya istek üretilmez. Geri çekme intent'i/yerel gönderim engeli sürer; kapatma işlemi uzaktaki sonucu başarılı saymaz. Pending soru AiChatViewModel dismiss yolunda temizlenmeye devam eder.
+- Doğrulama: 403 JVM testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 9/9 izole Compose testi başarılı (3 yeni bağlı controller+gerçek touch + 6 mevcut dialog testi). Üç yeni JVM testi busy kapatma/late result, single-flight reopen, geri çekme intent'inin korunması ve stale save cevabının pencereyi yeniden açmamasını doğrular. Yeni cihaz testleri hata ekranındaki Tekrar dene, Uzak asistan izinlerini geri çek ve Vazgeç/Kapat düğmelerini performTouchInput ile çalıştırır; gateway sahte, gerçek hesap/servis değişmedi. Gerçek uygulamadaki eşzamanlı tüm düğme tepkisizliğinin ve backend erişim hatasının kök nedeni henüz doğrulanmadığından geniş sorun açık.
+- Sınırlar: fake gateway ile bağlı controller+Dialog etkileşimi doğrulanır; gerçek hesap izinleri ve backend bağlantısı değiştirilmez. Kullanıcının hata durumundaki tüm düğmelerin birlikte tepkisiz kalmasının üretim ViewModel/SDK kök nedeni henüz cihazda yeniden üretilmedi; busy kapatma kusuru bunun tüm açıklaması değildir. Gerçek backend/Firebase/platform, foreground/lifecycle ve yayımlanmış metin testi açık tutulur.
+- Kalan sıra özeti: ana listede 22 x / 37 açık geniş kabul maddesi; tekil bug/adım toplamı değildir. Sekiz paketli güncel sıra GUNCEL_YAYIN_SIRASI.md içinde. Yeni alt bulgular geniş kriterlerle birlikte takip edilir. Önceki paket e47b2ab push edildi; bu tur henüz push edilmedi.
+
+
+4 Kasım — retry/revoke düğmeleri için hızlı başarısızlık geri bildirimi
+- Kullanıcı iki düğmenin de çalışmadığını yeniden bildirdi; gerçek uygulama/servis sorunu ilk sırada açık kalır. Önceki touch testleri fake gateway ile düğme callback'lerinin çalıştığını gösterir; canlı bağlantı veya üretim kök nedeni doğrulanmış sayılmaz.
+- Kod bulgusu: çok hızlı aynı hataya dönen retry'da busy ara durumu UI'a ulaşmadan birleşebilir; son hata state'i öncekiyle tamamen aynı olurdu. İşlem türüne göre deneme sayısı eklendi. Gerçekte başlatılan load/save/revoke sayılır, busy sırasında ikinci işlem başlatılması sayılmaz; işlem türü veya hesap reset'inde sayaç sıfırlanır. Tekrarlanan hatada Deneme N gösterilir ve hata bölgesi erişilebilirlik için polite live-region olarak işaretlenir. Sayaç sunucu onayı/başarısı değildir.
+- Doğrulama: 404 Android JVM testi (0 hata), debug APK, SM-T500 Android 12 üzerinde 10/10 Compose testi (4 gerçek dokunma etkileşimi + 6 dialog regresyonu) ve 22 yerel backend izin/platform testi başarılı (2 mevcut bağımlılık uyarısı). Yeni test, hızlı aynı hata sonrasında Deneme 2 ve Deneme 3 görünürlüğünü ve gerçek retry sayısını doğrular; JVM testi retry/revoke işlem sayısı ve hesap sıfırlamasını kapsar. İlk cihaz koşusunda 6 test Compose ağacına erişemedi (4 geçti); aynı paket tekrarında 10/10 geçti. Backend testlerinde gerçek HTTP engellendi; canlı erişim ve gerçek hesap izin değişikliği yapılmadı.
+- Sınır/sıra: gerçek backend/Firebase erişimi, aynı UID Auth callback'leri ve canlı ekran tepkisizliğinin kök nedeni hâlâ açık. Yerel test sınırı nedeniyle gerçek izin/hesap üzerinde istek veya değişiklik yapılmadı. Geri çekme pending engeli ve busy kapatma koruması korunur. Bildirim teslimi sırasında inbox temizleme ve genel yayın kontrol listesi unutulmadı. Henüz push edilmedi.
+
+
+4 Kasım — bildirim hazırlanırken liste temizleme yarışı
+- Bulgu: liste silme pending satırını kaldırsa bile hava/seyahat/FCM son gönderim kontrolü rezervasyonun hâlâ varlığını denetlemiyordu. Eski girişimin onayı, aynı kimlikte yeni bir rezervasyonla da yarışabiliyordu.
+- Düzeltme: seçili/tümü/kategori silme ve son sahipli pending kaydı kontrolü+native gönderim aynı süreç kilidinde sıralanır. UID, bildirim kimliği ve süreç kimliği kontrol edilir. Silme önce tamamlandıysa geç post engellenir. Üretim FCM ve yerel teslim yolları rezervasyon→onay/temizlik boyunca aynı teslim kilidini paylaşır; yeni rezervasyon eski girişimin bitmesini bekler. Mevcut oturum, izin ve kanal kontrolleri korunur. Şema değişmedi.
+- Doğrulama: 404 Android birim testi (0 hata), debug APK ve SM-T500 Android 12 üzerinde 4/4 izole Room testi başarılı (2 yeni silme yarışı + 2 mevcut SQL hata kurtarma testi). Yeni testler silme önceyse geç post olmamasını, diğer hesabın korunmasını, sonraki girişimin çalışmasını ve son sahiplik kontrolü başladıysa silmenin post sonrasına sıralanmasını doğrular. Gerçek OS post/FCM çalıştırılmadı.
+- Sınır: kabul edilmiş native post daha önce gerçekleşmişse tepsiden bu işlemle kaldırılmaz. Rezervasyon henüz başlamadan yapılan liste temizliği gelecekteki bildirimleri engellemez. Testlerde gerçek Room ve sahte post kullanılır; gerçek tepsi/FCM, çok süreç ve bağlı Activity matrisi açık. Asistan canlı bağlantı/tepkisizlik sorunu ilk öncelikte açık kalır. Henüz push edilmedi.

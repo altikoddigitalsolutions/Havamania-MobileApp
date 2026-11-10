@@ -201,21 +201,61 @@ data class TravelPlanEntity(
 @IgnoreExtraProperties
 @Keep
 data class AiHistoryEntity(
-    @PrimaryKey val id: String, // Acts as conversationId
+    @PrimaryKey val id: String = "", // Acts as conversationId
     val userId: String = "legacy",
+    val title: String = "",
+    val summary: String = "",
+    val messages: List<AltikodChatMessage> = emptyList(),
+    val cityName: String? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    @get:com.google.firebase.firestore.Exclude
+    @ColumnInfo(defaultValue = "NULL")
+    val syncedUpdatedAt: Long? = null,
+    @get:com.google.firebase.firestore.Exclude
+    @ColumnInfo(defaultValue = "0")
+    val pendingUpload: Boolean = false
+)
+
+data class AiHistorySummary(
+    val id: String,
     val title: String,
     val summary: String,
-    val messages: List<AltikodChatMessage>,
     val cityName: String?,
-    val timestamp: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val timestamp: Long,
+    val pendingUpload: Boolean
 )
+
+data class AiHistoryVersion(val userId: String, val timestamp: Long, val updatedAt: Long, val pendingUpload: Boolean)
+
+/** Empty recordId means the entire user's history. Kept until remote acknowledgement. */
+@Entity(tableName = "ai_history_deletions", primaryKeys = ["userId", "recordId"])
+data class HistoryDeletionRequest(val userId: String, val recordId: String, @ColumnInfo(defaultValue = "0") val completed: Boolean = false)
 
 /**
  * Veritabanı Erişim Nesnesi (DAO)
  */
+@Entity(tableName = "weather_account_deletions")
+data class WeatherAccountDeletion(@PrimaryKey val ownerHash: String)
+
 @Dao
 interface WeatherDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun blockDeletedAccountRaw(marker: WeatherAccountDeletion)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM weather_account_deletions WHERE ownerHash = :hash)")
+    suspend fun isDeletedAccountHash(hash: String): Boolean
+
+    @Transaction
+    suspend fun deleteAccountData(uid: String) {
+        blockDeletedAccountRaw(WeatherAccountDeletion(accountOwnerHash(uid)))
+        clearAllTravelPlans(uid)
+        clearAllAiHistory(uid)
+        clearHistoryDeletions(uid)
+        clearTripDeletions(uid)
+        clearTripUploads(uid)
+    }
+
     @Query("SELECT * FROM weather_cache WHERE cityName = :city LIMIT 1")
     suspend fun getCachedWeather(city: String): WeatherCacheEntity?
 
@@ -260,10 +300,13 @@ interface WeatherDao {
 
     @Transaction
     suspend fun insertTravelPlan(plan: TravelPlanEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return
+        if (hasTripDeletion(plan.userId, plan.id)) return
         val existing = getTravelPlanByIdRaw(plan.id)
         if (existing != null && existing.userId != plan.userId) {
             return
         }
+        if (pendingTripUploadVersion(plan.userId, plan.id) != null) return
         insertTravelPlanRaw(plan)
     }
 
@@ -280,26 +323,234 @@ interface WeatherDao {
     @Query("SELECT * FROM ai_history WHERE userId = :uid ORDER BY updatedAt DESC")
     suspend fun getAllAiHistory(uid: String): List<AiHistoryEntity>
 
+    @Query("""
+        SELECT id, title, summary, cityName, timestamp, pendingUpload
+        FROM ai_history WHERE userId = :uid AND NOT EXISTS (
+            SELECT 1 FROM ai_history_deletions d
+            WHERE d.userId = :uid AND (d.recordId = '' OR d.recordId = ai_history.id)
+        ) ORDER BY updatedAt DESC
+    """)
+    suspend fun getVisibleAiHistory(uid: String): List<AiHistorySummary>
+
     @Query("SELECT * FROM ai_history WHERE id = :id AND userId = :uid LIMIT 1")
     suspend fun getAiHistoryItem(id: String, uid: String): AiHistoryEntity?
 
-    @Query("SELECT * FROM ai_history WHERE id = :id LIMIT 1")
-    suspend fun getAiHistoryItemRaw(id: String): AiHistoryEntity?
+    @Query("SELECT userId, timestamp, updatedAt, pendingUpload FROM ai_history WHERE id = :id LIMIT 1")
+    suspend fun getAiHistoryVersion(id: String): AiHistoryVersion?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiHistoryRaw(item: AiHistoryEntity)
 
     @Transaction
     suspend fun insertAiHistory(item: AiHistoryEntity) {
-        val existing = getAiHistoryItemRaw(item.id)
-        if (existing != null && existing.userId != item.userId) {
-            return
-        }
+        check(!isDeletedAccountHash(accountOwnerHash(item.userId))) { "Account history writes are blocked" }
+        check(!hasHistoryDeletion(item.userId, item.id)) { "History deletion is pending" }
+        val existing = getAiHistoryVersion(item.id)
+        check(existing == null || existing.userId == item.userId) { "History ID belongs to another account" }
         insertAiHistoryRaw(item)
+    }
+
+    @Transaction
+    suspend fun saveAiHistoryRevision(item: AiHistoryEntity): AiHistoryEntity {
+        val existing = getAiHistoryVersion(item.id)
+        check(existing == null || existing.userId == item.userId) { "History ID belongs to another account" }
+        val previousVersion = existing?.updatedAt ?: 0L
+        check(previousVersion < Long.MAX_VALUE) { "History revision cannot advance" }
+        val revision = item.copy(
+            timestamp = existing?.timestamp ?: item.timestamp,
+            updatedAt = maxOf(item.updatedAt, previousVersion + 1L)
+        )
+        insertAiHistory(revision)
+        return revision
     }
 
     @Query("DELETE FROM ai_history WHERE id = :id AND userId = :uid")
     suspend fun deleteAiHistory(id: String, uid: String)
+
+    @Transaction
+    suspend fun mergeAiHistory(item: AiHistoryEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(item.userId))) return
+        if (hasHistoryDeletion(item.userId, item.id)) return
+        val existing = getAiHistoryVersion(item.id)
+        if (existing != null && (existing.userId != item.userId || existing.updatedAt > item.updatedAt || existing.pendingUpload)) return
+        insertAiHistoryRaw(item)
+    }
+
+    @Query("""
+        SELECT id FROM ai_history WHERE userId = :uid AND pendingUpload = 1 AND NOT EXISTS (
+            SELECT 1 FROM ai_history_deletions d
+            WHERE d.userId = :uid AND (d.recordId = '' OR d.recordId = ai_history.id)
+        ) ORDER BY updatedAt
+    """)
+    suspend fun getPendingAiHistoryIds(uid: String): List<String>
+
+    @Query("UPDATE ai_history SET pendingUpload = 0, syncedUpdatedAt = :version WHERE id = :id AND userId = :uid AND updatedAt = :version")
+    suspend fun acknowledgeAiHistory(id: String, uid: String, version: Long)
+
+    @Query("UPDATE ai_history SET pendingUpload = 0 WHERE userId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun stopAiHistoryUpload(uid: String, id: String?)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM ai_history_deletions WHERE userId = :uid AND (recordId = '' OR recordId = :id))")
+    suspend fun hasHistoryDeletion(uid: String, id: String): Boolean
+
+    @Query("SELECT * FROM ai_history_deletions WHERE userId = :uid AND completed = 0 ORDER BY recordId")
+    suspend fun getHistoryDeletions(uid: String): List<HistoryDeletionRequest>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertHistoryDeletionRaw(request: HistoryDeletionRequest)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertHistoryDeletionBatchRaw(requests: List<HistoryDeletionRequest>)
+
+    @Transaction
+    suspend fun markRemoteHistoryForDeletion(uid: String, ids: List<String>) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        insertHistoryDeletionBatchRaw(ids.map { HistoryDeletionRequest(uid, it, completed = true) })
+    }
+
+    @Transaction
+    suspend fun insertHistoryDeletion(request: HistoryDeletionRequest) {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+        insertHistoryDeletionRaw(request)
+    }
+
+    @Query("DELETE FROM ai_history_deletions WHERE userId = :uid AND recordId = :id")
+    suspend fun removeHistoryDeletion(uid: String, id: String)
+
+    @Transaction
+    suspend fun enqueueHistoryDeletion(uid: String, id: String?) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        insertHistoryDeletion(HistoryDeletionRequest(uid, id ?: ""))
+        stopAiHistoryUpload(uid, id)
+    }
+
+    @Query("UPDATE ai_history_deletions SET completed = 1 WHERE userId = :uid AND recordId = :id")
+    suspend fun acknowledgeHistoryDeletion(uid: String, id: String)
+
+    @Query("UPDATE ai_history_deletions SET completed = 1 WHERE userId = :uid AND recordId <> '' AND completed = 0")
+    suspend fun acknowledgeIndividualHistoryDeletions(uid: String)
+
+    @Query("DELETE FROM ai_history_deletions WHERE userId = :uid")
+    suspend fun clearHistoryDeletions(uid: String)
+
+    @Query("""
+        INSERT OR IGNORE INTO ai_history_deletions (userId, recordId, completed)
+        SELECT userId, id, 1 FROM ai_history WHERE userId = :uid
+    """)
+    suspend fun markLocalHistoryDeleted(uid: String)
+
+    @Transaction
+    suspend fun completeHistoryDeletion(uid: String, id: String) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        if (id.isEmpty()) {
+            markLocalHistoryDeleted(uid)
+            clearAllAiHistory(uid)
+            acknowledgeIndividualHistoryDeletions(uid)
+            removeHistoryDeletion(uid, id)
+        } else {
+            deleteAiHistory(id, uid)
+            acknowledgeHistoryDeletion(uid, id)
+        }
+    }
+
+    @Query("SELECT id FROM ai_history WHERE userId = :uid AND syncedUpdatedAt = updatedAt AND pendingUpload = 0")
+    suspend fun getAcknowledgedAiHistoryIds(uid: String): List<String>
+
+    /** Full, server-confirmed collection only. Unknown/local-only records are retained. */
+    @Transaction
+    suspend fun reconcileAiHistory(uid: String, items: List<AiHistoryEntity>, serverIds: Set<String>) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        items.filter { it.userId == uid }.forEach { mergeAiHistory(it.copy(syncedUpdatedAt = it.updatedAt, pendingUpload = false)) }
+        getAcknowledgedAiHistoryIds(uid).forEach { id ->
+            if (id !in serverIds) deleteAiHistory(id, uid)
+        }
+    }
+
+    @Query("DELETE FROM ai_history WHERE id = :id AND userId = :uid AND updatedAt <= :removedUpdatedAt")
+    suspend fun deleteAiHistoryIfUnchanged(id: String, uid: String, removedUpdatedAt: Long)
+
+    @Query("SELECT COUNT(*) FROM trip_deletions WHERE userId = :uid AND completed = 0")
+    fun pendingTripDeletionCount(uid: String): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM trip_uploads WHERE userId = :uid AND NOT EXISTS (SELECT 1 FROM trip_deletions d WHERE d.userId = :uid AND d.recordId = trip_uploads.recordId)")
+    fun pendingTripUploadCount(uid: String): kotlinx.coroutines.flow.Flow<Int>
+
+    @Query("SELECT revision FROM trip_uploads WHERE userId = :uid AND recordId = :id")
+    suspend fun pendingTripUploadVersion(uid: String, id: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun enqueueTripUploadRaw(request: TripUploadRequest)
+
+    @Transaction
+    suspend fun enqueueTripUpload(request: TripUploadRequest) {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return
+        enqueueTripUploadRaw(request)
+    }
+
+    @Query("SELECT * FROM trip_uploads WHERE userId = :uid")
+    suspend fun pendingTripUploads(uid: String): List<TripUploadRequest>
+
+    @Query("DELETE FROM trip_uploads WHERE userId = :uid AND recordId = :id AND revision = :revision")
+    suspend fun acknowledgeTripUpload(uid: String, id: String, revision: Long)
+
+    @Query("DELETE FROM trip_uploads WHERE userId = :uid")
+    suspend fun clearTripUploads(uid: String)
+
+    @Transaction
+    suspend fun saveLocalTrip(plan: TravelPlanEntity) {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return
+        if (hasTripDeletion(plan.userId, plan.id)) return
+        val old = getTravelPlanByIdRaw(plan.id)
+        if (old != null && old.userId != plan.userId) return
+        val revision = maxOf(plan.updatedAt, (old?.updatedAt ?: 0) + 1)
+        insertTravelPlanRaw(plan.copy(updatedAt = revision))
+        if (plan.userId != "legacy") enqueueTripUpload(TripUploadRequest(plan.userId, plan.id, revision))
+    }
+
+    @Transaction
+    suspend fun saveTripAnalysisIfVersion(plan: TravelPlanEntity, expectedVersion: Long): Long? {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return null
+        val current = getTravelPlanByIdRaw(plan.id) ?: return null
+        if (current.userId != plan.userId || current.updatedAt != expectedVersion || hasTripDeletion(plan.userId, plan.id)) return null
+        saveLocalTrip(plan)
+        return getTravelPlanByIdRaw(plan.id)?.updatedAt
+    }
+
+    @Query("UPDATE travel_plans SET lastDailyNotificationDate = :date WHERE id = :id AND userId = :uid AND updatedAt = :revision")
+    suspend fun markTripDailyNotification(uid: String, id: String, revision: Long, date: String): Int
+
+    @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id)")
+    suspend fun hasTripDeletion(uid: String, id: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM trip_deletions WHERE userId = :uid AND recordId = :id AND completed = 0)")
+    suspend fun isTripDeletionPending(uid: String, id: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun enqueueTripDeletionRaw(request: TripDeletionRequest)
+
+    @Transaction
+    suspend fun enqueueTripDeletion(request: TripDeletionRequest): Boolean {
+        if (isDeletedAccountHash(accountOwnerHash(request.userId))) return false
+        enqueueTripDeletionRaw(request)
+        return isTripDeletionPending(request.userId, request.recordId)
+    }
+
+    @Query("SELECT * FROM trip_deletions WHERE userId = :uid AND completed = 0")
+    suspend fun pendingTripDeletions(uid: String): List<TripDeletionRequest>
+
+    @Query("UPDATE trip_deletions SET completed = 1 WHERE userId = :uid AND recordId = :id")
+    suspend fun acknowledgeTripDeletion(uid: String, id: String)
+
+    @Transaction
+    suspend fun completeTripDeletion(uid: String, id: String) {
+        if (isDeletedAccountHash(accountOwnerHash(uid))) return
+        deleteTravelPlan(id, uid)
+        pendingTripUploadVersion(uid, id)?.let { acknowledgeTripUpload(uid, id, it) }
+        acknowledgeTripDeletion(uid, id)
+    }
+
+    @Query("DELETE FROM trip_deletions WHERE userId = :uid")
+    suspend fun clearTripDeletions(uid: String)
 
     @Query("DELETE FROM ai_history WHERE userId = :uid")
     suspend fun clearAllAiHistory(uid: String)
@@ -308,7 +559,13 @@ interface WeatherDao {
 /**
  * Room Database Tanımı
  */
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class], version = 17, exportSchema = false)
+@Entity(tableName = "trip_deletions", primaryKeys = ["userId", "recordId"])
+data class TripDeletionRequest(val userId: String, val recordId: String, val completed: Boolean = false)
+
+@Entity(tableName = "trip_uploads", primaryKeys = ["userId", "recordId"])
+data class TripUploadRequest(val userId: String, val recordId: String, val revision: Long)
+
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class, WeatherAccountDeletion::class], version = 23, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -382,6 +639,42 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE ai_history ADD COLUMN syncedUpdatedAt INTEGER DEFAULT NULL")
+            }
+        }
+
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE ai_history ADD COLUMN pendingUpload INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS weather_account_deletions (ownerHash TEXT NOT NULL, PRIMARY KEY(ownerHash))")
+            }
+        }
+
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS trip_uploads (userId TEXT NOT NULL, recordId TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(userId, recordId))")
+            }
+        }
+
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS trip_deletions (userId TEXT NOT NULL, recordId TEXT NOT NULL, completed INTEGER NOT NULL, PRIMARY KEY(userId, recordId))")
+            }
+        }
+
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS ai_history_deletions (userId TEXT NOT NULL, recordId TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(userId, recordId))")
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -389,7 +682,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
                 .build()
                 INSTANCE = instance
                 instance

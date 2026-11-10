@@ -19,7 +19,7 @@ object WeatherUtils {
         val time = currentTime.toLocalTime()
 
         val isNight = if (sunrise != null && sunset != null) {
-            time.isBefore(sunrise) || time.isAfter(sunset)
+            time.isBefore(sunrise) || !time.isBefore(sunset)
         } else {
             time.hour < 6 || time.hour >= 20
         }

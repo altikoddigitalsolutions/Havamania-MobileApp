@@ -85,3 +85,6 @@ mobile/android/.kotlin/
 
 # Local handoff and notes
 bilgi.md
+
+# Isolated local database audit clusters (never production data)
+.local-tests/
