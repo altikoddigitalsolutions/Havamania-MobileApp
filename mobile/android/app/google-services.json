@@ -9,6 +9,25 @@
       "client_info": {
         "mobilesdk_app_id": "1:35359908939:android:34828f587c16e11d1dd9ce",
         "android_client_info": {
+          "package_name": "com.havamania.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFzmE8yXgMt06Howiaf1J1AxjHai-NlwE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:35359908939:android:34828f587c16e11d1dd9ce",
+        "android_client_info": {
           "package_name": "com.havamania"
         }
       },
