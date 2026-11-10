@@ -23,6 +23,7 @@ enum class NotificationActionType {
     WEATHER_HOME,
     TRAVEL_CALENDAR,
     TRAVEL_DETAIL,
+    ROUTE_WEATHER,
     HOURLY_FORECAST,
     DAILY_FORECAST,
     UV_DETAIL,

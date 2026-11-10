@@ -132,7 +132,13 @@ class TripNavigationDeviceTest {
         val tripId = "İzmir/+?#%2F &"
         compose.runOnIdle {
             val source = requireNotNull(nav.currentBackStackEntry)
-            assertTrue(nav.navigateFromActiveScreen(source, Routes.routeWeather(tripId)))
+            val notification = NotificationItem(
+                category = NotificationCategory.TRAVEL,
+                actionType = NotificationActionType.ROUTE_WEATHER,
+                targetId = tripId
+            )
+            val destination = requireNotNull(notificationDestination(notification))
+            assertTrue(nav.navigateFromActiveScreen(source, destination))
             assertEquals(tripId, nav.currentBackStackEntry?.arguments?.getString("tripId"))
             assertFalse(nav.navigateFromActiveScreen(source, Routes.routeWeather("another trip")) {
                 launchSingleTop = true

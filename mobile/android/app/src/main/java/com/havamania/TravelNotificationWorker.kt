@@ -266,6 +266,9 @@ class TravelNotificationWorker(
             createdAt = System.currentTimeMillis(),
             deepLinkTarget = "havamania://app/route/${Uri.encode(plan.id)}",
             deduplicationKey = dailyKey,
+            actionType = NotificationActionType.ROUTE_WEATHER,
+            targetId = plan.id,
+            relatedTripId = plan.id,
             actionLabel = "Tahmini Aç"
         )
 
@@ -444,18 +447,7 @@ if (BuildConfig.DEBUG) {
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val currentDate = LocalDateTime.now()
-            var dueDate = LocalDateTime.now()
-                .withHour(9)
-                .withMinute(0)
-                .withSecond(0)
-                .withNano(0)
-
-            if (currentDate.isAfter(dueDate)) {
-                dueDate = dueDate.plusDays(1)
-            }
-
-            val initialDelay = ChronoUnit.MILLIS.between(currentDate, dueDate)
+            val initialDelay = travelNotificationInitialDelay(Instant.now(), ZoneId.systemDefault())
 
             val request = PeriodicWorkRequestBuilder<TravelNotificationWorker>(24, TimeUnit.HOURS)
                 .setConstraints(constraints)
@@ -497,3 +489,14 @@ private sealed interface RouteForecastOutcome {
 
 internal fun shouldRetryRouteForecast(unavailable: Boolean, attempt: Int): Boolean =
     unavailable && attempt < 2
+
+internal fun travelNotificationInitialDelay(now: Instant, zone: ZoneId): Long {
+    val today = now.atZone(zone).toLocalDate()
+    val todayAtNine = today.atTime(9, 0).atZone(zone).toInstant()
+    val due = if (now.isAfter(todayAtNine)) {
+        today.plusDays(1).atTime(9, 0).atZone(zone).toInstant()
+    } else {
+        todayAtNine
+    }
+    return ChronoUnit.MILLIS.between(now, due)
+}

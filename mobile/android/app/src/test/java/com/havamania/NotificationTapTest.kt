@@ -105,4 +105,16 @@ class NotificationTapTest {
             Routes.routeWeather("İzmir/+?#%2F"))
         assertEquals("sub_route_weather/ordinary-id", Routes.routeWeather("ordinary-id"))
     }
+
+    @Test fun typedRouteWeatherUsesTripIdAndIgnoresLegacyTarget() {
+        val route = NotificationItem(
+            actionType = NotificationActionType.ROUTE_WEATHER,
+            targetId = "İzmir/+?#",
+            relatedTripId = "fallback",
+            deepLinkTarget = "havamania://app/profile"
+        )
+        assertEquals("sub_route_weather/%C4%B0zmir%2F%2B%3F%23", notificationDestination(route))
+        assertEquals(Routes.routeWeather("fallback"), notificationDestination(route.copy(targetId = "")))
+        assertNull(notificationDestination(route.copy(targetId = "", relatedTripId = null)))
+    }
 }

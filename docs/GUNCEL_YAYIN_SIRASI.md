@@ -387,3 +387,13 @@ Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
 9 Kasım ilk güzergâh bildirimi: Hazır bildirimi artık tahmin sonucu alındığında gönderiliyor ve risk özeti içeriyor. İlk bildirim ve sonraki güncellemeler aynı günlük tekrar korumasını kullanıyor. Tahmin tamamen yoksa sınırlı yeniden deneme uygulanıyor. 446 Android birim testi ve debug APK başarılı. WorkManager zamanlaması ve cihaz bildirimi açık.
 
 9 Kasım güzergâh bildirimi teslimat kurtarma: Yarım kalan rezervasyon günlük teslimat sayılmıyor. SM-T500 üzerindeki izole Room testinde önceki süreçten kalan kayıt kurtarıldı ve tek tamamlanmış bildirim oluştu. İlk koşuda testin süreç kimliği eşleşmedi, test düzeltildikten sonra 3/3 cihaz testi geçti. Birim testleri ve debug APK başarılı. WorkManager zamanlaması ve gerçek sistem bildirimi açık.
+
+10 Kasım güzergâh bildirimi Android teslimatı: SM-T500 üzerinde izole güzergâh risk bildirimi Android'e gönderildi. Bildirim metni ve test Activity'sine ilk açılışta ve Activity açıkken iletilen bildirim kimlikleri doğrulandı. Test 1/1 geçti. WorkManager zamanlaması ve gerçek güzergâh ekranına yönlendirme açık.
+
+10 Kasım güzergâh bildirimi yönlendirmesi: Yeni bildirimler ROUTE_WEATHER eylemi ve seyahat kimliğini taşıyor. Eski bağlantılar destekleniyor. Özel karakterli kimlik, yedek kimlik ve geçersiz hedef test edildi. Android birim testleri ve debug APK başarılı. Gerçek güzergâh ekranına cihaz yönlendirmesi ve WorkManager zamanlaması açık.
+
+10 Kasım güzergâh bildirimi gezinme testi: SM-T500 üzerinde izole Android NavHost, ROUTE_WEATHER bildiriminden üretilen hedefi açtı ve özel karakterli seyahat kimliğini değiştirmeden aldı. Birim testleri, debug APK ve hedefli cihaz testi başarılı. Sistem bildiriminden üretim ekranına tek akışta geçiş ve WorkManager zamanlaması açık.
+
+10 Kasım güzergâh bildirimi hesap ayrımı: Samsung tablette Android'in teslim ettiği Intent, üretim çözümleyicisi ve izole Room kaydıyla sınandı. Doğru hesapta güzergâh hedefi ve okundu durumu doğrulandı; farklı hesapta istek reddedildi. 1/1 cihaz testi geçti. Gerçek uygulama ekranı ve WorkManager zamanlaması açık.
+
+10 Kasım seyahat bildirimi ilk zamanlama: Cihazın yerel 09.00 hedefi tek zaman örneğinden hesaplanıyor. Yaz saati değişen günlerde gecikme gerçek geçen süreye göre belirleniyor. İki yeni zamanlama testi dahil Android birim testleri ve debug APK başarılı. WorkManager'ın 24 saatlik tekrarının cihazda gözlemi açık.

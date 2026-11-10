@@ -26,6 +26,9 @@ internal fun notificationDestination(item: NotificationItem): String? = when (it
         (item.targetId?.takeIf(::validTripId) ?: item.relatedTripId?.takeIf(::validTripId))
             ?.let(Routes::calendarTrip)
             ?: Routes.CALENDAR_ROOT
+    NotificationActionType.ROUTE_WEATHER ->
+        (item.targetId?.takeIf(::validTripId) ?: item.relatedTripId?.takeIf(::validTripId))
+            ?.let(Routes::routeWeather)
     NotificationActionType.WEEKLY_SUMMARY -> Routes.AI_ROOT
     NotificationActionType.APP_UPDATE -> Routes.PROFILE_ROOT
     NotificationActionType.NONE -> when (item.deepLinkTarget) {
