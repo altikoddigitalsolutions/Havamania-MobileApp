@@ -23,10 +23,10 @@ android {
 
     defaultConfig {
         buildConfigField "boolean", "FCM_TOKEN_SYNC_ENABLED", "false"
-        applicationId "com.havamania"
+        applicationId "com.havamania.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
+        versionCode 4
         versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

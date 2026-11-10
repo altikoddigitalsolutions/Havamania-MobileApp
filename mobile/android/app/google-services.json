@@ -12,7 +12,12 @@
           "package_name": "com.havamania"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "35359908939-diler5l0ug8662j0v5vqhasscufi16t5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBFzmE8yXgMt06Howiaf1J1AxjHai-NlwE"
@@ -20,7 +25,41 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "35359908939-diler5l0ug8662j0v5vqhasscufi16t5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:35359908939:android:af988778c65dcf391dd9ce",
+        "android_client_info": {
+          "package_name": "com.havamania.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "35359908939-diler5l0ug8662j0v5vqhasscufi16t5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFzmE8yXgMt06Howiaf1J1AxjHai-NlwE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "35359908939-diler5l0ug8662j0v5vqhasscufi16t5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
