@@ -118,18 +118,26 @@ fun WeatherEmptyState(
  * Şehir eklenmemiş durumu için özel görünüm
  */
 @Composable
-fun NoCitiesEmptyState(onAddClick: () -> Unit) {
+fun NoCitiesEmptyState(onUseLocation: (() -> Unit)? = null, locationNotice: String? = null,
+    locating: Boolean = false, onAddClick: () -> Unit) {
     HavamaniaEmptyState(
         icon = Icons.Rounded.LocationCity,
         title = "Konum Seçin",
-        description = "Hava durumunu görmek için kayıtlı bir konumu seçin veya yeni bir konum ekleyin.",
+        description = locationNotice ?: "Hava durumunu görmek için kayıtlı bir konumu seçin veya yeni bir konum ekleyin.",
         action = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
             HavamaniaPrimaryButton(
                 text = "Konum Seç",
                 onClick = onAddClick,
                 modifier = Modifier.width(240.dp),
                 icon = Icons.Rounded.AddLocationAlt
             )
+            onUseLocation?.let { useLocation ->
+                androidx.compose.material3.TextButton(onClick = useLocation, enabled = !locating) {
+                    Text(if (locating) "Konum alınıyor…" else "Mevcut konumumu kullan")
+                }
+            }
+            }
         }
     )
 }

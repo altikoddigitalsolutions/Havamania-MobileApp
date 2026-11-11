@@ -13,6 +13,30 @@ import kotlin.coroutines.suspendCoroutine
 class WeatherStartupLocationTest {
     private val savedCity = GeocodingResultDto(id = 1, name = "İzmir")
 
+    @Test fun unavailableLocationReportsFailureWhilePreservingSavedCity() = runBlocking {
+        val displayed = mutableListOf<GeocodingResultDto?>()
+        var failures = 0
+        resolveAutomaticWeatherCity(savedCity, { throw java.io.IOException("offline geocoder") },
+            displayed::add, onUnavailable = { failures++ })
+        assertEquals(listOf(savedCity), displayed)
+        assertEquals(1, failures)
+        displayed.clear()
+        resolveAutomaticWeatherCity(null, { null }, displayed::add, onUnavailable = { failures++ })
+        assertEquals(listOf<GeocodingResultDto?>(null), displayed)
+        assertEquals(2, failures)
+    }
+
+    @Test fun cancelledLookupDoesNotPublishAnUnavailableNotice() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        var failures = 0
+        val lookup = launch {
+            resolveAutomaticWeatherCity(null, { entered.complete(Unit); kotlinx.coroutines.awaitCancellation() },
+                {}, onUnavailable = { failures++ })
+        }
+        entered.await(); lookup.cancel(); lookup.join()
+        assertEquals(0, failures)
+    }
+
     @Test fun automaticLocationDoesNotRepeatProvinceAsDistrict() {
         assertEquals("İzmir" to "Konak", currentLocationNames(" İzmir ", "İZMİR", "Konak", null))
         assertEquals("İzmir" to null, currentLocationNames("İzmir", "İZMİR", " ", null))

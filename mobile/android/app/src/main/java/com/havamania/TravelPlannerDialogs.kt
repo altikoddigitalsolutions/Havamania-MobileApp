@@ -1,4 +1,5 @@
 package com.havamania
+import androidx.compose.ui.platform.testTag
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -385,7 +386,7 @@ private fun LocationSearchField(
                         ListItem(
                             headlineContent = { Text(item.name, fontWeight = FontWeight.Bold) },
                             supportingContent = { Text("${item.admin1 ?: ""}, ${item.country}") },
-                            modifier = Modifier.clickable { onSelect(item) }
+                            modifier = Modifier.testTag("location_suggestion_${item.id}").clickable { onSelect(item) }
                         )
                     }
                 }
@@ -528,7 +529,7 @@ fun PastTravelDetailDialog(
                         Spacer(Modifier.height(8.dp))
                         Text("HATIRLANACAK ÖNERİ", style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Black), color = colors.accent)
                         Spacer(Modifier.height(4.dp))
-                        val personality = CityPersonalityProvider.getPersonality(plan.city, plan.tripType)
+                        val personality = CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType)
                         Text(personality.tip, style = HavamaniaTheme.typography.bodySmall, color = colors.textPrimary)
                     }
                 }

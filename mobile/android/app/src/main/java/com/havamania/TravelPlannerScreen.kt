@@ -97,7 +97,7 @@ fun TravelPlannerScreen(
     // UI Events (Snackbar)
     LaunchedEffect(viewModel, snackbarHostState) {
         collectSessionMessages(viewModel.sessionVersion, viewModel.uiEvent) { event ->
-            if (event.startsWith("DUPLICATE_TRIP|")) {
+            if (event.startsWith("DUPLICATE_TRIP|") || event.startsWith("PAST_TRIP_ERROR|")) {
                 snackbarHostState.showSnackbar(event.substringAfter("|"))
             } else {
                 snackbarHostState.showSnackbar(event)
@@ -144,10 +144,12 @@ fun TravelPlannerScreen(
         }
     }
 
-    LaunchedEffect(focusId, plans) {
-        if (focusId != null && plans.isNotEmpty()) {
+    var focusHandled by remember(session, editorUid, focusId) { mutableStateOf(false) }
+    LaunchedEffect(focusId, plans, focusHandled) {
+        if (!focusHandled && focusId != null && plans.isNotEmpty()) {
             val targetTrip = plans.find { it.id == focusId }
             if (targetTrip != null) {
+                focusHandled = true
                 selectedDate = targetTrip.startDate
                 val status = TravelStatusResolver.getStatus(targetTrip.startDate, targetTrip.endDate, today)
                 selectedFilter = if (targetTrip.isArchived) TravelFilter.ARCHIVED
@@ -216,7 +218,7 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
-    var expandedGuideId by remember(session, editorUid, selectedFilter, selectedDate) { mutableStateOf<String?>(null) }
+    var expandedGuideId by remember(session, editorUid) { mutableStateOf<String?>(null) }
     val expandedGuidePlan = displayPlans.firstOrNull { it.id == expandedGuideId }
     val toggleGuide: (TravelPlan) -> Unit = { plan ->
         expandedGuideId = if (expandedGuideId == plan.id) null else plan.id
@@ -236,6 +238,7 @@ fun TravelPlannerScreen(
     }
 
     HavamaniaScreen(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             HavamaniaTopBar(
                 title = "Seyahat Planlayıcı",
@@ -440,7 +443,12 @@ fun TravelPlannerScreen(
             onDismiss = { editor = editor.close() },
             onSave = { plan ->
                 val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
-                if (editor.owner == activeUid) viewModel.savePlan(plan)
+                if (editor.owner == activeUid) viewModel.savePlan(plan) { saved ->
+                    focusHandled = true
+                    selectedDate = saved.startDate
+                    selectedFilter = if (saved.isArchived) TravelFilter.ARCHIVED else TravelFilter.UPCOMING
+                    expandedGuideId = saved.id
+                }
                 editor = editor.close()
             }
         )

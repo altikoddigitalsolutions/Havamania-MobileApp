@@ -1,4 +1,8 @@
 package com.havamania
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.platform.testTag
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
@@ -114,7 +118,8 @@ fun NextTripHero(
         }
 
         // City Personality for Hero
-        val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
+        val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = if (isOngoing) themeColors.success else themeColors.accent, modifier = Modifier.size(14.dp))
@@ -176,6 +181,8 @@ fun TravelPlanCard(
 
     val isArchived = plan.isArchived
     var showMenu by remember { mutableStateOf(false) }
+    var localGuideExpanded by remember(plan.id) { mutableStateOf(false) }
+    val showPersonality = if (onToggleGuide != null) guideExpanded else localGuideExpanded
 
     val formatter = remember { DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("tr")) }
     val latestAnalysis = plan.analyses.lastOrNull()
@@ -188,9 +195,11 @@ fun TravelPlanCard(
                 if (isFocused) Modifier.border(2.dp, themeColors.accent, RoundedCornerShape(HavamaniaTheme.styles.cardCornerRadius))
                 else Modifier
             ),
-        onClick = {
+        onClick = if (showPersonality) null else {
+            {
             if (isPast || isArchived) onShowDetail()
             else onViewRoute(plan.id)
+            }
         },
         padding = 16.dp
     ) {
@@ -203,7 +212,7 @@ fun TravelPlanCard(
                 TripStatusBadge(tripStatus, isArchived, today == plan.startDate)
 
                 IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Rounded.MoreVert, null, tint = themeColors.textMuted)
+                    Icon(Icons.Rounded.MoreVert, "Seyahat işlemleri: ${plan.city}", tint = themeColors.textMuted)
                 }
 
                 DropdownMenu(
@@ -343,27 +352,19 @@ fun TravelPlanCard(
             }
 
             // City Personality Section (Trip-Type Aware & Clean Surface)
-            var localGuideExpanded by remember(plan.id) { mutableStateOf(false) }
-            val showPersonality = if (onToggleGuide != null) guideExpanded else localGuideExpanded
             val isTablet = LocalWindowSize.current.isTablet || LocalWindowSize.current.isLargeTablet
-            val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
+            val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
 
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
             Spacer(Modifier.height(12.dp))
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (onToggleGuide != null) {
-                            onToggleGuide(plan)
-                        } else {
-                            localGuideExpanded = !localGuideExpanded
-                        }
-                    }
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth().clickable {
+                    if (onToggleGuide != null) onToggleGuide(plan)
+                    else localGuideExpanded = !localGuideExpanded
+                }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -384,23 +385,41 @@ fun TravelPlanCard(
                     )
                 }
 
-                if (!isTablet) {
-                    AnimatedVisibility(visible = showPersonality) {
-                        RichTravelGuideView(plan = plan, today = today)
-                    }
+                if (!isTablet && showPersonality) {
+                    RichTravelGuideView(plan = plan, today = today)
                 }
             }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun RichTravelGuideView(
     plan: TravelPlan,
     today: LocalDate
 ) {
+    val guideStart = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(plan.id) {
+        androidx.compose.runtime.withFrameNanos { }
+        guideStart.bringIntoView()
+    }
+    val guideContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val refreshGuide = LocalTravelGuideRefresher.current
+    val guideLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(plan.city, plan.district, guideLifecycle, refreshGuide) {
+        guideLifecycle.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                refreshGuide(guideContext, plan.city, plan.district)
+                val expiresIn = TravelGuideUpdates.current(plan.city, plan.district)?.validUntilEpochMs
+                    ?.minus(System.currentTimeMillis())?.plus(1)?.coerceAtLeast(1000L)
+                kotlinx.coroutines.delay(minOf(6 * 60 * 60_000L, expiresIn ?: Long.MAX_VALUE))
+            }
+        }
+    }
     val themeColors = HavamaniaTheme.colors
-    val personality = remember(plan.city, plan.tripType) { CityPersonalityProvider.getPersonality(plan.city, plan.tripType) }
+    val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
     val analysis = plan.analyses.lastOrNull()
 
     val avgTemp = analysis?.averageTemperature?.toInt()
@@ -428,9 +447,10 @@ if (BuildConfig.DEBUG) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("travel_guide")) {
         Text(
             text = personality.description,
+            modifier = Modifier.bringIntoViewRequester(guideStart),
             style = HavamaniaTheme.typography.bodySmall,
             color = themeColors.textPrimary
         )
@@ -490,29 +510,40 @@ if (BuildConfig.DEBUG) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Mutlaka Gör
-        SectionHeader("MUTLAKA GÖR", Icons.Rounded.LocationOn)
-        Spacer(Modifier.height(6.dp))
-        personality.mustSee.forEach { item ->
-            Text("• $item", style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary, modifier = Modifier.padding(vertical = 2.dp))
+        if (personality.mustSee.isNotEmpty()) {
+            // Mutlaka Gör
+            SectionHeader("MUTLAKA GÖR", Icons.Rounded.LocationOn)
+            Spacer(Modifier.height(6.dp))
+            personality.mustSee.forEach { item ->
+                Text(item, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary, modifier = Modifier.padding(vertical = 2.dp))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Denemeden Dönme
+            SectionHeader("DENEMEDEN DÖNME", Icons.Rounded.Restaurant)
+            Spacer(Modifier.height(6.dp))
+            personality.food.forEach { item ->
+                Text(item, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary, modifier = Modifier.padding(vertical = 2.dp))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Mini Tavsiyeler
+            SectionHeader("KÜÇÜK BİR PLAN", Icons.Rounded.Lightbulb)
+            Spacer(Modifier.height(6.dp))
+            Text(personality.tip, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary)
+
+            if (personality.experiences.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                SectionHeader("FARKLI BİR DENEYİM", Icons.Rounded.AutoAwesome)
+                personality.experiences.forEach { experience ->
+                    Spacer(Modifier.height(8.dp))
+                    TravelGuideExperienceCard(experience)
+                }
+            }
+
         }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Denemeden Dönme
-        SectionHeader("DENEMEDEN DÖNME", Icons.Rounded.Restaurant)
-        Spacer(Modifier.height(6.dp))
-        personality.food.forEach { item ->
-            Text("• $item", style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary, modifier = Modifier.padding(vertical = 2.dp))
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Mini Tavsiyeler
-        SectionHeader("MİNİ TAVSİYELER", Icons.Rounded.Lightbulb)
-        Spacer(Modifier.height(6.dp))
-        Text("• ${personality.tip}", style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary)
-        Text("• Yerel halkla sohbet ederek bölgenin gizli güzelliklerini öğrenebilirsin.", style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

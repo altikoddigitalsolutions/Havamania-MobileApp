@@ -318,6 +318,11 @@ object ThemeManager {
     internal fun observeWeatherLocation(context: Context, uid: String) =
         citySyncStore(context).observeWeatherLocation(uid)
 
+    internal fun automaticWeatherCityCache(context: Context) = com.havamania.AutomaticWeatherCityCache(context.dataStore, {
+        val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+        !state.pending && !state.busy
+    })
+
     // --- System / UI Config ---
     suspend fun saveLiveEffects(context: Context, enabled: Boolean, uid: String) = context.dataStore.edit { it[liveEffectsKey(uid)] = enabled }
     fun getLiveEffects(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[liveEffectsKey(uid)] ?: true }

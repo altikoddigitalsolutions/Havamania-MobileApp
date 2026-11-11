@@ -497,14 +497,15 @@ interface WeatherDao {
     suspend fun clearTripUploads(uid: String)
 
     @Transaction
-    suspend fun saveLocalTrip(plan: TravelPlanEntity) {
-        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return
-        if (hasTripDeletion(plan.userId, plan.id)) return
+    suspend fun saveLocalTrip(plan: TravelPlanEntity): Long? {
+        if (isDeletedAccountHash(accountOwnerHash(plan.userId))) return null
+        if (hasTripDeletion(plan.userId, plan.id)) return null
         val old = getTravelPlanByIdRaw(plan.id)
-        if (old != null && old.userId != plan.userId) return
+        if (old != null && old.userId != plan.userId) return null
         val revision = maxOf(plan.updatedAt, (old?.updatedAt ?: 0) + 1)
         insertTravelPlanRaw(plan.copy(updatedAt = revision))
         if (plan.userId != "legacy") enqueueTripUpload(TripUploadRequest(plan.userId, plan.id, revision))
+        return revision
     }
 
     @Transaction

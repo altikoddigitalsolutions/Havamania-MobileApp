@@ -37,6 +37,8 @@ object PermissionHelper {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -84,36 +86,6 @@ fun PermissionExplanationDialog(
         containerColor = themeColors.surface,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
     )
-}
-
-@Composable
-fun LocationPermissionFlow(
-    onPermissionResult: (Boolean) -> Unit
-) {
-    var showDialog by remember { mutableStateOf(true) }
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val granted = permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
-                permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
-        onPermissionResult(granted)
-    }
-
-    if (showDialog) {
-        PermissionExplanationDialog(
-            title = "Konum İzni Gerekli",
-            description = "Havamania, bulunduğun şehre göre anlık hava analizi ve kişisel öneriler sunmak için konumunu kullanır.",
-            icon = Icons.Rounded.LocationOn,
-            onConfirm = {
-                showDialog = false
-                launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            },
-            onDismiss = {
-                showDialog = false
-                onPermissionResult(false)
-            }
-        )
-    }
 }
 
 @Composable

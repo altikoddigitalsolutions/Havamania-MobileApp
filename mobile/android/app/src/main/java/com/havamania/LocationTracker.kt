@@ -53,15 +53,11 @@ class DefaultLocationTracker(
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        val locationManager = application.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-
         if (!hasAccessCoarseLocationPermission && !hasAccessFineLocationPermission) {
             return null
         }
 
-        if (!isGpsEnabled) return null
+        if (!deviceLocationEnabled(application)) return null
 
         return try {
             kotlinx.coroutines.withTimeoutOrNull(15_000) {

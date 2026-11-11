@@ -6,74 +6,6 @@ import java.util.Locale
 
 object TravelAiHelper {
 
-    private data class CityDetails(
-        val description: String,
-        val visitPlace: String,
-        val localDish: String,
-        val localAdvice: String,
-        val cityTip: String,
-        val friendGreeting: String
-    )
-
-    private val CITY_DATA = mapOf(
-        "istanbul" to CityDetails(
-            description = "İki kıtanın birleştiği büyüleyici metropol",
-            visitPlace = "Galata Kulesi civarındaki ara sokakları keşfedip vapurla karşıya geçmeyi unutma. Boğaz havası her zaman iyi gelir.",
-            localDish = "Karaköy'de taze bir balık ekmek ve ardından meşhur bir baklava harika bir ikili olur.",
-            localAdvice = "Beşiktaş'tan Ortaköy'e uzanan sahil şeridinde sabah yürüyüşü yapıp boğazın keyfini çıkar.",
-            cityTip = "Vapur seyahatlerini gün batımına denk getirirsen İstanbul'un o eşsiz silüeti eşliğinde harika fotoğraflar yakalayabilirsin.",
-            friendGreeting = "İstanbul seni o bitmek bilmeyen enerjisi ve büyüleyici manzarasıyla bekliyor."
-        ),
-        "ankara" to CityDetails(
-            description = "Cumhuriyetin kalbi ve bozkırın modern yüzü",
-            visitPlace = "Anıtkabir'in huzurlu atmosferini ve ardından Hamamönü'nün tarihi dokusunu mutlaka gör.",
-            localDish = "Ankara Kalesi civarında gerçek bir Ankara döneri denemeden dönme, farkı hemen anlayacaksın.",
-            localAdvice = "Kuğulu Park'ta kuğuları izleyerek kahveni yudumlayıp şehrin temposuna kısa bir mola ver.",
-            cityTip = "Eymir Gölü'nde sabah saatlerinde kısa bir yürüyüş yapmak Ankara'nın o resmi havasını bir anda dağıtabilir.",
-            friendGreeting = "Başkentin o ağırbaşlı ama bir o kadar da samimi atmosferine hoş geldin."
-        ),
-        "izmir" to CityDetails(
-            description = "Ege'nin incisi ve özgürlüğün şehri",
-            visitPlace = "İzmir'e gitmişken gün batımında Kordon'da kısa bir yürüyüş yapmadan dönme. Özellikle akşam saatlerinde manzara çok keyifli oluyor.",
-            localDish = "Sabah fırından yeni çıkmış çıtır bir boyoz ve yanına haşlanmış yumurta İzmir klasiğidir, mutlaka denemelisin.",
-            localAdvice = "Kemeraltı Çarşısı'nın tarihi dokusunda kaybolup Kızlarağası Hanı'nda kumda kahve keyfi yap.",
-            cityTip = "Vaktin olursa Alaçatı'nın dar sokaklarında kaybolmayı veya Pasaport'ta çay keyfi yapmayı unutma.",
-            friendGreeting = "Ege'nin incisi İzmir, o rahat ve güler yüzlü havasıyla seni karşılamaya hazır."
-        ),
-        "antalya" to CityDetails(
-            description = "Güneşin, tarihin ve masmavi denizin buluşma noktası",
-            visitPlace = "Kaleiçi'nin o daracık, tarih kokan sokaklarını ve Hadrian Kapısı'nı keşfetmelisin. Her köşe ayrı bir hikaye.",
-            localDish = "Yöreye özgü tahinli piyaz ve şiş köfte ikilisini denemeni öneririm, Antalya'nın imza lezzetidir.",
-            localAdvice = "Konyaaltı sahilinde yürüyüş yapıp falezlerin üzerinden denizi izlemek ruhuna iyi gelecek.",
-            cityTip = "Düden Şelalesi'nin denize döküldüğü noktada güneşin batışını izlemek sana tüm yorgunluğunu unutturacak.",
-            friendGreeting = "Akdeniz'in masmavi denizi ve iç ısıtan güneşi seyahatine eşlik edecek."
-        ),
-        "balikesir" to CityDetails(
-            description = "Doğa ve denizin kucaklaştığı huzurlu rota",
-            visitPlace = "Kaz Dağları'nın bol oksijenli havasını solumak veya Ayvalık Cunda'nın renkli sokaklarında gezmek harika bir seçim olur.",
-            localDish = "Meşhur Balıkesir höşmerim tatlısını ve zeytinyağlıları denemeden ayrılma, tadı damağında kalacak.",
-            localAdvice = "Ayvalık'ta gün batımını Şeytan Sofrası'nda izlemek bu seyahatin en unutulmaz anı olabilir.",
-            cityTip = "Sabah saatlerinde Kaz Dağları'nın temiz havasını solumak oldukça keyifli bir deneyim olacaktır.",
-            friendGreeting = "Balıkesir seyahatin için doğanın tüm renkleriyle iç içe bir rota planlayabilirsin."
-        ),
-        "mardin" to CityDetails(
-            description = "Tarih ve kültürün taşa işlendiği masalsı şehir",
-            visitPlace = "Eski Mardin sokaklarında adımlarken tarihin sesini duyacaksın. Zinciriye Medresesi'nin manzarası seni büyüleyecek.",
-            localDish = "Kaburga dolmasını denemeden dönme, Mardin mutfağının zirve noktasıdır. Yanına bir de mırra kahvesi yakışır.",
-            localAdvice = "Deyrulzafaran Manastırı'nın huzurlu bahçesinde kısa bir mola verip tarihi atmosferin tadını çıkar.",
-            cityTip = "Eski Mardin sokaklarında kaybolurken fotoğraf çekmek için sabahın erken saatlerini tercih etmeni öneririm.",
-            friendGreeting = "Mardin seyahatin için hava verisi sınırlı olsa bile planını rahatça oluşturabilirsin."
-        ),
-        "gaziantep" to CityDetails(
-            description = "Gastronominin başkenti ve tarihin lezzet durağı",
-            visitPlace = "Zeugma Mozaik Müzesi'ndeki o eşsiz eserleri görüp ardından Bakırcılar Çarşısı'nın ritmine kapılmalısın.",
-            localDish = "Gaziantep'te tatlı için yer ayır. Özellikle iyi bir baklava ve katmer deneyimi seyahatin en unutulmaz kısmı olabilir.",
-            localAdvice = "Sabah erkenden meşhur bir Beyran içerek güne Antep usulü enerjik bir başlangıç yap.",
-            cityTip = "Sabah saatlerini müze ve çarşı için ayır; öğleden sonra yemek ve kısa yürüyüş planı daha rahat olur.",
-            friendGreeting = "Gastronominin başkenti Gaziantep, lezzet dolu sokakları ve derin tarihiyle seni bekliyor."
-        )
-    )
-
     fun generateTravelAiSuggestion(
         city: String,
         tripType: TripType,
@@ -83,7 +15,8 @@ object TravelAiHelper {
         isPastTrip: Boolean = false,
         endDate: LocalDate? = null,
         tone: AssistantTone = AssistantTone.DENGELI,
-        personalization: PersonalizationProfile? = null
+        personalization: PersonalizationProfile? = null,
+        district: String? = null
     ): String {
         if (isPastTrip) {
             val dateStr = endDate?.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM")) ?: "geçtiğimiz günlerde"
@@ -101,27 +34,16 @@ object TravelAiHelper {
 
         val windowDays = TRIP_ANALYSIS_WINDOW_DAYS
 
+        val guide = LocalTravelGuides.find(city, district)
+        val experiences = LocalTravelGuides.experiences(city, district, tripType)
+        val experienceAdvice = experiences.takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n") { "${it.title}\n${it.description}" } ?: guide?.experience
+        val destination = district?.takeIf { it.isNotBlank() }?.let { "$it, $city" } ?: city
+        val missingGuide = "$destination için yer ve yemek adları doğrulanmış rehber henüz hazır değil."
+
         if (daysUntilTrip > windowDays) {
-            return when (tone) {
-                AssistantTone.SAMIMI -> "HAVA ÖZETİ|Daha vakit var! $windowDays gün kala tüm detayları önüne sereceğim. [SEP] VALİZ TAVSİYESİ|Henüz erken, valizi sonraya sakla. [SEP] MUTLAKA GÖR|O tarihlerde en popüler yerleri fısıldayacağım. [SEP] DENEMEDEN DÖNME|En taze lezzetleri o zaman seçeriz. [SEP] YEREL TAVSİYE|Şimdilik sadece heyecanını yaşa!"
-                AssistantTone.RESMI -> "HAVA ÖZETİ|Hava durumu analizi seyahate $windowDays gün kala sisteme yansıtılacaktır. [SEP] VALİZ TAVSİYESİ|Tahminlerin kesinleşmesi beklenmektedir. [SEP] MUTLAKA GÖR|Popüler mekan listesi ilgili tarihlerde sunulacaktır. [SEP] DENEMEDEN DÖNME|Mevsimlik öneriler paylaşılacaktır. [SEP] YEREL TAVSİYE|Hazırlık sürecini takip ediniz."
-                AssistantTone.KISA_NET -> "HAVA ÖZETİ|$windowDays gün kala aktifleşecek. [SEP] VALİZ TAVSİYESİ|Bekleyiniz. [SEP] MUTLAKA GÖR|Yakında. [SEP] DENEMEDEN DÖNME|Yakında. [SEP] YEREL TAVSİYE|Takipte kal."
-                else -> "HAVA ÖZETİ|Hava durumu verileri seyahatinize $windowDays gün kala analiz edilecektir. [SEP] VALİZ TAVSİYESİ|Tahminler netleştiğinde en uygun kıyafet önerilerini burada bulacaksın. [SEP] MUTLAKA GÖR|Gideceğin şehir için en popüler mekanları o tarihlerde senin için listeleyeceğiz. [SEP] DENEMEDEN DÖNME|Yöresel lezzetlerin en tazelerini mevsime göre önereceğiz. [SEP] YEREL TAVSİYE|Şu an için sadece rotanın heyecanını yaşa, detayları bize bırak."
-            }
+            return "HAVA ÖZETİ|Hava tahmini seyahate $windowDays gün kala hazırlanacak. [SEP] VALİZ TAVSİYESİ|Havaya göre valiz önerisi için tahmin bekleniyor. [SEP] MUTLAKA GÖR|${guide?.visit ?: missingGuide} [SEP] DENEMEDEN DÖNME|${guide?.food ?: missingGuide} [SEP] YEREL TAVSİYE|${experienceAdvice ?: missingGuide}"
         }
-
-        val normalizedCity = city.lowercase(Locale("tr")).trim()
-            .replace('ç', 'c').replace('ğ', 'g').replace('ı', 'i')
-            .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
-
-        val cityInfo = CITY_DATA.entries.find { normalizedCity.contains(it.key) }?.value ?: CityDetails(
-            description = "Keşfedilmeyi bekleyen bir durak",
-            visitPlace = "$city sokaklarını ve yerel parklarını keşfetmek her zaman iyi bir fikirdir. Şehrin ruhunu hissetmeye çalış.",
-            localDish = "Bu şehre özel en meşhur yerel yemeği denemeden dönme, lezzet duraklarını yerlilere sormayı unutma.",
-            localAdvice = "Merkezden biraz uzaklaşıp yerel halkın vakit geçirdiği kafelerde bir çay molası ver.",
-            cityTip = "Plansız bir şekilde yürümek bazen en güzel keşiflerin kapısını açar, şehrin sesini dinle.",
-            friendGreeting = "$city seyahatin için her şey hazır, keşfetmenin heyecanını yaşamaya başla!"
-        )
 
         var weatherBlock = ""
         if (forecastSnapshot != null) {
@@ -242,21 +164,11 @@ object TravelAiHelper {
             packingBlock = "Rahat bir yürüyüş ayakkabısı ve her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
         }
 
-        val tripAdvice = when(tripType) {
-            TripType.BUSINESS -> "İş görüşmeleri arasında kısa bir yürüyüş yapmak enerjini tazeler. Zihnini boşaltmak için yerel bir kahve durağına uğra."
-            TripType.VACATION -> "Telefonunu bir kenara bırakıp anın tadını çıkar. Bazen sadece izlemek ve dinlemek en güzel hatıradır."
-            else -> cityInfo.cityTip
-        }
-
-        return "HAVA ÖZETİ|$weatherBlock [SEP] VALİZ TAVSİYESİ|$packingBlock [SEP] MUTLAKA GÖR|${cityInfo.visitPlace} [SEP] DENEMEDEN DÖNME|${cityInfo.localDish} [SEP] YEREL TAVSİYE|${cityInfo.localAdvice}"
+        return "HAVA ÖZETİ|$weatherBlock [SEP] VALİZ TAVSİYESİ|$packingBlock [SEP] MUTLAKA GÖR|${guide?.visit ?: missingGuide} [SEP] DENEMEDEN DÖNME|${guide?.food ?: missingGuide} [SEP] YEREL TAVSİYE|${experienceAdvice ?: missingGuide}"
     }
 
-    fun getCityDescription(city: String): String {
-        val normalizedCity = city.lowercase(Locale("tr")).trim()
-            .replace('ç', 'c').replace('ğ', 'g').replace('ı', 'i')
-            .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
-        return CITY_DATA.entries.find { normalizedCity.contains(it.key) }?.value?.description ?: "Keşfedilmeyi bekleyen harika bir rota"
-    }
+    fun getCityDescription(city: String): String =
+        LocalTravelGuides.find(city, null)?.description ?: city
 
     fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot, tone: AssistantTone = AssistantTone.DENGELI): String {
         val changes = mutableListOf<String>()

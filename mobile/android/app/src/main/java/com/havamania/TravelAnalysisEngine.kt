@@ -125,7 +125,7 @@ if (BuildConfig.DEBUG) {
 
         val aiResult = TravelAiHelper.generateTravelAiSuggestion(
             plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot,
-            forecastDaysUntil, tone = tone, personalization = personalization
+            forecastDaysUntil, tone = tone, personalization = personalization, district = plan.district
         )
 
         // Parse AI Result to separate fields for the model (Stability)

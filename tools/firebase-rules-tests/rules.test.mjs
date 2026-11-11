@@ -1,10 +1,22 @@
 import { after, before, beforeEach, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 let env;
+test('editorial guides are readable individually but clients cannot list or publish', async () => {
+  const guest = env.unauthenticatedContext().firestore();
+  const user = env.authenticatedContext('owner').firestore();
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'travel_guides/reviewed'), { payload: '{}' });
+  });
+  await assertSucceeds(getDoc(doc(guest, 'travel_guides/reviewed')));
+  await assertSucceeds(getDoc(doc(user, 'travel_guides/reviewed')));
+  await assertFails(getDocs(collection(user, 'travel_guides')));
+  await assertFails(setDoc(doc(user, 'travel_guides/reviewed'), { payload: 'changed' }));
+  await assertFails(setDoc(doc(guest, 'travel_guides/new'), { payload: 'changed' }));
+});
 before(async () => {
   // Never fall back to production, even if invoked without emulators:exec.
   if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8086' ||

@@ -28,7 +28,8 @@ internal suspend fun resolveAutomaticWeatherCity(
     locate: suspend () -> GeocodingResultDto?,
     display: (GeocodingResultDto?) -> Unit,
     offerCityPicker: (() -> Unit)? = null,
-    waitForPicker: suspend () -> Unit = { delay(5_000) }
+    waitForPicker: suspend () -> Unit = { delay(5_000) },
+    onUnavailable: (() -> Unit)? = null
 ): Unit = coroutineScope {
     if (savedCity != null) display(savedCity)
     val picker = if (savedCity == null && offerCityPicker != null) launch {
@@ -46,6 +47,7 @@ internal suspend fun resolveAutomaticWeatherCity(
         picker?.cancel()
     }
     currentCoroutineContext().ensureActive()
+    if (currentCity == null) onUnavailable?.invoke()
     if (savedCity == null || (currentCity != null && currentCity != savedCity)) display(currentCity)
 }
 
@@ -134,6 +136,11 @@ class WeatherViewModel(
     private var searchJob: kotlinx.coroutines.Job? = null
     private val accountTasks = AccountTaskScope(viewModelScope) { currentUid }
     private var locationJob: kotlinx.coroutines.Job? = null
+    private var locationAttempt = 0L
+    private val _locating = MutableStateFlow(false)
+    val locating = _locating.asStateFlow()
+    private val _locationNotice = MutableStateFlow<String?>(null)
+    val locationNotice = _locationNotice.asStateFlow()
 
     private val _weatherSession = MutableStateFlow(0L)
     val weatherSession = _weatherSession.asStateFlow()
@@ -156,6 +163,9 @@ class WeatherViewModel(
         fetchJob?.cancel()
         weatherSelection = null
         locationJob?.cancel()
+        locationAttempt++
+        _locating.value = false
+        _locationNotice.value = null
         searchJob?.cancel()
         _isRefreshing.value = false
         _citySearchStatus.value = LocationSearchStatus.IDLE
@@ -240,11 +250,34 @@ class WeatherViewModel(
 
     private fun refreshWeatherWithCurrentLocation(savedCity: GeocodingResultDto?) {
         locationJob?.cancel()
+        val attempt = ++locationAttempt
+        _locating.value = true
+        _locationNotice.value = null
         val uid = currentUid
         locationJob = viewModelScope.launch {
+            try {
+            val cache = ThemeManager.automaticWeatherCityCache(getApplication())
+            val cachedCity = try { cache.read(uid) } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                null
+            }
+            val fallbackCity = cachedCity ?: savedCity
+            if (fallbackCity != null && uid == currentUid) _locationNotice.value =
+                "Kayıtlı şehir gösteriliyor; mevcut konum kontrol ediliyor."
             resolveAutomaticWeatherCity(
-                savedCity,
-                locate = { locationTracker.getCurrentCity() },
+                fallbackCity,
+                locate = {
+                    val city = locationTracker.getCurrentCity()
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    if (city != null && uid == currentUid) _locationNotice.value = null
+                    if (city != null && uid == currentUid) try {
+                        cache.write(uid, city) { uid == currentUid }
+                    } catch (error: Exception) {
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        // Live weather must remain usable if the optional disk fallback cannot be saved.
+                    }
+                    city
+                },
                 display = { city ->
                     if (uid == currentUid) {
                         if (city != null) {
@@ -258,13 +291,24 @@ class WeatherViewModel(
                     if (uid == currentUid && weatherSelection == null && _uiState.value is WeatherUiState.Loading) {
                         clearWeatherSelection()
                     }
-                })
+                }),
+                onUnavailable = {
+                    if (uid == currentUid) _locationNotice.value = if (fallbackCity != null)
+                        "Mevcut konum doğrulanamadı. Kayıtlı şehrin hava durumu gösteriliyor."
+                    else "Mevcut konumdan şehir bilgisi alınamadı. Yeniden deneyebilir veya konumu elle seçebilirsin."
+                }
             )
+            } finally {
+                if (attempt == locationAttempt) _locating.value = false
+            }
         }
     }
 
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
         locationJob?.cancel()
+        locationAttempt++
+        _locating.value = false
+        _locationNotice.value = null
         loadSelectedCity(lat, lon, cityName, districtName)
     }
 
@@ -280,6 +324,10 @@ class WeatherViewModel(
         weatherSelection = null
         _isRefreshing.value = false
         _uiState.value = WeatherUiState.NoCity
+    }
+
+    fun useCurrentLocation() {
+        refreshWeatherWithCurrentLocation(null)
     }
 
     fun refreshWeather() {

@@ -61,8 +61,12 @@ internal suspend fun retryQueuedTripUploads(
     }
 }
 
-class TravelViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = WeatherDatabase.getDatabase(application)
+class TravelViewModel @JvmOverloads constructor(
+    application: Application,
+    private val database: WeatherDatabase = WeatherDatabase.getDatabase(application),
+    private val cityLookup: (suspend (String) -> List<GeocodingResultDto>)? = null,
+    private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
+) : AndroidViewModel(application) {
     private val dao = database.weatherDao()
     private val repository = WeatherRepository.getInstance(application)
     private val apiService = NetworkModule.apiService
@@ -74,7 +78,6 @@ class TravelViewModel(application: Application) : AndroidViewModel(application) 
 
     private var firestoreListener: ListenerRegistration? = null
 
-    private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
         .stateIn(
             scope = viewModelScope,
@@ -372,11 +375,11 @@ if (BuildConfig.DEBUG) {
         )
     }
 
-    fun savePlan(plan: TravelPlan) {
+    fun savePlan(plan: TravelPlan, onSaved: (TravelPlan) -> Unit = {}): Job? {
         val cityNameTrimmed = plan.city.trim()
-        if (cityNameTrimmed.isEmpty()) return
+        if (cityNameTrimmed.isEmpty()) return null
 
-        accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
+        return accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) launch@ { currentUid ->
             if (plan.userId != "legacy" && plan.userId != currentUid) return@launch
             tripLocationError(plan)?.let {
                 emitAccountMessage(currentUid, it)
@@ -428,7 +431,14 @@ if (BuildConfig.DEBUG) {
                 analysisJobs.remove(finalPlan.id)?.cancel()
             }
             val entity = finalPlan.toEntity()
-            dao.saveLocalTrip(entity)
+            val savedRevision = dao.saveLocalTrip(entity)
+            if (savedRevision == null) {
+                emitAccountMessage(currentUid, "Seyahat kaydedilemedi. Kayıt silinmiş veya bu hesaba ait değil.")
+                return@launch
+            }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+                if (currentUid == this@TravelViewModel.currentUid) onSaved(finalPlan.copy(updatedAt = savedRevision))
+            }
 
             if (currentUid != "legacy") {
                 try {
@@ -550,7 +560,7 @@ if (BuildConfig.DEBUG) {
         if (query.trim().length < 2) return
         citySearchJob = accountTasks.launch launch@ { currentUid ->
             kotlinx.coroutines.delay(300)
-            val result = fetchLocationSuggestions { repository.searchCityOrThrow(query.trim()) }
+            val result = fetchLocationSuggestions { cityLookup?.invoke(query.trim()) ?: repository.searchCityOrThrow(query.trim()) }
             publishAccountResult(currentUid, { this@TravelViewModel.currentUid }) {
                 _citySuggestions.value = result.items
                 _citySearchStatus.value = result.status
@@ -565,7 +575,7 @@ if (BuildConfig.DEBUG) {
         if (query.trim().length < 2) return
         originSearchJob = accountTasks.launch launch@ { currentUid ->
             kotlinx.coroutines.delay(300)
-            val result = fetchLocationSuggestions { repository.searchCityOrThrow(query.trim()) }
+            val result = fetchLocationSuggestions { cityLookup?.invoke(query.trim()) ?: repository.searchCityOrThrow(query.trim()) }
             publishAccountResult(currentUid, { this@TravelViewModel.currentUid }) {
                 _originSuggestions.value = result.items
                 _originSearchStatus.value = result.status

@@ -129,6 +129,7 @@ fun HavamaniaScreen(
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
+    snackbarHost: @Composable () -> Unit = {},
     content: @Composable BoxScope.(PaddingValues) -> Unit
 ) {
     val colors = HavamaniaTheme.colors
@@ -138,6 +139,7 @@ fun HavamaniaScreen(
         topBar = topBar,
         bottomBar = bottomBar,
         floatingActionButton = floatingActionButton,
+        snackbarHost = snackbarHost,
         containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
@@ -176,6 +178,7 @@ fun HavamaniaGlassCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val parentCard = LocalHavamaniaCardDepth.current
     val colors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
     val interactionSource = remember { MutableInteractionSource() }
@@ -203,22 +206,20 @@ fun HavamaniaGlassCard(
                 } else Modifier
             ),
         shape = RoundedCornerShape(cornerRadius),
-        color = colors.surface.copy(alpha = alpha),
-        border = BorderStroke(
+        color = if (parentCard > 0) Color.Transparent else colors.surface.copy(alpha = alpha),
+        border = if (parentCard > 0) null else BorderStroke(
             width = themeStyles.cardBorderWidth,
             brush = Brush.verticalGradient(
                 colors = listOf(colors.border, Color.Transparent)
             )
         ),
-        shadowElevation = themeStyles.elevation / 2
+        shadowElevation = if (parentCard > 0) 0.dp else themeStyles.elevation / 2
     ) {
-        Column(
-            modifier = Modifier.padding(
-                if (windowSize.isCompact) themeStyles.spacingMD
-                else themeStyles.spacingLG
-            ),
-            content = content
-        )
+        CompositionLocalProvider(LocalHavamaniaCardDepth provides parentCard + 1) {
+            Column(modifier = Modifier.padding(
+                if (windowSize.isCompact) themeStyles.spacingMD else themeStyles.spacingLG
+            ), content = content)
+        }
     }
 }
 
@@ -772,6 +773,8 @@ fun HavamaniaInfoBanner(
 /**
  * Standardized Card Component
  */
+internal val LocalHavamaniaCardDepth = staticCompositionLocalOf { 0 }
+
 @Composable
 fun HavamaniaCard(
     modifier: Modifier = Modifier,
@@ -783,6 +786,7 @@ fun HavamaniaCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val parentCard = LocalHavamaniaCardDepth.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -801,14 +805,13 @@ fun HavamaniaCard(
                 ) else Modifier
             ),
         shape = shape,
-        color = backgroundColor,
-        border = BorderStroke(HavamaniaTheme.styles.cardBorderWidth, borderColor),
-        shadowElevation = elevation / 2
+        color = if (parentCard > 0) Color.Transparent else backgroundColor,
+        border = if (parentCard > 0) null else BorderStroke(HavamaniaTheme.styles.cardBorderWidth, borderColor),
+        shadowElevation = if (parentCard > 0) 0.dp else elevation / 2
     ) {
-        Column(
-            modifier = Modifier.padding(padding),
-            content = content
-        )
+        CompositionLocalProvider(LocalHavamaniaCardDepth provides parentCard + 1) {
+            Column(modifier = Modifier.padding(padding), content = content)
+        }
     }
 }
 

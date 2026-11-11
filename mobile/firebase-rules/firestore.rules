@@ -1,6 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Public editorial guides. Only trusted Admin SDK publishing may write.
+    match /travel_guides/{guideId} {
+      allow get: if true;
+      allow list, write: if false;
+    }
     // Admin-only marker prevents stale tokens from recreating deleted data.
     function activeOwner(userId) {
       return request.auth != null && request.auth.uid == userId

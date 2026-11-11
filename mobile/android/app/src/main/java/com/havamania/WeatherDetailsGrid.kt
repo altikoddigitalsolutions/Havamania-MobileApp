@@ -130,19 +130,9 @@ private fun MetricRow(rowItems: List<WeatherDetailData>) {
 @Composable
 fun WeatherDetailCard(
     data: WeatherDetailData,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
     val themeColors = HavamaniaTheme.colors
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressedState = interactionSource.collectIsPressedAsState()
-    val isPressed = isPressedState.value
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
-        label = "scale"
-    )
 
     val accentColor = remember(data.accentColorHex, themeColors.accent) {
         try {
@@ -153,13 +143,16 @@ fun WeatherDetailCard(
     }
 
     HavamaniaCard(
-        modifier = modifier.height(130.dp),
+        modifier = modifier.heightIn(min = 130.dp),
+        backgroundColor = Color.Transparent,
+        borderColor = Color.Transparent,
+        elevation = 0.dp,
         padding = 16.dp,
-        onClick = onClick
+        onClick = null
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -174,7 +167,7 @@ fun WeatherDetailCard(
                 Text(
                     text = data.title.uppercase(),
                     style = HavamaniaTheme.typography.sectionTitle,
-                    color = themeColors.textSecondary.copy(alpha = 0.5f)
+                    color = themeColors.textSecondary
                 )
             }
 
@@ -185,14 +178,13 @@ fun WeatherDetailCard(
                     fontSize = 20.sp
                 ),
                 color = themeColors.textPrimary,
-                maxLines = 1
+                maxLines = 3
             )
 
             Text(
                 text = data.description,
                 style = HavamaniaTheme.typography.bodySmall,
-                color = themeColors.textSecondary.copy(alpha = 0.6f),
-                maxLines = 1
+                color = themeColors.textSecondary
             )
         }
     }
@@ -207,11 +199,11 @@ fun WindDirectionCard(
     val themeColors = HavamaniaTheme.colors
 
     HavamaniaCard(
-        modifier = modifier.fillMaxWidth().height(110.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 110.dp),
         padding = 16.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -231,7 +223,7 @@ fun WindDirectionCard(
                 )
             }
 
-            Column {
+            Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Rounded.CompassCalibration, null, tint = themeColors.textMuted, modifier = Modifier.size(14.dp))
                     Text(

@@ -95,6 +95,9 @@ fun HomeScreen(
     var searchText by remember { mutableStateOf("") }
 
     val weatherSession by viewModel.weatherSession.collectAsStateWithLifecycle()
+    val locationMode by viewModel.locationMode.collectAsStateWithLifecycle()
+    val locating by viewModel.locating.collectAsStateWithLifecycle()
+    val locationNotice by viewModel.locationNotice.collectAsStateWithLifecycle()
     LaunchedEffect(searchText, showCitySwitcher, weatherSession) {
         viewModel.searchCity(if (showCitySwitcher) searchText else "")
     }
@@ -105,6 +108,12 @@ fun HomeScreen(
         onRefresh = { viewModel.refreshWeather() }
     )
 
+    WeatherLocationAccess(weatherSession, uiState is WeatherUiState.NoCity,
+        autoLocate = locationMode != LocationMode.AUTO,
+        onLocate = {
+            if (viewModel.locationMode.value == LocationMode.AUTO) viewModel.useCurrentLocation()
+            else themeViewModel.setLocationMode(LocationMode.AUTO)
+        }, onManual = { showCitySwitcher = true }) { useLocation ->
     HavamaniaScreen(
         modifier = Modifier.pullRefresh(pullRefreshState)
     ) { padding ->
@@ -113,7 +122,10 @@ fun HomeScreen(
             when (state) {
                 is WeatherUiState.Loading -> HomeScreenLoading()
                 is WeatherUiState.NoCity -> {
-                    NoCitiesEmptyState(onAddClick = { showCitySwitcher = true })
+                    Box(Modifier.padding(padding)) {
+                        NoCitiesEmptyState(onAddClick = { showCitySwitcher = true }, onUseLocation = useLocation,
+                            locationNotice = locationNotice, locating = locating)
+                    }
                 }
                 is WeatherUiState.Success -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -131,7 +143,8 @@ fun HomeScreen(
                             scrollState = scrollState,
                             onAskAiClick = { rec -> onNavigateToAi(rec, state.data) },
                             onCityClick = { showCitySwitcher = true },
-                            onNotificationsClick = onNavigateToNotifications
+                            onNotificationsClick = onNavigateToNotifications,
+                            locationNotice = locationNotice
                         )
                     }
                 }
@@ -168,6 +181,9 @@ fun HomeScreen(
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.textMuted.copy(0.2f)) }
             ) {
+                TextButton(onClick = { showCitySwitcher = false; useLocation() }) {
+                    Text("Mevcut konumumu kullan")
+                }
                 WeatherCitySearchContent(
                     query = searchText,
                     onQueryChange = { searchText = it },
@@ -198,6 +214,7 @@ fun HomeScreen(
             scale = true
         )
     }
+    }
 }
 
 @Composable
@@ -215,7 +232,8 @@ fun BoxScope.WeatherSuccessContent(
     onAskAiClick: (HavamaniaRecommendation) -> Unit,
     onCityClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
-    isOnline: Boolean = true
+    isOnline: Boolean = true,
+    locationNotice: String? = null
 ) {
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
@@ -265,6 +283,10 @@ fun BoxScope.WeatherSuccessContent(
             )
     ) {
         Spacer(modifier = Modifier.height(themeStyles.spacingSM))
+        locationNotice?.let { notice ->
+            Text(notice, style = HavamaniaTheme.typography.bodySmall, color = themeColors.warning,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = themeStyles.pagePadding, vertical = 8.dp))
+        }
 
         if (data.isStale || !isOnline) {
             val formattedTime = remember(data.timestamp, data.timezone) {
