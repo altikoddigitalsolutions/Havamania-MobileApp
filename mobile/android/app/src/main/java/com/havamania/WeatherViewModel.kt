@@ -54,22 +54,22 @@ internal suspend fun resolveAutomaticWeatherCity(
 /**
  * Hava durumu ekranı için ViewModel - Network Awareness eklendi
  */
-class WeatherViewModel(
-    application: Application
+class WeatherViewModel internal constructor(
+    application: Application,
+    private val repository: WeatherRepository,
+    private val networkMonitor: NetworkMonitor,
+    locationTrackerFactory: () -> LocationTracker,
+    private val locationPreferences: ((String) -> Flow<Pair<LocationMode, GeocodingResultDto?>>)? = null,
+    private val automaticCityCache: AutomaticWeatherCityCache? = null
 ) : AndroidViewModel(application) {
-
-    private val repository = WeatherRepository.getInstance(application)
+    constructor(application: Application) : this(application, WeatherRepository.getInstance(application),
+        ConnectivityManagerNetworkMonitor(application), {
+            DefaultLocationTracker(com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(application), application)
+        })
     private val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
 
-    private val networkMonitor: NetworkMonitor = ConnectivityManagerNetworkMonitor(application)
-
-    private val locationTracker: LocationTracker by lazy {
-        DefaultLocationTracker(
-            com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(application),
-            application
-        )
-    }
+    private val locationTracker: LocationTracker by lazy(locationTrackerFactory)
 
     // İnternet durumunu flow olarak takip et
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
@@ -214,7 +214,7 @@ class WeatherViewModel(
             }
 
             launch {
-                ThemeManager.observeWeatherLocation(getApplication(), uid).catch {
+                (locationPreferences?.invoke(uid) ?: ThemeManager.observeWeatherLocation(getApplication(), uid)).catch {
                     showWeatherPreferenceError(uid)
                 }.collect { (mode, city) ->
                     if (uid != currentUid) return@collect
@@ -256,7 +256,7 @@ class WeatherViewModel(
         val uid = currentUid
         locationJob = viewModelScope.launch {
             try {
-            val cache = ThemeManager.automaticWeatherCityCache(getApplication())
+            val cache = automaticCityCache ?: ThemeManager.automaticWeatherCityCache(getApplication())
             val cachedCity = try { cache.read(uid) } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 null

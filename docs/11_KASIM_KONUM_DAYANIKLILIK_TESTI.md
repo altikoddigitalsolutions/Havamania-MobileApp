@@ -43,3 +43,6 @@ Samsung SM-T500 / Android 12 üzerinde son toplu koşu **9/10 başarılı, 0 atl
 - Gerçek sistem izin reddi ve GPS ayarları sınandı. Ağ kesintisi/konum bulunamaması callback testleri ve disk geri dönüşü izole testlerdir; fiziksel internet kesintisiyle tam HomeScreen–hava servisi–önbellek kabulü yerine geçmez.
 - Açık kalanlar: GPS yeniden açılışının ilk konum sonucu, gerçek hava ekranında çevrimdışı soğuk açılış, sistemin kalıcı ret nedeniyle izin penceresini hiç göstermediği gerçek cihaz durumu, fiziksel telefon/üretici çeşitliliği, gerçek Firebase hesap değişimi ve süreç ölümü/izin penceresi sırasında yeniden oluşturma. Kalıcı ret için uygulamanın ret/ayarlar mantığı birim testlerinde kapsandı; gerçek cihaz günlükleri bu turda iki normal sistem penceresi reddi ve sıfır penceresiz ret gösterdi.
 - Yeni release AAB üretilmedi. Bu değişiklikler Play'e yayımlandı sayılmaz.
+
+## Sonraki doğrulama
+İlk boş sağlayıcı sonucu ayrıştırıldı ve sınırlı kurtarma eklendi. GPS yeniden açılışı 2/2 konum koşusunda geçti; gerçek HomeScreen kontrollü çevrimdışı testinde açıldı. Önceki açık maddelerin güncel kapsamı ve 477 JVM / cihaz kanıtları için [devam raporuna](11_KASIM_KONUM_SOGUK_BASLANGIC_VE_OFFLINE.md) bakın. Fiziksel ağ kesintisi ve tam giriş/launcher akışı hâlâ açık.

@@ -271,6 +271,7 @@ fun BoxScope.WeatherSuccessContent(
     val displayIsDay by remember(data, selectedHourlyWeather) {
         derivedStateOf { selectedHourlyWeather?.isDay }
     }
+    val heroMetrics = remember(data) { weatherHeroMetrics(data) }
 
     Column(
         modifier = Modifier
@@ -337,9 +338,9 @@ fun BoxScope.WeatherSuccessContent(
                 high = selectedDailyForecast?.maxTemp?.toString()?.plus("°") ?: data.high,
                 low = selectedDailyForecast?.minTemp?.toString()?.plus("°") ?: data.low,
                 feelsLike = selectedHourlyWeather?.temp ?: data.feelsLike,
-                humidity = data.details.find { it.title.contains("Nem") }?.value ?: "%65",
-                windSpeed = data.details.find { it.title.contains("Rüzgar") }?.value ?: "12 km/sa",
-                uvIndex = (data.uvIndex ?: 0).toString(),
+                humidity = heroMetrics.humidity,
+                windSpeed = heroMetrics.wind,
+                uvIndex = heroMetrics.uv,
                 unreadCount = unreadCount,
                 onCityClick = onCityClick,
                 onNotificationsClick = onNotificationsClick,

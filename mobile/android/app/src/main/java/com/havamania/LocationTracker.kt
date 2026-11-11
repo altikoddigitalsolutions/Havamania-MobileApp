@@ -10,9 +10,11 @@ import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Priority
+import com.google.android.gms.location.CurrentLocationRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import java.util.Locale
 import kotlin.coroutines.resume
 
@@ -38,9 +40,13 @@ interface LocationTracker {
     suspend fun getCurrentCity(): GeocodingResultDto?
 }
 
+enum class LocationLookupStage { POSITION_STARTED, POSITION_RECEIVED, POSITION_EMPTY, POSITION_RETRY, POSITION_TIMEOUT,
+    PROVIDER_ERROR, PERMISSION_MISSING, LOCATION_DISABLED, GEOCODER_STARTED, CITY_RECEIVED, CITY_EMPTY, GEOCODER_ERROR }
+
 class DefaultLocationTracker(
     private val locationClient: FusedLocationProviderClient,
-    private val application: Application
+    private val application: Application,
+    private val diagnostic: (LocationLookupStage) -> Unit = {}
 ) : LocationTracker {
 
     override suspend fun getCurrentLocation(): Location? {
@@ -54,14 +60,21 @@ class DefaultLocationTracker(
         ) == PackageManager.PERMISSION_GRANTED
 
         if (!hasAccessCoarseLocationPermission && !hasAccessFineLocationPermission) {
+            diagnostic(LocationLookupStage.PERMISSION_MISSING)
             return null
         }
 
-        if (!deviceLocationEnabled(application)) return null
+        if (!deviceLocationEnabled(application)) {
+            diagnostic(LocationLookupStage.LOCATION_DISABLED)
+            return null
+        }
 
         return try {
-            kotlinx.coroutines.withTimeoutOrNull(15_000) {
-                suspendCancellableCoroutine { cont ->
+            diagnostic(LocationLookupStage.POSITION_STARTED)
+            kotlinx.coroutines.withTimeout(31_000) {
+                var providerFailed = false
+                suspend fun requestPosition(): Location? {
+                val position = suspendCancellableCoroutine<Location?> { cont ->
                     val cancellation = com.google.android.gms.tasks.CancellationTokenSource()
                     cont.invokeOnCancellation { cancellation.cancel() }
                     val priority = if (hasAccessFineLocationPermission) {
@@ -69,25 +82,44 @@ class DefaultLocationTracker(
                     } else {
                         Priority.PRIORITY_BALANCED_POWER_ACCURACY
                     }
-                    locationClient.getCurrentLocation(priority, cancellation.token)
+                    val request = CurrentLocationRequest.Builder().setPriority(priority)
+                        .setDurationMillis(30_000).setMaxUpdateAgeMillis(10_000).build()
+                    locationClient.getCurrentLocation(request, cancellation.token)
                         .addOnSuccessListener { location ->
                             if (cont.isActive) cont.resume(location)
                         }
                         .addOnFailureListener {
-                            if (cont.isActive) cont.resume(null)
+                            if (cont.isActive) {
+                                providerFailed = true
+                                diagnostic(LocationLookupStage.PROVIDER_ERROR)
+                                cont.resume(null)
+                            }
                         }
                         .addOnCanceledListener {
                             if (cont.isActive) cont.resume(null)
                         }
                 }
+                diagnostic(if (position == null) LocationLookupStage.POSITION_EMPTY else LocationLookupStage.POSITION_RECEIVED)
+                return position
+                }
+                recoverEarlyEmptyPosition(::requestPosition,
+                    canRetry = { !providerFailed && PermissionHelper.hasLocationPermission(application) && deviceLocationEnabled(application) },
+                    elapsedMillis = android.os.SystemClock::elapsedRealtime,
+                    onRetry = { diagnostic(LocationLookupStage.POSITION_RETRY) })
             }
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            diagnostic(LocationLookupStage.POSITION_TIMEOUT)
+            null
         } catch (_: SecurityException) {
+            diagnostic(LocationLookupStage.PERMISSION_MISSING)
             null
         }
     }
 
     override suspend fun getCurrentCity(): GeocodingResultDto? {
         val location = getCurrentLocation() ?: return null
+        diagnostic(LocationLookupStage.GEOCODER_STARTED)
         return withContext(Dispatchers.IO) {
             try {
                 val geocoder = Geocoder(application, Locale.forLanguageTag("tr"))
@@ -99,7 +131,12 @@ class DefaultLocationTracker(
                     val (cityName, districtName) = currentLocationNames(
                         address.adminArea, address.locality, address.subLocality, address.subAdminArea
                     )
+                    if (cityName == "Mevcut konum") {
+                        diagnostic(LocationLookupStage.CITY_EMPTY)
+                        return@withContext null
+                    }
 
+                    diagnostic(LocationLookupStage.CITY_RECEIVED)
                     GeocodingResultDto(
                         id = (location.latitude * 1000 + location.longitude * 1000).toLong(),
                         name = districtName ?: cityName,
@@ -109,9 +146,13 @@ class DefaultLocationTracker(
                         countryCode = address.countryCode,
                         admin1 = cityName
                     )
-                } else null
+                } else {
+                    diagnostic(LocationLookupStage.CITY_EMPTY)
+                    null
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                diagnostic(LocationLookupStage.GEOCODER_ERROR)
 if (BuildConfig.DEBUG) {
                     android.util.Log.e("LocationTracker", "Reverse Geocoding failed", e)
 }

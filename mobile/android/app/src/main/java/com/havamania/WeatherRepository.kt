@@ -173,7 +173,11 @@ if (BuildConfig.DEBUG) {
         }
         if (!current(epoch)) return@flow
         val cachedData = cachedEntity?.let {
-            try { json.decodeFromString<WeatherData>(it.jsonData) } catch (_: Exception) { null }
+            try {
+                val decoded = json.decodeFromString<WeatherData>(it.jsonData)
+                decoded.copy(cityName = cityName, districtName = districtName,
+                    latitude = decoded.latitude ?: lat, longitude = decoded.longitude ?: lon)
+            } catch (_: Exception) { null }
         }
         val isCacheFresh = cachedEntity != null && weatherCacheIsFresh(cachedEntity.timestamp, System.currentTimeMillis())
         if (cachedData != null && cachedEntity != null) {
