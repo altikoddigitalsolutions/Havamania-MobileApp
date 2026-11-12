@@ -30,6 +30,9 @@ fun SmartAlertsScreen(
     viewModel: SmartAlertViewModel = viewModel()
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
+    val saving by viewModel.saving.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
     HavamaniaScreen(
@@ -48,6 +51,15 @@ fun SmartAlertsScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
+            error?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error)
+                Row {
+                    if (!ready) TextButton(onClick = viewModel::retryLoading) { Text("Yeniden dene") }
+                    if (ready) TextButton(onClick = viewModel::dismissError) { Text("Kapat") }
+                }
+            }
+            if (!ready && error == null) Text("Tercihler yükleniyor…", color = themeColors.textSecondary)
+            if (saving) Text("Kaydediliyor…", color = themeColors.textSecondary)
 
             Text(
                 "Kişiselleştirilmiş hava durumu uyarılarını yönetin. Belirlediğiniz koşullar oluştuğunda sizi bilgilendirelim.",
@@ -62,9 +74,10 @@ fun SmartAlertsScreen(
             HavamaniaGlassCard {
                 AlertToggleRow(
                     title = "Yağmur Uyarısı",
-                    desc = "Yağış başlamadan 2 saat önce haber ver.",
+                    desc = "Önümüzdeki 2 saatte yağış riski varsa uyar.",
                     icon = Icons.Rounded.WaterDrop,
                     checked = config.rainEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("rain", it) }
                 )
                 AlertDivider()
@@ -73,6 +86,7 @@ fun SmartAlertsScreen(
                     desc = "Gök gürültülü sağanak beklendiğinde uyar.",
                     icon = Icons.Rounded.Thunderstorm,
                     checked = config.stormEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("storm", it) }
                 )
                 AlertDivider()
@@ -81,6 +95,7 @@ fun SmartAlertsScreen(
                     desc = "Rüzgar hızı 40 km/sa üzerine çıktığında bildir.",
                     icon = Icons.Rounded.Air,
                     checked = config.windEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("wind", it) }
                 )
             }
@@ -94,6 +109,7 @@ fun SmartAlertsScreen(
                     desc = "Sıcaklık 35°C üzerine çıktığında uyar.",
                     icon = Icons.Rounded.WbSunny,
                     checked = config.heatEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("heat", it) }
                 )
                 AlertDivider()
@@ -102,6 +118,7 @@ fun SmartAlertsScreen(
                     desc = "Gece sıcaklığı 0°C altına düştüğünde bildir.",
                     icon = Icons.Rounded.AcUnit,
                     checked = config.frostEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("frost", it) }
                 )
                 AlertDivider()
@@ -110,6 +127,7 @@ fun SmartAlertsScreen(
                     desc = "Görüş mesafesi düştüğünde haber ver.",
                     icon = Icons.Rounded.Visibility,
                     checked = config.fogEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("fog", it) }
                 )
             }
@@ -123,6 +141,7 @@ fun SmartAlertsScreen(
                     desc = "Güneş radyasyonu riskli seviyeye ulaştığında bildir.",
                     icon = Icons.Rounded.LightMode,
                     checked = config.uvEnabled,
+                    enabled = ready && !saving,
                     onCheckedChange = { viewModel.toggleAlert("uv", it) }
                 )
                 AlertDivider()

@@ -33,7 +33,7 @@ fun WeatherEffectLayer(
     isAnimationEnabled: Boolean = true,
     parallaxOffset: Float = 0f
 ) {
-    if (intensity == WeatherEffectIntensity.OFF) return
+    if (intensity == WeatherEffectIntensity.OFF || !WeatherUtils.isKnownCode(weatherCode)) return
 
     val theme = HavamaniaTheme.colors
     val baseOpacity = if (theme.isDark) 0.7f else 0.4f

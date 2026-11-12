@@ -19,27 +19,49 @@ object WeatherMapper {
 
     fun mapToDomain(response: OpenMeteoResponse, cityName: String, districtName: String? = null,
                     now: java.time.Instant = java.time.Instant.now()): WeatherData {
-        val current = response.current
-        val daily = response.daily
+        // Validate observations before any rounding, scoring or derived calculation.
+        val current = response.current?.let { value -> value.copy(
+            temperature = value.temperature?.takeIf { it.isFinite() },
+            apparentTemperature = value.apparentTemperature?.takeIf { it.isFinite() },
+            humidity = value.humidity?.takeIf { it in 0..100 },
+            windSpeed = value.windSpeed?.takeIf { it.isFinite() && it >= 0 },
+            windGusts = value.windGusts?.takeIf { it.isFinite() && it >= 0 },
+            windDirection = value.windDirection?.takeIf { it.isFinite() && it in 0.0..360.0 },
+            pressure = value.pressure?.takeIf { it.isFinite() && it > 0 },
+            visibility = value.visibility?.takeIf { it.isFinite() && it >= 0 },
+            dewPoint = value.dewPoint?.takeIf { it.isFinite() },
+            precipitation = value.precipitation?.takeIf { it.isFinite() && it >= 0 },
+            cloudCover = value.cloudCover?.takeIf { it in 0..100 },
+            uvIndex = value.uvIndex?.takeIf { it.isFinite() && it >= 0 }
+        ) }
+        val allDaily = response.daily
+        val today = ForecastTime.localNow(response.timezone, now).toLocalDate()
+        val daily = allDaily?.let { source ->
+            val indices = source.time.indices.filter { source.time[it] == today.toString() }
+            val index = indices.singleOrNull() ?: return@let null
+            source.copy(time = listOf(today.toString()),
+                weatherCode = listOfNotNull(source.weatherCode.getOrNull(index)),
+                tempMin = listOfNotNull(source.tempMin.getOrNull(index)),
+                tempMax = listOfNotNull(source.tempMax.getOrNull(index)),
+                precipProbMax = source.precipProbMax?.getOrNull(index)?.takeIf { it in 0..100 }?.let { listOf(it) },
+                uvIndexMax = source.uvIndexMax?.getOrNull(index)?.takeIf { it.isFinite() && it >= 0 }?.let { listOf(it) },
+                sunrise = listOfNotNull(source.sunrise.getOrNull(index)),
+                sunset = listOfNotNull(source.sunset.getOrNull(index)))
+        }
         val hourly = response.hourly
 
-        val tempMax = daily?.tempMax?.firstOrNull()?.roundToInt() ?: 0
-        val tempMin = daily?.tempMin?.firstOrNull()?.roundToInt() ?: 0
-        val feelsLike = current?.apparentTemperature?.roundToInt() ?: 0
+        val windDirLabel = current?.windDirection?.toInt()?.let { getWindDirectionLabel(it) }
 
-        val windDir = current?.windDirection?.toInt() ?: 0
-        val windDirLabel = getWindDirectionLabel(windDir)
-
-        val airTemp = current?.temperature ?: 0.0
-        val windSpd = current?.windSpeed ?: 0.0
-        val windChillValue = calculateWindChill(airTemp, windSpd)
+        val windChillValue = current?.temperature?.let { temperature ->
+            current.windSpeed?.let { speed -> calculateWindChill(temperature, speed) }
+        }
 
         val suitability = calculateSuitability(current, daily)
 
-        val today = ForecastTime.localNow(response.timezone, now).toLocalDate()
         val todayIndex = daily?.time?.indexOf(today.toString()) ?: -1
-        val sunrise = ForecastSun.timeForDate(daily?.sunrise?.getOrNull(todayIndex), today.toString())
-        val sunset = ForecastSun.timeForDate(daily?.sunset?.getOrNull(todayIndex), today.toString())
+        val (sunrise, sunset) = ForecastSun.validTimes(
+            ForecastSun.timeForDate(daily?.sunrise?.getOrNull(todayIndex), today.toString()),
+            ForecastSun.timeForDate(daily?.sunset?.getOrNull(todayIndex), today.toString()))
         val solarNoon = ForecastSun.daylightMidpoint(sunrise, sunset)
 
         return WeatherData(
@@ -48,11 +70,11 @@ object WeatherMapper {
             latitude = response.latitude,
             longitude = response.longitude,
             temperature = current?.temperature?.let { "${it.roundToInt()}°" } ?: "--",
-            condition = getWeatherCondition(current?.weatherCode ?: 0),
-            weatherCode = current?.weatherCode ?: 0,
+            condition = getWeatherCondition(current?.weatherCode ?: -1),
+            weatherCode = current?.weatherCode ?: -1,
             isDay = current?.isDay == 1,
-            high = daily?.tempMax?.firstOrNull()?.let { "${it.roundToInt()}°" } ?: "--",
-            low = daily?.tempMin?.firstOrNull()?.let { "${it.roundToInt()}°" } ?: "--",
+            high = daily?.tempMax?.firstOrNull()?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}°" } ?: "--",
+            low = daily?.tempMin?.firstOrNull()?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}°" } ?: "--",
             feelsLike = current?.apparentTemperature?.let { "${it.roundToInt()}°" } ?: "--",
             sunriseTime = if (sunrise.isNullOrEmpty()) null else sunrise,
             sunsetTime = if (sunset.isNullOrEmpty()) null else sunset,
@@ -74,8 +96,9 @@ object WeatherMapper {
             weatherSuitabilityScore = suitability.score,
             weatherSuitabilityText = suitability.title,
             weatherSuitabilityDesc = suitability.description,
-            hourlyForecast = mapHourly(hourly, daily, response.timezone, now),
-            dailyForecast = mapDaily(daily, ForecastTime.localNow(response.timezone, now).toLocalDate()),
+            hourlyForecast = mapHourly(hourly, allDaily, response.timezone, now),
+            dailyForecast = mapDaily(allDaily, today),
+            mappingVersion = 1,
             details = mapDetails(current, daily)
         )
     }
@@ -88,11 +111,11 @@ object WeatherMapper {
     data class SuitabilityResult(val score: Int, val title: String, val description: String)
 
     private fun calculateSuitability(current: CurrentWeatherDto?, daily: DailyDto?): SuitabilityResult {
-        if (current == null) return SuitabilityResult(100, "Veri yok", "Hava durumu verilerine ulaşılamıyor.")
+        if (current == null) return SuitabilityResult(-1, "Veri yok", "Hava durumu verilerine ulaşılamıyor.")
         var score = 100
         val warnings = mutableListOf<String>()
 
-        val precipProb = daily?.precipProbMax?.firstOrNull()?.toDouble() ?: 0.0
+        val precipProb = daily?.precipProbMax?.firstOrNull()?.takeIf { it in 0..100 }?.toDouble() ?: 0.0
         if ((current.precipitation ?: 0.0) > 0.1 || precipProb > 40.0) {
             score -= 30
             warnings.add("yağmur riski")
@@ -101,7 +124,7 @@ object WeatherMapper {
             score -= 20
             warnings.add("güçlü rüzgar")
         }
-        val uv = daily?.uvIndexMax?.firstOrNull() ?: current?.uvIndex ?: 0.0
+        val uv = listOfNotNull(current.uvIndex, daily?.uvIndexMax?.firstOrNull()?.takeIf { it.isFinite() && it >= 0 }).maxOrNull() ?: 0.0
         if (uv > 7.0) {
             score -= 15
             warnings.add("yüksek UV")
@@ -117,6 +140,14 @@ object WeatherMapper {
             warnings.add("ekstrem sıcaklık")
         }
 
+        val complete = current.weatherCode?.let { WeatherUtils.isKnownCode(it) } == true && current.temperature != null && current.windSpeed != null &&
+            current.visibility != null && (current.uvIndex != null || daily?.uvIndexMax?.firstOrNull()?.let { it.isFinite() && it >= 0 } == true) &&
+            daily?.precipProbMax?.firstOrNull()?.let { it in 0..100 } == true
+        if (!complete) {
+            val knownRisks = if (warnings.isEmpty()) "" else " Mevcut verilerde ${warnings.joinToString(", ")} var."
+            return SuitabilityResult(-1, "Değerlendirme için veri eksik",
+                "Eksik ölçümler nedeniyle açık hava uygunluğu değerlendirilemiyor.$knownRisks")
+        }
         val title = when {
             score > 80 -> "Açık hava için uygun"
             score > 60 -> "Yürüyüş için uygun"
@@ -145,17 +176,20 @@ object WeatherMapper {
 
         val sunTimesByDate = mutableMapOf<String, Pair<LocalTime, LocalTime>>()
         if (daily != null) {
+            val uniqueDates = daily.time.groupingBy { it }.eachCount()
             for (i in daily.time.indices) {
                 val date = daily.time[i]
+                if (uniqueDates[date] != 1) continue
                 val rise = ForecastSun.timeForDate(daily.sunrise.getOrNull(i), date)?.let(LocalTime::parse)
                 val set = ForecastSun.timeForDate(daily.sunset.getOrNull(i), date)?.let(LocalTime::parse)
-                if (rise != null && set != null) sunTimesByDate[date] = rise to set
+                if (rise != null && set != null && set.isAfter(rise)) sunTimesByDate[date] = rise to set
             }
         }
 
-        return hourly.time.indices.mapNotNull { i ->
+        val mapped = hourly.time.indices.mapNotNull { i ->
             val code = hourly.weatherCode.getOrNull(i) ?: return@mapNotNull null
             val temperature = hourly.temperature.getOrNull(i) ?: return@mapNotNull null
+            if (!temperature.isFinite()) return@mapNotNull null
             val fullTime = hourly.time[i]
             val parts = fullTime.split("T")
             if (parts.size != 2) return@mapNotNull null
@@ -171,11 +205,7 @@ object WeatherMapper {
             val timeObj = try {
                 LocalTime.parse(hourLabelRaw)
             } catch (e: Exception) {
-                try {
-                    LocalTime.of(hourLabelRaw.split(":").first().toInt(), 0)
-                } catch (e2: Exception) {
-                    return@mapNotNull null
-                }
+                return@mapNotNull null
             }
 
             val sunTimes = sunTimesByDate[datePart]
@@ -193,19 +223,24 @@ object WeatherMapper {
                 weatherCode = code,
                 isDay = isDay,
                 temp = "${temperature.roundToInt()}°",
-                precipProb = hourly.precipitationProbability?.getOrNull(i)?.let { "$it%" },
-                precipitationProbability = hourly.precipitationProbability?.getOrNull(i),
+                precipProb = hourly.precipitationProbability?.getOrNull(i)?.takeIf { it in 0..100 }?.let { "$it%" },
+                precipitationProbability = hourly.precipitationProbability?.getOrNull(i)?.takeIf { it in 0..100 },
                 isSelected = fullTime == currentHourStr
             )
         }
+        return uniqueForecastEntries(mapped) { LocalDateTime.parse(it.fullTime) }
     }
 
     private fun mapDaily(daily: DailyDto?, today: LocalDate): List<DailyForecast> {
         if (daily == null) return emptyList()
-        return daily.time.mapIndexedNotNull { index, time ->
+        val mapped = daily.time.mapIndexedNotNull { index, time ->
             val code = daily.weatherCode.getOrNull(index) ?: return@mapIndexedNotNull null
             val min = daily.tempMin.getOrNull(index) ?: return@mapIndexedNotNull null
             val max = daily.tempMax.getOrNull(index) ?: return@mapIndexedNotNull null
+            if (!min.isFinite() || !max.isFinite() || min > max) return@mapIndexedNotNull null
+            try { LocalDate.parse(time) } catch (_: Exception) { return@mapIndexedNotNull null }
+            val (rise, set) = ForecastSun.validTimes(ForecastSun.timeForDate(daily.sunrise.getOrNull(index), time),
+                ForecastSun.timeForDate(daily.sunset.getOrNull(index), time))
             DailyForecast(
                 day = getDayName(time),
                 date = time,
@@ -213,12 +248,13 @@ object WeatherMapper {
                 weatherCode = code,
                 minTemp = min.roundToInt(),
                 maxTemp = max.roundToInt(),
-                precipitationProbability = daily.precipProbMax?.getOrNull(index),
+                precipitationProbability = daily.precipProbMax?.getOrNull(index)?.takeIf { it in 0..100 },
                 isToday = time == today.toString(),
-                sunriseTime = ForecastSun.timeForDate(daily.sunrise.getOrNull(index), time),
-                sunsetTime = ForecastSun.timeForDate(daily.sunset.getOrNull(index), time)
+                sunriseTime = rise,
+                sunsetTime = set
             )
         }
+        return uniqueForecastEntries(mapped) { LocalDate.parse(it.date) }
     }
 
     private fun getDayName(dateStr: String): String {
@@ -233,31 +269,32 @@ object WeatherMapper {
     }
 
     private fun mapDetails(current: CurrentWeatherDto?, daily: DailyDto?): List<WeatherDetailData> {
-        val precipProb = daily?.precipProbMax?.firstOrNull() ?: 0
-        val humidity = current?.humidity ?: 0
-        val uv = current?.uvIndex ?: daily?.uvIndexMax?.firstOrNull() ?: 0.0
-        val visibility = current?.visibility ?: 10000.0
-        val cloudCover = current?.cloudCover ?: 0
-        val windGust = current?.windGusts ?: 0.0
-        val airTemp = current?.temperature ?: 0.0
-        val windSpd = current?.windSpeed ?: 0.0
-        val windChill = calculateWindChill(airTemp, windSpd)
+        val precipProb = daily?.precipProbMax?.firstOrNull()?.takeIf { it in 0..100 }
+        val humidity = current?.humidity?.takeIf { it in 0..100 }
+        val uv = (current?.uvIndex ?: daily?.uvIndexMax?.firstOrNull())?.takeIf { it.isFinite() && it >= 0 }
+        val visibility = current?.visibility?.takeIf { it.isFinite() && it >= 0 }
+        val cloudCover = current?.cloudCover?.takeIf { it in 0..100 }
+        val windGust = current?.windGusts?.takeIf { it.isFinite() && it >= 0 }
+        val airTemp = current?.temperature?.takeIf { it.isFinite() }
+        val windSpd = current?.windSpeed?.takeIf { it.isFinite() && it >= 0 }
+        val windChill = if (airTemp != null && windSpd != null) calculateWindChill(airTemp, windSpd) else null
+        val unavailable = "Veri yok"
 
         val isSnow = (current?.weatherCode ?: 0) in 71..77 || (current?.weatherCode ?: 0) in 85..86
-        val precipLabel = if (isSnow) "Kar olasılığı: %$precipProb" else "Yağmur olasılığı: %$precipProb"
+        val precipLabel = if (precipProb == null) unavailable else if (isSnow) "Kar olasılığı: %$precipProb" else "Yağmur olasılığı: %$precipProb"
 
         return listOf(
-            WeatherDetailData("Hissedilen", "${current?.apparentTemperature?.roundToInt() ?: 0}°", "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
-            WeatherDetailData("Rüzgar Soğutma", if (windChill != null) "${windChill.roundToInt()}°" else "Düşük", if (windChill != null) "Rüzgar etkisi dahil" else "Rüzgar etkisi düşük", "AcUnit", "#38BDF8"),
-            WeatherDetailData("Yağış Olasılığı", WeatherUtils.formatRainProbability(precipProb), precipLabel, "WaterDrop", "#60A5FA"),
-            WeatherDetailData("Yağış Miktarı", "${current?.precipitation ?: 0.0} mm", "Son 1 saat", "Umbrella", "#0EA5E9"),
-            WeatherDetailData("Rüzgar", "${windSpd.roundToInt()} km/sa", "Anlık hız", "Air", "#34D399"),
-            WeatherDetailData("Rüzgar Hamlesi", "${windGust.roundToInt()} km/sa", "Maksimum hız", "Cyclone", "#10B981"),
-            WeatherDetailData("UV İndeksi", "${uv.toInt()}", getUVDescription(uv), "Sun", "#FBBF24", uv.toFloat() / 12f),
-            WeatherDetailData("Bulutluluk", WeatherUtils.formatRainProbability(cloudCover), "Gökyüzü kapalılığı", "Cloud", "#64748B"),
-            WeatherDetailData("Görüş", "${(visibility / 1000).toInt()} km", getVisibilityDescription(visibility), "Visibility", "#10B981"),
-            WeatherDetailData("Basınç", "${current?.pressure?.toInt() ?: 1013} hPa", "Yüzey basıncı", "Compress", "#A78BFA"),
-            WeatherDetailData("Nem", WeatherUtils.formatRainProbability(humidity), "Bağıl nem oranı", "Opacity", "#06B6D4")
+            WeatherDetailData("Hissedilen", current?.apparentTemperature?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}°" } ?: unavailable, "Rüzgar etkisi dahil", "Thermostat", "#FB7185"),
+            WeatherDetailData("Rüzgar Soğutma", if (airTemp == null || windSpd == null) unavailable else windChill?.let { "${it.roundToInt()}°" } ?: "Düşük", if (airTemp == null || windSpd == null) unavailable else if (windChill != null) "Rüzgar etkisi dahil" else "Rüzgar etkisi düşük", "AcUnit", "#38BDF8"),
+            WeatherDetailData("Yağış Olasılığı", precipProb?.let { WeatherUtils.formatRainProbability(it) } ?: unavailable, precipLabel, "WaterDrop", "#60A5FA"),
+            WeatherDetailData("Yağış Miktarı", current?.precipitation?.takeIf { it.isFinite() && it >= 0 }?.let { "$it mm" } ?: unavailable, "Son 1 saat", "Umbrella", "#0EA5E9"),
+            WeatherDetailData("Rüzgar", windSpd?.let { "${it.roundToInt()} km/sa" } ?: unavailable, "Anlık hız", "Air", "#34D399"),
+            WeatherDetailData("Rüzgar Hamlesi", windGust?.let { "${it.roundToInt()} km/sa" } ?: unavailable, "Maksimum hız", "Cyclone", "#10B981"),
+            WeatherDetailData("UV İndeksi", uv?.toInt()?.toString() ?: unavailable, uv?.let { getUVDescription(it) } ?: unavailable, "Sun", "#FBBF24", uv?.let { (it.toFloat() / 12f).coerceIn(0f, 1f) }),
+            WeatherDetailData("Bulutluluk", cloudCover?.let { WeatherUtils.formatRainProbability(it) } ?: unavailable, "Gökyüzü kapalılığı", "Cloud", "#64748B"),
+            WeatherDetailData("Görüş", visibility?.let { "${(it / 1000).toInt()} km" } ?: unavailable, visibility?.let { getVisibilityDescription(it) } ?: unavailable, "Visibility", "#10B981"),
+            WeatherDetailData("Basınç", current?.pressure?.takeIf { it.isFinite() && it > 0 }?.let { "${it.toInt()} hPa" } ?: unavailable, "Yüzey basıncı", "Compress", "#A78BFA"),
+            WeatherDetailData("Nem", humidity?.let { WeatherUtils.formatRainProbability(it) } ?: unavailable, "Bağıl nem oranı", "Opacity", "#06B6D4")
         )
     }
 

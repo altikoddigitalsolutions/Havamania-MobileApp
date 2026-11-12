@@ -174,14 +174,15 @@ if (BuildConfig.DEBUG) {
         if (!current(epoch)) return@flow
         val cachedData = cachedEntity?.let {
             try {
-                val decoded = json.decodeFromString<WeatherData>(it.jsonData)
+                val decoded = normalizeCachedForecastLists(normalizeCachedWeatherAssessment(json.decodeFromString<WeatherData>(it.jsonData)))
                 decoded.copy(cityName = cityName, districtName = districtName,
                     latitude = decoded.latitude ?: lat, longitude = decoded.longitude ?: lon)
             } catch (_: Exception) { null }
         }
-        val isCacheFresh = cachedEntity != null && weatherCacheIsFresh(cachedEntity.timestamp, System.currentTimeMillis())
+        val isCacheFresh = cachedEntity != null && weatherCacheIsFresh(cachedEntity.timestamp, System.currentTimeMillis()) &&
+            cachedData?.let { cachedWeatherSameLocalDay(it.copy(timestamp = cachedEntity.timestamp), java.time.Instant.now()) } == true
         if (cachedData != null && cachedEntity != null) {
-            emitCurrent(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh), epoch)
+            emitCurrent(presentCachedWeather(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = !isCacheFresh), java.time.Instant.now()), epoch)
         }
         if (cachedData != null && isCacheFresh && !forceRefresh) return@flow
 
@@ -197,7 +198,7 @@ if (BuildConfig.DEBUG) {
             if (!current(epoch)) return@flow
             if (cachedData == null) throw e
             if (forceRefresh && isCacheFresh) {
-                emitCurrent(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = true), epoch)
+                emitCurrent(presentCachedWeather(cachedData.copy(timestamp = cachedEntity.timestamp, isStale = true), java.time.Instant.now()), epoch)
             }
             return@flow
         }

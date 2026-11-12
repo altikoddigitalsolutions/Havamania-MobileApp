@@ -5,9 +5,12 @@ import androidx.compose.material.icons.rounded.*
 
 object SmartAlertEngine {
 
-    fun generateAlerts(weather: WeatherData, config: SmartAlertConfig, uid: String = "legacy"): List<SmartAlert> {
+    fun generateAlerts(weather: WeatherData, config: SmartAlertConfig, uid: String = "legacy",
+                       now: java.time.Instant = java.time.Instant.now()): List<SmartAlert> {
+        if (weather.isStale || !weatherCacheIsFresh(weather.timestamp, now.toEpochMilli()) ||
+            !cachedWeatherSameLocalDay(weather, now)) return emptyList()
         val alerts = mutableListOf<SmartAlert>()
-        val todayStr = java.time.LocalDate.now().toString()
+        val todayStr = ForecastTime.localNow(weather.timezone, now).toLocalDate().toString()
         val city = weather.cityName
 
         // Helper to create unique key
@@ -15,14 +18,12 @@ object SmartAlertEngine {
 
         // 1. Rain Alert (Next 2 hours)
         if (config.rainEnabled) {
-            val next2HoursRain = weather.hourlyForecast.take(3).any {
-                (it.precipitationProbability ?: 0) > 40 || it.weatherCode in listOf(51, 53, 55, 61, 63, 65, 80, 81, 82)
-            }
+            val next2HoursRain = rainRiskInNextTwoHours(weather, now)
             if (next2HoursRain) {
                 alerts.add(SmartAlert(
                     id = "rain",
                     title = "Yağmur Uyarısı",
-                    description = "2 saat içinde yağmur bekleniyor.",
+                    description = "Önümüzdeki 2 saatlik tahminde yağış riski var.",
                     icon = Icons.Rounded.WaterDrop,
                     severity = AlertSeverity.WARNING,
                     deduplicationKey = createKey("rain")
@@ -32,7 +33,7 @@ object SmartAlertEngine {
 
         // 2. Wind Alert (> 40 km/h)
         if (config.windEnabled) {
-            val speed = weather.windSpeed ?: 0.0
+            val speed = weather.windSpeed?.takeIf { it.isFinite() && it >= 0 } ?: 0.0
             if (speed > 40.0) {
                 alerts.add(SmartAlert(
                     id = "wind",
@@ -47,8 +48,7 @@ object SmartAlertEngine {
 
         // 3. Heat Alert (> 35°C)
         if (config.heatEnabled) {
-            val tempStr = weather.temperature.filter { it.isDigit() || it == '-' }
-            val temp = tempStr.toDoubleOrNull() ?: 0.0
+            val temp = weather.temperature.trim().removeSuffix("°").toDoubleOrNull()?.takeIf { it.isFinite() } ?: 0.0
             if (temp > 35.0) {
                 alerts.add(SmartAlert(
                     id = "heat",
@@ -63,13 +63,12 @@ object SmartAlertEngine {
 
         // 4. Frost Alert (< 0°C)
         if (config.frostEnabled) {
-            val minTempStr = weather.low.filter { it.isDigit() || it == '-' }
-            val minTemp = minTempStr.toIntOrNull() ?: 5
+            val minTemp = weather.low.trim().removeSuffix("°").toDoubleOrNull()?.takeIf { it.isFinite() } ?: 5.0
             if (minTemp <= 0) {
                 alerts.add(SmartAlert(
                     id = "frost",
                     title = "Don Riski",
-                    description = "Gece don bekleniyor ($minTemp°C). Bitkilerinizi koruyun.",
+                    description = "Günlük en düşük sıcaklık $minTemp°C; don riski için yerel uyarıları kontrol edin.",
                     icon = Icons.Rounded.AcUnit,
                     severity = AlertSeverity.WARNING,
                     deduplicationKey = createKey("frost")

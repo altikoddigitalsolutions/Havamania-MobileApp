@@ -1,0 +1,114 @@
+# 12 Kasım — Tablet gerektirmeyen hava verisi kontrolleri
+
+Kullanıcı tablet yanında olmadığı için cihaz kontrolleri ertelendi; tamamlandı sayılmadı. Bu tur yalnız yerel kaynak, JVM testleri ve debug derlemesidir. Firebase veya canlı hesap verisine işlem yapılmadı.
+
+## Düzeltilenler
+
+- Hava ayrıntı eşleyicisi eksik nem, basınç, görüş, yağış, UV, rüzgâr, bulutluluk ve hissedilen sıcaklığı varsayılan gözlemlere çevirmiyor. Eksik ölçüm “Veri yok” olarak gösterilir. Gerçek sıfır ölçümleri korunur.
+- Sıcaklık veya rüzgâr yokken rüzgâr soğutma “Düşük” diye sınıflandırılmaz. Eksik UV/görüş için düşük risk veya iyi görüş yorumu üretilmez. UV çubuğu yalnız ölçüm mevcutken oluşturulur ve 0–1 aralığına sınırlanır.
+- Yeni geçersiz veri testi, `apparentTemperature=NaN` için `roundToInt` çökmesini yakaladı. Mevcut ölçümler artık eşleme girişinde sonlu sayı ve alan aralığı açısından doğrulanır.
+- Boş günlük tahminde “0 günlük tahmin” yerine sabit başlık ve verinin bulunmadığını açıklayan metin var. Görsel kabul tablet geldiğinde yapılacak.
+- Öneri motorundaki sabit şehir eki (`Bursa'de`) yerine ek gerektirmeyen “Bursa için” yapısı kullanılır. “dereceara” ve İngilizce “and” yazımları düzeltildi.
+
+## Kabul ve sonraki sıra
+
+Beş yeni test: tamamen eksik ölçümler, gerçek sıfırlar, geçersiz sayılar/aralıklar, günlük UV yedeği ve rüzgâr soğutma bağımlılıkları. İlk koşuda 482 testten biri NaN çökmesi nedeniyle başarısızdı; düzeltme sonrası sonuç aşağıda kaydedilecek.
+
+Sıradaki yerel inceleme: eksik veride uygunluk skorunun iyimser kalması; öneri motorunun eksik sayıları sıfıra/varsayılana dönüştürmesi; günlük/saatlik dizilerde geçersiz sayılar; eksik hava kodu/gündüz bilgisi ve rüzgâr yönü. Bu tur tüm eksik veri yollarının kapandığı anlamına gelmez.
+
+Tablet bekleyenler: boş günlük tahmin ve eksik ölçümlerin açık/koyu tema, büyük yazı ve dar ekran görünümü; gerçek ağ kesintisi; girişten başlayan soğuk açılış ve hesap geçişi. Önceki B5-1/B5-2/B5-3 açık kabul maddeleri korunur. Yeni release AAB üretilmedi ve değişiklikler yayımlanmadı.
+
+## Sonuç
+Düzeltme sonrası testDebugUnitTest ve assembleDebug başarılı: 482 JVM testi, 0 hata. Cihaz testi çalıştırılmadı. git diff --check başarılı.
+
+## Devam: uygunluk ve ana ekran önerisi
+Eksik sıcaklık/rüzgâr/görüş/UV/yağış olasılığı ile tam uygunluk değerlendirmesi yapılmıyor. Değerlendirilemeyen skor -1 işaretiyle taşınıyor; kartta nötr bilgi simgesi kullanılıyor. Bilinen riskler eksik veri açıklamasında korunuyor. Tam veriyle önceki puanlama devam ediyor; bu skor bilimsel bir güvenlik garantisi değildir.
+Ana ekran önerisi eksik veya eski kayıtta eldeki ölçümleri ve bilinen riskleri bildiriyor; eksik sıcaklığı 20 derece sayarak kıyafet/aktivite tavsiye etmiyor. Soğuk hava tek başına taze kar kanıtı olarak sunulmuyor. Altı yeni regresyonla toplam 488 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Tablet testi çalıştırılmadı.
+Açık kalanlar: asistanın ayrı kıyafet/aktivite/yağmur/genel yanıt yollarındaki varsayılanlar; günlük/saatlik sayısal doğrulama; eksik hava kodu/gündüz/yön; önceki önbellekte saklanmış eski skorların yenilenmesi ve kısmi veride birden çok riskin tüm öneri tonlarında korunması. Ana ekran düzeltmesi bu ayrı yolları tamamlamış sayılmaz.
+
+## Devam: yerel asistan yanıtları
+Kıyafet/aktivite/genel günlük yanıtlar eksik veya eski ölçümlerle kesin tavsiye vermiyor. Kıyafet ve aktivitede eksik hissedilen sıcaklık/nem açıklanıyor; termal algı anlık sıcaklıkla eşitlenmiyor. Bugün sorusunda günlük minimum–maksimum ortalaması anlık sıcaklığın yerine kullanılmıyor.
+Başka şehir için mevcut şehrin ölçümleri yeniden etiketlenmiyor. Gelecek tarih sorusunda bugünkü ölçümler ve gelecek gün verisi birleştirilmek yerine bu yerel yolun sınırı açıklanıyor. Bu, geleceğe dönük ayrıntılı tavsiye özelliğinin tamamlandığı anlamına gelmez. Yağış sorusu eksik olasılığı yüzde sıfır saymıyor; yüksek olasılık kesin yağmur, düşük olasılık şemsiyeye gerek olmadığı şeklinde sunulmuyor. Uzman tondaki dayanaksız nem/bulut ve gün boyu stabilite iddiaları kaldırıldı. Yüksek UV/nem aktiviteyi ideal saymıyor. Hafta sonu yağış verisi eksik/eskiyse uygun gün seçilmiyor; uzman tonundaki dayanaksız rüzgâr/stabilite anlatımı kaldırıldı.
+Yedi yeni test (çoklu tonlar dahil) ile 495 JVM testi, 0 hata. testDebugUnitTest ve assembleDebug başarılı; cihaz veya canlı uzak asistan testi yapılmadı. Hafta sonu koruması derlendi; ayrı tarihli hafta sonu regresyonu sırada.
+Sıradaki yerel iş: seyahat yanıtının koşulsuz uygun hava iddiası, hafta sonu gün seçimi/tarih kapsamı, kullanılmayan genel yanıt yolu ve günlük/saatlik geçersiz sayılar. Önceki önbellek/cihaz kabul maddeleri açık.
+
+## Devam: hafta sonu ve seyahat yanıtı
+Hafta sonu karşılaştırması görünen gün adına değil şehrin saat dilimindeki bugünden hesaplanan cumartesi/pazar ISO tarihlerine bağlı. Farklı haftalar ve aynı tarihin mükerrer kayıtları çift oluşturmaz. Pazar günü geçmiş cumartesi önerilmez. Eksik/eski yağış verisinde karşılaştırma yapılmaz. İki riskli günde uygun gün söylenmez; eşit yağışta zorla kazanan seçilmez. Risk yoksa yalnız yağış olasılığı karşılaştırılır; rüzgâr/UV ve yerel uyarıların ayrıca kontrolü belirtilir. Bu bir tam aktivite güvenliği değerlendirmesi değildir; ilgi alanından kamp/kayak uygunluğu çıkarılması kaldırıldı.
+Seyahat yerel yanıtı şehir/tarih aralığıyla eşleşen analiz olmadan koşulsuz hava uygun iddiası üretmiyor; kullanıcıyı Takvimdeki güncel seyahat analizine yönlendiriyor. Bu yolun doğrulanmış rota tahminini sohbete aktarması sonraki entegrasyon işidir. Kaynakta hiçbir çağrısı bulunmayan eski generateGeneralWeatherReply kaldırıldı.
+Altı yeni test dahil 501 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Cihaz veya canlı servis testi yapılmadı. Sonraki yerel sıra: günlük/saatlik geçersiz sayılar ve eksik kod/yön; seyahat özet kartının sıcaklık varsayımları; eski uygunluk skoru önbelleği. Önceki cihaz kabul maddeleri açık.
+
+## Devam: günlük/saatlik sayılar ve seyahat sıcaklığı
+Günlük/saatlik tahminlerde NaN ve sonsuz sıcaklıklar yuvarlanmadan eleniyor. Günlük minimum maksimumdan büyükse veya ISO tarih geçersizse kayıt gösterilmiyor. Saatlik bozuk dakika artık yalnız saati alınarak düzeltilmiş gibi kabul edilmiyor. Geçersiz yağış yüzdeleri bilinmiyor olarak kalıyor; gerçek sıfır korunuyor. Ana kartın ilk günlük yüksek/düşük değerlerinde sonlu sayı kontrolü var. Kullanılmayan üç eski yuvarlama kaldırıldı.
+Eksik rüzgâr yönü kuzey etiketi üretmiyor. Sıcaklık ve hız birlikte yoksa türetilmiş rüzgâr soğutma değeri oluşturulmuyor. Seyahat öneri kartı eksik/NaN/sonsuz en yüksek sıcaklığı 20 dereceye çevirmiyor; eksik veriyi açıklıyor.
+Beş yeni regresyon dahil 506 JVM testi, 0 hata. testDebugUnitTest ve assembleDebug başarılı. Tablet veya canlı servis testi yapılmadı.
+Sıradaki açık yerel işler: eski önbelleğin uygunluk skorunu yeniden değerlendirme; günlük tarih ile ana kartın ilk gününün eşleşmesi; eksik/geçersiz hava kodunun varsayılan açık hava sayılması; günlük UV değerlerinin tüm domain yollarında doğrulanması; tekrar eden tahmin zamanları ve veri yaşı. Mevcut testler bunların tamamını kapatmaz.
+
+## Devam: günlük tarih hizalaması ve eski skor önbelleği
+Ana kartın yüksek/düşük sıcaklığı, yağış olasılığı, günlük UV yedeği, ayrıntılar ve uygunluk hesabı şehrin saat dilimindeki bugünün tek kaydına bağlı. Gün yoksa veya aynı gün birden fazla kez varsa listenin ilk günü ödünç alınmaz. Saatlik ve çok günlük tahminler tüm özgün günleri kullanmayı sürdürür. Günlük UV yedeğinde NaN/sonsuz/negatif değerler kullanılmaz.
+WeatherData mappingVersion alanı eklendi. Yeni eşlemeler sürüm 1 olarak yazılır; sürümsüz eski önbellek okunurken ölçümler korunur ve eski türetilmiş uygunluk skoru -1 / değerlendirme güncellenmeli durumuna alınır. Ham API yanıtı bulunmadığından eski skor yeniden hesaplanmış gibi sunulmaz; normal hava yenilemesi yeni skoru oluşturur. Room şeması değişmedi, kayıt silinmedi.
+Dört yeni yerel test eklendi: yerel gün/UTC sınırı, eksik-mükerrer bugün, geçersiz günlük UV ve eski JSON skoru. Önceki tarihli testler sabit now parametresiyle takvimden bağımsız hale getirildi. İlk artımlı koşuda 14 eski test sınıfı yeni WeatherData kurucusunu bulamadı (NoSuchMethodError); temiz derleme sonucu aşağıya kaydedilecek.
+Açık kalanlar: cihazda eski Room kaydıyla ekran kabulü, gün değişince önbellekteki günlük alanların yeniden hizalanması, süresi dolmuş yeni sürüm skorunun gösterimi, eksik/geçersiz hava kodu ve genel yinelenen tahmin zamanları. Tablet ve canlı Firebase kontrolleri bekliyor.
+
+Sonuç: clean testDebugUnitTest assembleDebug başarılı; 510 JVM testi, 0 hata. İlk artımlı koşudaki kurucu hataları temiz derlemede tekrarlanmadı. Cihaz testi yapılmadı.
+
+## Devam: önbellekte gün değişimi ve bilinmeyen hava metni
+Önbellek tazeliği yalnız yaşla değil kayıt ve şimdiki zamanın şehir saat dilimindeki günüyle de kontrol ediliyor. On dakika önceki kayıt gece yarısını geçtiyse yeni günün güncel kaydı sayılmıyor ve yenileme deneniyor. Böyle kayıt sunulurken günlük yüksek/düşük, UV, yağış olasılığı, güneş saatleri ve eski ayrıntılar yeni güne aktarılmıyor; anlık sıcaklık tarih damgası/eski veri işaretiyle korunuyor. Süresi dolmuş aynı gün kaydı ölçümlerini korur ama uygunluk skoru güncelleme gerekli olur. Zorunlu yenileme başarısızsa gösterilen geri dönüşte de aynı koruma uygulanır.
+Mevcut WeatherData ve mapper için eksik kod -1 olarak taşınıyor; merkezi hava açıklaması tanınmayan kodu Güneşli/Gece yerine Veri yok olarak gösteriyor. Tanınmayan kodun simge/tema ve tüm uygunluk/öneri yollarındaki etkisinin ayrıca denetlenmesi gerekiyor.
+Dört yeni regresyon dahil 514 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Cihaz veya canlı servis testi yapılmadı. Bu testler sunum/tazelik yardımcılarını sınar; Room ve ekranla tam gün değişimi cihaz kabulü yerine geçmez.
+Sıradaki açık işler: ekran gece boyunca açıkken otomatik zaman yenileme, bilinmeyen kodun simge/tema/uygunluk davranışı, mükerrer tahmin zamanları ve eski veriyle eksik uyarıların bütünlüğü. Tablet kontrolleri açık.
+
+## Devam: açık ekran veri yaşı ve bilinmeyen kod
+HomeScreen STARTED yaşam döngüsünde girişte ve 30 saniyede bir verinin yaşını yeniden kontrol eder; arka planda döngü durur. Süre/gün devrinde sunum eski veri durumuna alınır, günlük eski alanlar ve uygunluk skoru temizlenir, öneri güncellenir. Seçili gün geçmişte kaldıysa seçim yeniden yapılır. Yeni eskime geçişinde çevrimiçiyse ve aktif istek yoksa bir yenileme denenir; başarısızlıkta her 30 saniyede yeni ağ isteği oluşturulmaz. Zaten eski veriyle yeniden bağlanma ve başarısız denemenin otomatik kurtarılması ayrıca açık.
+Merkezi tanınan kod kontrolü eklendi. Bilinmeyen kod uygunluk ve günlük öneri için eksik veri sayılır. Ana kart bilinmeyen kodda soru/bilgi simgesi ve nötr gri palet kullanır; bulut yoğunluğu sıfırdır. WeatherEffectLayer bilinmeyen kodda atmosfer efekti çizmez. Diğer kart/harita/seyahat simgeleri ayrıca açık.
+Üç yeni test dahil 517 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler saf yaşlandırma ve karar yardımcılarını sınar; gerçek ViewModel/Compose yaşam döngüsü, 30 saniyelik döngü, tek ağ isteği ve görsel davranış cihazda doğrulanmış değildir. Bu kabul tablet geldiğinde yapılacak.
+Sonraki yerel sıra: çevrimdışıdan çevrimiçine geçişte eski veri kurtarma, mükerrer tahmin zamanları ve risk/öneri üretiminde geç sonuçların korunması. Önceki cihaz ve canlı servis kontrolleri açık.
+
+## Devam: bağlantı kurtarma ve geç sonuçlar
+Görünür HomeScreen çevrimiçi duruma geçtiğinde ve STARTED durumuna döndüğünde eski veri veya yeniden denenebilir hava hatası için yenileme isteyebilir. Hesap sahibi, seçim, çevrimiçi durum ve aktif istek/yenileme kontrolleri var. Güncel veri, boş şehir ve yükleme durumları kurtarma istemez. Başarısız bir deneme kendi başına sürekli döngü oluşturmaz; yeni bağlantı/ekrana dönüş veya kullanıcı yenilemesi gerekir.
+Geciken akıllı uyarı ayar okumasından sonra iptal, seçim kimliği, UID ve güncel WeatherData nesnesi kontrol edilir. Şehir değişimi veya şehir temizliğinde önceki uyarı ve öneriler temizlenir. Günlük öneri üretimi ağ/IO içermediği için eşzamanlı çalıştırılır; aynı hesaptaki eski öneri işi kuyruğa bırakılmaz.
+Üç yeni karar testi dahil 520 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler kurtarma uygunluk kararını kapsar; gerçek ağ geçişi/tek istek, ViewModel yaşam döngüsü ve gecikmiş ayar okumasının ekran kabulü cihazda açık. Firebase hesabı veya fiziksel radyo değiştirilmedi.
+Sıradaki yerel iş: mükerrer/sırasız tahmin zamanları, gün devrindeki seçili saat davranışı ve uyarı/öneri iptal yollarının kontrollü gecikmeyle ek doğrulaması. Önceki cihaz ve canlı servis kabul maddeleri korunur.
+
+## Devam: tahmin sırası ve mükerrer zamanlar
+Yeni API eşlemesinde saatlik ve günlük tahminler gerçek parse edilmiş zamanlarına göre sıralanır. Aynı zaman anahtarına ait birden fazla geçerli kayıt varsa tüm adaylar elenir; ilk/son sıcaklık keyfi seçilmez. Saat 10:00 ile 10:00:00 aynı zaman sayılır. Aynı veri korunması politikası eski önbellek için ForecastTime.hoursForDate ve dailyFromToday seçim yardımcılarında uygulanır. Bu durum eksik saat/gün bırakabilir; eksik tahmin tamamlanmış kapsama gibi sunulmamalıdır. Ham eski listeleri bu yardımcıları kullanmadan okuyan tüketicilerin denetimi ayrıca açık.
+Üç yeni regresyon dahil 523 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Cihaz testi yapılmadı. Testler yeni eşleme ve eski liste seçim yardımcılarını kapsar; Compose anahtarları/gerçek dokunma cihaz kabulü açık.
+Sırada: uyarı ve önerilerin geciken sonuçları için kontrollü iptal testi; ham önbellek tüketicilerinde mükerrer zaman kontrolü; mükerrer günlerde gün doğumu/batımı eşleştirmesi; veri aralığında boşluk ve DST geri saat tekrarları. Önceki tablet ve canlı servis kabul maddeleri korunur.
+
+## Devam: gecikmiş uyarı işi ve iptal
+Üretimdeki isteğe bağlı akıllı uyarı ayar okuması resolveLatestWeatherWork korumasını kullanır. İş başlamadan ve askıdan döndükten sonra geçerlilik kontrol edilir; coroutine iptali korunur. Ayar okumasının normal istisnası ana hava yüklemesine yayılmaz; CancellationException yutulmaz. Hesap/şehir seçimi/veri nesnesi değişmişse eski sonuç yayımlanmaz. Yeni günlük öneriler önceki turda eşzamanlı hale getirildiğinden bu turda ayrı bir asenkron öneri kuyruğu testi yoktur.
+Beş kontrollü zamanlama testi: yeni verinin geciken eski ayara üstün gelmesi; A–B–A dönüşünde eski seçim kimliğinin reddi; NonCancellable geç tamamlanmanın iptal sonrası yayımlanmaması; ayar okuma hatasının mevcut sonucu bozmaması; baştan geçersiz işin hiç yüklenmemesi. 528 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler üretim yardımcı kodunu kullanır; gerçek ViewModel/ThemeManager/Firebase ve ekran kabulü yerine geçmez.
+Sıradaki yerel iş: ham önbellek listelerini okuyan tüketicilerin mükerrer zaman denetimi ve mükerrer günlerin güneş saati eşleştirmesi. Cihaz/ağ geçişi ve gerçek hesap kabul maddeleri açık.
+
+## Devam: doğrudan tüketiciler ve güneş saati belirsizliği
+Room JSON önbelleği okunurken normalizeCachedForecastLists tüm günlük/saatlik listelerde geçersiz tarihleri ve mükerrer zaman adaylarını ayıklayıp sıralar; böylece doğrudan tüketicilere de normalize veri gider. Tarihli asistan yanıtı ve seçili güne ait güneş kaydı ham listede birden fazla eşleşme varsa ilkini seçmez. Saatlik gündüz/gece eşlemesi mükerrer günün güneş saatlerini kullanmaz; batış doğuştan sonra değilse de saatlik isDay bilinmiyor kalır.
+Üç yeni test: ham cache normalizasyonu ve tekrar uygulama kararlılığı, asistanın belirsiz günlük kaydı reddi, mükerrer ve ters güneş saatlerinin saatlik sınıflamayı etkilememesi. 531 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Gerçek Room/ekran/Firebase testi yapılmadı.
+Sıradaki bulgular: akıllı yağmur uyarısı ilk üç satırı gelecek iki saat sayıyor; gerçek zamana ve şehir saat dilimine bağlanmalı. Ters güneş aralıklarının günlük kartın tüm alanlarında gösterimi ayrıca incelenecek. Eski veri, gece yarısına taşan saat aralığı ve saat dilimi geri alma durumları açık. Önceki tablet kabul maddeleri korunur.
+
+## Devam: gerçek iki saatlik yağış penceresi
+Akıllı yağış uyarısı listenin ilk üç satırını değil şimdi ile iki saat sonrası arasına örtüşen saatlik tahmin dilimlerini kullanır. Şu anı içeren saatlik dilim dahil, bitiş sınırında başlayan dilim hariçtir. Konumun saat dilimiyle Instant dönüşümü yapılır; gece yarısı ve liste sırası sonucu bozmaz. Offset içermeyen DST geri alma saatleri belirsizse tahmin edilmez. Mükerrer saatler, geçersiz bölge, eski hava kaydı ve aralık dışı yüzdeler yağış uyarısı üretmez. Yağış hava koduyla mevcutsa olasılığın yokluğu tek başına bu işareti kaldırmaz. Uyarı metni kesin yağmur yerine yağış riskini belirtir. Tekrar anahtarı cihaz günü yerine konumun gününü kullanır.
+Altı yeni test dahil 537 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Yağmur ayarının kapalı olması ve yerel tarihli UID anahtarı gerçek SmartAlertEngine üzerinden de sınandı. Bildirim gönderilmedi; fiziksel cihaz, WorkManager ve canlı hava doğrulaması yapılmadı.
+Sıradaki açık iş: üretilmiş uyarıların ekran açıkken zaman penceresi ilerledikçe yenilenmesi/temizlenmesi; diğer uyarı türlerinin veri yaşı ve geçersiz sayılarla davranışı; günlük kartlarda ters güneş aralığının tüm alanları. Mevcut motor testi ekrandaki eski uyarı ömrünü kapatmaz.
+
+## Devam: bekleyen uyarıların ömrü ve ölçüm ayrıştırma
+Görünür ekranın mevcut 30 saniyelik kontrolünde, aynı UID ve veri nesnesine ait okunmuş uyarı ayarlarıyla uyarılar yeniden üretilir. Veri eskirse veya yağış dilimi geçmişte kalırsa eski uyarı korunmaz. Her kontrolde DataStore okunmaz. Yeni hava kaydı, hesap/şehir değişimi ve şehir temizliğinde önceki uyarı girdisi temizlenir. Ayarlar yüklenene kadar önceki verinin uyarısı gösterilmez.
+SmartAlertEngine tüm uyarı türlerinde eski, süresi geçmiş veya önceki yerel güne ait kaydı güncel uyarı olarak sunmaz. Ondalıklı sıcaklık metni rakamları birleştirerek okunmaz (3.6 artık 36 sayılmaz); sonlu olmayan hız/sıcaklıklar uyarı üretmez. Günlük en düşük sıcaklıktan geceye kesin olay atfetmek yerine don riski ve yerel kontrol açıklaması kullanılır.
+Dört yeni motor testi dahil 541 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler eskime, ondalık sıcaklık, geçersiz sayılar ve saat diliminin geçmesini kapsar. Gerçek ViewModel 30 saniyelik döngüsü, ayar dosyası ve ekran kabulü cihazda hâlâ açık. Bildirim gönderilmedi.
+Sıradaki yerel iş: uyarı ayarı değiştiğinde hava yenilemesini beklemeden açık ekranın yeni tercihi uygulaması; ters güneş aralığının günlük kart alanları. Önceki cihaz ve canlı servis kabul maddeleri korunur.
+
+## Devam: canlı uyarı tercihleri
+WeatherViewModel UID oturumu içinde uyarı ayarlarını sürekli gözlemler. Aynı ayarın tekrarı iş üretmez; değişiklik mevcut hava kaydıyla uyarıları yeniden hesaplar, yeni hava isteği gerekmez. Her hava yüklemesinde ayarı tek sefer okuyan eski iş kaldırıldı. Hesap sıfırlanırken ayar referansı temizlenir; eski gözlemci iptal edilir ve geç UID olayları reddedilir. Ayar okuma hatasında önceki izinli ayar kullanılmaz, uyarılar temizlenir; iptal hata gibi yutulmaz.
+Beş yeni kontrol: aynı hava kaydında yağmuru kapat/aç, eşit tercihte tekrar üretmeme, hesap değişiminde eski olayların reddi ve gözlemci iptali, okuma hatasında temizleme, eski hesap hatasının yeni durumu temizlememesi ve upstream iptalinin korunması (ilk test birden fazla kontrol içerir). İlk çalıştırmada test sınıfındaki bir yöntemin dönüş tipi JUnit tarafından reddedildi; test imzası düzeltildi. Son tur 546 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı.
+Bu testler üretimdeki Flow gözlemcisi ve SmartAlertEngine ile kontrollü yerel akışı sınar. Gerçek DataStore ayar ekranı, ViewModel, tablet dokunuşu ve Firebase hesabı uçtan uca doğrulanmadı. Ayar kaynağı normal hatayla sonlanırsa otomatik yeniden abonelik ayrıca açık.
+Sıradaki yerel iş: günlük kartlarda ters güneş aralığının bütün alanları ve ayar gözlemcisinin geçici okuma hatasından sonra yeniden toparlanması. Önceki cihaz ve canlı servis kabul maddeleri korunur.
+
+## Devam: günlük güneş aralıkları ve ayar okuma kurtarma
+Ortak güneş saati doğrulaması ana kart, günlük kart ve eski önbellek listelerine uygulandı. Doğuş/batış birlikte ters veya eşitse ikisi de kullanılmaz; tek geçerli ölçüm korunur, öğle zamanı uydurulmaz. Eski önbellekte güneş öğlesi yalnız geçerli çiftle yeniden üretilir.
+Ayar gözlemcisi yalnız IOException için en fazla iki ek abonelik dener (1 ve 2 saniye bekleme). Denemeden önce uyarılar temizlenir. Normal hata ile iptal ayrıdır; iptal yutulmaz, hesap geçerli değilse yeniden denenmez. Tekrar abonelikte distinctUntilChanged yeniden başladığından hata öncesiyle aynı değer tekrar yayımlanabilir. Sürekli/IO dışı hata sınırsız denemeye dönüşmez; iki denemeden sonra yeni oturum/akış başlangıcı gerekir.
+Beş yeni test dahil 551 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler üretim doğrulayıcısı/gözlemcisi ile kontrollü yerel akış kullanır; gerçek DataStore arızası, ayar ekranı ve tablet kabulü yerine geçmez.
+Sıradaki yerel inceleme: uyarı ve profil tercihlerinin kaydedilmesinde UID ayrımı, başarısız yazının kullanıcıya bildirilmesi ve ayarların yeniden açılışta korunması. Önceki bildirim, tablet ve canlı servis kabul maddeleri açık.
+
+## Devam: uyarı tercihi yazımı ve hesap ayrımı
+SmartAlertViewModel okuma ve yazma oturumunu UID ve nesil kimliğiyle takip eder; aynı UID auth bildirimi gereksiz sıfırlama yapmaz. Yeni hesapta eski düğme değerleri, uyarılar ve işlem durumları temizlenir. Tıklanan hesabın kimliği kayda taşınır; başlamadan eskiyen iş yazmaz. Yazma başladıktan sonra hesap değişirse işlem yeni UID'ye yönelmez, yeni hesapta başarı/hata yayımlamaz. Başlamış disk yazısı iptalle geri alınmış sayılmaz.
+Düğmeler ayar yüklenmeden ve kayıt sürerken devre dışı; yalnız DataStore gözlemcisinin doğruladığı değer kullanılır. İyimser yerel kopya kaldırıldı. Kaydetme hatası görünür ve önceki değer korunur; okuma hatasında yeniden deneme var. Aktif uyarı hesap anahtarı doğru UID ile üretilir. Yağmur ayarı açıklaması kesin iki saat öncesi teslimat vaadi yerine iki saatlik risk ifadesine çevrildi.
+Dört yeni sahipli yazma testi dahil 555 JVM testi, 0 hata; testDebugUnitTest ve assembleDebug başarılı. Testler kontrollü yazma yardımcı kodunu sınar; gerçek DataStore diske kayıt/yeniden açılış, UI düğmeleri, gerçek Firebase geçişi ve profil tercihleri doğrulanmış değildir.
+Sıradaki yerel inceleme: profil tercihleri yazımı ve hesap silinirken geç kalan tercih yazılarının veri temizliğine etkisi. Kalıcılık ve görsel kabul tablet geldiğinde yapılacak.

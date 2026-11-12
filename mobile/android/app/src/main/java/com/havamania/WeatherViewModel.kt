@@ -117,6 +117,8 @@ class WeatherViewModel internal constructor(
     val unreadNotificationCount: StateFlow<Int> = _unreadNotificationCount.asStateFlow()
 
     private val _smartAlerts = MutableStateFlow<List<SmartAlert>>(emptyList())
+    private var smartAlertInput: Triple<String, WeatherData, SmartAlertConfig>? = null
+    private var currentAlertSettings: Pair<String, SmartAlertConfig>? = null
     val smartAlerts: StateFlow<List<SmartAlert>> = _smartAlerts.asStateFlow()
 
     private val _locationMode = MutableStateFlow(LocationMode.MANUAL)
@@ -156,6 +158,7 @@ class WeatherViewModel internal constructor(
     }
 
     private fun resetWeatherSession(newUid: String, accountUid: String?) {
+        currentAlertSettings = null
         accountTasks.reset()
         if (BuildConfig.DEBUG) Log.d("WeatherVM", "Auth changed. Re-initializing weather.")
 
@@ -176,6 +179,7 @@ class WeatherViewModel internal constructor(
         repository.onAccountChanged(accountUid)
         _uiState.value = WeatherUiState.Loading
         _todayRecommendation.value = null
+        smartAlertInput = null
         _smartAlerts.value = emptyList()
 
         observeUserData(newUid)
@@ -198,6 +202,21 @@ class WeatherViewModel internal constructor(
     private fun observeUserData(uid: String) {
         userDataJob?.cancel()
         userDataJob = viewModelScope.launch {
+            launch {
+                observeCurrentWeatherSettings(
+                    settings = ThemeManager.getSmartAlertConfig(getApplication(), uid),
+                    isCurrent = { uid == currentUid },
+                    onValue = { config ->
+                        currentAlertSettings = uid to config
+                        updateAlertsForCurrentWeather()
+                    },
+                    onUnavailable = {
+                        currentAlertSettings = null
+                        smartAlertInput = null
+                        _smartAlerts.value = emptyList()
+                    }
+                )
+            }
             // Tone observation
             launch {
                 ThemeManager.getAssistantTone(getApplication(), uid).catch { emit(AssistantTone.DENGELI) }.collect { tone ->
@@ -315,6 +334,11 @@ class WeatherViewModel internal constructor(
     private fun loadSelectedCity(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
         val selection = WeatherSelection(currentUid, lat, lon, cityName, districtName)
         if (fetchJob?.isActive == true && weatherSelection == selection) return
+        if (weatherSelection != selection) {
+            smartAlertInput = null
+            _smartAlerts.value = emptyList()
+            _todayRecommendation.value = null
+        }
         weatherSelection = selection
         loadWeather(selection, forceRefresh = false)
     }
@@ -324,6 +348,9 @@ class WeatherViewModel internal constructor(
         weatherSelection = null
         _isRefreshing.value = false
         _uiState.value = WeatherUiState.NoCity
+        smartAlertInput = null
+        _smartAlerts.value = emptyList()
+        _todayRecommendation.value = null
     }
 
     fun useCurrentLocation() {
@@ -343,6 +370,35 @@ class WeatherViewModel internal constructor(
         loadWeather(selection, forceRefresh = true)
     }
 
+    fun revalidateVisibleWeather(now: java.time.Instant = java.time.Instant.now()) {
+        val data = (_uiState.value as? WeatherUiState.Success)?.data ?: return
+        val aged = ageVisibleWeather(data, now)
+        val alertInput = smartAlertInput
+        _smartAlerts.value = if (alertInput != null && alertInput.first == currentUid && alertInput.second === data) {
+            SmartAlertEngine.generateAlerts(aged, alertInput.third, alertInput.first, now)
+        } else emptyList()
+        if (aged == data) return
+        _uiState.value = WeatherUiState.Success(aged)
+        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
+        if (_selectedForecastDate.value.isBefore(today)) selectInitialForecast(aged)
+        updateRecommendation()
+        if (!data.isStale && aged.isStale && isOnline.value && fetchJob?.isActive != true) refreshWeather()
+    }
+
+    fun recoverWeatherConnection(now: java.time.Instant = java.time.Instant.now()) {
+        val selection = weatherSelection ?: return
+        if (selection.uid != currentUid || !isOnline.value || fetchJob?.isActive == true || _isRefreshing.value) return
+        if (weatherNeedsConnectionRecovery(_uiState.value, now)) refreshWeather()
+    }
+
+    private fun updateAlertsForCurrentWeather() {
+        val data = (_uiState.value as? WeatherUiState.Success)?.data
+        val settings = currentAlertSettings?.takeIf { it.first == currentUid }
+        smartAlertInput = if (data != null && settings != null) Triple(settings.first, data, settings.second) else null
+        _smartAlerts.value = if (data != null && settings != null)
+            SmartAlertEngine.generateAlerts(data, settings.second, settings.first) else emptyList()
+    }
+
     private fun loadWeather(selection: WeatherSelection, forceRefresh: Boolean) {
         fetchJob?.cancel()
         _isRefreshing.value = forceRefresh
@@ -357,11 +413,10 @@ class WeatherViewModel internal constructor(
                     ).collect { data ->
                         receivedForecast = true
                         _uiState.value = WeatherUiState.Success(data)
+                        smartAlertInput = null
+                        _smartAlerts.value = emptyList()
 
-                        launch {
-                            val config = ThemeManager.getSmartAlertConfig(getApplication(), ownerUid).first()
-                            _smartAlerts.value = SmartAlertEngine.generateAlerts(data, config, ownerUid)
-                        }
+                        updateAlertsForCurrentWeather()
                         selectInitialForecast(data)
                         updateRecommendation()
                     }
@@ -434,15 +489,14 @@ class WeatherViewModel internal constructor(
         if (currentUiState is WeatherUiState.Success) {
             val weather = currentUiState.data
 
-            accountTasks.launch { _ ->
-                _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
+            // Generation is local and synchronous; do not queue stale same-account weather.
+            _todayRecommendation.value = RecommendationEngine.generateTodayRecommendation(
                     weatherData = weather,
                     userInterests = currentUserInterests,
                     aboutMe = currentUserAboutMe,
                     tone = _assistantTone.value,
                     personalization = currentPersonalization
                 )
-            }
         }
     }
 

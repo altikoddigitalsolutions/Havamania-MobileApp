@@ -14,7 +14,7 @@ data class WeatherData(
     val longitude: Double? = null,
     val temperature: String = "12°",
     val condition: String = "Parçalı Bulutlu",
-    val weatherCode: Int = 0,
+    val weatherCode: Int = -1,
     val isDay: Boolean = true,
     val high: String = "17°",
     val low: String = "3°",
@@ -43,7 +43,8 @@ data class WeatherData(
     val dailyForecast: List<DailyForecast> = emptyList(),
     val details: List<WeatherDetailData> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
-    val isStale: Boolean = false
+    val isStale: Boolean = false,
+    val mappingVersion: Int = 0
 )
 
 @Serializable

@@ -5,6 +5,8 @@ import java.time.LocalTime
 import java.util.Locale
 
 object WeatherUtils {
+    fun isKnownCode(code: Int): Boolean = code in setOf(0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57,
+        61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99)
 
     /**
      * Hava durumuna göre sözel açıklama döner.
@@ -51,8 +53,7 @@ object WeatherUtils {
             weatherCode in listOf(71, 73, 75, 77, 85, 86) && isNight -> "Karlı Gece"
             weatherCode in listOf(71, 73, 75, 77, 85, 86) -> "Karlı"
 
-            isNight -> "Gece"
-            else -> "Güneşli"
+            else -> "Veri yok"
         }
     }
 

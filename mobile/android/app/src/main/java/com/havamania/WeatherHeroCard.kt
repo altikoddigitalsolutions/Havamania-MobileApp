@@ -218,7 +218,7 @@ object WeatherHeroStyleManager {
             else -> if (isDark) Color(0xFF94A3B8) else Color(0xFF334155)
         }
 
-        val icon = when (themeType) {
+        val icon = if (!WeatherUtils.isKnownCode(weatherCode)) Icons.Rounded.HelpOutline else when (themeType) {
             WeatherThemeType.SUNNY, WeatherThemeType.MOSTLY_SUNNY -> if (!isDaytime) Icons.Rounded.NightsStay else Icons.Rounded.WbSunny
             WeatherThemeType.RAINY -> Icons.Rounded.WaterDrop
             WeatherThemeType.CLOUDY -> Icons.Rounded.Cloud
@@ -238,7 +238,7 @@ object WeatherHeroStyleManager {
             else -> VisualEffectType.NONE
         }
 
-        val cloudDensity = when (themeType) {
+        val cloudDensity = if (!WeatherUtils.isKnownCode(weatherCode)) 0 else when (themeType) {
             WeatherThemeType.SUNNY -> 1 // Very few
             WeatherThemeType.MOSTLY_SUNNY -> 2 // 1-2 big
             WeatherThemeType.PARTLY_CLOUDY -> 4 // 2-4

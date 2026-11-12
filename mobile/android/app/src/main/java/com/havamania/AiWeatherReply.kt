@@ -28,7 +28,7 @@ internal object AiWeatherReply {
         val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
         val date = AiIntentParser.detectDate(prompt, today) ?: return null
         val label = date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr")))
-        val day = data.dailyForecast.firstOrNull { it.date == date.toString() }
+        val day = data.dailyForecast.singleOrNull { it.date == date.toString() }
             ?: return "$label tarihi için ${data.cityName} şehrine ait tahmin verisi bulunmuyor."
         val stale = if (data.isStale) "Bu yanıt eski önbellek verisine dayanıyor; güncel tahmin doğrulanamadı. " else ""
         return stale + "$label tarihinde ${data.cityName} şehrinde günlük hava özeti: ${dailyCondition(day.weatherCode)}. " +

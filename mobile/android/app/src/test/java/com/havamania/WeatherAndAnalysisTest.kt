@@ -41,7 +41,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(temperature = null)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertEquals("--", domain.temperature)
     }
 
@@ -52,7 +52,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(temperature = 0.0)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertEquals("0°", domain.temperature)
     }
 
@@ -63,7 +63,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(pressure = null)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.pressure)
     }
 
@@ -74,7 +74,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(visibility = null)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.visibilityKm)
     }
 
@@ -91,7 +91,7 @@ class WeatherAndAnalysisTest {
                 precipProbMax = null
             )
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.precipitationProbability)
     }
 
@@ -108,7 +108,7 @@ class WeatherAndAnalysisTest {
                 precipProbMax = listOf(0)
             )
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertEquals(Integer.valueOf(0), domain.precipitationProbability)
     }
 
@@ -119,7 +119,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(windSpeed = null)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.windSpeed)
     }
 
@@ -130,7 +130,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(windSpeed = 0.0)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNotNull(domain.windSpeed)
         assertEquals(0.0, domain.windSpeed!!, 0.001)
     }
@@ -154,7 +154,7 @@ class WeatherAndAnalysisTest {
                 temperature = listOf(22.0)
             )
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.sunriseTime)
         assertNull(domain.sunsetTime)
         assertEquals(1, domain.hourlyForecast.size)
@@ -171,7 +171,7 @@ class WeatherAndAnalysisTest {
                 temperature = listOf(22.0)
             )
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertTrue(domain.hourlyForecast.isEmpty())
     }
 
@@ -182,7 +182,7 @@ class WeatherAndAnalysisTest {
             longitude = 29.0,
             current = CurrentWeatherDto(visibility = null)
         )
-        val domain = WeatherMapper.mapToDomain(response, "İstanbul")
+        val domain = WeatherMapper.mapToDomain(response, "İstanbul", now = java.time.Instant.parse("2026-09-05T12:00:00Z"))
         assertNull(domain.visibilityKm)
     }
 

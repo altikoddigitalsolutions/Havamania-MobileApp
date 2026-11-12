@@ -156,7 +156,7 @@ fun DailyForecastPanel(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "${forecasts.size} GÜNLÜK TAHMİN",
+                    text = if (forecasts.isEmpty()) "GÜNLÜK TAHMİN" else "${forecasts.size} GÜNLÜK TAHMİN",
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
@@ -166,6 +166,13 @@ fun DailyForecastPanel(
             }
 
             // Forecast List
+            if (forecasts.isEmpty()) {
+                Text(
+                    text = "Günlük tahmin verisi şu anda bulunmuyor. Bağlantı sağlandığında yeniden deneyebilirsiniz.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = themeColors.textSecondary
+                )
+            }
             Column {
                 visibleForecast.forEachIndexed { index, forecast ->
                     key(forecast.date) {

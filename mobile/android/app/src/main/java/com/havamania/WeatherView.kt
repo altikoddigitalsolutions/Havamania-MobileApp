@@ -39,6 +39,9 @@ import java.time.LocalTime
 import java.time.LocalDate
 import com.havamania.ui.theme.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
@@ -50,6 +53,16 @@ fun HomeScreen(
     onNavigateToAi: (HavamaniaRecommendation, WeatherData?) -> Unit = { _, _ -> },
     onNavigateToNotifications: () -> Unit = {}
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.recoverWeatherConnection()
+            while (true) {
+                viewModel.revalidateVisibleWeather()
+                delay(30_000)
+            }
+        }
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val selectedHourlyWeather by viewModel.selectedHourlyWeather.collectAsStateWithLifecycle()
@@ -71,6 +84,11 @@ fun HomeScreen(
     val notificationUiState by notificationViewModel.uiState.collectAsStateWithLifecycle()
     val unreadNotificationsCount = notificationUiState.unreadCount
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    LaunchedEffect(isOnline, lifecycleOwner, viewModel) {
+        if (isOnline && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            viewModel.recoverWeatherConnection()
+        }
+    }
 
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
@@ -241,7 +259,7 @@ fun BoxScope.WeatherSuccessContent(
     val windowSize = LocalWindowSize.current
 
     val locationNow = ForecastTime.localNow(data.timezone)
-    val selectedSun = data.dailyForecast.firstOrNull { it.date == selectedForecastDate.toString() }
+    val selectedSun = data.dailyForecast.singleOrNull { it.date == selectedForecastDate.toString() }
     val sunriseTime = selectedSun?.sunriseTime
     val sunsetTime = selectedSun?.sunsetTime
     val displayTime = selectedHourlyWeather?.let { ForecastTime.parseHour(it) }?.toLocalTime() ?: locationNow.toLocalTime()

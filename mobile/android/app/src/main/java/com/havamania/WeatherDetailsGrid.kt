@@ -310,6 +310,7 @@ fun WeatherSuitabilityCard(
 ) {
     val themeColors = HavamaniaTheme.colors
     val scoreColor = when {
+        score < 0 -> themeColors.textSecondary
         score > 80 -> Color(0xFF10B981)
         score > 60 -> Color(0xFFF59E0B)
         else -> Color(0xFFEF4444)
@@ -330,7 +331,7 @@ fun WeatherSuitabilityCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (score > 60) Icons.Rounded.AutoAwesome else Icons.Rounded.Warning,
+                    imageVector = if (score < 0) Icons.Rounded.Info else if (score > 60) Icons.Rounded.AutoAwesome else Icons.Rounded.Warning,
                     contentDescription = null,
                     tint = scoreColor,
                     modifier = Modifier.size(24.dp)

@@ -4,6 +4,12 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 internal object ForecastSun {
+    fun validTimes(sunrise: String?, sunset: String?): Pair<String?, String?> {
+        val rise = runCatching { LocalTime.parse(sunrise) }.getOrNull()
+        val set = runCatching { LocalTime.parse(sunset) }.getOrNull()
+        if (rise != null && set != null && !set.isAfter(rise)) return null to null
+        return rise?.toString() to set?.toString()
+    }
     // Reject shifted or malformed provider arrays instead of borrowing another day's sun times.
     fun timeForDate(iso: String?, date: String): String? = try {
         LocalDateTime.parse(iso).takeIf { it.toLocalDate().toString() == date }
