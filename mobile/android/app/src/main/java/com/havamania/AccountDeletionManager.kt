@@ -59,6 +59,7 @@ class AccountDeletionManager private constructor(private val app: Application) {
 
     fun start(password: String, onComplete: (Boolean, String?) -> Unit) {
         if (state.value.busy || state.value.pending) return
+        accountPreferenceWriteEpoch.invalidate()
         mutableState.value = AccountDeletionState(busy = true)
         scope.launch {
             try {
@@ -216,6 +217,7 @@ class AccountDeletionManager private constructor(private val app: Application) {
 
     fun acknowledgeCompletion() {
         if (state.value.complete) {
+            accountPreferenceWriteEpoch.invalidate()
             mutableState.value = AccountDeletionState()
             TravelNotificationWorker.schedule(app)
         }

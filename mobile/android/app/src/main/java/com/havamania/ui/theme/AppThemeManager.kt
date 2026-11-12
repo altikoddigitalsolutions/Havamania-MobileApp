@@ -213,9 +213,11 @@ object ThemeManager {
     suspend fun saveProfileSnapshot(context: Context, profile: com.havamania.UserProfile) {
         val uid = profile.uid
         require(uid.isNotBlank())
+        val epoch = com.havamania.accountPreferenceWriteEpoch.capture()
         com.havamania.saveProfilePreferences(context.dataStore, writesAllowed = {
             val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
-            !state.pending && !state.busy
+            com.havamania.accountPreferenceWriteEpoch.permits(epoch, uid,
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid, state.pending || state.busy)
         }) { prefs ->
             prefs[nameKey(uid)] = profile.name
             prefs[bioKey(uid)] = profile.bio
@@ -231,30 +233,32 @@ object ThemeManager {
         }
     }
 
-    private suspend fun Context.editProfilePreferences(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+    private suspend fun Context.editProfilePreferences(uid: String, transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+        val epoch = com.havamania.accountPreferenceWriteEpoch.capture()
         com.havamania.saveProfilePreferences(dataStore, {
             val state = com.havamania.AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value
-            !state.pending && !state.busy
+            com.havamania.accountPreferenceWriteEpoch.permits(epoch, uid,
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid, state.pending || state.busy)
         }, transform)
     }
     internal suspend fun saveProfileBasics(context: Context, uid: String, name: String, bio: String) =
-        context.editProfilePreferences { it[nameKey(uid)] = name; it[bioKey(uid)] = bio }
+        context.editProfilePreferences(uid) { it[nameKey(uid)] = name; it[bioKey(uid)] = bio }
     internal suspend fun savePersonalizationBasics(context: Context, uid: String, interests: Set<String>) =
-        context.editProfilePreferences { it[interestsKey(uid)] = interests.joinToString(","); it[onboardingCompletedKey(uid)] = true }
+        context.editProfilePreferences(uid) { it[interestsKey(uid)] = interests.joinToString(","); it[onboardingCompletedKey(uid)] = true }
 
-    suspend fun saveUserName(context: Context, uid: String, name: String) = context.editProfilePreferences { it[nameKey(uid)] = name }
+    suspend fun saveUserName(context: Context, uid: String, name: String) = context.editProfilePreferences(uid) { it[nameKey(uid)] = name }
     fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
 
-    suspend fun saveUserBio(context: Context, uid: String, bio: String) = context.editProfilePreferences { it[bioKey(uid)] = bio }
+    suspend fun saveUserBio(context: Context, uid: String, bio: String) = context.editProfilePreferences(uid) { it[bioKey(uid)] = bio }
     fun getUserBio(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[bioKey(uid)] ?: "" }
 
-    suspend fun saveUserImageUriByUid(context: Context, uid: String, path: String?) = context.editProfilePreferences {
+    suspend fun saveUserImageUriByUid(context: Context, uid: String, path: String?) = context.editProfilePreferences(uid) {
         val key = imageUriKey(uid)
         if (path == null) it.remove(key) else it[key] = path
     }
     fun getUserImageUriByUid(context: Context, uid: String): Flow<String?> = context.dataStore.data.map { it[imageUriKey(uid)] }
 
-    suspend fun saveUserInterests(context: Context, uid: String, interests: Set<String>) = context.editProfilePreferences {
+    suspend fun saveUserInterests(context: Context, uid: String, interests: Set<String>) = context.editProfilePreferences(uid) {
         it[interestsKey(uid)] = interests.joinToString(",")
     }
     fun getUserInterests(context: Context, uid: String): Flow<Set<String>> = context.dataStore.data.map {
@@ -262,7 +266,7 @@ object ThemeManager {
         if (str.isEmpty()) emptySet() else str.split(",").toSet()
     }
 
-    suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.editProfilePreferences { it[aboutMeKey(uid)] = aboutMe }
+    suspend fun saveUserAboutMe(context: Context, uid: String, aboutMe: String) = context.editProfilePreferences(uid) { it[aboutMeKey(uid)] = aboutMe }
     fun getUserAboutMe(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[aboutMeKey(uid)] ?: "" }
 
     private fun citySyncStore(context: Context): com.havamania.CitySyncStore =
@@ -357,7 +361,19 @@ object ThemeManager {
 
     // --- Smart Alert Methods ---
 
-    suspend fun saveSmartAlertConfig(context: Context, uid: String, config: com.havamania.SmartAlertConfig) = context.dataStore.edit {
+    private suspend fun Context.editAlertPreferences(uid: String, transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+        val epoch = com.havamania.accountPreferenceWriteEpoch.capture()
+        dataStore.edit { preferences ->
+            val state = com.havamania.AccountDeletionManager.getInstance(applicationContext as android.app.Application).state.value
+            check(com.havamania.accountPreferenceWriteEpoch.permits(epoch, uid,
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid, state.pending || state.busy)) {
+                "Account preference write is no longer valid"
+            }
+            transform(preferences)
+        }
+    }
+
+    suspend fun saveSmartAlertConfig(context: Context, uid: String, config: com.havamania.SmartAlertConfig) = context.editAlertPreferences(uid) {
         it[rainAlertKey(uid)] = config.rainEnabled
         it[windAlertKey(uid)] = config.windEnabled
         it[heatAlertKey(uid)] = config.heatEnabled
@@ -383,7 +399,7 @@ object ThemeManager {
         )
     }
 
-    suspend fun saveSingleAlertSetting(context: Context, uid: String, alertId: String, enabled: Boolean) = context.dataStore.edit {
+    suspend fun saveSingleAlertSetting(context: Context, uid: String, alertId: String, enabled: Boolean) = context.editAlertPreferences(uid) {
         val key = when(alertId) {
             "rain" -> rainAlertKey(uid)
             "wind" -> windAlertKey(uid)
