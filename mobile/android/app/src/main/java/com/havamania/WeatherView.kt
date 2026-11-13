@@ -209,10 +209,7 @@ fun HomeScreen(
                     status = citySearchStatus,
                     onRetry = { viewModel.searchCity(searchText) },
                     savedCities = registeredCities,
-                    isSelected = { suggestion ->
-                        val data = (uiState as? WeatherUiState.Success)?.data
-                        data?.cityName == suggestion.getSafeCity() && data?.districtName == suggestion.getSafeDistrict()
-                    },
+                    isSelected = viewModel::isSelectedLocation,
                     onSelect = { suggestion ->
                         viewModel.fetchWeather(suggestion.latitude, suggestion.longitude, suggestion.getSafeCity(), suggestion.getSafeDistrict())
                         themeViewModel.setDefaultCity(suggestion, useManualLocation = true)

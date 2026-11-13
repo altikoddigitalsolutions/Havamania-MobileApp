@@ -113,12 +113,11 @@ class WeatherRepository(
      * Şehir arama fonksiyonu
      */
     suspend fun searchCityOrThrow(query: String): List<GeocodingResultDto> =
-        apiService.searchCity(cityName = query).results ?: emptyList()
+        turkeyFirstLocationSearch(query) { country -> apiService.searchCity(cityName = query, count = 10, countryCode = country).results.orEmpty() }
 
     suspend fun searchCity(query: String): List<GeocodingResultDto> {
         return try {
-            val response = apiService.searchCity(cityName = query)
-            response.results ?: emptyList()
+            searchCityOrThrow(query)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()

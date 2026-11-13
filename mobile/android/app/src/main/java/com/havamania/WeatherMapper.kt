@@ -63,6 +63,9 @@ object WeatherMapper {
             ForecastSun.timeForDate(daily?.sunrise?.getOrNull(todayIndex), today.toString()),
             ForecastSun.timeForDate(daily?.sunset?.getOrNull(todayIndex), today.toString()))
         val solarNoon = ForecastSun.daylightMidpoint(sunrise, sunset)
+        val dailyMin = daily?.tempMin?.firstOrNull()?.takeIf { it.isFinite() }
+        val dailyMax = daily?.tempMax?.firstOrNull()?.takeIf { it.isFinite() }
+        val rangeValid = dailyMin == null || dailyMax == null || dailyMin <= dailyMax
 
         return WeatherData(
             cityName = cityName,
@@ -73,8 +76,8 @@ object WeatherMapper {
             condition = getWeatherCondition(current?.weatherCode ?: -1),
             weatherCode = current?.weatherCode ?: -1,
             isDay = current?.isDay == 1,
-            high = daily?.tempMax?.firstOrNull()?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}°" } ?: "--",
-            low = daily?.tempMin?.firstOrNull()?.takeIf { it.isFinite() }?.let { "${it.roundToInt()}°" } ?: "--",
+            high = dailyMax?.takeIf { rangeValid }?.let { "${it.roundToInt()}°" } ?: "--",
+            low = dailyMin?.takeIf { rangeValid }?.let { "${it.roundToInt()}°" } ?: "--",
             feelsLike = current?.apparentTemperature?.let { "${it.roundToInt()}°" } ?: "--",
             sunriseTime = if (sunrise.isNullOrEmpty()) null else sunrise,
             sunsetTime = if (sunset.isNullOrEmpty()) null else sunset,

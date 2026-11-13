@@ -5,11 +5,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ForecastInvalidValuesTest {
+    @Test fun reversedTodaysRangeDoesNotReachHero() {
+        val value = WeatherMapper.mapToDomain(OpenMeteoResponse(40.0, 29.0, daily = DailyDto(
+            time = listOf("2026-11-13"), weatherCode = listOf(0),
+            tempMin = listOf(10.0), tempMax = listOf(8.0))), "Bursa",
+            now = java.time.Instant.parse("2026-11-13T12:00:00Z"))
+        assertEquals("--", value.high)
+        assertEquals("--", value.low)
+    }
     @Test fun `nonfinite daily temperatures do not crash or become observations`() {
         val value = WeatherMapper.mapToDomain(OpenMeteoResponse(40.0, 29.0, daily = DailyDto(
             time = listOf("2026-11-12", "2026-11-13", "2026-11-14"), weatherCode = listOf(0, 0, 0),
             tempMin = listOf(Double.NaN, 10.0, 5.0), tempMax = listOf(Double.POSITIVE_INFINITY, 8.0, 15.0)
-        )), "Bursa")
+        )), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
         assertEquals("--", value.high)
         assertEquals("--", value.low)
         assertEquals("2026-11-14", value.dailyForecast.single().date)
@@ -19,7 +27,7 @@ class ForecastInvalidValuesTest {
             time = listOf("2026-11-12T10:00", "2026-11-12T11:99", "2026-11-12T12:00"),
             weatherCode = listOf(0, 0, 0), temperature = listOf(Double.NaN, 10.0, 0.0),
             precipitationProbability = listOf(0, 0, 101)
-        )), "Bursa")
+        )), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
         val hour = value.hourlyForecast.single()
         assertEquals("0°", hour.temp)
         assertNull(hour.precipitationProbability)
@@ -29,13 +37,13 @@ class ForecastInvalidValuesTest {
         val value = WeatherMapper.mapToDomain(OpenMeteoResponse(40.0, 29.0, daily = DailyDto(
             time = listOf("2026-02-30", "2026-11-12"), weatherCode = listOf(0, 0),
             tempMin = listOf(0.0, 0.0), tempMax = listOf(5.0, 5.0), precipProbMax = listOf(0, -1)
-        )), "Bursa")
+        )), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
         assertEquals("2026-11-12", value.dailyForecast.single().date)
         assertNull(value.dailyForecast.single().precipitationProbability)
     }
     @Test fun `missing direction and temperature do not invent north or wind chill`() {
         val value = WeatherMapper.mapToDomain(OpenMeteoResponse(40.0, 29.0,
-            current = CurrentWeatherDto(windSpeed = 20.0)), "Bursa")
+            current = CurrentWeatherDto(windSpeed = 20.0)), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
         assertNull(value.windDirectionLabel)
         assertNull(value.windDirectionDegrees)
         assertNull(value.windChill)

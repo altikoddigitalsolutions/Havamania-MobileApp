@@ -462,3 +462,27 @@ Güncellenen teslim testi SM-T500 üzerinde üç ardışık koşuda 3/3 geçti.
 12 Kasım tercih yazımı devamı: SmartAlertViewModel UID/nesil koruması, hesap değişiminde temizleme, kaydetme/yükleme durumu ve görünür hata eklendi. Düğmeler hazır değilken/yazma sürerken kapalı, değerler disk gözlemcisinden geliyor. Dört yeni test dahil 555 JVM testi ve debug derlemesi başarılı. DataStore yeniden açılış ve gerçek hesap/ekran kabulü açık. Sırada profil tercihleri ve hesap silme sırasında geç yazılar var. Rapor: 12_KASIM_YEREL_HAVA_VERI_VE_METIN.md.
 
 12 Kasım silme/tercih devamı: Profil ve uyarı yazıları işlem içinde UID/silme/epoch kontrolü kullanıyor. Silme başlatma ve tamamlama onayı eski kuyruk tokenlarını geçersizleştiriyor. Uyarı kaydı reddedilirse hata döner. Dört yeni test dahil 559 JVM testi ve debug derlemesi başarılı. Gerçek DataStore/silme/Firebase kabulü açık. Sırada diğer doğrudan tercih yazıları ve sessiz profil ret bildirimi var. Rapor: 12_KASIM_YEREL_HAVA_VERI_VE_METIN.md.
+
+13 Kasım kullanıcı isteği eklendi ve yerel/izole cihaz düzeltmesi yapıldı: Türkiye filtreli + dünya sorguları birleştirilir, TR önce, grup içinde yazılan ad öneki önce. Global kapsam korunur. 567 JVM testi, 2 arama UI ve 3 bekleyen izole DataStore cihaz testi geçti. Ana kart ters sıcaklık aralığı da düzeltildi. Gerçek oturumda arama, ülke satırları ve önceki ayar ekranı kabulü açık. Rapor: 13_KASIM_TURKIYE_ONCELIKLI_ARAMA.md.
+
+## Devam — Ülke satırları ve kimliksiz konumlar
+
+Hava aramasında il/ülke açıklaması görünür hale getirildi. Seyahat kalkış/varış arama bileşeni de aynı açıklamayı kullanır; eksik il adı boş virgül üretmez, aynı il adı tekrarlanmaz. Ülke adı yoksa ülke kodu; ikisi de yoksa açık bilinmiyor metni gösterilir.
+
+Kimliği olmayan farklı konumlar yalnız id=0 nedeniyle tek satıra düşmez. Servis kimliği varsa o, yoksa ülke kodu/ad/koordinat birleşimi liste anahtarı olur. Ortak arama sonuç birleştirmesi de aynı anahtarı kullanır. Diğer ekranlardaki seçili/kayıtlı şehir karşılaştırmalarının yalnız id=0 ile çalışıp çalışmadığı ayrıca incelenecek.
+
+Son tur: 571 JVM testi, 0 hata; SM-T500 üzerinde 4/4 cihaz testi. İkisi önceki Türkiye önceliği açık/koyu tema regresyonu, ikisi yeni aynı adlı Fransa/ABD konumlarının hava ve seyahat bileşeninde ayrı görünmesi ve doğru kaydın seçilmesi. Bu testler kontrollü sonuçlarla gerçek Compose bileşenlerini kullanır; gerçek oturumda yazı yazarak ağdan sonuç getirme ve seyahat kaydetme kabulü yerine geçmez.
+
+Gradle testDebugUnitTest ve connectedDebugAndroidTest başarılı. Play kurulumu, kullanıcı hesabı ve Firebase verileri değiştirilmedi. Kullanıcının gradle.properties değişikliği korundu; push yapılmadı. Sırada seçili/kayıtlı konum kimliği eşleştirmesi ve önceki profil/uyarı ayarı ekranı kabulü var.
+
+## Devam — Seçili ve varsayılan konum eşleştirmeleri
+
+Hava seçicisinin şehir/ilçe adına bakarak farklı ülkelerdeki aynı adlı konumları seçili işaretlemesi kaldırıldı. WeatherViewModel güncel UID'ye ait istenen konumun koordinatını ve şehir/ilçe bilgisini kullanır; API'nin tahmin ızgarası koordinatı veya yalnız görünen isim kullanılmaz. Geçersiz koordinat seçili sayılmaz.
+
+Şehir yönetiminde öneri ve kayıtlı satırlar ortak kayıt anahtarını kullanır. id=0 olan farklı konumlar aynı LazyColumn anahtarına düşmez ve hepsi varsayılan sayılmaz. Öneriler tekilleştirildikten sonra ilk beş alınır. İl/ülke açıklaması bu ekranda da ortak biçime alındı.
+
+Son tur: 575 JVM testi, 0 hata; SM-T500 üzerinde 6/6 cihaz testi. Dört önceki arama/ülke satırı regresyonu ve iki yeni şehir yönetimi testi geçti. Yeni testler id=0 aynı adlı önerilerin ayrı kalmasını, tek varsayılan işaretini ve doğru ülkeye ait geri çağrıyı doğrular. Ağ, gerçek kayıt işlemi ve kullanıcı oturumu yerine kontrollü Compose girdileri kullanıldı.
+
+Bulut kayıt kimlikleri, silme ve senkronizasyon kuyruğunun biçimi değiştirilmedi. İd'siz eski kayıtların gerçekten saklanması/silinmesi ve sunucuyla senkronizasyonu ayrıca denetlenecek; UI eşleştirmesi bu kalıcılık kabulünü kapatmaz. Görünen liste tekilleştirilirken kullanılan şehir sayısının silme düğmesi kurallarıyla tutarlılığı da sırada.
+
+Play kurulumu, Firebase hesabı ve mevcut gradle.properties değişikliği korundu. Yeni release veya push yapılmadı. Önceki ayar ekranı, gerçek oturum ve mağaza kabul maddeleri açık.

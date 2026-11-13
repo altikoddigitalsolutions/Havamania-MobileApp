@@ -46,9 +46,9 @@ internal fun WeatherCitySearchContent(
             }
         }
         val cities = if (searching) suggestions else savedCities
-        items(cities.distinctBy { it.id }, key = { it.id }) { suggestion ->
+        items(cities.distinctBy(::locationSuggestionKey), key = ::locationSuggestionKey) { suggestion ->
             val selected = isSelected(suggestion)
-            val city = suggestion.getSafeCity()
+            val supporting = locationSupportingText(suggestion)
             val title = suggestion.getSafeDistrict() ?: suggestion.name
             Surface(
                 onClick = { onSelect(suggestion) },
@@ -58,9 +58,7 @@ internal fun WeatherCitySearchContent(
                 Column(Modifier.padding(16.dp)) {
                     if (selected) Text("Seçili", color = colors.accent)
                     Text(title, color = colors.textPrimary, style = HavamaniaTheme.typography.bodyLarge)
-                    if (city != title) {
-                        Text(city, color = colors.textMuted, style = HavamaniaTheme.typography.bodySmall)
-                    }
+                    Text(supporting, color = colors.textMuted, style = HavamaniaTheme.typography.bodySmall)
                 }
             }
         }

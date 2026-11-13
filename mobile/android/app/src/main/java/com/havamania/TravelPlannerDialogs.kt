@@ -355,7 +355,7 @@ private fun LockedLocationCard(title: String, subtitle: String, onUnlock: () -> 
 }
 
 @Composable
-private fun LocationSearchField(
+internal fun LocationSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     suggestions: List<GeocodingResultDto>,
@@ -382,10 +382,10 @@ private fun LocationSearchField(
                 border = BorderStroke(1.dp, HavamaniaTheme.colors.border.copy(alpha = 0.1f))
             ) {
                 LazyColumn {
-                    items(suggestions) { item ->
+                    items(suggestions.distinctBy(::locationSuggestionKey), key = ::locationSuggestionKey) { item ->
                         ListItem(
                             headlineContent = { Text(item.name, fontWeight = FontWeight.Bold) },
-                            supportingContent = { Text("${item.admin1 ?: ""}, ${item.country}") },
+                            supportingContent = { Text(locationSupportingText(item)) },
                             modifier = Modifier.testTag("location_suggestion_${item.id}").clickable { onSelect(item) }
                         )
                     }

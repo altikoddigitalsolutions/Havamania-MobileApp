@@ -323,6 +323,11 @@ class WeatherViewModel internal constructor(
         }
     }
 
+    fun isSelectedLocation(candidate: GeocodingResultDto): Boolean {
+        val selected = weatherSelection?.takeIf { it.uid == currentUid } ?: return false
+        return matchesWeatherSelection(selected.latitude, selected.longitude, selected.city, selected.district, candidate)
+    }
+
     fun fetchWeather(lat: Double, lon: Double, cityName: String, districtName: String? = null) {
         locationJob?.cancel()
         locationAttempt++

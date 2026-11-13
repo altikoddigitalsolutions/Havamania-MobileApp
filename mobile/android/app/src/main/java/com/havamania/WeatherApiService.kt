@@ -42,6 +42,7 @@ interface WeatherApiService {
         @Query("name") cityName: String,
         @Query("count") count: Int = 5,
         @Query("language") language: String = "tr",
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("countryCode") countryCode: String? = null
     ): GeocodingResponse
 }

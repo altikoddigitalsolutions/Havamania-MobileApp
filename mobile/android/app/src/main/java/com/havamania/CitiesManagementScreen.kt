@@ -91,12 +91,12 @@ internal fun CityManagementContent(
         }
         if (query.trim().length >= 2) {
             item(key = "search-status") { LocationSearchFeedback(searchStatus, onRetry) }
-            items(suggestions.take(5).distinctBy { it.id }, key = { "suggestion-${it.id}" }) { suggestion ->
+            items(suggestions.distinctBy(::locationSuggestionKey).take(5), key = { "suggestion-" + locationSuggestionKey(it) }) { suggestion ->
                 HavamaniaGlassCard(onClick = { onAdd(suggestion) }, modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(suggestion.displayName, color = colors.textPrimary, fontWeight = FontWeight.Bold)
-                            Text(suggestion.country, color = colors.textSecondary)
+                            Text(locationSupportingText(suggestion), color = colors.textSecondary)
                         }
                         Icon(Icons.Rounded.AddCircle, "Konumu ekle", tint = colors.accent)
                     }
@@ -110,8 +110,8 @@ internal fun CityManagementContent(
                     description = "Şehir veya ilçe ekleyerek hava durumunu takip edebilirsiniz.", accentColor = colors.accent)
             }
         } else {
-            items(cities, key = { "city-${it.id}" }) { city ->
-                CityListItem(city, city.id == defaultCity?.id, cities.size > 1,
+            items(cities.distinctBy(::locationSuggestionKey), key = { "city-" + locationSuggestionKey(it) }) { city ->
+                CityListItem(city, sameLocationRecord(city, defaultCity), cities.size > 1,
                     { onDelete(city) }, { onSetDefault(city) })
             }
         }
@@ -170,7 +170,7 @@ fun CityListItem(
                     color = themeColors.textPrimary
                 )
                 Text(
-                    text = listOfNotNull(city.admin1?.takeIf { it != city.name }, city.country.takeIf { it.isNotBlank() }).joinToString(", "),
+                    text = locationSupportingText(city),
                     style = MaterialTheme.typography.bodySmall,
                     color = themeColors.textSecondary
                 )
