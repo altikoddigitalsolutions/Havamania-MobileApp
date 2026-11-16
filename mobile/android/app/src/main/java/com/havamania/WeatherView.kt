@@ -76,7 +76,9 @@ fun HomeScreen(
 
     val cityMutationError by themeViewModel.cityMutationError.collectAsStateWithLifecycle()
     val cityMutationErrorDetails by themeViewModel.cityMutationErrorDetails.collectAsStateWithLifecycle()
-    CityMutationErrorDialog(cityMutationError, themeViewModel::dismissCityMutationError, themeViewModel::retryCitySync, cityMutationErrorDetails)
+    val cityMutationCanRetry by themeViewModel.cityMutationCanRetry.collectAsStateWithLifecycle()
+    CityMutationErrorDialog(cityMutationError, themeViewModel::dismissCityMutationError,
+        if (cityMutationCanRetry) themeViewModel::retryCitySync else null, cityMutationErrorDetails)
     val userInterests by themeViewModel.userInterests.collectAsStateWithLifecycle()
     val todayRecommendation by viewModel.todayRecommendation.collectAsStateWithLifecycle()
     val userAboutMe by themeViewModel.userAboutMe.collectAsStateWithLifecycle()

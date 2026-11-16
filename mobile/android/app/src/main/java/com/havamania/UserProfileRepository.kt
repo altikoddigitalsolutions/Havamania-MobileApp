@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * P2 OPTIMIZATION: Unified repository for User Profile to prevent duplicate Firestore listeners.
  */
-internal data class ServerDefaultCity(val uid: String, val name: String?)
+internal data class ServerDefaultCity(val uid: String, val name: String?, val location: Any? = null)
 
 class UserProfileRepository private constructor() {
     private val db get() = FirebaseFirestore.getInstance()
@@ -55,7 +55,7 @@ class UserProfileRepository private constructor() {
                 if (e == null && snapshot != null && snapshot.exists()) {
                     _profile.value = snapshot.toObject(UserProfile::class.java)
                     if (!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
-                        _serverDefaultCity.value = ServerDefaultCity(uid, _profile.value?.defaultCity)
+                        _serverDefaultCity.value = ServerDefaultCity(uid, _profile.value?.defaultCity, snapshot.get("defaultCityLocation"))
                     }
                 } else {
                     _profile.value = null

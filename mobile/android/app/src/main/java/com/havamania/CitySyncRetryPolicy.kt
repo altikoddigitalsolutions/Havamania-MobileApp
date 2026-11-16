@@ -46,7 +46,7 @@ internal class CitySyncWaitingException(val blocked: String?, val retryAt: Long)
     Exception("City synchronization is waiting for recovery")
 
 internal fun citySyncErrorText(error: Exception, now: Long = System.currentTimeMillis() / 1000): String {
-    if (error is DefaultCityNameAmbiguousException) return "Varsayılan konum adı birden fazla kayıtla eşleşiyor. Yerel tercihiniz korundu; doğru konumun kimliği doğrulanmalı."
+    if (generateSequence<Throwable>(error) { it.cause }.take(8).any { it is DefaultCityNameAmbiguousException }) return "Varsayılan konum adı birden fazla kayıtla eşleşiyor. Yerel tercihiniz korundu. Konum listesinden doğru konumu yeniden varsayılan seçin; çakışma sürerse destek ile iletişime geçin."
     if (isCityIdentityConflict(error)) return "Konum kayıtlarının kimlikleri çakışıyor. Yerel kayıtlar ve bekleyen işlemler korundu. Kayıtlar doğrulanmadan eşitleme yapılamıyor."
     val category = if (error is CitySyncWaitingException) error.blocked else citySyncFailure(error).name
     return when (category) {
@@ -59,4 +59,13 @@ internal fun citySyncErrorText(error: Exception, now: Long = System.currentTimeM
             "Yeniden denemeden önce yaklaşık ${minutes.coerceAtLeast(1)} dakika bekleyin. Süre dolunca eşitlemeyi tekrar deneyin; bu pencere otomatik gönderim başlatmaz."
         } else "Konum eşitlemesi tamamlanamadı. Bağlantınızı kontrol edip kısa bir süre sonra tekrar deneyin. Yerel kayıtlarınızı da kontrol edin."
     }
+}
+
+
+/** Only transport failures can be recovered by sending the same operation again. */
+internal fun canManuallyRetryCitySync(error: Exception): Boolean {
+    if (generateSequence<Throwable>(error) { it.cause }.take(8).any {
+            it is DefaultCityNameAmbiguousException || it is CityIdentityConflictException }) return false
+    if (error is CitySyncWaitingException) return false
+    return citySyncFailure(error) == CitySyncFailure.TEMPORARY
 }

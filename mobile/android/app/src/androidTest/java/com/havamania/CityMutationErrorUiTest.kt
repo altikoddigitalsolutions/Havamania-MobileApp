@@ -33,9 +33,20 @@ class CityMutationErrorUiTest {
         }
         compose.onNodeWithText("Konum işlemi tamamlanamadı").assertIsDisplayed()
         compose.onNodeWithText(details ?: "Değişiklik cihazınıza kaydedilmiş olabilir; bulut eşitlemesi tamamlanmamış olabilir. Bağlantınızı ve kayıtlı konumlarınızı kontrol edin.").assertIsDisplayed()
+        if (!retry) compose.onNodeWithText("Eşitlemeyi tekrar dene").assertDoesNotExist()
         compose.runOnIdle { assertEquals(0, retries) }
         compose.onNodeWithText(if (retry) "Eşitlemeyi tekrar dene" else "Tamam").assertIsDisplayed().performClick()
         compose.runOnIdle { assertFalse(visible.value); assertEquals(if (retry) 0 else 1, dismisses); assertEquals(if (retry) 1 else 0, retries) }
+    }
+    @Test fun productionAmbiguityPolicyDoesNotOfferRetry() {
+        val error = DefaultCityNameAmbiguousException()
+        verify(AppTheme.LIGHT, canManuallyRetryCitySync(error), citySyncErrorText(error))
+        compose.onNodeWithText("Eşitlemeyi tekrar dene").assertDoesNotExist()
+    }
+    @Test fun productionConflictPolicyDoesNotOfferRetry() {
+        val error = CityIdentityConflictException()
+        verify(AppTheme.DARK, canManuallyRetryCitySync(error), citySyncErrorText(error))
+        compose.onNodeWithText("Eşitlemeyi tekrar dene").assertDoesNotExist()
     }
     @Test fun defaultNameAmbiguityFitsLightLargeText() = verify(AppTheme.LIGHT, false, citySyncErrorText(DefaultCityNameAmbiguousException()))
     @Test fun identityConflictFitsDarkLargeText() = verify(AppTheme.DARK, false, citySyncErrorText(CityIdentityConflictException()))

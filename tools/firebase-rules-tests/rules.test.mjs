@@ -1,4 +1,5 @@
 import { after, before, beforeEach, test } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
@@ -76,4 +77,64 @@ test('storage rejects new uploads after Firestore deletion marker', async () => 
   });
   await assertFails(uploadBytes(ref(owner, 'profile-images/owner/avatar.jpg'),
     new Uint8Array([1]), {contentType: 'image/jpeg'}));
+});
+
+
+const defaultLocationFields = () => ({ defaultCity: 'Paris', defaultCityLocation: {
+  version: 1, id: 1, name: 'Paris', latitude: 48.8, longitude: 2.3,
+  country: 'France', country_code: 'FR', admin1: null, admin2: null, admin3: null
+}});
+
+test('default location companion round trips and merge preserves unrelated profile fields', async () => {
+  const db = env.authenticatedContext('owner').firestore();
+  const profile = doc(db, 'users/owner');
+  await setDoc(profile, { displayName: 'Preserved', defaultCity: 'Ankara', interests: ['walking'] });
+  const fields = defaultLocationFields();
+  await assertSucceeds(setDoc(profile, fields, { merge: true }));
+  const saved = (await getDoc(profile)).data();
+  assert.deepEqual(saved, { displayName: 'Preserved', interests: ['walking'], ...fields });
+  // A legacy reader still sees its expected name field.
+  assert.equal(saved.defaultCity, 'Paris');
+});
+
+test('default location rejects other account and guest reads and writes', async () => {
+  const owner = env.authenticatedContext('owner').firestore();
+  const fields = defaultLocationFields();
+  await setDoc(doc(owner, 'users/owner'), fields);
+  for (const db of [env.authenticatedContext('other').firestore(), env.unauthenticatedContext().firestore()]) {
+    await assertFails(getDoc(doc(db, 'users/owner')));
+    await assertFails(setDoc(doc(db, 'users/owner'), fields, { merge: true }));
+  }
+  assert.deepEqual((await getDoc(doc(owner, 'users/owner'))).data(), fields);
+});
+
+test('deletion marker rejects companion updates and profile recreation from stale owner', async () => {
+  const owner = env.authenticatedContext('owner').firestore();
+  const fields = defaultLocationFields();
+  await setDoc(doc(owner, 'users/owner'), fields);
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'account_deletions/owner'), { blocked: true });
+  });
+  await assertFails(setDoc(doc(owner, 'users/owner'), fields, { merge: true }));
+  await assertFails(getDoc(doc(owner, 'users/owner')));
+  await env.withSecurityRulesDisabled(async context => {
+    assert.deepEqual((await getDoc(doc(context.firestore(), 'users/owner'))).data(), fields);
+  });
+  // A different deleted account with no profile must not be able to recreate it.
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'account_deletions/deleted'), { blocked: true });
+  });
+  const deleted = env.authenticatedContext('deleted').firestore();
+  await assertFails(setDoc(doc(deleted, 'users/deleted'), fields, { merge: true }));
+});
+
+test('legacy name-only writes retain stale companion: compatibility limitation is explicit', async () => {
+  const db = env.authenticatedContext('owner').firestore();
+  const profile = doc(db, 'users/owner');
+  const fields = defaultLocationFields();
+  await setDoc(profile, fields);
+  await setDoc(profile, { defaultCity: 'Ankara' }, { merge: true });
+  const saved = (await getDoc(profile)).data();
+  assert.equal(saved.defaultCity, 'Ankara');
+  assert.deepEqual(saved.defaultCityLocation, fields.defaultCityLocation);
 });

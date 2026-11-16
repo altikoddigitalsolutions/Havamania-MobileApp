@@ -55,4 +55,21 @@ class DefaultCityIdentityDeviceTest {
             assertEquals(before, data.data.first().asMap())
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin(); file.delete() }
     }
+    @Test fun companionConfirmsUnregisteredLocationAndKeepsOtherAccount() = runBlocking {
+        val file = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "default-contract-" + UUID.randomUUID() + ".preferences_pb")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val data = PreferenceDataStoreFactory.create(scope = scope) { file }
+            val store = CitySyncStore(data)
+            val manual = france.copy(id = 0)
+            store.recordDefaultCity("a", manual)
+            store.recordDefaultCity("b", usa)
+            store.acknowledgeDefaultCity("a", store.pendingDefaultCity("a")!!)
+            val resolved = resolveDefaultCityProfile("Paris", defaultCityProfileFields(manual)["defaultCityLocation"], emptyList())
+            assertEquals(manual, store.mergeServerDefaultCity("a", "Paris", resolved))
+            assertNull(store.pendingDefaultCity("a"))
+            assertEquals(manual, store.observeDefaultCity("a").first())
+            assertEquals(usa, store.observeDefaultCity("b").first())
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin(); file.delete() }
+    }
 }

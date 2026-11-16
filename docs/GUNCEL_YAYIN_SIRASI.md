@@ -536,3 +536,42 @@ Sonuç: 598 JVM testi, 0 hata; SM-T500 üzerinde 13/13 cihaz testi. Dört yeni b
 Önemli sınır: serverDefaultCity şu anda yalnız uid/name taşır. Yerel listeden kimlik çözülmesi, sunucunun o kimliği gerçekten taşıdığı anlamına gelmez. Platformlar arasında aynı adlı fakat listede bulunmayan yerleri kesin ayırmak için varsayılan şehir kimliği/konumu içeren uyumlu bir senkronizasyon sözleşmesi gerekir. Bu tur Firestore şeması, kurallar veya canlı profil verisi değiştirilmedi. Belirsiz onayların korunması ve yeniden deneme/yönlendirme deneyimi bu sözleşmeyle ayrıca ele alınacak.
 
 Sıradaki öncelik: varsayılan konum için isim dışındaki kimlik bilgisinin geriye uyumlu taşınmasını hazırlamak ve yerel/emülatör doğrulamasını planlamak. Önceki gerçek Firestore transaction ve üretim/mağaza kabul maddeleri açık.
+
+
+## Devam — Varsayılan konum kimliği sözleşmesi
+
+Mevcut defaultCity adı korunurken aynı profil yazısında defaultCityLocation haritası da gönderiliyor. Harita version=1, id (Firestore Long), name, latitude, longitude, country, country_code, admin1/admin2/admin3 alanlarını taşır. country_code ve yönetim alanları null olabilir. Koordinatlar sonlu ve enlem -90..90, boylam -180..180 olmalıdır. İsim boş olamaz. Profil merge yazısı diğer alanları korumayı amaçlar; gerçek SDK/emülatör kabulü henüz yapılmadı.
+
+UserProfileRepository yalnız sunucudan onaylanmış görüntüde bu haritayı yayınlar. Yeni harita varsa isimden ilk kayıt seçilmez; haritanın adı, sürümü, koordinatları ve kayıtlı listede aynı kimliğe sahip konumlarla tutarlılığı doğrulanır. Geçersiz harita ad eşleşmesine düşmez; işlem korunarak hata verilir. Kayıtlı listede bulunmayan manuel konum da haritayla çözümlenebilir. Harita yoksa önceki belirsizlik kontrollü ad çözümü kullanılır.
+
+Doğrulama: testDebugUnitTest + assembleDebug başarılı. 604 JVM testi, 0 hata/atlama; altı yeni sözleşme testi. SM-T500 Android 12 üzerinde DefaultCityIdentityDeviceTest ve DefaultCitySyncStoreDeviceTest toplam 4/4 geçti. Yeni izole DataStore testi manuel konumun kimlikli onayını, bekleyen işaretin kalkmasını ve B hesabının değişmemesini doğruladı. Kullanıcının canlı Firebase verisine dokunulmadı; release/push yapılmadı.
+
+Açık sınırlar: Firestore kuralları dosyasında aktif sahibin profil alanlarını yazmasına izin var; kurallar bu yeni alanın biçimini ayrıca doğrulamıyor. Emülatör denemesi firebase CLI/dependency kurulumu olmadığı için başlamadı; geçmedi sayılmalı. Gerçek SDK serileştirme, profil merge, A–B izolasyonu ve account_deletions işareti altında yeni alanın reddi ayrıca emülatörde doğrulanacak. Yeni alanın cihazda kodlanıp çözülmesi canlı sunucu kanıtı değildir.
+
+Eski istemci yalnız defaultCity yazarsa önceki companion haritası kalabilir. İsim değişmişse yeni okuyucu çelişkiyi reddeder. Aynı adlı farklı bir yere eski istemciden geçilmesi yalnız adla tespit edilemez; eski istemciler için aynı adlı geçişte tam garanti yok. Legacy adı tek başına çözen geriye uyumlu yol da sunucunun kimlik kanıtı sayılmaz. Tüm yazarların kimlikli sözleşmeye geçmesi veya sunucuda uyumluluk/temizleme politikası gereklidir. Otomatik tahminle harita silinmez.
+
+Sırada: yerel Firebase test bağımlılıklarını hazırlayıp yeni alanın emülatör kabul testlerini çalıştırmak; ardından eski istemci uyumluluğunu ve hata ekranındaki yeniden deneme/yönlendirme davranışını tamamlamak. Önceki canlı senkronizasyon, gerçek transaction ve mağaza kabul kapıları açık.
+
+
+## Devam — Firebase emülatör kabulü
+
+Yerel test bağımlılıkları package-lock üzerinden npm ci ile kuruldu; kilit dosyası ve üretim bağımlılıkları değiştirilmedi. Firebase CLI ile yalnız demo-havamania-audit projesinin localhost Firestore (8086) / Storage (9196) emülatörleri çalıştırıldı. Test koruması bu iki adres dışında çalışmayı reddeder. Canlı Firebase'e bağlanılmadı; kurallar dağıtılmadı.
+
+npm test: 9/9 geçti, 0 hata/atlama. Dört yeni test yeni varsayılan konum haritasının JS Firestore SDK ile yazılıp okunmasını, merge ile displayName/interests alanlarının korunmasını, A–B/misafir erişiminin reddini, silme işaretiyle mevcut profilde yazının ve olmayan profilin yeniden oluşturulmasının reddini kapsıyor. Önceki rehber, profil/altkoleksiyon ve Storage testleri de geçti. PERMISSION_DENIED günlükleri beklenen negatif senaryolardır. Emülatörler başarı sonrası durdu.
+
+Sonuç: önceki turdaki 'Firebase CLI eksik; emülatör başlamadı' engeli bu tur aşıldı. Bu kanıt JS SDK + yerel kurallar içindir; Android SDK üzerinden emülatöre bağlı uçtan uca senkronizasyon, Android transaction yarışları ve canlıya dağıtılmış kuralların kabulü yerine geçmez. Önceki 604 JVM / 4 cihaz sonucu bu tur yeniden çalıştırılmadı; Android kaynakları bu tur değiştirilmedi.
+
+Yeni uyumluluk testi, eski istemcinin yalnız defaultCity alanını merge etmesinin önceki defaultCityLocation haritasını koruduğunu gerçekten doğruladı. Bu test sorunun giderildiği anlamına gelmez. Farklı ad çelişkisini Android reddediyor; aynı adlı farklı konum geçişi eski istemciden kimlik olmadan ayırt edilemez. Tüm yazarların kimlikli sözleşmeye geçmesi veya sunucu tarafında uyumluluk politikası açık. Kurallar yeni haritanın şeklini henüz ayrıca doğrulamıyor.
+
+Sıradaki öncelikler: eski istemci/kimlik uyumluluğu ve varsayılan konum hata ekranında doğru kurtarma yönlendirmesi; sonra Android SDK ile gerçek emülatör senkronizasyon/transaction testleri. Test araçlarının npm engine/deprecation uyarıları ayrı araç bakımı maddesi olarak izlenecek; bu tur sürüm yükseltilmedi. Canlı servisler, gerçek cihaz uçtan uca kabulü ve Play yayın kapıları açık. Push/release yapılmadı.
+
+
+## Devam — Konum eşitleme hatasında güvenli kurtarma
+
+Hava ve Şehirleri Yönet ekranları artık üretimde aynı yeniden deneme politikasını kullanıyor. Kimlik çakışması, varsayılan ad belirsizliği, bekleme penceresi, oturum/sunucu reddi veya tanınmayan hata için kör yeniden gönderim düğmesi gösterilmiyor. Geçici bağlantı/zaman aşımı hatalarında düğme korunuyor. ViewModel eylemi de politika kapısıyla korunuyor; yalnız arayüzde gizlemekle yetinilmiyor. Belirsiz varsayılan ad açıklaması yerel tercihin korunduğunu ve doğru konumun yeniden varsayılan seçilmesi gerektiğini söylüyor; otomatik navigasyon eklenmedi.
+
+Ek düzeltme: transport yeniden denemesi önceden tüm blockedReason değerlerini serbest bırakabiliyordu. Artık manuel bağlantı denemesi ilgisiz kimlik/ret bloklarını açmıyor. Yeniden giriş yolu yalnız AUTHENTICATION bloklarını açabiliyor. Hata kapanırken ve hesap değişirken yeniden deneme izni temizleniyor. Kimlik sorunu seçimle düzelmiyorsa destek/doğrulama gerekli; uygulama otomatik kayıt silmiyor veya kimlik tahmin etmiyor.
+
+Doğrulama: son kaynakla testDebugUnitTest, assembleDebug ve assembleDebugAndroidTest başarılı; 608 JVM testi, 0 hata. Dört yeni politika testi geçici hata, sarılmış kimlik/ad hatası, bekleme/korumalı hata ve kullanıcı açıklamasını kapsıyor. İlk cihaz koşusunda tablet kilitliydi: 10 UI testi arayüze erişemedi, 3 izole veri testi geçti. Kullanıcı kilidi açtıktan sonra son APK ile aynı 13 test tekrar çalıştı ve 13/13 geçti. Bunlar CityMutationErrorUiTest (10 açık/koyu, 200% yazı ve eylem testi) ve DefaultCityIdentityDeviceTest (3 izole DataStore testi). İki yeni UI testi üretim politika yardımcısını kullanarak yanlış retry eyleminin pencere açıkken bulunmadığını kontrol ediyor. Gerçek Firebase başarısız isteği veya tam Activity/ViewModel ağ akışı bu fixture testlerinde çalıştırılmadı.
+
+Sırada: Android SDK ile yerel Firebase emülatör senkronizasyon/transaction kabulü; eski istemcinin yalnız adı değiştirip eski kimlik haritasını bırakması için uyumluluk politikası; yeni harita biçiminin sunucu kurallarında doğrulanması. Önceki 9 Firebase emülatör testi bu tur tekrar koşulmadı, kurallar değişmedi. Canlı servis/mağaza kapıları açık; push/release yapılmadı.

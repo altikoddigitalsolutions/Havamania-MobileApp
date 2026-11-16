@@ -37,7 +37,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     val cityMutationError = _cityMutationError.asStateFlow()
     private val _cityMutationErrorDetails = MutableStateFlow<String?>(null)
     val cityMutationErrorDetails = _cityMutationErrorDetails.asStateFlow()
+    private val _cityMutationCanRetry = MutableStateFlow(false)
+    val cityMutationCanRetry = _cityMutationCanRetry.asStateFlow()
     private fun reportCityError(error: Exception) {
+        _cityMutationCanRetry.value = com.havamania.canManuallyRetryCitySync(error)
         _cityMutationErrorDetails.value = com.havamania.citySyncErrorText(error)
         _cityMutationError.value = true
     }
@@ -211,7 +214,7 @@ if (BuildConfig.DEBUG) {
                     try {
                         com.havamania.publishAccountResult(uid, { currentUid }) {
                             ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
-                                com.havamania.resolveNamedDefaultCity(remote.name, cities))
+                                com.havamania.resolveDefaultCityProfile(remote.name, remote.location, cities))
                         }
                     } catch (error: Exception) {
                         if (error is kotlinx.coroutines.CancellationException) throw error
@@ -309,16 +312,18 @@ if (BuildConfig.DEBUG) {
         savePreference({ uid -> ThemeManager.saveUserImageUriByUid(getApplication(), uid, uri) }) { _userImageUri.value = uri }
     }
 
-    fun dismissCityMutationError() { _cityMutationError.value = false; _cityMutationErrorDetails.value = null }
+    fun dismissCityMutationError() { _cityMutationCanRetry.value = false; _cityMutationError.value = false; _cityMutationErrorDetails.value = null }
     fun retryCitySync() {
-        _cityMutationError.value = false
+        if (!_cityMutationCanRetry.value) return
+        dismissCityMutationError()
         prepareCitySyncRetry(authOnly = false)
     }
 
     private fun prepareCitySyncRetry(authOnly: Boolean) {
         accountTasks.launch { owner ->
             try {
-                ThemeManager.releaseCitySyncBlocks(getApplication(), owner, authOnly)
+                // A transport retry must not release unrelated identity/rejection blocks.
+                if (authOnly) ThemeManager.releaseCitySyncBlocks(getApplication(), owner, true)
                 retryPendingCityChanges()
                 retryPendingDefaultCity()
             } catch (error: Exception) {
@@ -408,13 +413,13 @@ if (BuildConfig.DEBUG) {
             read = { ThemeManager.pendingDefaultCity(getApplication(), uid) },
             send = { change ->
                 db.collection("users").document(uid)
-                    .set(mapOf("defaultCity" to change.city.name), SetOptions.merge()).await()
+                    .set(com.havamania.defaultCityProfileFields(change.city), SetOptions.merge()).await()
             }, acknowledge = { change ->
                 ThemeManager.acknowledgeDefaultCity(getApplication(), uid, change)
                 val remote = userProfileRepository.serverDefaultCity.value
                 if (remote?.uid == uid) {
                     ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
-                        com.havamania.resolveNamedDefaultCity(remote.name, _registeredCities.value))
+                        com.havamania.resolveDefaultCityProfile(remote.name, remote.location, _registeredCities.value))
                 }
             }, recordFailure = { sent, error ->
                 ThemeManager.recordCitySyncFailure(getApplication(), uid, sent, error, true)
@@ -465,6 +470,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun clearLocalUserData() {
+        _cityMutationCanRetry.value = false
         _cityMutationErrorDetails.value = null
         _cityMutationError.value = false
         _settingsIssue.value = null
