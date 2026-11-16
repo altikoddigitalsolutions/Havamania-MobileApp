@@ -47,6 +47,17 @@ class LocationCountryRowsDeviceTest {
         compose.onNodeWithText("ABD").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("ABD", selected) }
     }
+    @Test fun duplicatedSingleSavedCityCannotBeDeleted() {
+        var deleted = false
+        val city = rows.first()
+        host {
+            CityManagementContent("", {}, emptyList(), listOf(city, city.copy()), null,
+                onAdd = {}, onDelete = { deleted = true }, onSetDefault = {})
+        }
+        compose.onAllNodesWithText("Paris").assertCountEquals(1)
+        compose.onNodeWithContentDescription("Paris konumunu sil").assertIsNotEnabled()
+        compose.runOnIdle { assertFalse(deleted) }
+    }
     @Test fun weatherRowsDistinguishSameNamesWithoutIds() {
         var country: String? = null
         host {

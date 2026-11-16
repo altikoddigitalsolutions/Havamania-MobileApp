@@ -74,6 +74,8 @@ internal fun CityManagementContent(
     searchStatus: LocationSearchStatus = LocationSearchStatus.IDLE, onRetry: () -> Unit = {}
 ) {
     val colors = HavamaniaTheme.colors
+    val uniqueCities = cities.distinctBy(::locationSuggestionKey)
+    val ambiguousIds = hasAmbiguousCityIds(cities)
     LazyColumn(
         modifier = modifier.fillMaxSize().imePadding(),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -92,7 +94,7 @@ internal fun CityManagementContent(
         if (query.trim().length >= 2) {
             item(key = "search-status") { LocationSearchFeedback(searchStatus, onRetry) }
             items(suggestions.distinctBy(::locationSuggestionKey).take(5), key = { "suggestion-" + locationSuggestionKey(it) }) { suggestion ->
-                HavamaniaGlassCard(onClick = { onAdd(suggestion) }, modifier = Modifier.fillMaxWidth()) {
+                HavamaniaGlassCard(onClick = if (ambiguousIds) null else ({ onAdd(suggestion) }), modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(suggestion.displayName, color = colors.textPrimary, fontWeight = FontWeight.Bold)
@@ -103,15 +105,16 @@ internal fun CityManagementContent(
                 }
             }
         }
+        if (ambiguousIds) item(key = "identity-conflict") { Text("Bazı eski konum kayıtlarının kimlikleri çakışıyor. Kayıtlar doğrulanmadan listeye ekleme ve silme yapılamıyor.", color = colors.textSecondary) }
         item(key = "heading") { Text("Kayıtlı konumlar", color = colors.accent, style = MaterialTheme.typography.titleMedium) }
-        if (cities.isEmpty()) {
+        if (uniqueCities.isEmpty()) {
             item(key = "empty") {
                 WeatherEmptyState(icon = Icons.Rounded.LocationCity, title = "Henüz kayıtlı konum yok",
                     description = "Şehir veya ilçe ekleyerek hava durumunu takip edebilirsiniz.", accentColor = colors.accent)
             }
         } else {
-            items(cities.distinctBy(::locationSuggestionKey), key = { "city-" + locationSuggestionKey(it) }) { city ->
-                CityListItem(city, sameLocationRecord(city, defaultCity), cities.size > 1,
+            items(uniqueCities, key = { "city-" + locationSuggestionKey(it) }) { city ->
+                CityListItem(city, sameLocationRecord(city, defaultCity), canDeleteRegisteredCity(cities, defaultCity, city),
                     { onDelete(city) }, { onSetDefault(city) })
             }
         }

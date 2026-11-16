@@ -19,6 +19,7 @@ internal data class CitySyncChange(
 internal fun mergeCityChanges(
     remote: List<GeocodingResultDto>, changes: List<CitySyncChange>
 ): List<GeocodingResultDto> {
+    validateCitySnapshotMerge(emptyList(), remote, changes)
     val result = remote.associateByTo(linkedMapOf()) { it.id }
     changes.forEach { if (it.deleted) result.remove(it.city.id) else result[it.city.id] = it.city }
     return result.values.toList()

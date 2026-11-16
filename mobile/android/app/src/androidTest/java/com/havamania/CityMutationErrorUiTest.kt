@@ -37,6 +37,8 @@ class CityMutationErrorUiTest {
         compose.onNodeWithText(if (retry) "Eşitlemeyi tekrar dene" else "Tamam").assertIsDisplayed().performClick()
         compose.runOnIdle { assertFalse(visible.value); assertEquals(if (retry) 0 else 1, dismisses); assertEquals(if (retry) 1 else 0, retries) }
     }
+    @Test fun defaultNameAmbiguityFitsLightLargeText() = verify(AppTheme.LIGHT, false, citySyncErrorText(DefaultCityNameAmbiguousException()))
+    @Test fun identityConflictFitsDarkLargeText() = verify(AppTheme.DARK, false, citySyncErrorText(CityIdentityConflictException()))
     @Test fun waitingAdviceFitsLightLargeText() = verify(AppTheme.LIGHT, true,
         citySyncErrorText(CitySyncWaitingException(null, 161), 100))
     @Test fun rejectionAdviceFitsDarkLargeText() = verify(AppTheme.DARK, true,

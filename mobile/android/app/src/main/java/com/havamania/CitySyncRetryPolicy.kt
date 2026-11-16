@@ -6,7 +6,7 @@ import java.io.IOException
 internal enum class CitySyncFailure { TEMPORARY, AUTHENTICATION, REJECTED, UNKNOWN }
 internal class CitySyncTimeoutException : IOException("City synchronization response timed out")
 
-internal fun citySyncFailure(error: Exception): CitySyncFailure = when (error) {
+internal fun citySyncFailure(error: Exception): CitySyncFailure = if (isCityIdentityConflict(error)) CitySyncFailure.UNKNOWN else when (error) {
     is FirebaseFirestoreException -> when (error.code) {
         FirebaseFirestoreException.Code.UNAVAILABLE,
         FirebaseFirestoreException.Code.DEADLINE_EXCEEDED,
@@ -46,6 +46,8 @@ internal class CitySyncWaitingException(val blocked: String?, val retryAt: Long)
     Exception("City synchronization is waiting for recovery")
 
 internal fun citySyncErrorText(error: Exception, now: Long = System.currentTimeMillis() / 1000): String {
+    if (error is DefaultCityNameAmbiguousException) return "Varsayılan konum adı birden fazla kayıtla eşleşiyor. Yerel tercihiniz korundu; doğru konumun kimliği doğrulanmalı."
+    if (isCityIdentityConflict(error)) return "Konum kayıtlarının kimlikleri çakışıyor. Yerel kayıtlar ve bekleyen işlemler korundu. Kayıtlar doğrulanmadan eşitleme yapılamıyor."
     val category = if (error is CitySyncWaitingException) error.blocked else citySyncFailure(error).name
     return when (category) {
         "AUTHENTICATION" -> "Konumlar eşitlenemedi. Oturumunuzu kontrol edip yeniden giriş yapın. Yerel kayıtlarınız korunuyor."

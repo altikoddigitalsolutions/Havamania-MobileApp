@@ -211,7 +211,7 @@ if (BuildConfig.DEBUG) {
                     try {
                         com.havamania.publishAccountResult(uid, { currentUid }) {
                             ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
-                                cities.find { it.name == remote.name })
+                                com.havamania.resolveNamedDefaultCity(remote.name, cities))
                         }
                     } catch (error: Exception) {
                         if (error is kotlinx.coroutines.CancellationException) throw error
@@ -352,10 +352,25 @@ if (BuildConfig.DEBUG) {
     private suspend fun sendCityChange(uid: String, cityId: Long) =
         citySyncRequests.run("$uid:city:$cityId") {
         com.havamania.CitySyncDispatcher.sendLatest("$uid:city:$cityId", uid, { currentUid },
-            read = { ThemeManager.pendingCityChanges(getApplication(), uid).firstOrNull { it.city.id == cityId } },
+            read = { com.havamania.singleCitySyncChange(ThemeManager.pendingCityChanges(getApplication(), uid), cityId) },
             send = { change ->
                 val document = db.collection("users").document(uid).collection("cities").document(cityId.toString())
-                if (change.deleted) document.delete().await() else document.set(change.city).await()
+                val requestJob = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+                val applied = db.runTransaction { transaction ->
+                    com.havamania.stageCityDocumentMutation(change,
+                        isCurrent = { requestJob?.isActive != false && uid == currentUid && citySyncAllowed() },
+                        read = {
+                            val snapshot = transaction.get(document)
+                            if (!snapshot.exists()) null else {
+                                try { snapshot.toObject(com.havamania.GeocodingResultDto::class.java)
+                                    ?: throw com.havamania.CityIdentityConflictException() }
+                                catch (_: Exception) { throw com.havamania.CityIdentityConflictException() }
+                            }
+                        },
+                        write = { transaction.set(document, change.city) },
+                        delete = { transaction.delete(document) })
+                }.await()
+                if (!applied) throw kotlinx.coroutines.CancellationException("City operation is no longer current")
             }, acknowledge = { ThemeManager.acknowledgeCityChange(getApplication(), uid, it) },
             recordFailure = { sent, error -> ThemeManager.recordCitySyncFailure(getApplication(), uid, sent, error, false) },
             reserve = { change, now -> ThemeManager.reserveCitySyncAttempt(getApplication(), uid, change, false, now) },
@@ -399,7 +414,7 @@ if (BuildConfig.DEBUG) {
                 val remote = userProfileRepository.serverDefaultCity.value
                 if (remote?.uid == uid) {
                     ThemeManager.mergeServerDefaultCity(getApplication(), uid, remote.name,
-                        _registeredCities.value.find { it.name == remote.name })
+                        com.havamania.resolveNamedDefaultCity(remote.name, _registeredCities.value))
                 }
             }, recordFailure = { sent, error ->
                 ThemeManager.recordCitySyncFailure(getApplication(), uid, sent, error, true)

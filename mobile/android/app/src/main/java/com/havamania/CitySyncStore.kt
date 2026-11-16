@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import com.havamania.ui.theme.LocationMode
@@ -40,8 +41,26 @@ internal class CitySyncStore(
         } else {
             try { Json.decodeFromString(str) } catch(e: Exception) { emptyList() }
         }
+    }.onStart {
+        try { repairExactCityDuplicates(uid) } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            // Optional maintenance failure must not hide readable stored cities.
+        }
     }
 
+    suspend fun repairExactCityDuplicates(uid: String): CityRepairStatus {
+        var result = CityRepairStatus.UNCHANGED
+        store.edit { prefs ->
+            if (!writesAllowed()) { result = CityRepairStatus.BLOCKED; return@edit }
+            val raw = prefs[citiesKey(uid)] ?: return@edit
+            val decoded = try { Json.decodeFromString<List<GeocodingResultDto>>(raw) }
+                catch (_: Exception) { result = CityRepairStatus.INVALID; return@edit }
+            val plan = planRegisteredCityRepair(decoded)
+            result = plan.status
+            if (plan.status == CityRepairStatus.COMPACTED) prefs[citiesKey(uid)] = Json.encodeToString(plan.cities)
+        }
+        return result
+    }
     fun observeDefaultCity(uid: String): Flow<GeocodingResultDto?> = store.data.map { it.defaultCity(uid) }
 
     fun observeWeatherLocation(uid: String): Flow<Pair<LocationMode, GeocodingResultDto?>> =
@@ -87,9 +106,10 @@ internal class CitySyncStore(
         store.edit { prefs ->
             if (!writesAllowed()) return@edit
             val pending = prefs[defaultChangeKey(uid)]?.let { Json.decodeFromString<CitySyncChange>(it) }
+            if (resolved != null && !defaultCityNameMatches(name, resolved)) throw CityIdentityConflictException()
             result = pending?.city ?: resolved
             result?.let { prefs[defaultKey(uid)] = Json.encodeToString(it) }
-            if (pending?.acknowledged == true && pending.city.name == name) prefs.remove(defaultChangeKey(uid))
+            if (pending != null && canConfirmDefaultCity(pending, name, resolved)) prefs.remove(defaultChangeKey(uid))
         }
         return result
     }
@@ -103,10 +123,11 @@ internal class CitySyncStore(
             }.orEmpty()
             val cities = prefs[citiesKey(uid)]?.let { Json.decodeFromString<List<GeocodingResultDto>>(it) }
                 ?: if (uid == "legacy") listOf(GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul")) else emptyList()
+            if (hasAmbiguousCityIds(cities)) return@edit
             val default = prefs[defaultKey(uid)]?.let { Json.decodeFromString<GeocodingResultDto>(it) }
                 ?: if (uid == "legacy") GeocodingResultDto(0, "İstanbul", 41.0082, 28.9784, "Turkey", "TR", "İstanbul") else null
             if (deleted) {
-                if (cities.size <= 1 || default?.id == city.id || cities.none { it.id == city.id }) return@edit
+                if (!canDeleteRegisteredCity(cities, default, city)) return@edit
             } else if (cities.any { it.id == city.id }) return@edit
             val updated = changes.filterNot { it.city.id == city.id } + com.havamania.CitySyncChange(city, deleted)
             prefs[citiesKey(uid)] = Json.encodeToString(com.havamania.mergeCityChanges(cities, updated))
@@ -220,6 +241,8 @@ internal class CitySyncStore(
             val changes = prefs[cityChangesKey(uid)]?.let {
                 Json.decodeFromString<List<com.havamania.CitySyncChange>>(it)
             }.orEmpty()
+            val local = prefs[citiesKey(uid)]?.let { Json.decodeFromString<List<GeocodingResultDto>>(it) }.orEmpty()
+            validateCitySnapshotMerge(local, remote, changes)
             result = com.havamania.mergeCityChanges(remote, changes)
             prefs[citiesKey(uid)] = Json.encodeToString(result)
             prefs[cityChangesKey(uid)] = Json.encodeToString(com.havamania.unconfirmedCityChanges(remote, changes))
