@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "pretest": "node prepare.mjs",
-    "test": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only firestore,storage \"node --test rules.test.mjs\""
+    "test": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only firestore,storage \"node --test rules.test.mjs\"",
+    "pretest:android": "node prepare.mjs",
+    "test:android": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only auth,firestore \"powershell.exe -NoProfile -ExecutionPolicy Bypass -File run-android.ps1\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "4.0.1",

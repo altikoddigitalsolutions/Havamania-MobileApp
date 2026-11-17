@@ -580,3 +580,8 @@ Sırada: Android SDK ile yerel Firebase emülatör senkronizasyon/transaction ka
 ## 17 Kasım — Firebase konum şeması doğrulaması
 
 Yeni/değişen defaultCityLocation için biçim doğrulaması eklendi. Alt koleksiyon wildcard kuralının ana profil doğrulamasını geçersiz bırakması engellendi. Eski profil düzenlemeleri korunuyor. Yerel Firestore/Storage emülatöründe 24/24 test geçti (15 yeni). Rapor: docs/17_KASIM_FIREBASE_KONUM_KURALLARI.md. Canlı kurallar dağıtılmadı; Android SDK/emülatör senkronizasyonu ve eski istemcinin yalnız ad yazıp eski haritayı bırakması için uyumluluk politikası açık. Önceki mağaza/üretim kabul maddeleri korunuyor.
+
+
+## 17 Kasım — Android SDK Firebase emülatör kabulü
+
+Ayrı demo FirebaseApp ile Auth/Firestore bağlantısı ve test koşucusu eklendi. Debug loopback HTTP izni düzeltildi; release ağı değişmedi. Son koşu SM-T500 üzerinde 3/3 geçti: profil kimliği gerçek SDK serileştirme/okuma, hesap izolasyonu, üretim yardımcısıyla gerçek transaction kimlik koruması/silme/yazma. Rapor: docs/17_KASIM_ANDROID_FIREBASE_EMULATOR.md. Tam ViewModel/ekran uçtan uca kabulü, zorlanmış transaction retry, offline/hesap değişimi yarışı ve legacy ad-only uyumluluğu açık. Canlı dağıtım/push/release yapılmadı.

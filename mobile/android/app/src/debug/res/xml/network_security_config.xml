@@ -4,6 +4,8 @@
         <!-- Local development IPs -->
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">localhost</domain>
+        <!-- USB-reversed local Firebase emulators; never included in release. -->
+        <domain>127.0.0.1</domain>
         <!-- IP from apiClient.ts for testing -->
         <domain includeSubdomains="true">192.168.1.50</domain>
     </domain-config>
