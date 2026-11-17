@@ -2,7 +2,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, deleteField, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 let env;
@@ -137,4 +137,66 @@ test('legacy name-only writes retain stale companion: compatibility limitation i
   const saved = (await getDoc(profile)).data();
   assert.equal(saved.defaultCity, 'Ankara');
   assert.deepEqual(saved.defaultCityLocation, fields.defaultCityLocation);
+});
+
+
+const invalidDefaultLocations = [
+  ['unsupported version', { version: 2 }],
+  ['fractional ID', { id: 1.5 }],
+  ['blank name', { name: '' }],
+  ['conflicting name', { name: 'Ankara' }],
+  ['out of range latitude', { latitude: 91 }],
+  ['out of range longitude', { longitude: -181 }],
+  ['non-finite latitude', { latitude: NaN }],
+  ['infinite longitude', { longitude: Infinity }],
+  ['string coordinate', { latitude: '48.8' }],
+  ['invalid country code', { country_code: 42 }],
+  ['invalid administrative area', { admin1: [] }],
+  ['unknown field', { unexpected: true }]
+];
+for (const [label, patch] of invalidDefaultLocations) {
+  test(`default location rejects ${label} on create and update without data loss`, async () => {
+    const db = env.authenticatedContext('owner').firestore();
+    const profile = doc(db, 'users/owner');
+    const original = { displayName: 'Preserved', ...defaultLocationFields() };
+    const bad = { ...defaultLocationFields(), defaultCityLocation: {
+      ...defaultLocationFields().defaultCityLocation, ...patch
+    }};
+    await assertFails(setDoc(profile, bad));
+    assert.equal((await getDoc(profile)).exists(), false);
+    await setDoc(profile, original);
+    await assertFails(setDoc(profile, bad, { merge: true }));
+    assert.deepEqual((await getDoc(profile)).data(), original);
+  });
+}
+
+test('default location rejects incomplete and non-map companions', async () => {
+  const db = env.authenticatedContext('owner').firestore();
+  const profile = doc(db, 'users/owner');
+  for (const value of [null, 'Paris', [], { version: 1, id: 1, name: 'Paris' }]) {
+    await assertFails(setDoc(profile, { defaultCity: 'Paris', defaultCityLocation: value }));
+  }
+  await assertFails(setDoc(profile, { defaultCityLocation: defaultLocationFields().defaultCityLocation }));
+});
+
+test('legacy malformed companion does not block unrelated profile edits and can be replaced or removed', async () => {
+  const db = env.authenticatedContext('owner').firestore();
+  const profile = doc(db, 'users/owner');
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'users/owner'), { defaultCity: 'Paris', defaultCityLocation: 'old' });
+  });
+  await assertSucceeds(setDoc(profile, { displayName: 'Updated' }, { merge: true }));
+  await assertSucceeds(setDoc(profile, defaultLocationFields(), { merge: true }));
+  assert.equal((await getDoc(profile)).data().displayName, 'Updated');
+  await assertSucceeds(setDoc(profile, { defaultCityLocation: deleteField() }, { merge: true }));
+  assert.equal('defaultCityLocation' in (await getDoc(profile)).data(), false);
+  await assertSucceeds(deleteDoc(profile));
+});
+
+test('manual zero ID and optional null metadata remain valid', async () => {
+  const db = env.authenticatedContext('owner').firestore();
+  const fields = defaultLocationFields();
+  fields.defaultCityLocation.id = 0;
+  await assertSucceeds(setDoc(doc(db, 'users/owner'), fields));
+  assert.deepEqual((await getDoc(doc(db, 'users/owner'))).data(), fields);
 });

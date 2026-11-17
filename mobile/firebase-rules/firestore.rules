@@ -11,10 +11,39 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId
         && !exists(/databases/$(database)/documents/account_deletions/$(userId));
     }
+    function nullableLocationText(location, key) {
+      return !(key in location) || location[key] == null || location[key] is string;
+    }
+    function validDefaultLocation() {
+      let data = request.resource.data;
+      return !('defaultCityLocation' in data) || (
+        data.defaultCityLocation is map &&
+        data.defaultCityLocation.keys().hasAll(['version', 'id', 'name', 'latitude', 'longitude']) &&
+        data.defaultCityLocation.keys().hasOnly(['version', 'id', 'name', 'latitude', 'longitude',
+          'country', 'country_code', 'admin1', 'admin2', 'admin3']) &&
+        data.defaultCityLocation.version is int && data.defaultCityLocation.version == 1 &&
+        data.defaultCityLocation.id is int &&
+        data.defaultCityLocation.name is string && data.defaultCityLocation.name.size() > 0 &&
+        data.defaultCity is string && data.defaultCity == data.defaultCityLocation.name &&
+        data.defaultCityLocation.latitude is number &&
+        data.defaultCityLocation.latitude >= -90 && data.defaultCityLocation.latitude <= 90 &&
+        data.defaultCityLocation.longitude is number &&
+        data.defaultCityLocation.longitude >= -180 && data.defaultCityLocation.longitude <= 180 &&
+        nullableLocationText(data.defaultCityLocation, 'country') &&
+        nullableLocationText(data.defaultCityLocation, 'country_code') &&
+        nullableLocationText(data.defaultCityLocation, 'admin1') &&
+        nullableLocationText(data.defaultCityLocation, 'admin2') &&
+        nullableLocationText(data.defaultCityLocation, 'admin3')
+      );
+    }
     // User-scoped data isolation
     match /users/{userId} {
-      // Allow user to read/write their own profile document
-      allow read, write: if activeOwner(userId);
+      allow read, delete: if activeOwner(userId);
+      allow create: if activeOwner(userId) && validDefaultLocation();
+      // Preserve legacy/unrelated edits; validate whenever the companion itself changes.
+      allow update: if activeOwner(userId) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['defaultCityLocation']) ||
+        validDefaultLocation());
 
       // trips subcollection
       match /trips/{tripId} {
@@ -27,7 +56,9 @@ service cloud.firestore {
       }
 
       // Recursive safety for any other user-scoped data
-      match /{allPaths=**} {
+      // Require a subcollection/document pair: a zero-length recursive match must not
+      // bypass the profile validation above (allow statements are combined with OR).
+      match /{collectionId}/{documentId}/{allPaths=**} {
         allow read, write: if activeOwner(userId);
       }
     }
