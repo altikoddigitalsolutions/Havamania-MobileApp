@@ -1,3 +1,6 @@
+param([switch]$ProcessRestart, [switch]$TransportCut, [switch]$ReplyLoss, [switch]$ProfileContract)
+if (@($ProcessRestart, $TransportCut, $ReplyLoss, $ProfileContract | Where-Object { $_ }).Count -gt 1) { throw "Select one special test mode" }
+$usesProxy = $TransportCut -or $ReplyLoss
 $ErrorActionPreference = 'Stop'
 if ($env:FIRESTORE_EMULATOR_HOST -ne '127.0.0.1:8086' -or $env:FIREBASE_AUTH_EMULATOR_HOST -ne '127.0.0.1:9096') {
     throw 'Only localhost demo emulators are permitted'
@@ -13,20 +16,68 @@ $initContent = "gradle.beforeProject { p -> p.plugins.withId('com.android.applic
 [IO.File]::WriteAllText($init, $initContent)
 $exitCode = 1
 try {
-    foreach ($port in @(8086, 9096)) {
+    $ports = @(8086, 9096)
+    if ($usesProxy) { $ports += 9296 }
+    if ($ReplyLoss) { $ports += 8088 }
+    if ($ProfileContract) { $ports += 9396 }
+    foreach ($port in $ports) {
+        $targetPort = if ($usesProxy -and $port -eq 8086) { 8087 } elseif ($ReplyLoss -and $port -eq 8088) { 8086 } else { $port }
         $existing = @(& $adb -s $serial reverse --list | Select-String "tcp:$port\s+tcp:")
         if ($existing.Count -gt 0) {
-            if ($existing.Count -ne 1 -or $existing[0].Line -notmatch "tcp:$port\s+tcp:$port$") { throw 'Existing reverse mapping conflicts with emulator port' }
+            if ($existing.Count -ne 1 -or $existing[0].Line -notmatch "tcp:$port\s+tcp:$targetPort$") { throw 'Existing reverse mapping conflicts with emulator port' }
         } else {
-            & $adb -s $serial reverse "tcp:$port" "tcp:$port"
+            & $adb -s $serial reverse "tcp:$port" "tcp:$targetPort"
             if ($LASTEXITCODE -ne 0) { throw 'ADB reverse failed' }
             $ownedPorts += $port
         }
     }
     Push-Location (Join-Path $PSScriptRoot '../../mobile/android')
     try {
-        & .\gradlew.bat connectedDebugAndroidTest --init-script $init '-Pandroid.testInstrumentationRunnerArguments.class=com.havamania.FirebaseCityContractDeviceTest' '-Pandroid.testInstrumentationRunnerArguments.firebaseEmulatorContract=true' --console=plain --max-workers=2 --no-daemon
-        $exitCode = $LASTEXITCODE
+        if ($ProcessRestart) {
+            & .\gradlew.bat assembleDebug assembleDebugAndroidTest --init-script $init --console=plain --max-workers=2 --no-daemon
+            if ($LASTEXITCODE -ne 0) { throw 'QA test build failed' }
+            foreach ($apk in @('outputs/apk/debug/app-debug.apk', 'outputs/apk/androidTest/debug/app-debug-androidTest.apk')) {
+                & $adb -s $serial install -r -t (Join-Path $outputDir $apk)
+                if ($LASTEXITCODE -ne 0) { throw 'QA APK installation failed' }
+            }
+            $scenario = [guid]::NewGuid().ToString()
+            foreach ($phase in @('prepare', 'resume')) {
+                if ($phase -eq 'resume') {
+                    & $adb -s $serial shell am force-stop com.havamania
+                    if ($LASTEXITCODE -ne 0) { throw 'QA force-stop failed' }
+                    $running = & $adb -s $serial shell pidof com.havamania
+                    if ($running) { throw 'QA process is still running' }
+                }
+                Write-Output "Restart acceptance phase: $phase"
+                $result = & $adb -s $serial shell am instrument -w -r -e class 'com.havamania.FirebaseCityContractDeviceTest#processRestartMaintainsDeletionFence' -e firebaseEmulatorContract true -e cityRestartPhase $phase -e cityRestartId $scenario 'com.havamania.test/androidx.test.runner.AndroidJUnitRunner'
+                $instrumentExit = $LASTEXITCODE
+                $result | Write-Output
+                if ($instrumentExit -ne 0 -or ($result -join "`n") -notmatch 'OK \(1 test\)') { throw "Restart phase $phase failed" }
+            }
+            $exitCode = 0
+        } else {
+            $testClass = 'com.havamania.FirebaseCityContractDeviceTest'
+            $extraArgs = @()
+            if ($ProfileContract) {
+                if ($env:CITY_PROFILE_TEST_NONCE -notmatch '^[0-9a-f-]{36}$') { throw 'Missing local profile fixture nonce' }
+                $testClass += '#serverPremiumMirrorUpdatesAndRevokesWithoutProfileOverwrite,com.havamania.FirebaseCityContractDeviceTest#profileAccountSwitchRejectsQueuedOldOwnerEvents'
+                $extraArgs += '-Pandroid.testInstrumentationRunnerArguments.cityProfileContract=true'
+                $extraArgs += "-Pandroid.testInstrumentationRunnerArguments.cityProfileNonce=$env:CITY_PROFILE_TEST_NONCE"
+            }
+            if ($usesProxy) {
+                if ($env:CITY_NETWORK_TEST_NONCE -notmatch '^[0-9a-f-]{36}$') { throw 'Missing local proxy nonce' }
+                if ($ReplyLoss) {
+                    $testClass += '#lostCommitReplyKeepsQueueUntilIdempotentConfirmation'
+                    $extraArgs += '-Pandroid.testInstrumentationRunnerArguments.cityReplyLoss=true'
+                } else {
+                    $testClass += '#transportCutPreservesReservationAndRejectsLateDelete'
+                    $extraArgs += '-Pandroid.testInstrumentationRunnerArguments.cityNetworkCut=true'
+                }
+                $extraArgs += "-Pandroid.testInstrumentationRunnerArguments.cityNetworkNonce=$env:CITY_NETWORK_TEST_NONCE"
+            }
+            & .\gradlew.bat connectedDebugAndroidTest --init-script $init "-Pandroid.testInstrumentationRunnerArguments.class=$testClass" '-Pandroid.testInstrumentationRunnerArguments.firebaseEmulatorContract=true' @extraArgs --console=plain --max-workers=2 --no-daemon
+            $exitCode = $LASTEXITCODE
+        }
     } finally { Pop-Location }
 } finally {
     foreach ($port in $ownedPorts) { & $adb -s $serial reverse --remove "tcp:$port" }

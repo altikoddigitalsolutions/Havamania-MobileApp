@@ -2,6 +2,7 @@ package com.havamania
 
 import androidx.annotation.Keep
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.Exclude
 
 @Keep
 @IgnoreExtraProperties
@@ -18,6 +19,7 @@ data class UserProfile(
     val personalizationEnabled: Boolean = true,
     val onboardingCompleted: Boolean = false,
     val profileCompleted: Boolean = false,
+    @get:Exclude // Server-owned display mirror, never echoed in client profile writes.
     val isPremium: Boolean = false,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,

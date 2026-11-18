@@ -34,10 +34,10 @@ class CitySyncBatchTest {
             fail("Expected cancellation")
         } catch (_: CancellationException) { }
     }
-    @Test fun waitingMessageExplainsManualRetryAndRoundsMinutesUp() {
+    @Test fun waitingMessageExplainsRecoveryWhileAppRunsAndRoundsMinutesUp() {
         val message = citySyncErrorText(CitySyncWaitingException(null, 161), 100)
         assertTrue(message.contains("2 dakika"))
-        assertTrue(message.contains("otomatik gönderim başlatmaz"))
+        assertTrue(message.contains("uygulama çalışırken eşitleme yeniden denenecek"))
     }
     @Test fun blockedMessagesGiveSafeRecoveryAdvice() {
         assertTrue(citySyncErrorText(CitySyncWaitingException("AUTHENTICATION", 0)).contains("yeniden giriş"))

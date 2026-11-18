@@ -1,0 +1,15 @@
+# 18 Kasım — Gerçek TCP kesintisi ve şehir kuyruğu
+
+npm run test:android:transport ve run-transport.mjs eklendi. TCP proxy yalnız 127.0.0.1:8087 üzerinde dinleyip yerel Firestore 127.0.0.1:8086 adresine iletir. Auth 9096 üzerinde kalır. Kontrol servisi 127.0.0.1:9296, yalnız POST ve koşuya özel rastgele nonce başlığını kabul eder. Demo/localhost ortam koruması vardır. Canlı Firebase anahtarı kullanılmaz.
+
+Koşucu yalnız bu modda cihaz tcp:8086 adresini host tcp:8087 adresine bağlar; 9296 da geçici yönlendirilir. Önceden çakışan eşlemeleri değiştirmez; yalnız kendi eklediklerini finally içinde kaldırır. Normal mod doğrudan 8086 kullanır. ProcessRestart ve TransportCut aynı anda seçilemez. Telefonun Wi-Fi/mobil ağ veya PC genel internet ayarı değiştirilmez. Release ayarları değişmedi.
+
+transportCutPreservesReservationAndRejectsLateDelete gerçek DataStore, CitySyncStore, dispatcher reserve/timeout/onay ve Android SDK transaction kullanır. İki şehir sunucuya yazılıp sunucu görüntüsü yerel depoya alınır; bir şehir silme isteği diske kaydedilir. Proxy açık socket'leri destroy eder ve kesinti sürerken yeni bağlantıları kapatır. Test, gerçekten canlı socket kapandığını ve SDK'nın sunucu okumasına giriştiğini ayrı sayaçlarla doğrular; disableNetwork anahtarı kullanılmaz.
+
+Dispatcher timeout'u yalnız test çağrısında 250 ms; üretim 60 saniye değeri değişmedi. Timeout sonrası acknowledge yok, retryNotBefore ve onaysız kuyruk korunuyor. TCP açılınca eski SDK Task'in false veya UNAVAILABLE ile bitmesi kabul edilir; her iki sonuçta sıfır delete aşamalanması, orijinal uzak şehrin korunması ve kuyruğun aynen kalması zorunludur. Callback üretimdeki requestJob.isActive/UID kapısını kullanır. Task sonucu gözlenmeden test bitmez. Erken retry engellenir; enjekte edilen wall clock bekleme sınırına ilerletilince yeni etkin istek silmeyi tamamlar ve gerçek sunucu görüntüsüyle kuyruk temizlenir.
+
+Özel TCP koşusu XML: tests=1, failures=0, errors=0, skipped=0; script ve Gradle başarılı. Node sözdizimi kontrolü geçti. Koşucu değiştiği için normal SDK regresyonu yeniden çalıştı: XML tests=10, failures=0, errors=0, skipped=2; sekiz normal senaryo başarılı. ProcessRestart/TransportCut yöntemleri normal koşuda planlı atlanır; transport bu tur kendi koşusunda geçti, özel süreç koşusu tekrar çalıştırılmadı. Gradle konsolundaki 12/10 sayacı toplam olarak kullanılmadı. Son kontrolde 8087/9296 LISTENING yoktu; adb reverse --list boştu. Emülatörler ve proxy kapandı.
+
+Kesinti transaction sunucu okumasından önce uygulandı. Sunucu commit olmuş ama yalnız cevap kaybolmuş durum, commit ortası kesinti, üretim TLS/DNS, gerçek modem/Wi-Fi ve Doze birlikte sınanmadı. Bu koşulda eski görev delete aşamalamadı; genel olarak coroutine iptalinin önceden gönderilmiş uzak commit'i geri alacağı iddia edilmez. Üretim Kotlin/kurallar değiştirilmedi; test ve koşucu eklendi.
+
+Sırada commit sonrası yanıt kaybı/belirsiz sonuç kabulü, tam Activity/ViewModel kurtarma, Android hesap silme uçtan uca birleşimi, reboot/saat değişimi ve legacy ad-only uyumluluğu var. Önceki JVM/UI/JS kural testleri bu tur tekrar çalıştırılmadı. Canlı dağıtım, release ve push yapılmadı.

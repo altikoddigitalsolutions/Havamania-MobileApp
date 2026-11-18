@@ -25,6 +25,8 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = WeatherRepository.getInstance(application)
     private val userProfileRepository = com.havamania.UserProfileRepository.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
+    private val _activeUid = MutableStateFlow(auth.currentUser?.uid)
+    internal val activeUid = _activeUid.asStateFlow()
     private val accountTasks = com.havamania.AccountTaskScope(viewModelScope) { currentUid }
 
     private var citySyncRequests = com.havamania.CitySyncRequestGate()
@@ -123,6 +125,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var settingsJob: kotlinx.coroutines.Job? = null
     private var profileSyncJob: kotlinx.coroutines.Job? = null
+    private var cityRecoveryJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         accountTasks.reset()
@@ -134,11 +137,13 @@ if (BuildConfig.DEBUG) {
 }
 
         clearLocalUserData()
+        _activeUid.value = user?.uid
 
         loadSettings()
         observeFirestoreUserDoc(newUid)
         observeFirestoreCities(newUid)
         prepareCitySyncRetry(authOnly = true)
+        startCitySyncRecovery()
     }
 
     init {
@@ -147,6 +152,7 @@ if (BuildConfig.DEBUG) {
 
     override fun onCleared() {
         super.onCleared()
+        cityRecoveryJob?.cancel()
         auth.removeAuthStateListener(authListener)
         citiesListenerVersion++
         citiesSnapshotJob?.cancel()
@@ -203,8 +209,8 @@ if (BuildConfig.DEBUG) {
         profileSyncJob = accountTasks.launch {
             launch {
                 userProfileRepository.profile.collect { profile ->
-                    if (uid == this@ThemeViewModel.currentUid && profile?.uid == uid) {
-                        _isPremium.value = profile.isPremium
+                    if (uid == this@ThemeViewModel.currentUid) {
+                        _isPremium.value = profile?.takeIf { it.uid == uid }?.isPremium ?: false
                     }
                 }
             }
@@ -339,6 +345,31 @@ if (BuildConfig.DEBUG) {
                 local = { local(owner) },
                 remote = { if (owner != "legacy") remote(owner) },
                 onFailure = { reportCityError(it) })
+        }
+    }
+
+    private fun startCitySyncRecovery() {
+        cityRecoveryJob?.cancel()
+        cityRecoveryJob = accountTasks.launch(kotlinx.coroutines.Dispatchers.IO) { owner ->
+            if (owner == "legacy") return@launch
+            // The existing startup attempt runs immediately; this loop takes over later recovery.
+            kotlinx.coroutines.delay(30_000)
+            com.havamania.runCitySyncRecovery(owner, { currentUid }, ::citySyncAllowed,
+                read = {
+                    val pending = ThemeManager.pendingCityChanges(getApplication(), owner)
+                        .map { com.havamania.CitySyncRecoveryWork(it) } +
+                        listOfNotNull(ThemeManager.pendingDefaultCity(getApplication(), owner)
+                            ?.let { com.havamania.CitySyncRecoveryWork(it, true) })
+                    pending.filter { !it.change.acknowledged && it.change.blockedReason == null }
+                        .mapNotNull { work ->
+                            ThemeManager.refreshCitySyncClock(getApplication(), owner, work.change, work.defaultCity)
+                                ?.let { work.copy(change = it) }
+                        }
+                }, clock = { com.havamania.CitySyncClocks.capture(getApplication()) },
+                send = { work ->
+                    if (work.defaultCity) sendPendingDefaultCity(owner)
+                    else sendCityChange(owner, work.change.city.id)
+                }, onFailure = ::reportCityError)
         }
     }
 

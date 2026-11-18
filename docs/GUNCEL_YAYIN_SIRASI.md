@@ -1,4 +1,12 @@
-# Güncel yayın sırası — 11 Kasım 2026
+# Güncel yayın sırası — 18 Kasım 2026
+
+## 18 Kasım — Güncel ilerleme özeti
+
+Genel tamamlanma yüzdesi hesaplanmış değildir. Sekiz ana paketin son yayın kabulü hâlâ açıktır; bu, yalnız sekiz küçük adım kaldığı anlamına gelmez. Eski 59/22/37 sayımı tarihsel kayıttır ve bugünkü yüzdeye çevrilemez. Artan test sayısı, tüm ekran veya üretim senaryolarının aynı oranda tamamlandığını göstermez. Güncel tamamlandı/yerelde doğrulandı/canlı kabul bekliyor envanteri tüm alt maddeler için yeniden sayılmadan yüzde vermek güvenilir olmaz.
+
+Son yerel kanıtlar: 631 JVM, on üç normal Android SDK senaryosu ve üç izole profil hata arayüz testi; 34 yerel Firestore/Storage kural testi; gerçek TCP kesintisi ve commit sonrası yanıt kaybıyla üretim otomatik kurtarma; iki ayrı süreçte aynı hesap/kalıcı kuyruğun otomatik kurtarılması. Bunlar ayrı koşu ve tarihlerdeki kanıtlardır, bu tur hepsi yeniden koşulmadı. Yerel emulator/fixture kabulü canlı kabul yerine geçmez.
+
+Başlıca açık yayın kapıları: canlı asistan/backend/Firebase bağlantısı ve kuralların hedef ortam kabulü; çok cihaz/hesap silme/izin senaryolarının tam uygulama akışı; tüm ekran ve durumların telefon/tablet/görsel/erişilebilirlik kabulü; hava/güzergâh, bildirim, performans ve mimarinin kalan kontrolleri; servis kapasitesi ile yasal/mağaza beyanlarının kapanışı; son kaynakları içeren imzalı R8 AAB, 16 KB ve Play iç test kabulü. Ayrıntılı sekiz paket ve kullanıcı bildirimleri aşağıda korunur.
 
 4 Kasım tarihli ana kontrol listesi sayımı 59 geniş kabul maddesinin 22’sini tamamlandı, 37’sini açık gösteriyordu. Bu tarihsel sayım güncel bug veya kalan adım sayısı değildir; aşağıdaki yeni alt kabuller de ayrıca izlenir. Son yerel alt düzeltmeler canlı/çok cihazlı/yayın kontrollerini kendiliğinden kapatmaz. Ayrıntılı kaynak: YAYIN_ONCELIKLERI.md ve YAYIN_DURUM_RAPORU.md.
 
@@ -585,3 +593,62 @@ Yeni/değişen defaultCityLocation için biçim doğrulaması eklendi. Alt kolek
 ## 17 Kasım — Android SDK Firebase emülatör kabulü
 
 Ayrı demo FirebaseApp ile Auth/Firestore bağlantısı ve test koşucusu eklendi. Debug loopback HTTP izni düzeltildi; release ağı değişmedi. Son koşu SM-T500 üzerinde 3/3 geçti: profil kimliği gerçek SDK serileştirme/okuma, hesap izolasyonu, üretim yardımcısıyla gerçek transaction kimlik koruması/silme/yazma. Rapor: docs/17_KASIM_ANDROID_FIREBASE_EMULATOR.md. Tam ViewModel/ekran uçtan uca kabulü, zorlanmış transaction retry, offline/hesap değişimi yarışı ve legacy ad-only uyumluluğu açık. Canlı dağıtım/push/release yapılmadı.
+
+
+## 18 Kasım — Android bekleyen yazı ve hesap değişimi kabulü
+
+Yerel Firebase Android SDK testleri 3 yeni senaryoyla 6/6 geçti: pending profil yazısı/sunucu onayı, rezervasyon sonrası A–B değişiminde gönderimin engellenmesi, uzak commit sonrası hesap değişiminde yerel onayın bastırılması ve A hesabında idempotent yeniden deneme. Rapor: docs/18_KASIM_FIREBASE_AG_VE_HESAP_GECISI.md. İlk ağ testi disableNetwork ile transaction başarısızlığı bekliyordu; SDK/emülatörde tamamlanınca fiziksel kesintiyle eşdeğer olmadığı kaydedilip cache/pending yazı kapsamına düzeltildi. Gerçek taşıma kesintisi, süreç ölümü + kalıcı kuyruk, zorlanmış transaction retry/silme yarışı ve legacy uyumluluk açık. Üretim Kotlin/kurallar değişmedi; canlı dağıtım/push/release yapılmadı.
+
+
+## 18 Kasım — DataStore diski + SDK kuyruk kabulü
+
+7/7 Android emülatör testi geçti. Yeni test gerçek DataStore dosyasını kapatıp iki kez açarak tamamlanmış uzak silmenin onaysız kalması, reservation bekleme sınırının/revision değerinin korunması, B hesabında A kuyruğunun gönderilmemesi ve A hesabında süre dolunca idempotent onay/temizliği doğruladı. Rapor: docs/18_KASIM_FIREBASE_AG_VE_HESAP_GECISI.md son bölüm. DataStore yeniden açılışı tamamlandı; gerçek OS süreç ölümü/reboot ve tam Activity/ViewModel yeniden açılışı açık. Üretim Kotlin değişmedi. Taşıma kesintisi/geç commit, zorlanmış retry/silme yarışı, eski istemci uyumluluğu ve önceki yayın kapıları açık. Push/release yapılmadı.
+
+
+## 18 Kasım — Yeni Android sürecinde kuyruk kurtarma
+
+İki aşamalı npm run test:android:restart başarılı: prepare 1/1 ve QA force-stop sonrası farklı PID ile resume 1/1. Aynı emülatör UID, kalıcı revision/bekleme kaydı ve idempotent silme onayı doğrulandı. Normal SDK regresyonu XML: 8 test, 0 hata, 1 planlı atlama (önceki 7 senaryo geçti; özel süreç yöntemi ayrı koşuldu). Rapor: docs/18_KASIM_FIREBASE_SUREC_YENIDEN_BASLATMA.md. Gerçek süreç yeniden yaratılması fixture düzeyinde tamamlandı; tam Activity/ViewModel otomatik açılışı, reboot/saat değişimi, yazı ortasında öldürme, taşıma kesintisi ve transaction çatışma/hesap silme yarışı açık. Üretim kodu/kurallar değişmedi; eski istemci uyumluluğu ve mağaza kapıları korunuyor. Push/release yapılmadı.
+
+
+## 18 Kasım — Gerçek transaction retry kimlik kontrolü
+
+SDK ilk şehir okumasından sonra başka yazıyla kimlik değiştirilip transaction yeniden denemeye zorlandı. En az iki callback denemesi, yalnız ilk eski görüntüde silme aşamalanması ve yeni kimlikte silmenin reddi/sunucu kaydının korunması doğrulandı. Normal Android emülatör koşusu XML: 9 test, 0 hata, 1 planlı süreç testi atlaması; 8 SDK senaryosu geçti. Rapor: docs/18_KASIM_FIREBASE_AG_VE_HESAP_GECISI.md son bölüm. Bu yarış kabulü tamamlandı; taşıma kesintisi/geç commit, silme işareti yarışı, tam açılış/reboot ve legacy uyumluluk açık. Üretim kodu/kurallar değişmedi; push/release/canlı dağıtım yapılmadı.
+
+
+## 18 Kasım — Hesap silme işareti transaction yarışı
+
+27/34 yerel Firestore/Storage kural testi geçti; üç yeni JS SDK yarışı ilk şehir okumasından sonra deletion marker oluştuğunda silme, oluşturma ve admin temizliğinden sonra yeniden oluşturmayı permission-denied ile engelledi. Rapor: docs/18_KASIM_HESAP_SILME_YARISI.md. Bu JS SDK/kural kabulüdür; tam Android AccountDeletionManager/backend/Auth/cihaz temizliği birlikte doğrulanmadı. Üretim kodu/kurallar değişmedi. Fiziksel taşıma/timeout/geç commit, tam Android silme/kurtarma, reboot ve legacy uyumluluk açık; canlı dağıtım/push/release yapılmadı.
+
+## 18 Kasım — Gerçek localhost TCP kesintisi
+
+Özel npm run test:android:transport 1/1 geçti. Canlı socket'ler kapatılıp SDK okuması altında gerçek dispatcher timeout'u, kalıcı reservation/onaysız kuyruk, geri bağlantıda eski görevden sıfır delete ve süre sonrası yeni istekle güvenli silme/onay doğrulandı. Üretim timeout değişmedi; test 250 ms kullanır. Normal SDK regresyonu XML: 10 test, 0 hata, 2 planlı özel mod atlaması; sekiz normal senaryo geçti. Rapor: docs/18_KASIM_FIREBASE_TCP_KESINTISI.md. Kesinti okumadan önceydi; commit sonrası yalnız yanıt kaybı ve commit ortası kesinti hâlâ açık. Üretim TLS/modem/Doze, tam açılış, Android silme/reboot ve legacy uyumluluk da açık. Üretim kodu/kurallar değişmedi; canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Commit sonrası kaybolan yanıt kabulü
+
+Yanıt kaybı özel testi 1/1 geçti: bağımsız aynı-hesap SDK gözlemcisi uzak silmenin tamamlandığını, asıl Task'in onay almadığını doğruladı; dönüş byte'ları düşürüldü. Timeout sonrası kalıcı kuyruk/reservation korundu; geri bağlantı sonrası erken retry engellendi ve süre sonrası ikinci delete aşamalanmadan idempotent onay/temizlik tamamlandı. Önceki TCP özel testi de 1/1 yeniden geçti. Normal SDK XML: 11 test, 0 hata, 3 planlı özel mod atlaması; sekiz normal senaryo geçti. Rapor: docs/18_KASIM_FIREBASE_YANIT_KAYBI.md. Üretim kodu/kurallar değişmedi. Fixture düzeyinde commit sonrası yanıt kaybı tamamlandı; tam Activity/ViewModel kurtarma, Android silme birleşimi, restart/ağ kaybı birleşimi, üretim TLS/modem/Doze, reboot ve legacy uyumluluk açık. Canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Süre dolunca otomatik kurtarma eksikliği düzeltildi
+
+Üretimde giriş/açılış denemesi tek seferdi; bekleme süresi dolunca yeni gönderimi başlatan yol yoktu. ThemeViewModel'e hesap scope'una bağlı, IO üzerinde ve mevcut saat/reservation/kimlik kapılarını kullanan tek sıralı kurtarma döngüsü eklendi. Bloke/onaylı kayıtlar gönderilmez; silme kapısı ve hesap değişimi korunur. 615 JVM testi geçti. Gerçek diskteki reservation ile üretim döngüsünün süre dolunca tek SDK gönderimi yapması doğrulandı; normal SDK XML 12 test/0 hata/3 planlı özel mod atlaması, dokuz senaryo başarılı. Rapor: docs/18_KASIM_KONUM_OTOMATIK_KURTARMA.md. Tam Activity açılışı, yeni döngünün özel süreç/ağ kaybıyla birleşimi, gerçek Doze/reboot, Android silme birleşimi ve legacy uyumluluğu açık. Canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Otomatik döngü + iki ağ kaybı modu
+
+Yeni otomatik kurtarma TCP kesintisi ve commit sonrası yanıt kaybı özel testlerine bağlandı. Son retry artık testten elle çağrılmıyor; üretim döngüsü sanal elapsed süreyi bekleyip kendisi gönderiyor. Süre öncesi sıfır gönderim, sonrasında tek send ve kayıp yanıtta ikinci delete olmadan onay/kalıcı kuyruk temizliği doğrulandı. İki özel koşu ayrı ayrı 1/1 geçti. Rapor: docs/18_KASIM_KONUM_OTOMATIK_KURTARMA.md son bölüm. Üretim kodu değişmedi; 615 JVM/dokuz normal SDK bu tur tekrar koşulmadı. Tam Activity açılışı, otomatik döngünün gerçek süreç yeniden başlatmasıyla birleşimi, Android silme/reboot/Doze ve legacy uyumluluk açık. Canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Otomatik kurtarma + yeni süreç kabulü
+
+İki aşamalı QA force-stop testi üretim kurtarma döngüsüyle yeniden geçti: prepare 1/1, farklı PID ile resume 1/1. Cihazdan alınan saat/boot durumu ile kalıcı reservation ve aynı emülatör UID geri geldi; erken send engellendi, kalan süre sanal ilerletilince döngü son gönderimi kendisi yaptı ve kuyruk temizlendi. Rapor: docs/18_KASIM_FIREBASE_SUREC_YENIDEN_BASLATMA.md son bölüm. Üretim kodu değişmedi; tam Activity açılışı, gerçek reboot/Doze, Android silme birleşimi, canlı servis/mağaza ve legacy uyumluluk açık. Yüzdeye dayanak olacak tam kapanış envanteri olmadığı rapor başında belirtildi. Canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Bağımsız gönderim iptalinin worker'ı durdurması düzeltildi
+
+Parent Job aktif/UID aynı olduğu halde tek send CancellationException'ının tüm kurtarma worker'ını bitirmesi önlendi; gerçek Job/oturum iptali korunur. Yeni testle 616 JVM geçti. Yeni gerçek SDK revizyon yarışı, eski batch görüntüsü dururken ikinci şehir güncellense de dispatcher'ın yalnız yeni revision/payload'ı gönderdiğini doğruladı. Normal SDK XML: 13 test, 0 hata, 3 planlı özel mod atlaması; on normal senaryo geçti. Rapor: docs/18_KASIM_KONUM_OTOMATIK_KURTARMA.md son bölüm. Tam Activity/silme/reboot/Doze ve canlı/mağaza/legacy kabulü açık; push/release/canlı dağıtım yapılmadı.
+## 18 Kasım — Profil dönüşüm/kimlik hatası ve kapanmayan hata akışı
+
+Firestore toObject exception'ı yakalandı; profil Loading/Missing/Failed/Ready olarak ayrıldı. Yanlış UID reddedilir, eksik UID yalnız path sahibiyle bellekte tamamlanır. Failed/Loading profil oluşturma yoluna gitmez; eski authoritative şehir ve profil temizlenir. Force refresh dinleyiciyi gerçekten yeniler. Hata penceresinde kapatma refresh çağırmaz; retry/vazgeç ayrıldı. 622 JVM, normal SDK XML 15 test/0 hata/3 planlı özel mod atlaması (12 başarılı), 3/3 izole UI testi geçti. İlk isPremium tür testi alan eşlemesi nedeniyle timeout oldu; name yanlış türüyle son koşu geçti. isPremium/premium eşleme ve istemci yazma yetkisi ayrı açık öncelik olarak kaydedildi; tahmini şema değişikliği yapılmadı. Rapor: docs/18_KASIM_PROFIL_OKUMA_DAYANIKLILIGI.md. Tam Activity/UID saved-state/offline ve Android silme/yayın kapıları açık; canlı dağıtım/push/release yapılmadı.
+## 18 Kasım — Premium profil alanı koruması
+
+Yerel kabul: 631 JVM, 34 Firestore/Storage kural testi ve 13 Android Firebase SDK senaryosu geçti. SDK XML toplamı 16; üç özel ağ/süreç modu bu normal koşuda bilerek atlandı. Profil DTO üyelik alanı yazmıyor; iki eski/yeni alan adı açıkça okunuyor; bekleyen yerel yazı üyelik onayı sayılmıyor. İstemcinin premium bayrağını değiştirmesi kurallarla engellendi. Canlı dağıtım yapılmadı. Tarihsel bayrakların yetkili abonelik kaynağıyla denetimi, eski sürüm yazım uyumluluğu, Admin true → Android dinleyici kabulü ve gerçek satın alma/abonelik ayna güncellemesi açık. Ayrıntı: 18_KASIM_PREMIUM_ALAN_GUVENLIGI.md. Sıradaki bu paketin yerel işi: yetkili emülatör fixture ile sunucu üyelik aynasının verilmesi/geri alınması ve profil dinleyicisine geçişi.
+## 18 Kasım — Premium sunucu dinleyicisi kabulü
+
+Yetkili yerel fixture → gerçek Android Firebase SDK → UserProfileRepository akışında üyelik verilmesi, eski premium alanına geçiş, normal profil düzenlemesinde aynanın korunması, istemci müdahalesinin reddi, sunucudan geri alma ve bozuk/çelişkili veriden toparlanma geçti (özel koşu 1/1, sıfır hata). Önceki bölümde açık kalan Admin true → Android dinleyici kabulü yerel demo ortamı için kapandı. Canlı bayrak denetimi/kuralların dağıtımı, eski sürüm uyumluluğu ve gerçek mağaza/SQL ödeme akışı açık kalır. Ücretli hesabın tam ayarlar ekranında görsel kabulü ayrıca açık. Ayrıntı: 18_KASIM_PREMIUM_SUNUCU_SENKRONIZASYONU.md. Sonraki bağımsız yerel iş: aynı profil dinleyicisinin A→B hesap değişiminde ve geciken eski hesap güncellemesinde üyelik/veri izolasyonu.
+## 18 Kasım — Profil A–B izolasyonu yerel kabulü
+
+Gerçek demo Auth ile A→B→A geçişi, SDK callback olayını kontrollü geciktirme, B seçildiği anda eski profil/şehir/üyeliğin temizlenmesi, geçiş boyunca yayımlanan tüm dolu profillerin yalnız B'ye ait olması, B'nin A profilini sunucudan okuyamaması ve bozuk A kaydının düzeltilince yeniden okunması doğrulandı. Önceki üyelik sunucu testiyle özel koşu 2/2 geçti; 631 JVM testi yeniden hatasız. Varsayılan callback yürütücüsü ana iş parçacığı olarak korundu; testte ayrı yürütücü verilebiliyor. Bu kabul repository + gerçek SDK katmanıdır, tam login/ayarlar/theme ekranı kabulü değildir. Ayrıntı: 18_KASIM_PROFIL_HESAP_IZOLASYONU.md. Sıradaki yerel iş: tam profil/ayarlar tüketicilerinin hesap değişimi ve Activity yeniden oluşturulmasında ad/şehir/üyelik tutarlılığı.
+## 18 Kasım — Hesapla birlikte kapanan ekran pencereleri
+
+Profil/ayarlar tüketicilerinin incelemesinde kullanıcıya bağlı olmayan geçici pencereler bulundu ve düzeltildi. Ayarların silme/çıkış/tema/dil/üslup/bilgi durumları etkin UID ile sıfırlanıyor; profil bilgi/istatistik pencereleri de aynı hesap kapsamına bağlandı. Silme/çıkış onayı pencere hesabı hâlâ etkinse çalışıyor. Gerçek silme composable'ı ile A→B, çıkış ve Compose save/restore sonrası parolanın/onayın temizlenmesi doğrulandı. Son kaynaklarla 631 JVM ve 8 UI testi sıfır hatayla geçti. Bu yalnız bileşen ve Compose durum yenileme kabulüdür; tam gerçek Auth–ThemeViewModel–ProfileScreen/SettingsScreen Activity.recreate, ad/şehir/premium ve süreç ölümü kabulü açık kalır. Sıradaki yerel iş bu tam tüketici/Activity testidir. Ayrıntı: 18_KASIM_HESABA_BAGLI_EKRAN_PENCERELERI.md.

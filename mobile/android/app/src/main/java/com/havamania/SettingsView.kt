@@ -91,13 +91,15 @@ fun SettingsScreen(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    var showThemeSheet by remember { mutableStateOf(false) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
-    var showToneDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showComingSoonDialog by remember { mutableStateOf(false) }
-    var comingSoonTitle by remember { mutableStateOf("") }
+    val owner by themeViewModel.activeUid.collectAsStateWithLifecycle()
+    val dialogs = rememberSettingsDialogs(owner)
+    var showThemeSheet by dialogs.theme
+    var showLanguageDialog by dialogs.language
+    var showToneDialog by dialogs.tone
+    var showDeleteDialog by dialogs.delete
+    var showLogoutDialog by dialogs.logout
+    var showComingSoonDialog by dialogs.comingSoon
+    var comingSoonTitle by dialogs.title
 
     val scope = rememberCoroutineScope()
 
@@ -297,7 +299,7 @@ fun SettingsScreen(
             confirmText = "Çıkış Yap",
             dismissText = "İptal",
             onConfirm = {
-                authViewModel.signOut()
+                if (owner != null && authViewModel.currentUser?.uid == owner) authViewModel.signOut()
                 showLogoutDialog = false
             }
         )
@@ -311,7 +313,9 @@ fun SettingsScreen(
             error = deletionState.message,
             onDismiss = { showDeleteDialog = false },
             onConfirm = { password ->
-                authViewModel.deleteAccount(password = password, onComplete = { success, _ ->
+                if (owner == null || authViewModel.currentUser?.uid != owner) {
+                    showDeleteDialog = false
+                } else authViewModel.deleteAccount(password = password, onComplete = { success, _ ->
                     if (success) {
                         showDeleteDialog = false
                     }

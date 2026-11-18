@@ -65,9 +65,10 @@ fun ProfileScreen(
     val emptyTripsOwner by travelViewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
     val emptyHistoryOwner by aiHistoryViewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
 
-    var showComingSoonDialog by remember { mutableStateOf(false) }
-    var comingSoonTitle by remember { mutableStateOf("") }
     val owner by profileViewModel.activeUid.collectAsStateWithLifecycle()
+    var showComingSoonDialog by remember(owner) { mutableStateOf(false) }
+    var comingSoonTitle by remember(owner) { mutableStateOf("") }
+
     var showAboutMeSheet by remember(owner) { mutableStateOf(false) }
     val aboutMeSaveState by profileViewModel.aboutMeSaveState.collectAsStateWithLifecycle()
     val savingAboutMe = aboutMeSaveState == ProfileSaveState.Saving
@@ -77,7 +78,7 @@ fun ProfileScreen(
             profileViewModel.resetAboutMeSave()
         }
     }
-    var showStatsDetail by remember { mutableStateOf<String?>(null) }
+    var showStatsDetail by remember(owner) { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -213,16 +214,7 @@ fun ProfileScreen(
             )
         }
 
-        if (profileState is ProfileState.Error) {
-            val errorMsg = (profileState as ProfileState.Error).message
-            HavamaniaDialog(
-                onDismissRequest = { profileViewModel.refresh() },
-                title = "YÜKLEME HATASI",
-                text = "$errorMsg\n\nLütfen internet bağlantınızı kontrol edin.",
-                confirmText = "TAMAM",
-                onConfirm = { profileViewModel.refresh() }
-            )
-        }
+        ProfileLoadErrorDialog((profileState as? ProfileState.Error)?.message, owner, profileViewModel::refresh, profileViewModel::dismissProfileError)
     }
 }
 

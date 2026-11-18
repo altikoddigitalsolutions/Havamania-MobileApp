@@ -36,12 +36,28 @@ service cloud.firestore {
         nullableLocationText(data.defaultCityLocation, 'admin3')
       );
     }
+    function premiumMirrorCreateAllowed() {
+      let data = request.resource.data;
+      return (!('isPremium' in data) || (data.isPremium is bool && data.isPremium == false)) &&
+        (!('premium' in data) || (data.premium is bool && data.premium == false));
+    }
+    function premiumFieldUnchangedOrFreeInit(field, other) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return !after.diff(before).affectedKeys().hasAny([field]) ||
+        (!(field in before) && field in after && after[field] is bool && after[field] == false &&
+          (!(other in before) || before[other] == false));
+    }
+    function premiumMirrorsUpdateAllowed() {
+      return premiumFieldUnchangedOrFreeInit('isPremium', 'premium') &&
+        premiumFieldUnchangedOrFreeInit('premium', 'isPremium');
+    }
     // User-scoped data isolation
     match /users/{userId} {
       allow read, delete: if activeOwner(userId);
-      allow create: if activeOwner(userId) && validDefaultLocation();
+      allow create: if activeOwner(userId) && validDefaultLocation() && premiumMirrorCreateAllowed();
       // Preserve legacy/unrelated edits; validate whenever the companion itself changes.
-      allow update: if activeOwner(userId) && (
+      allow update: if activeOwner(userId) && premiumMirrorsUpdateAllowed() && (
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['defaultCityLocation']) ||
         validDefaultLocation());
 

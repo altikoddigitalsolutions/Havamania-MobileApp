@@ -56,7 +56,7 @@ internal fun citySyncErrorText(error: Exception, now: Long = System.currentTimeM
         else -> if (error is CitySyncWaitingException) {
             val seconds = (error.retryAt.coerceAtLeast(0) - now.coerceAtLeast(0)).coerceAtLeast(0)
             val minutes = seconds / 60 + if (seconds % 60 > 0) 1 else 0
-            "Yeniden denemeden önce yaklaşık ${minutes.coerceAtLeast(1)} dakika bekleyin. Süre dolunca eşitlemeyi tekrar deneyin; bu pencere otomatik gönderim başlatmaz."
+            "Yaklaşık ${minutes.coerceAtLeast(1)} dakika sonra, uygulama çalışırken eşitleme yeniden denenecek. Yerel kayıtlarınız korunuyor."
         } else "Konum eşitlemesi tamamlanamadı. Bağlantınızı kontrol edip kısa bir süre sonra tekrar deneyin. Yerel kayıtlarınızı da kontrol edin."
     }
 }

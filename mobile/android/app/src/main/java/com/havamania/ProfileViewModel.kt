@@ -82,7 +82,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun refresh() {
         val uid = auth.currentUser?.uid ?: return
-        observeProfile(uid)
+        observeProfile(uid, forceRefresh = true)
+    }
+
+    fun dismissProfileError() {
+        if (_profileState.value !is ProfileState.Error) return
+        val uid = auth.currentUser?.uid ?: return
+        userProfileRepository.profile.value?.takeIf { it.uid == uid }?.let {
+            _profileState.value = ProfileState.Success(it)
+        }
     }
 
     private fun profileWritesAllowed(): Boolean {
@@ -90,22 +98,27 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         return !state.pending && !state.busy
     }
 
-    private fun observeProfile(uid: String) {
+    private fun observeProfile(uid: String, forceRefresh: Boolean = false) {
         profileJob?.cancel()
         _profileState.value = userProfileRepository.profile.value
             ?.takeIf { it.uid == uid }?.let { ProfileState.Success(it) } ?: ProfileState.Loading
-        userProfileRepository.startObserving(uid)
+        userProfileRepository.startObserving(uid, forceRefresh)
 
         profileJob = accountTasks.launch launch@ { ownerUid ->
             try {
-            userProfileRepository.profile.collect { profile ->
-                if (auth.currentUser?.uid != uid || !profileWritesAllowed()) return@collect
-                if (profile != null && profile.uid == uid) {
-                    _profileState.value = ProfileState.Success(profile)
-                    ThemeManager.saveProfileSnapshot(getApplication(), profile)
-                } else {
-                    _profileState.value = ProfileState.Loading
-                    ensureRemoteProfile(uid)
+            userProfileRepository.readState.collect { state ->
+                if (state.uid != uid || auth.currentUser?.uid != uid || !profileWritesAllowed()) return@collect
+                when (state) {
+                    is ProfileReadState.Ready -> {
+                        _profileState.value = ProfileState.Success(state.profile)
+                        ThemeManager.saveProfileSnapshot(getApplication(), state.profile)
+                    }
+                    is ProfileReadState.Missing -> {
+                        _profileState.value = ProfileState.Loading
+                        ensureRemoteProfile(uid)
+                    }
+                    is ProfileReadState.Failed -> _profileState.value = ProfileState.Error(state.message)
+                    else -> _profileState.value = ProfileState.Loading
                 }
             }
             } catch (e: kotlinx.coroutines.CancellationException) {
