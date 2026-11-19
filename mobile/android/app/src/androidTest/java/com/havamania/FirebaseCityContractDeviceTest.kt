@@ -11,6 +11,9 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.havamania.ui.theme.dataStore
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
@@ -238,6 +241,207 @@ class FirebaseCityContractDeviceTest {
                 assertFalse(final.contains("isPremium"))
                 assertFalse(final.contains("premium"))
             } finally { repository.stopObserving(); collector.cancelAndJoin() }
+        }
+    }
+    @Test fun productionThemeViewModelIsolatesRealPreferencesAndPremiumAcrossOwners() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("cityProfileContract") == "true")
+        withTimeout(45_000) {
+            val nonce = InstrumentationRegistry.getArguments().getString("cityProfileNonce")!!
+            UUID.fromString(nonce)
+            val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application
+            val ownerA = uid
+            var ownerB: String? = null
+            val repository = UserProfileRepository { db }
+            val store = androidx.lifecycle.ViewModelStore()
+            val weatherOwners = java.util.concurrent.CopyOnWriteArrayList<String?>()
+            val ankara = GeocodingResultDto(323786, "Ankara", 39.9, 32.8, countryCode = "TR")
+            val bursa = GeocodingResultDto(750269, "Bursa", 40.2, 29.1, countryCode = "TR")
+            suspend fun seedPreferences(owner: String, name: String, city: GeocodingResultDto) {
+                application.dataStore.edit { it[stringPreferencesKey("havamania:$owner:user_name")] = name }
+                com.havamania.ui.theme.ThemeManager.saveDefaultCity(application, owner, city)
+            }
+            suspend fun seedRemote(owner: String, city: GeocodingResultDto) {
+                db.collection("users").document(owner).set(
+                    mapOf("uid" to owner, "name" to "Remote $owner") + defaultCityProfileFields(city)).await()
+            }
+            try {
+                seedPreferences(ownerA, "Local A", ankara)
+                seedRemote(ownerA, ankara)
+                seedProfileMirror(ownerA, "canonical_true", nonce)
+                lateinit var vm: com.havamania.ui.theme.ThemeViewModel
+                withContext(Dispatchers.Main) {
+                    val factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                            @Suppress("UNCHECKED_CAST")
+                            return com.havamania.ui.theme.ThemeViewModel(application, auth, db, repository,
+                                weatherAccountChanged = { weatherOwners.add(it) }, syncGate = { false }) as T
+                        }
+                    }
+                    vm = androidx.lifecycle.ViewModelProvider(store, factory)[com.havamania.ui.theme.ThemeViewModel::class.java]
+                }
+                vm.userName.first { it == "Local A" }
+                vm.defaultCity.first { it?.id == ankara.id }
+                vm.isPremium.first { it }
+                auth.signOut()
+                vm.activeUid.first { it == null }
+                assertEquals("", vm.userName.value)
+                assertFalse(vm.isPremium.value)
+                assertNull(vm.defaultCity.value)
+                val nextOwner = auth.signInAnonymously().await().user!!.uid
+                ownerB = nextOwner
+                seedPreferences(nextOwner, "Local B", bursa)
+                seedRemote(nextOwner, bursa)
+                vm.activeUid.first { it == nextOwner }
+                vm.userName.first { it == "Local B" }
+                vm.defaultCity.first { it?.id == bursa.id }
+                repository.serverDefaultCity.first { it?.uid == nextOwner }
+                assertFalse(vm.isPremium.value)
+                // One real DataStore transaction changes both owners. Only B may be published.
+                application.dataStore.edit {
+                    it[stringPreferencesKey("havamania:$ownerA:user_name")] = "Late local A"
+                    it[stringPreferencesKey("havamania:$nextOwner:user_name")] = "Local B barrier"
+                }
+                vm.userName.first { it == "Local B barrier" }
+                assertEquals(bursa.id, vm.defaultCity.value?.id)
+                assertFalse(vm.isPremium.value)
+                seedProfileMirror(nextOwner, "canonical_true", nonce)
+                vm.isPremium.first { it }
+                seedProfileMirror(nextOwner, "agreed_false", nonce)
+                vm.isPremium.first { !it }
+                withContext(Dispatchers.Main) { store.clear() }
+                val weatherCount = weatherOwners.size
+                application.dataStore.edit {
+                    it[stringPreferencesKey("havamania:$nextOwner:user_name")] = "After clear"
+                }
+                assertEquals("Local B barrier", vm.userName.value)
+                assertEquals(weatherCount, weatherOwners.size)
+                assertTrue(weatherOwners.contains(ownerA))
+                assertTrue(weatherOwners.contains(nextOwner))
+            } finally {
+                withContext(Dispatchers.Main) { store.clear() }
+                repository.stopObserving()
+                application.dataStore.edit { preferences ->
+                    val owners = listOfNotNull(ownerA, ownerB)
+                    preferences.asMap().keys.filter { key ->
+                        owners.any { key.name.startsWith("havamania:$it:") }
+                    }.forEach { preferences.remove(it) }
+                }
+            }
+        }
+    }
+    @Test fun guardedProfileSnapshotPersistsAndRejectsQueuedOldSession() = runBlocking {
+        withTimeout(45_000) {
+            val file = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir,
+                "profile-session-${UUID.randomUUID()}.preferences_pb")
+            var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val epoch = PreferenceWriteEpoch()
+            var blocked = false
+            fun openStore() = androidx.datastore.preferences.core.PreferenceDataStoreFactory.create(scope = scope) { file }
+            var data = openStore()
+            val ownerA = uid
+            val profileA = UserProfile(uid = ownerA, name = "Disk A", bio = "Bio A", aboutMe = "Kamp",
+                photoURL = "test-only-photo", personalizationEnabled = false, onboardingCompleted = true,
+                personalizationProfile = FirestorePersonalizationProfile(selectedInterests = listOf("kamp", "bisiklet")))
+            suspend fun save(profile: UserProfile) = com.havamania.ui.theme.ThemeManager.saveProfileSnapshot(
+                data, profile, { auth.currentUser?.uid }, { blocked }, epoch)
+            fun key(owner: String, field: String) = stringPreferencesKey("havamania:$owner:$field")
+            try {
+                save(profileA)
+                assertEquals("Disk A", data.data.first()[key(ownerA, "user_name")])
+                val entered = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                val editor = launch(Dispatchers.IO) {
+                    data.edit { entered.complete(Unit); release.await() }
+                }
+                entered.await()
+                val queued = async(start = CoroutineStart.UNDISPATCHED) { save(profileA.copy(name = "Late A")) }
+                auth.signOut()
+                val ownerB = auth.signInAnonymously().await().user!!.uid
+                release.complete(Unit)
+                editor.join(); queued.await()
+                assertEquals("Disk A", data.data.first()[key(ownerA, "user_name")])
+                val profileB = UserProfile(uid = ownerB, name = "Disk B")
+                save(profileB)
+                blocked = true
+                save(profileB.copy(name = "Blocked B"))
+                blocked = false
+                assertEquals("Disk B", data.data.first()[key(ownerB, "user_name")])
+                val held = CompletableDeferred<Unit>()
+                val unblock = CompletableDeferred<Unit>()
+                val transaction = launch(Dispatchers.IO) { data.edit { held.complete(Unit); unblock.await() } }
+                held.await()
+                val invalidated = async(start = CoroutineStart.UNDISPATCHED) { save(profileB.copy(name = "Old epoch B")) }
+                epoch.invalidate()
+                unblock.complete(Unit)
+                transaction.join(); invalidated.await()
+                assertEquals("Disk B", data.data.first()[key(ownerB, "user_name")])
+                scope.coroutineContext[Job]!!.cancelAndJoin()
+                scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                data = openStore() // Reopen the same actual file with a new DataStore instance.
+                val disk = data.data.first()
+                assertEquals("Disk A", disk[key(ownerA, "user_name")])
+                assertEquals("Bio A", disk[key(ownerA, "user_bio")])
+                assertEquals("Kamp", disk[key(ownerA, "user_about_me")])
+                assertEquals("kamp,bisiklet", disk[key(ownerA, "user_interests")])
+                assertEquals("Disk B", disk[key(ownerB, "user_name")])
+                save(profileB.copy(photoURL = "temporary"))
+                assertEquals("temporary", data.data.first()[key(ownerB, "profileImagePath")])
+                save(profileB.copy(photoURL = null, bio = ""))
+                assertNull(data.data.first()[key(ownerB, "profileImagePath")])
+            } finally { scope.coroutineContext[Job]!!.cancelAndJoin(); file.delete() }
+        }
+    }
+    @Test fun productionProfileViewModelSwitchesOwnerAndStopsAfterStoreClear() = runBlocking {
+        withTimeout(45_000) {
+            val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application
+            val repository = UserProfileRepository { db }
+            val store = androidx.lifecycle.ViewModelStore()
+            val saved = java.util.concurrent.CopyOnWriteArrayList<UserProfile>()
+            val ownerA = uid
+            db.collection("users").document(ownerA).set(UserProfile(uid = ownerA, name = "VM A", defaultCity = "Ankara")).await()
+            lateinit var vm: ProfileViewModel
+            withContext(Dispatchers.Main) {
+                val factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return ProfileViewModel(application, auth, db, repository,
+                            writeGate = { true }, snapshotWriter = { saved.add(it) },
+                            storageProvider = { error("Read-only profile test must not access Storage") }) as T
+                    }
+                }
+                vm = androidx.lifecycle.ViewModelProvider(store, factory)[ProfileViewModel::class.java]
+            }
+            try {
+                vm.profileState.first { it is ProfileState.Success && it.profile.uid == ownerA }
+                auth.signOut()
+                vm.profileState.first { it is ProfileState.Idle }
+                assertNull(vm.activeUid.value)
+                val ownerB = auth.signInAnonymously().await().user!!.uid
+                val refB = db.collection("users").document(ownerB)
+                // Real ViewModel may initialize this missing account first; merge preserves its fields.
+                refB.set(mapOf("uid" to ownerB, "name" to "VM B", "defaultCity" to "Bursa"), SetOptions.merge()).await()
+                vm.profileState.first { it is ProfileState.Success && it.profile.uid == ownerB && it.profile.name == "VM B" }
+                assertEquals(ownerB, vm.activeUid.value)
+                assertEquals("Bursa", (vm.profileState.value as ProfileState.Success).profile.defaultCity)
+                refB.update("name", listOf("invalid")).await()
+                vm.profileState.first { it is ProfileState.Error }
+                assertNull(repository.profile.value)
+                refB.update("name", "VM B recovered").await()
+                vm.profileState.first { it is ProfileState.Success && it.profile.name == "VM B recovered" }
+                val retained = vm.profileState.value
+                withContext(Dispatchers.Main) { store.clear() }
+                val savedBefore = saved.size
+                refB.update("name", "After VM cleared").await()
+                repository.profile.first { it?.name == "After VM cleared" }
+                assertEquals(retained, vm.profileState.value)
+                assertEquals(savedBefore, saved.size)
+                assertTrue(saved.any { it.uid == ownerA })
+                assertTrue(saved.any { it.uid == ownerB && it.name == "VM B recovered" })
+                assertTrue(saved.all { it.uid == ownerA || it.uid == ownerB })
+            } finally {
+                withContext(Dispatchers.Main) { store.clear() }
+                repository.stopObserving()
+            }
         }
     }
     @Test fun actualAndroidSerializationRoundTripsAndPreservesProfile() = runBlocking {

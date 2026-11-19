@@ -19,11 +19,21 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
-class ThemeViewModel(application: Application) : AndroidViewModel(application) {
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
-    private val repository = WeatherRepository.getInstance(application)
-    private val userProfileRepository = com.havamania.UserProfileRepository.getInstance()
+class ThemeViewModel internal constructor(
+    application: Application,
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore,
+    private val userProfileRepository: com.havamania.UserProfileRepository,
+    private val weatherAccountChanged: (String?) -> Unit,
+    private val syncGate: (() -> Boolean)? = null
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, FirebaseAuth.getInstance(),
+        FirebaseFirestore.getInstance(), com.havamania.UserProfileRepository.getInstance(),
+        { WeatherRepository.getInstance(application).onAccountChanged(it) })
+
+
+
+
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
     private val _activeUid = MutableStateFlow(auth.currentUser?.uid)
     internal val activeUid = _activeUid.asStateFlow()
@@ -31,6 +41,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var citySyncRequests = com.havamania.CitySyncRequestGate()
     private fun citySyncAllowed(): Boolean {
+        syncGate?.let { return it() }
         val state = com.havamania.AccountDeletionManager.getInstance(getApplication()).state.value
         return !state.pending && !state.busy
     }
@@ -514,7 +525,7 @@ if (BuildConfig.DEBUG) {
         _userInterests.value = emptySet()
         _defaultCity.value = null
         _registeredCities.value = emptyList()
-        repository.onAccountChanged(auth.currentUser?.uid)
+        weatherAccountChanged(auth.currentUser?.uid)
 
     }
 }

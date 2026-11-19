@@ -542,7 +542,7 @@ private fun SettingsDivider() {
 }
 
 @Composable
-private fun PremiumSettingsCard(isPremium: Boolean, onClick: () -> Unit) {
+internal fun PremiumSettingsCard(isPremium: Boolean, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 

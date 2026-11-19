@@ -211,13 +211,25 @@ object ThemeManager {
 
     /** Persist a complete profile in one transaction, including intentionally cleared fields. */
     suspend fun saveProfileSnapshot(context: Context, profile: com.havamania.UserProfile) {
+        saveProfileSnapshot(context.dataStore, profile,
+            currentOwner = { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            writesBlocked = {
+                val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+                state.pending || state.busy
+            })
+    }
+
+    /** Same guarded mapping, with an explicit store/session for isolated integration acceptance. */
+    internal suspend fun saveProfileSnapshot(
+        store: DataStore<Preferences>, profile: com.havamania.UserProfile,
+        currentOwner: () -> String?, writesBlocked: () -> Boolean,
+        writeEpoch: com.havamania.PreferenceWriteEpoch = com.havamania.accountPreferenceWriteEpoch
+    ) {
         val uid = profile.uid
         require(uid.isNotBlank())
-        val epoch = com.havamania.accountPreferenceWriteEpoch.capture()
-        com.havamania.saveProfilePreferences(context.dataStore, writesAllowed = {
-            val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
-            com.havamania.accountPreferenceWriteEpoch.permits(epoch, uid,
-                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid, state.pending || state.busy)
+        val epoch = writeEpoch.capture()
+        com.havamania.saveProfilePreferences(store, writesAllowed = {
+            writeEpoch.permits(epoch, uid, currentOwner(), writesBlocked())
         }) { prefs ->
             prefs[nameKey(uid)] = profile.name
             prefs[bioKey(uid)] = profile.bio

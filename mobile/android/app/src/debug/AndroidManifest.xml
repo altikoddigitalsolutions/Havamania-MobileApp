@@ -6,6 +6,8 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="28"
         tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name=".ProfileSettingsIntegrationActivity" android:exported="false" />
+        <activity android:name=".ProfileSettingsTestActivity" android:exported="false" />
         <activity android:name=".TravelEditorTestActivity" android:exported="false" />
         <!-- Shell-only entry point for process-death QA; absent from release. -->
         <activity android:name=".TravelEditorProcessDeathActivity"

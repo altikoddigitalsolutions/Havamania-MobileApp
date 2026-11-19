@@ -22,9 +22,19 @@ sealed class ProfileState {
     data class Error(val message: String) : ProfileState()
 }
 
-class ProfileViewModel(application: Application) : AndroidViewModel(application) {
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
+class ProfileViewModel internal constructor(
+    application: Application,
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore,
+    private val userProfileRepository: UserProfileRepository,
+    private val writeGate: (() -> Boolean)? = null,
+    private val snapshotWriter: (suspend (UserProfile) -> Unit)? = null,
+    private val storageProvider: () -> FirebaseStorage = { FirebaseStorage.getInstance() }
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, FirebaseAuth.getInstance(),
+        FirebaseFirestore.getInstance(), UserProfileRepository.getInstance())
+
+
     private val _activeUid = MutableStateFlow(auth.currentUser?.uid)
     internal val activeUid: StateFlow<String?> = _activeUid
     private val accountTasks = AccountTaskScope(viewModelScope) { auth.currentUser?.uid ?: "legacy" }
@@ -39,7 +49,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val aboutMeRunner = AssistantTaskRunner(viewModelScope, { auth.currentUser?.uid ?: "legacy" }, {}, 20_000)
     internal fun resetAboutMeSave() { aboutMeRunner.reset(); _aboutMeSaveState.value = ProfileSaveState.Idle }
 
-    private val storage = FirebaseStorage.getInstance()
+    private val storage get() = storageProvider()
 
     private val _profileState = MutableStateFlow<ProfileState>(ProfileState.Idle)
     val profileState: StateFlow<ProfileState> = _profileState
@@ -56,7 +66,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         { _avatarVersion.value = System.currentTimeMillis() },
         { _profileState.value = ProfileState.Error(it) })
 
-    private val userProfileRepository = UserProfileRepository.getInstance()
+
     private var profileJob: kotlinx.coroutines.Job? = null
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -94,6 +104,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun profileWritesAllowed(): Boolean {
+        writeGate?.let { return it() }
         val state = AccountDeletionManager.getInstance(getApplication()).state.value
         return !state.pending && !state.busy
     }
@@ -111,7 +122,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 when (state) {
                     is ProfileReadState.Ready -> {
                         _profileState.value = ProfileState.Success(state.profile)
-                        ThemeManager.saveProfileSnapshot(getApplication(), state.profile)
+                        if (snapshotWriter != null) snapshotWriter.invoke(state.profile)
+                        else ThemeManager.saveProfileSnapshot(getApplication(), state.profile)
                     }
                     is ProfileReadState.Missing -> {
                         _profileState.value = ProfileState.Loading
