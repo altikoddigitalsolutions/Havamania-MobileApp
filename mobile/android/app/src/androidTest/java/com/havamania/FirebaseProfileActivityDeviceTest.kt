@@ -106,11 +106,51 @@ class FirebaseProfileActivityDeviceTest {
                 db.collection("users").document(ownerA).update("name", "Birleşik A güncel").await()
                 awaitValue("A updated snapshot", themeVm.userName) { it == "Birleşik A güncel" }
                 assertEquals("Birleşik A güncel", ThemeManager.getUserName(application, ownerA).first())
+                stage = "offline Activity recreation"
+                db.disableNetwork().await()
+                scenario.recreate()
+                compose.onNodeWithText("Yerel ad: Birleşik A güncel").assertIsDisplayed()
+                compose.onNodeWithText("Havamania Premium Üyesi").assertIsDisplayed()
+                scenario.onActivity { assertSame(profileVm, it.profileModel); assertSame(themeVm, it.themeModel) }
+                stage = "restore connection and malformed profile"
+                db.enableNetwork().await()
+                db.collection("users").document(ownerA).update("name", listOf("invalid-test-name")).await()
+                awaitValue("Malformed profile error", profileVm.profileState) { it is ProfileState.Error }
+                awaitValue("Malformed profile removes premium display", themeVm.isPremium) { !it }
+                compose.onNodeWithText("Birleşik A güncel").assertDoesNotExist()
+                stage = "recover valid profile"
+                db.collection("users").document(ownerA).update("name", "Birleşik A düzeldi").await()
+                awaitValue("Recovered profile snapshot", themeVm.userName) { it == "Birleşik A düzeldi" }
+                awaitValue("Recovered profile state", profileVm.profileState) {
+                    it is ProfileState.Success && it.profile.name == "Birleşik A düzeldi"
+                }
+                awaitValue("Recovered premium confirmation", themeVm.isPremium) { it }
+                compose.onNodeWithText("Yerel ad: Birleşik A düzeldi").assertIsDisplayed()
                 stage = "switch account"
                 auth.signOut()
                 awaitValue("Logout state", profileVm.profileState) { it is ProfileState.Idle }
+                db.disableNetwork().await()
                 val ownerB = auth.signInAnonymously().await().user!!.uid
                 owners.add(ownerB)
+                stage = "uncached offline B profile UI"
+                awaitValue("B owner", profileVm.activeUid) { it == ownerB }
+                awaitValue("Uncached B remains loading", profileVm.profileState) { it is ProfileState.Loading }
+                compose.onNodeWithText("Profil yükleniyor…").assertIsDisplayed()
+                compose.onNodeWithText("Birleşik A düzeldi").assertDoesNotExist()
+                compose.mainClock.advanceTimeBy(8_100)
+                compose.onNodeWithText("Profil henüz yüklenemedi").assertIsDisplayed()
+                compose.onNodeWithText("Tekrar dene").performScrollTo().performClick()
+                compose.onNodeWithText("Profil yükleniyor…").assertIsDisplayed()
+                stage = "recreate uncached offline loading"
+                scenario.recreate()
+                compose.onNodeWithText("Profil yükleniyor…").assertIsDisplayed()
+                compose.onNodeWithText("Birleşik A düzeldi").assertDoesNotExist()
+                compose.onNodeWithText("Geri dön").performScrollTo().performClick()
+                scenario.onActivity { assertEquals(1, it.backRequests) }
+                assertNull(repository.profile.value)
+                withTimeout(2_000) { db.waitForPendingWrites().await() }
+                stage = "reconnect B profile"
+                db.enableNetwork().await()
                 ThemeManager.saveDefaultCity(application, ownerB,
                     GeocodingResultDto(750269, "Bursa", 40.2, 29.1, countryCode = "TR"))
                 db.collection("users").document(ownerB).set(mapOf("uid" to ownerB, "name" to "Birleşik B"),
@@ -123,9 +163,9 @@ class FirebaseProfileActivityDeviceTest {
                 compose.onNodeWithText("Yerel ad: Birleşik B").assertIsDisplayed()
                 compose.onNodeWithText("Yerel şehir: Bursa").assertIsDisplayed()
                 compose.onNodeWithText("Birleşik B").assertExists()
-                compose.onNodeWithText("Birleşik A güncel").assertDoesNotExist()
+                compose.onNodeWithText("Birleşik A düzeldi").assertDoesNotExist()
                 compose.onNodeWithText("Havamania Premium Üyesi").assertDoesNotExist()
-                assertEquals("Birleşik A güncel", ThemeManager.getUserName(application, ownerA).first())
+                assertEquals("Birleşik A düzeldi", ThemeManager.getUserName(application, ownerA).first())
             } finally { withContext(NonCancellable) { withTimeout(10_000) {
                 stage = "close Activity (previous: $stage)"
                 scenario?.close()

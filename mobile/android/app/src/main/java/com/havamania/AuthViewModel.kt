@@ -9,12 +9,13 @@ import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+
 import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
+    object PasswordResetSent : AuthState()
     data class Authenticated(val user: FirebaseUser) : AuthState()
     data class Error(val message: String) : AuthState()
 }
@@ -27,13 +28,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val authState: StateFlow<AuthState> = _authState
 
     val currentUser: FirebaseUser? get() = auth.currentUser
+    private val operations = AuthOperationRunner(viewModelScope,
+        onStart = { _authState.value = AuthState.Loading },
+        onFailure = { _authState.value = AuthState.Error(mapFirebaseError(it)) },
+        onCancelled = { _authState.value = AuthState.Idle })
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val user = firebaseAuth.currentUser
         if (user != null) {
             _authState.value = AuthState.Authenticated(user)
         } else {
-            if (_authState.value !is AuthState.Loading && _authState.value !is AuthState.Error) {
+            if (_authState.value !is AuthState.Loading && _authState.value !is AuthState.Error && _authState.value !is AuthState.PasswordResetSent) {
                 _authState.value = AuthState.Idle
             }
         }
@@ -44,6 +49,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        operations.close()
         super.onCleared()
         auth.removeAuthStateListener(authListener)
     }
@@ -93,58 +99,37 @@ if (BuildConfig.DEBUG) {
     }
 
     fun signIn(email: String, password: String) {
-        viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            try {
-                auth.signInWithEmailAndPassword(email, password).await()
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(mapFirebaseError(e))
-            }
+        operations.start(onSuccess = { publishCurrentUser() }) {
+            auth.signInWithEmailAndPassword(email.trim(), password).await()
         }
     }
 
     fun signUp(name: String, email: String, password: String) {
-        viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            try {
-                val result = auth.createUserWithEmailAndPassword(email, password).await()
-                val user = result.user
-
-                user?.updateProfile(userProfileChangeRequest {
-                    displayName = name
-                })?.await()
-
-                // Create user document in Firestore
-                user?.let {
-                    val userData = hashMapOf(
-                        "uid" to it.uid,
-                        "name" to name,
-                        "email" to email,
-                        "createdAt" to System.currentTimeMillis()
-                    )
-                    db.collection("users").document(it.uid).set(userData).await()
-                }
-
-                // Sign in is automatic after createUserWithEmailAndPassword success
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(mapFirebaseError(e))
-            }
+        operations.start(onSuccess = { publishCurrentUser() }) {
+            val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
+            val user = checkNotNull(result.user) { "Missing created user" }
+            user.updateProfile(userProfileChangeRequest { displayName = name.trim() }).await()
+            val userData = hashMapOf(
+                "uid" to user.uid,
+                "name" to name.trim(),
+                "email" to email.trim(),
+                "createdAt" to System.currentTimeMillis()
+            )
+            db.collection("users").document(user.uid).set(userData).await()
         }
     }
 
     fun resetPassword(email: String) {
-        viewModelScope.launch {
-            _authState.value = AuthState.Loading
-            try {
-                auth.sendPasswordResetEmail(email).await()
-                _authState.value = AuthState.Idle
-            } catch (e: Exception) {
-                _authState.value = AuthState.Error(mapFirebaseError(e))
-            }
+        operations.start(onSuccess = { _authState.value = AuthState.PasswordResetSent }) {
+            auth.sendPasswordResetEmail(email.trim()).await()
         }
     }
 
+    private fun publishCurrentUser() {
+        _authState.value = auth.currentUser?.let { AuthState.Authenticated(it) } ?: AuthState.Idle
+    }
     fun signOut() {
+        operations.cancel()
         auth.signOut()
         _authState.value = AuthState.Idle
     }
@@ -154,6 +139,7 @@ if (BuildConfig.DEBUG) {
     }
 
     fun clearError() {
+        if (operations.busy) return
         _authState.value = AuthState.Idle
     }
 }

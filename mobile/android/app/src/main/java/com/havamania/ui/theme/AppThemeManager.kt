@@ -453,31 +453,5 @@ object ThemeManager {
         }
     }
 
-    fun getColorScheme(theme: AppTheme): ColorScheme {
-        return when (theme) {
-            AppTheme.DARK, AppTheme.AUTUMN, AppTheme.WINTER -> darkColorScheme(
-                primary = Color(0xFF00C2FF),
-                secondary = Color(0xFF38BDF8),
-                background = Color(0xFF0B0F14),
-                surface = Color(0xFF121821),
-                surfaceVariant = Color(0xFF1A2230),
-                onBackground = Color(0xFFEAF2FF),
-                onSurface = Color(0xFFEAF2FF),
-                onSurfaceVariant = Color(0xFFA3B3C9),
-                outline = Color(0xFF30363D)
-            )
-            AppTheme.LIGHT, AppTheme.SPRING, AppTheme.SUMMER -> lightColorScheme(
-                primary = Color(0xFF0077FF),
-                secondary = Color(0xFF38BDF8),
-                background = Color(0xFFF5F7FA),
-                surface = Color(0xFFFFFFFF),
-                surfaceVariant = Color(0xFFEEF2F7),
-                onBackground = Color(0xFF1A1F2B),
-                onSurface = Color(0xFF1A1F2B),
-                onSurfaceVariant = Color(0xFF6B7280),
-                outline = Color(0xFFE2E8F0)
-            )
-            AppTheme.AUTO -> getColorScheme(getSeasonalTheme(java.time.LocalDate.now().monthValue))
-        }
-    }
+    fun getColorScheme(theme: AppTheme): ColorScheme = materialColorsFor(ThemeFactory.createColors(theme))
 }

@@ -60,7 +60,7 @@ try {
             $extraArgs = @()
             if ($ProfileContract) {
                 if ($env:CITY_PROFILE_TEST_NONCE -notmatch '^[0-9a-f-]{36}$') { throw 'Missing local profile fixture nonce' }
-                $testClass += '#serverPremiumMirrorUpdatesAndRevokesWithoutProfileOverwrite,com.havamania.FirebaseCityContractDeviceTest#profileAccountSwitchRejectsQueuedOldOwnerEvents,com.havamania.FirebaseCityContractDeviceTest#productionThemeViewModelIsolatesRealPreferencesAndPremiumAcrossOwners,com.havamania.FirebaseProfileActivityDeviceTest'
+                $testClass += '#serverPremiumMirrorUpdatesAndRevokesWithoutProfileOverwrite,com.havamania.FirebaseCityContractDeviceTest#profileAccountSwitchRejectsQueuedOldOwnerEvents,com.havamania.FirebaseCityContractDeviceTest#productionThemeViewModelIsolatesRealPreferencesAndPremiumAcrossOwners,com.havamania.FirebaseCityContractDeviceTest#diskCachedProfileReopensOfflineAndCannotAuthorizeAnotherOwner,com.havamania.FirebaseProfileActivityDeviceTest'
                 $extraArgs += '-Pandroid.testInstrumentationRunnerArguments.cityProfileContract=true'
                 $extraArgs += "-Pandroid.testInstrumentationRunnerArguments.cityProfileNonce=$env:CITY_PROFILE_TEST_NONCE"
             }

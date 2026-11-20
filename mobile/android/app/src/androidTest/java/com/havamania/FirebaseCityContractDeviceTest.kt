@@ -391,6 +391,76 @@ class FirebaseCityContractDeviceTest {
             } finally { scope.coroutineContext[Job]!!.cancelAndJoin(); file.delete() }
         }
     }
+    @Test fun diskCachedProfileReopensOfflineAndCannotAuthorizeAnotherOwner() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("cityProfileContract") == "true")
+        withTimeout(45_000) {
+            val nonce = InstrumentationRegistry.getArguments().getString("cityProfileNonce")!!
+            UUID.fromString(nonce)
+            db.firestoreSettings = FirebaseFirestoreSettings.Builder(db.firestoreSettings).setPersistenceEnabled(true).build()
+            val ref = db.collection("users").document(uid)
+            ref.set(UserProfile(uid = uid, name = "Disk offline owner", defaultCity = "Ankara")).await()
+            seedProfileMirror(uid, "canonical_true", nonce)
+            val firstRepository = UserProfileRepository { db }
+            firstRepository.startObserving(uid)
+            firstRepository.profile.first { it?.isPremium == true }
+            firstRepository.stopObserving()
+            // Same named app/options and same on-disk Firestore cache, new SDK client.
+            val appName = app!!.name
+            val options = app!!.options
+            db.terminate().await()
+            app!!.delete()
+            val reopened = FirebaseApp.initializeApp(InstrumentationRegistry.getInstrumentation().targetContext, options, appName)
+            app = reopened
+            auth = FirebaseAuth.getInstance(reopened)
+            auth.useEmulator("127.0.0.1", 9096)
+            assertEquals(uid, auth.currentUser?.uid)
+            db = FirebaseFirestore.getInstance(reopened)
+            db.firestoreSettings = FirebaseFirestoreSettings.Builder().setPersistenceEnabled(true).build()
+            db.useEmulator("127.0.0.1", 8086)
+            db.disableNetwork().await()
+            val repository = UserProfileRepository { db }
+            try {
+                val cached = db.collection("users").document(uid).get(com.google.firebase.firestore.Source.CACHE).await()
+                assertEquals("Disk offline owner", cached.getString("name"))
+                assertTrue(cached.metadata.isFromCache)
+                repository.startObserving(uid)
+                val offline = repository.profile.first { it?.name == "Disk offline owner" }!!
+                assertEquals(uid, offline.uid)
+                assertFalse(offline.isPremium) // Disk cache is not a new server membership confirmation.
+                assertNull(repository.serverDefaultCity.value)
+                seedProfileMirror(uid, "malformed", nonce)
+                db.enableNetwork().await()
+                repository.readState.first { it is ProfileReadState.Failed }
+                assertNull(repository.profile.value)
+                seedProfileMirror(uid, "agreed_false", nonce)
+                repository.profile.first { it?.name == "Disk offline owner" && !it.isPremium }
+                repository.serverDefaultCity.first { it?.uid == uid }
+                db.disableNetwork().await()
+                auth.signOut()
+                val otherOwner = auth.signInAnonymously().await().user!!.uid
+                assertNotEquals(uid, otherOwner)
+                repository.startObserving(otherOwner)
+                try {
+                    val missingCache = db.collection("users").document(otherOwner)
+                        .get(com.google.firebase.firestore.Source.CACHE).await()
+                    assertFalse(missingCache.exists())
+                } catch (error: FirebaseFirestoreException) {
+                    assertEquals(FirebaseFirestoreException.Code.UNAVAILABLE, error.code)
+                }
+                assertNull(repository.profile.value)
+                assertNull(repository.serverDefaultCity.value)
+                assertEquals(ProfileReadState.Loading(otherOwner), repository.readState.value)
+                db.enableNetwork().await()
+                repository.readState.first { it == ProfileReadState.Missing(otherOwner) }
+                assertNull(repository.profile.value)
+            } finally {
+                repository.stopObserving()
+                withContext(NonCancellable) {
+                    withTimeout(10_000) { db.enableNetwork().await(); db.terminate().await(); db.clearPersistence().await() }
+                }
+            }
+        }
+    }
     @Test fun productionProfileViewModelSwitchesOwnerAndStopsAfterStoreClear() = runBlocking {
         withTimeout(45_000) {
             val application = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application

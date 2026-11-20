@@ -66,6 +66,8 @@ fun ProfileScreen(
     val emptyHistoryOwner by aiHistoryViewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
 
     val owner by profileViewModel.activeUid.collectAsStateWithLifecycle()
+    var profileRetryAttempt by remember(owner) { mutableStateOf(0) }
+    val retryProfile = { profileRetryAttempt++; profileViewModel.refresh() }
     var showComingSoonDialog by remember(owner) { mutableStateOf(false) }
     var comingSoonTitle by remember(owner) { mutableStateOf("") }
 
@@ -111,7 +113,8 @@ fun ProfileScreen(
         }
     ) { paddingValues ->
         if (profile == null) {
-            HavamaniaLoading(modifier = Modifier.padding(paddingValues), text = "Profil yükleniyor…")
+            ProfileUnavailableContent(owner, profileState, profileRetryAttempt, retryProfile, onBack,
+                modifier = Modifier.padding(paddingValues))
         } else {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
@@ -214,7 +217,7 @@ fun ProfileScreen(
             )
         }
 
-        ProfileLoadErrorDialog((profileState as? ProfileState.Error)?.message, owner, profileViewModel::refresh, profileViewModel::dismissProfileError)
+        ProfileLoadErrorDialog((profileState as? ProfileState.Error)?.message, owner, retryProfile, profileViewModel::dismissProfileError)
     }
 }
 

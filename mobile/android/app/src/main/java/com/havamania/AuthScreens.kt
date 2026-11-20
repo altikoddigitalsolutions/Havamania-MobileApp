@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.havamania
 
 import android.widget.Toast
@@ -9,12 +11,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -65,10 +75,11 @@ fun AuthHeader(
         Text(
             text = stringResource(R.string.app_name),
             style = HavamaniaTheme.typography.screenTitle.copy(
-                fontSize = 32.sp,
+                fontSize = if (LocalWindowSize.current.isCompact) 24.sp else 32.sp,
                 letterSpacing = 1.sp
             ),
-            color = themeColors.textPrimary
+            color = themeColors.textPrimary,
+            textAlign = TextAlign.Center
         )
 
         if (showSlogan) {
@@ -115,6 +126,7 @@ fun AuthWelcomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(themeStyles.pagePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -147,15 +159,13 @@ fun AuthWelcomeScreen(
             Spacer(modifier = Modifier.height(themeStyles.spacingXXL))
 
             // Legal Links
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth().minimumInteractiveComponentSize(),
                 horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 LegalLink("KVKK") { openLegal(LegalUrls.KVKK) }
-                LegalDivider()
                 LegalLink("Gizlilik Politikası") { openLegal(LegalUrls.PRIVACY_POLICY) }
-                LegalDivider()
                 LegalLink("Kullanım Koşulları") { openLegal(LegalUrls.TERMS_OF_USE) }
             }
 
@@ -171,9 +181,24 @@ fun LoginScreen(
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit
 ) {
+    val state by viewModel.authState.collectAsStateWithLifecycle()
+    LoginContent(state, viewModel::signIn, viewModel::clearError, onBack, onNavigateToRegister, onNavigateToForgotPassword)
+}
+
+@Composable
+internal fun LoginContent(
+    authState: AuthState, onSignIn: (String, String) -> Unit, onClearError: () -> Unit,
+    onBack: () -> Unit, onNavigateToRegister: () -> Unit, onNavigateToForgotPassword: () -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val passwordFocus = remember { FocusRequester() }
+    val busy = authState is AuthState.Loading
+    val submit = {
+        focusManager.clearFocus()
+        if (!busy && email.isNotBlank() && password.isNotBlank()) onSignIn(email.trim(), password)
+    }
     val themeColors = HavamaniaTheme.colors
 
     HavamaniaScreen(
@@ -185,6 +210,8 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -202,7 +229,7 @@ fun LoginScreen(
                 if (authState is AuthState.Error) {
                     HavamaniaErrorCard(
                         message = (authState as AuthState.Error).message,
-                        onDismiss = { viewModel.clearError() }
+                        onDismiss = { onClearError() }
                     )
                 }
 
@@ -210,10 +237,12 @@ fun LoginScreen(
                     HavamaniaAuthField(
                         value = email,
                         onValueChange = { email = it },
-                        placeholder = "Email",
+                        placeholder = "E-posta",
                         leadingIcon = Icons.Rounded.Email,
                         keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
+                        enabled = !busy,
+                        keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() })
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -222,7 +251,9 @@ fun LoginScreen(
                         value = password,
                         onValueChange = { password = it },
                         placeholder = "Şifre",
-                        imeAction = ImeAction.Done
+                        imeAction = ImeAction.Done,
+                        enabled = !busy, modifier = Modifier.focusRequester(passwordFocus),
+                        keyboardActions = KeyboardActions(onDone = { submit() })
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -235,29 +266,29 @@ fun LoginScreen(
                                 textDecoration = TextDecoration.Underline
                             ),
                             color = themeColors.accent,
-                            modifier = Modifier.clickable { onNavigateToForgotPassword() }
+                            modifier = Modifier.minimumInteractiveComponentSize().clickable(enabled = authState !is AuthState.Loading) { onNavigateToForgotPassword() }
                         )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
                     HavamaniaPrimaryButton(
-                        text = stringResource(R.string.login_title).uppercase(),
-                        onClick = { viewModel.signIn(email, password) },
+                        text = stringResource(R.string.login_title).uppercase(java.util.Locale.forLanguageTag("tr")),
+                        onClick = submit,
                         isLoading = authState is AuthState.Loading,
-                        enabled = email.isNotEmpty() && password.isNotEmpty()
+                        enabled = !busy && email.isNotBlank() && password.isNotBlank()
                     )
                 }
 
                 Spacer(modifier = Modifier.height(40.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.no_account_text), color = themeColors.textSecondary)
                     Text(
                         text = " " + stringResource(R.string.register_title),
                         color = themeColors.accent,
                         fontWeight = FontWeight.Black,
-                        modifier = Modifier.clickable { onNavigateToRegister() }
+                        modifier = Modifier.minimumInteractiveComponentSize().clickable(enabled = authState !is AuthState.Loading) { onNavigateToRegister() }
                     )
                 }
 
@@ -272,6 +303,15 @@ fun RegisterScreen(
     viewModel: AuthViewModel,
     onBack: () -> Unit,
     onNavigateToLogin: () -> Unit
+) {
+    val state by viewModel.authState.collectAsStateWithLifecycle()
+    RegisterContent(state, viewModel::signUp, viewModel::clearError, onBack, onNavigateToLogin)
+}
+
+@Composable
+internal fun RegisterContent(
+    authState: AuthState, onSignUp: (String, String, String) -> Unit, onClearError: () -> Unit,
+    onBack: () -> Unit, onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -290,7 +330,17 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var termsAccepted by remember { mutableStateOf(false) }
 
-    val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val emailFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val confirmationFocus = remember { FocusRequester() }
+    val busy = authState is AuthState.Loading
+    val passwordsMatch = password == confirmPassword && password.isNotEmpty()
+    val canSubmit = !busy && name.isNotBlank() && email.isNotBlank() && passwordsMatch && termsAccepted
+    val submit = {
+        focusManager.clearFocus()
+        if (canSubmit) onSignUp(name.trim(), email.trim(), password)
+    }
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
@@ -303,6 +353,8 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -320,7 +372,7 @@ fun RegisterScreen(
                 if (authState is AuthState.Error) {
                     HavamaniaErrorCard(
                         message = (authState as AuthState.Error).message,
-                        onDismiss = { viewModel.clearError() }
+                        onDismiss = { onClearError() }
                     )
                 }
 
@@ -330,7 +382,8 @@ fun RegisterScreen(
                         onValueChange = { name = it },
                         placeholder = "Ad Soyad",
                         leadingIcon = Icons.Rounded.Person,
-                        capitalization = KeyboardCapitalization.Words
+                        capitalization = KeyboardCapitalization.Words, enabled = !busy,
+                        keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() })
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -338,9 +391,11 @@ fun RegisterScreen(
                     HavamaniaAuthField(
                         value = email,
                         onValueChange = { email = it },
-                        placeholder = "Email",
+                        placeholder = "E-posta",
                         leadingIcon = Icons.Rounded.Email,
-                        keyboardType = KeyboardType.Email
+                        keyboardType = KeyboardType.Email, enabled = !busy,
+                        modifier = Modifier.focusRequester(emailFocus),
+                        keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() })
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -348,7 +403,8 @@ fun RegisterScreen(
                     HavamaniaAuthPasswordField(
                         value = password,
                         onValueChange = { password = it },
-                        placeholder = "Şifre"
+                        placeholder = "Şifre", enabled = !busy, modifier = Modifier.focusRequester(passwordFocus),
+                        keyboardActions = KeyboardActions(onNext = { confirmationFocus.requestFocus() })
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -356,7 +412,9 @@ fun RegisterScreen(
                     HavamaniaAuthPasswordField(
                         value = confirmPassword,
                         onValueChange = { confirmPassword = it },
-                        placeholder = "Şifre Tekrar"
+                        placeholder = "Şifre Tekrar", imeAction = ImeAction.Done, enabled = !busy,
+                        modifier = Modifier.focusRequester(confirmationFocus),
+                        keyboardActions = KeyboardActions(onDone = { submit() })
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -364,16 +422,14 @@ fun RegisterScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                onClickLabel = stringResource(R.string.legal_consent_part1),
-                                onClick = { termsAccepted = !termsAccepted }
-                            )
+                            .toggleable(value = termsAccepted, enabled = !busy, role = Role.Checkbox,
+                                onValueChange = { termsAccepted = it })
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
                             checked = termsAccepted,
-                            onCheckedChange = { termsAccepted = it },
+                            onCheckedChange = null, enabled = !busy,
                             colors = CheckboxDefaults.colors(checkedColor = themeColors.accent)
                         )
                         Column {
@@ -399,13 +455,12 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    val passwordsMatch = password == confirmPassword && password.isNotEmpty()
 
                     HavamaniaPrimaryButton(
-                        text = stringResource(R.string.register_title).uppercase(),
-                        onClick = { viewModel.signUp(name, email, password) },
+                        text = stringResource(R.string.register_title).uppercase(java.util.Locale.forLanguageTag("tr")),
+                        onClick = submit,
                         isLoading = authState is AuthState.Loading,
-                        enabled = name.isNotEmpty() && email.isNotEmpty() && passwordsMatch && termsAccepted
+                        enabled = canSubmit
                     )
 
                     if (!passwordsMatch && confirmPassword.isNotEmpty()) {
@@ -420,13 +475,13 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(40.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.has_account_text), color = themeColors.textSecondary)
                     Text(
                         text = " " + stringResource(R.string.login_title),
                         color = themeColors.accent,
                         fontWeight = FontWeight.Black,
-                        modifier = Modifier.clickable { onNavigateToLogin() }
+                        modifier = Modifier.minimumInteractiveComponentSize().clickable(enabled = authState !is AuthState.Loading) { onNavigateToLogin() }
                     )
                 }
 
@@ -441,10 +496,28 @@ fun ForgotPasswordScreen(
     viewModel: AuthViewModel,
     onBack: () -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    ForgotPasswordContent(authState, viewModel::resetPassword, viewModel::clearError) {
+        viewModel.clearError()
+        onBack()
+    }
+}
+
+@Composable
+internal fun ForgotPasswordContent(
+    authState: AuthState, onResetPassword: (String) -> Unit, onClearError: () -> Unit, onBack: () -> Unit
+) {
+    var email by rememberSaveable { mutableStateOf("") }
     val themeColors = HavamaniaTheme.colors
-    var successSent by remember { mutableStateOf(false) }
+    val busy = authState is AuthState.Loading
+    val successSent = authState is AuthState.PasswordResetSent
+    val focusManager = LocalFocusManager.current
+    val submit = {
+        if (!busy && email.isNotBlank()) {
+            focusManager.clearFocus()
+            onResetPassword(email.trim())
+        }
+    }
 
     HavamaniaScreen(
         topBar = {
@@ -455,6 +528,8 @@ fun ForgotPasswordScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -472,14 +547,14 @@ fun ForgotPasswordScreen(
                 if (authState is AuthState.Error) {
                     HavamaniaErrorCard(
                         message = (authState as AuthState.Error).message,
-                        onDismiss = { viewModel.clearError() }
+                        onDismiss = onClearError
                     )
                 }
 
                 HavamaniaGlassCard {
                     if (!successSent) {
                         Text(
-                            text = "Şifrenizi mi Unuttunuz?",
+                            text = "Şifrenizi mi unuttunuz?",
                             style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Bold),
                             color = themeColors.textPrimary
                         )
@@ -493,21 +568,20 @@ fun ForgotPasswordScreen(
                         HavamaniaAuthField(
                             value = email,
                             onValueChange = { email = it },
-                            placeholder = "Email",
+                            placeholder = "E-posta",
                             leadingIcon = Icons.Rounded.Email,
-                            keyboardType = KeyboardType.Email
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done, enabled = !busy,
+                            keyboardActions = KeyboardActions(onDone = { submit() })
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
 
                         HavamaniaPrimaryButton(
                             text = stringResource(R.string.send_link_btn),
-                            onClick = {
-                                viewModel.resetPassword(email)
-                                successSent = true
-                            },
+                            onClick = submit,
                             isLoading = authState is AuthState.Loading,
-                            enabled = email.isNotEmpty()
+                            enabled = !busy && email.isNotBlank()
                         )
                     } else {
                         Column(
@@ -557,7 +631,9 @@ fun HavamaniaAuthField(
     leadingIcon: ImageVector,
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Next,
-    capitalization: KeyboardCapitalization = KeyboardCapitalization.None
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
+    enabled: Boolean = true, keyboardActions: KeyboardActions = KeyboardActions.Default,
+    modifier: Modifier = Modifier
 ) {
     val colors = HavamaniaTheme.colors
     var isFocused by remember { mutableStateOf(false) }
@@ -568,8 +644,9 @@ fun HavamaniaAuthField(
     TextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
             .clip(RoundedCornerShape(20.dp))
             .border(
                 1.dp,
@@ -578,6 +655,8 @@ fun HavamaniaAuthField(
             ),
         label = { Text(placeholder, color = colors.textSecondary) },
         leadingIcon = { Icon(leadingIcon, null, tint = if (isFocused) colors.accent else colors.textMuted, modifier = Modifier.size(20.dp)) },
+        enabled = enabled,
+        keyboardActions = keyboardActions,
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,
             imeAction = imeAction,
@@ -601,7 +680,9 @@ fun HavamaniaAuthPasswordField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
-    imeAction: ImeAction = ImeAction.Next
+    imeAction: ImeAction = ImeAction.Next,
+    enabled: Boolean = true, keyboardActions: KeyboardActions = KeyboardActions.Default,
+    modifier: Modifier = Modifier
 ) {
     val colors = HavamaniaTheme.colors
     var passwordVisible by remember { mutableStateOf(false) }
@@ -613,8 +694,9 @@ fun HavamaniaAuthPasswordField(
     TextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
             .clip(RoundedCornerShape(20.dp))
             .border(
                 1.dp,
@@ -625,11 +707,13 @@ fun HavamaniaAuthPasswordField(
         leadingIcon = { Icon(Icons.Rounded.Lock, null, tint = if (isFocused) colors.accent else colors.textMuted, modifier = Modifier.size(20.dp)) },
         trailingIcon = {
             val image = if (passwordVisible) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff
-            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+            IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = enabled) {
                 Icon(image, if (passwordVisible) "Şifreyi gizle" else "Şifreyi göster", tint = colors.textMuted.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
             }
         },
         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        enabled = enabled,
+        keyboardActions = keyboardActions,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = imeAction),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = colors.surfaceGlass.copy(alpha = containerAlpha),
@@ -659,15 +743,4 @@ fun LegalLink(text: String, onClick: () -> Unit = {}) {
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
         )
     }
-}
-
-@Composable
-fun LegalDivider() {
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .size(3.dp)
-            .clip(CircleShape)
-            .background(HavamaniaTheme.colors.textMuted.copy(alpha = 0.3f))
-    )
 }

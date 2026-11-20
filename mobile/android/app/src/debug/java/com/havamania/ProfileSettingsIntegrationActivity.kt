@@ -19,6 +19,8 @@ internal object ProfileSettingsIntegrationSession {
 }
 
 class ProfileSettingsIntegrationActivity : ComponentActivity() {
+    var backRequests = 0
+        private set
     lateinit var profileModel: ProfileViewModel
         private set
     lateinit var themeModel: ThemeViewModel
@@ -41,6 +43,12 @@ class ProfileSettingsIntegrationActivity : ComponentActivity() {
                         val premium by themeModel.isPremium.collectAsStateWithLifecycle()
                         val profile = (state as? ProfileState.Success)?.profile?.takeIf { it.uid == owner }
                         val dialogs = rememberSettingsDialogs(owner)
+                        var retryAttempt by remember(owner) { mutableStateOf(0) }
+                        if (profile == null) {
+                            ProfileUnavailableContent(owner, state, retryAttempt,
+                                onRetry = { retryAttempt++; profileModel.refresh() },
+                                onBack = { backRequests++ })
+                        } else {
                         Column(Modifier.verticalScroll(rememberScrollState())) {
                             PremiumSettingsCard(premium) {}
                             Text("Yerel ad: $name")
@@ -49,6 +57,7 @@ class ProfileSettingsIntegrationActivity : ComponentActivity() {
                             if (profile != null) PremiumProfileHeader(profile.name, profile.bio, null,
                                 interests = emptySet(), aboutMe = profile.aboutMe, stats = emptyMap(),
                                 onAvatarClick = {}, onStatClick = {})
+                        }
                         }
                         if (dialogs.delete.value) AccountDeleteDialog(
                             onDismiss = { dialogs.delete.value = false },

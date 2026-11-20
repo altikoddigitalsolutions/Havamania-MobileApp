@@ -254,16 +254,13 @@ fun HavamaniaPrimaryButton(
         label = "glow"
     )
 
-    val backgroundBrush = if (enabled && !isLoading) {
-        if (colors.buttonGradient != null) {
-            Brush.linearGradient(colors.buttonGradient)
-        } else {
-            Brush.linearGradient(listOf(colors.accent, colors.accent))
-        }
-    } else {
-        Brush.linearGradient(listOf(colors.surface.copy(alpha = 0.3f), colors.surface.copy(alpha = 0.3f)))
+    val gradientStops = colors.buttonGradient?.takeIf { it.isNotEmpty() } ?: listOf(colors.accent, colors.accent)
+    val palette = remember(gradientStops, colors.onAccent) { themeButtonPalette(gradientStops, colors.onAccent) }
+    val foreground = if (enabled) palette.content else colors.textSecondary
+    val backgroundBrush = remember(enabled, isLoading, palette.stops, colors.surface) {
+        if (enabled && !isLoading) Brush.linearGradient(palette.stops)
+        else Brush.linearGradient(listOf(colors.surface.copy(alpha = 0.3f), colors.surface.copy(alpha = 0.3f)))
     }
-
     Surface(
         onClick = if (!isLoading) onClick else ({}),
         enabled = enabled && !isLoading,
@@ -294,7 +291,7 @@ fun HavamaniaPrimaryButton(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier)
                 .heightIn(min = maxOf(height, 48.dp))
                 .background(backgroundBrush)
                 .padding(vertical = 12.dp),
@@ -303,7 +300,7 @@ fun HavamaniaPrimaryButton(
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = colors.onAccent,
+                    color = colors.textPrimary,
                     strokeWidth = 2.dp
                 )
             } else {
@@ -313,7 +310,7 @@ fun HavamaniaPrimaryButton(
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     if (icon != null) {
-                        Icon(icon, null, tint = colors.onAccent, modifier = Modifier.size(18.dp))
+                        Icon(icon, null, tint = foreground, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(
@@ -322,7 +319,7 @@ fun HavamaniaPrimaryButton(
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp,
                             letterSpacing = 0.5.sp,
-                            color = colors.onAccent
+                            color = foreground
                         ),
                         textAlign = TextAlign.Center
                     )
@@ -846,7 +843,11 @@ fun HavamaniaSecondaryButton(
         enabled = enabled && !isLoading,
         modifier = modifier
             .scale(scale)
-            .height(height)
+            .semantics {
+                role = Role.Button
+                if (isLoading) { contentDescription = text; stateDescription = "İşlem sürüyor" }
+            }
+            .heightIn(min = maxOf(height, 48.dp))
             .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier),
         shape = RoundedCornerShape(themeStyles.radiusSmall),
         color = colors.surface.copy(alpha = 0.1f),
@@ -854,7 +855,10 @@ fun HavamaniaSecondaryButton(
         interactionSource = interactionSource
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier)
+                .heightIn(min = maxOf(height, 48.dp))
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
@@ -870,14 +874,13 @@ fun HavamaniaSecondaryButton(
                     modifier = Modifier.padding(horizontal = 16.dp)
                 ) {
                     if (icon != null) {
-                        Icon(icon, null, tint = colors.textPrimary, modifier = Modifier.size(18.dp))
+                        Icon(icon, null, tint = if (enabled) colors.textPrimary else colors.textSecondary, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                     }
                     Text(
                         text = text,
-                        style = HavamaniaTheme.typography.button.copy(color = colors.textPrimary),
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip
+                        style = HavamaniaTheme.typography.button.copy(color = if (enabled) colors.textPrimary else colors.textSecondary),
+                        textAlign = TextAlign.Center
                     )
                 }
             }
