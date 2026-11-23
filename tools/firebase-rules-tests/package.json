@@ -12,6 +12,8 @@
     "test:android:transport": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only auth,firestore \"node run-transport.mjs\"",
     "pretest:android:reply-loss": "node prepare.mjs",
     "test:android:reply-loss": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only auth,firestore \"node run-transport.mjs --reply-loss\"",
+    "pretest:android:registration": "node prepare.mjs",
+    "test:android:registration": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only auth,firestore \"powershell.exe -NoProfile -ExecutionPolicy Bypass -File run-android.ps1 -AuthRegistration\"",
     "pretest:android:profile": "node prepare.mjs",
     "test:android:profile": "firebase emulators:exec --config firebase.json --project demo-havamania-audit --only auth,firestore \"node run-profile-contract.mjs\""
   },

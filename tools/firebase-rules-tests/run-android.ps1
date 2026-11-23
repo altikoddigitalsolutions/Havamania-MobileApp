@@ -1,5 +1,5 @@
-param([switch]$ProcessRestart, [switch]$TransportCut, [switch]$ReplyLoss, [switch]$ProfileContract)
-if (@($ProcessRestart, $TransportCut, $ReplyLoss, $ProfileContract | Where-Object { $_ }).Count -gt 1) { throw "Select one special test mode" }
+param([switch]$ProcessRestart, [switch]$TransportCut, [switch]$ReplyLoss, [switch]$ProfileContract, [switch]$AuthRegistration)
+if (@($ProcessRestart, $TransportCut, $ReplyLoss, $ProfileContract, $AuthRegistration | Where-Object { $_ }).Count -gt 1) { throw "Select one special test mode" }
 $usesProxy = $TransportCut -or $ReplyLoss
 $ErrorActionPreference = 'Stop'
 if ($env:FIRESTORE_EMULATOR_HOST -ne '127.0.0.1:8086' -or $env:FIREBASE_AUTH_EMULATOR_HOST -ne '127.0.0.1:9096') {
@@ -56,7 +56,7 @@ try {
             }
             $exitCode = 0
         } else {
-            $testClass = 'com.havamania.FirebaseCityContractDeviceTest'
+            $testClass = if ($AuthRegistration) { 'com.havamania.FirebaseAuthRegistrationDeviceTest' } else { 'com.havamania.FirebaseCityContractDeviceTest' }
             $extraArgs = @()
             if ($ProfileContract) {
                 if ($env:CITY_PROFILE_TEST_NONCE -notmatch '^[0-9a-f-]{36}$') { throw 'Missing local profile fixture nonce' }

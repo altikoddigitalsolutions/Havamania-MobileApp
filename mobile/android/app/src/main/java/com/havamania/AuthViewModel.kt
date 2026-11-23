@@ -21,9 +21,13 @@ sealed class AuthState {
     data class Error(val message: String) : AuthState()
 }
 
-class AuthViewModel(application: Application) : AndroidViewModel(application) {
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+class AuthViewModel internal constructor(
+    application: Application,
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore,
+    private val beforeRegistrationProfileWrite: (suspend (String) -> Unit)? = null
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, FirebaseAuth.getInstance(), FirebaseFirestore.getInstance())
 
     private val registration = RegistrationPreparation()
     private val _authState = MutableStateFlow<AuthState>(auth.currentUser?.let { AuthState.Authenticated(it) } ?: AuthState.Idle)
@@ -125,6 +129,7 @@ if (BuildConfig.DEBUG) {
                     user.updateProfile(userProfileChangeRequest { this.displayName = displayName }).await()
                 },
                 saveProfile = { uid, displayName, address ->
+                    beforeRegistrationProfileWrite?.invoke(uid)
                     val document = db.collection("users").document(uid)
                     db.runTransaction { transaction ->
                         check(auth.currentUser?.uid == uid) { "Account changed during registration" }
