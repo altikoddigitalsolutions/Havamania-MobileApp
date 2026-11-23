@@ -305,7 +305,10 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit
 ) {
     val state by viewModel.authState.collectAsStateWithLifecycle()
-    RegisterContent(state, viewModel::signUp, viewModel::clearError, onBack, onNavigateToLogin)
+    val leaveRegistration = { viewModel.cancelRegistration(); onBack() }
+    androidx.activity.compose.BackHandler(onBack = leaveRegistration)
+    RegisterContent(state, viewModel::signUp, viewModel::clearError, leaveRegistration,
+        { viewModel.cancelRegistration(); onNavigateToLogin() })
 }
 
 @Composable
