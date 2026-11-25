@@ -528,7 +528,7 @@ fun HavamaniaErrorCard(
                 color = themeColors.error,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "Kapat",
@@ -551,62 +551,40 @@ fun HavamaniaTopBar(
 ) {
     val colors = HavamaniaTheme.colors
     val responsive = LocalResponsiveValues.current
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = responsive.pagePadding, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.widthIn(min = 48.dp)) {
-            if (onBack != null) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.surfaceGlass.copy(alpha = 0.5f))
-                        .border(1.dp, colors.border.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.ArrowBack,
-                        contentDescription = "Geri",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+    val largeText = androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+    @Composable fun Back() {
+        Box(Modifier.widthIn(min = 48.dp)) {
+            if (onBack != null) IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.ArrowBack, contentDescription = "Geri", tint = colors.textPrimary)
             }
         }
-
-        Text(
-            text = title,
-            style = HavamaniaTheme.typography.label.copy(
-                letterSpacing = 1.sp,
-                fontWeight = FontWeight.Black,
-                fontSize = (responsive.headerFontSize.value * 0.6f).sp
-            ),
-            color = colors.textPrimary.copy(alpha = 0.9f),
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 8.dp),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Row(
-            modifier = Modifier.widthIn(min = 48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            actions()
+    }
+    @Composable fun Title(modifier: Modifier) {
+        if (title.isNotEmpty()) Text(title,
+            style = HavamaniaTheme.typography.label.copy(letterSpacing = 1.sp,
+                fontWeight = FontWeight.Black, fontSize = (responsive.headerFontSize.value * 0.6f).sp),
+            color = colors.textPrimary, modifier = modifier,
+            textAlign = TextAlign.Center)
+    }
+    val frame = Modifier.fillMaxWidth().statusBarsPadding()
+        .padding(horizontal = responsive.pagePadding, vertical = 8.dp)
+    if (largeText && title.isNotEmpty()) {
+        Column(frame) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Back(); Spacer(Modifier.weight(1f)); actions()
+            }
+            Title(Modifier.fillMaxWidth().padding(top = 8.dp))
+        }
+    } else {
+        Row(frame, verticalAlignment = Alignment.CenterVertically) {
+            Back()
+            Title(Modifier.weight(1f).padding(horizontal = 8.dp))
+            Row(Modifier.widthIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End, content = actions)
         }
     }
 }
 
-/**
- * Standardized Loading State
- */
 @Composable
 fun HavamaniaLoading(
     modifier: Modifier = Modifier,

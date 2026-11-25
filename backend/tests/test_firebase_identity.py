@@ -35,3 +35,58 @@ def test_invalid_firebase_token_is_rejected(client, monkeypatch):
 
     monkeypatch.setattr(firebase_identity, "verify_firebase_token", reject)
     assert client.get("/v1/profile", headers={"Authorization": "Bearer invalid"}).status_code == 401
+
+
+@pytest.mark.parametrize("error_type", [
+    firebase_identity.auth.RevokedIdTokenError,
+    firebase_identity.auth.UserDisabledError,
+    firebase_identity.auth.UserNotFoundError,
+    firebase_identity.auth.ExpiredIdTokenError,
+])
+def test_invalidated_identity_is_rechecked_and_cannot_access_profile(
+    client, monkeypatch, db_session, error_type,
+):
+    from app.models.user import User
+
+    monkeypatch.setattr(get_settings(), "firebase_project_id", "test-project")
+    app_marker = object()
+    monkeypatch.setattr(firebase_identity, "firebase_app", lambda project: app_marker)
+    calls = []
+    invalidated = False
+
+    def verify(token, *, app, check_revoked):
+        calls.append((token, app, check_revoked))
+        if invalidated:
+            if error_type is firebase_identity.auth.ExpiredIdTokenError:
+                raise error_type("private SDK diagnostic must not reach client", cause=None)
+            raise error_type("private SDK diagnostic must not reach client")
+        return {"uid": "revocation-user", "email": "revocation@example.com"}
+
+    monkeypatch.setattr(firebase_identity.auth, "verify_id_token", verify)
+    headers = {"Authorization": "Bearer firebase-revocation-test"}
+    accepted = client.get("/v1/profile", headers=headers)
+    assert accepted.status_code == 200
+    owner_id = accepted.json()["user_id"]
+    invalidated = True
+    rejected = client.get("/v1/profile", headers=headers)
+    assert rejected.status_code == 401
+    assert rejected.json() == {"detail": "Invalid Firebase credentials"}
+    assert calls == [("firebase-revocation-test", app_marker, True)] * 2
+    assert db_session.query(User).count() == 1
+    assert db_session.get(User, owner_id) is not None
+
+
+def test_missing_firebase_identity_cannot_create_backend_account(client, monkeypatch, db_session):
+    from app.models.user import User
+
+    monkeypatch.setattr(get_settings(), "firebase_project_id", "test-project")
+    monkeypatch.setattr(firebase_identity, "firebase_app", lambda project: object())
+
+    def verify(token, **kwargs):
+        assert kwargs["check_revoked"] is True
+        raise firebase_identity.auth.UserNotFoundError("deleted remote UID")
+
+    monkeypatch.setattr(firebase_identity.auth, "verify_id_token", verify)
+    response = client.get("/v1/profile", headers={"Authorization": "Bearer deleted-user"})
+    assert response.status_code == 401
+    assert db_session.query(User).count() == 0

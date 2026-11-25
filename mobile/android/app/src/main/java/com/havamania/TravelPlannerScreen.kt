@@ -237,6 +237,12 @@ fun TravelPlannerScreen(
         )
     }
 
+    val travelPersonalization = key(editorUid) {
+        val value by remember(context, editorUid) { ThemeManager.getPersonalizationSnapshot(context, editorUid) }
+            .collectAsStateWithLifecycle(initialValue = PersonalizationProfile(uid = editorUid, personalizationEnabled = false))
+        value
+    }
+    CompositionLocalProvider(LocalTravelPersonalization provides travelPersonalization) {
     HavamaniaScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -430,6 +436,8 @@ fun TravelPlannerScreen(
                 Spacer(Modifier.height(100.dp))
             }
         }
+    }
+
     }
 
     TravelEditorHost(

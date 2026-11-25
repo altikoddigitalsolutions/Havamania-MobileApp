@@ -50,15 +50,15 @@ fun WeatherDetailsPanel(
             description = data.weatherSuitabilityDesc
         )
 
-        // 2. Ana Detay Grid (2 Sütun)
-        DetailMetricGrid(data = data)
-
-        // 3. Güneş Zamanları
-        SunTimesCard(
-            sunrise = sunriseTime,
-            solarNoon = solarNoon,
-            sunset = sunsetTime
-        )
+        // One section surface; nested metrics and solar times stay visually flat.
+        HavamaniaCard(padding = 0.dp) {
+            DetailMetricGrid(data = data)
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = HavamaniaTheme.colors.border
+            )
+            SunTimesCard(sunrise = sunriseTime, solarNoon = solarNoon, sunset = sunsetTime)
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -70,21 +70,25 @@ fun DetailMetricGrid(data: WeatherData) {
 
     if (items.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // İlk 4 öğe (Hissedilen, Rüzgar Soğutma, Yağış Olasılığı, Yağış Miktarı)
-        items.take(4).chunked(2).forEach { rowItems ->
-            MetricRow(rowItems)
-        }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+        val columns = if (maxWidth < 360.dp || fontScale > 1.3f) 1 else 2
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // İlk 4 öğe (Hissedilen, Rüzgar Soğutma, Yağış Olasılığı, Yağış Miktarı)
+            items.take(4).chunked(columns).forEach { rowItems ->
+                MetricRow(rowItems, columns)
+            }
 
-        // Rüzgar Yönü Kartı
-        WindDirectionCard(
-            degrees = data.windDirectionDegrees,
-            label = data.windDirectionLabel
-        )
+            // Rüzgar Yönü Kartı
+            WindDirectionCard(
+                degrees = data.windDirectionDegrees,
+                label = data.windDirectionLabel
+            )
 
-        // Kalan öğeler
-        items.drop(4).chunked(2).forEach { rowItems ->
-            MetricRow(rowItems)
+            // Kalan öğeler
+            items.drop(4).chunked(columns).forEach { rowItems ->
+                MetricRow(rowItems, columns)
+            }
         }
     }
 }
@@ -110,7 +114,7 @@ private fun getVisibilityLabel(km: Double?): String {
 }
 
 @Composable
-private fun MetricRow(rowItems: List<WeatherDetailData>) {
+private fun MetricRow(rowItems: List<WeatherDetailData>, columns: Int) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -121,7 +125,7 @@ private fun MetricRow(rowItems: List<WeatherDetailData>) {
                 modifier = Modifier.weight(1f)
             )
         }
-        if (rowItems.size < 2) {
+        if (rowItems.size < columns) {
             Spacer(modifier = Modifier.weight(1f))
         }
     }
@@ -165,7 +169,7 @@ fun WeatherDetailCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = data.title.uppercase(),
+                    text = data.title.uppercase(java.util.Locale.forLanguageTag("tr-TR")),
                     style = HavamaniaTheme.typography.sectionTitle,
                     color = themeColors.textSecondary
                 )
@@ -229,7 +233,7 @@ fun WindDirectionCard(
                     Text(
                         "RÜZGAR YÖNÜ",
                         style = HavamaniaTheme.typography.sectionTitle,
-                        color = themeColors.textSecondary.copy(alpha = 0.5f)
+                        color = themeColors.textSecondary
                     )
                 }
                 Text(
@@ -240,7 +244,7 @@ fun WindDirectionCard(
                 Text(
                     text = "Anlık rüzgar yönü",
                     style = HavamaniaTheme.typography.bodySmall,
-                    color = themeColors.textSecondary.copy(alpha = 0.6f)
+                    color = themeColors.textSecondary
                 )
             }
         }
@@ -266,7 +270,7 @@ fun SunTimesCard(
                 Text(
                     "GÜNEŞ ZAMANLARI",
                     style = HavamaniaTheme.typography.sectionTitle,
-                    color = themeColors.textSecondary.copy(alpha = 0.5f)
+                    color = themeColors.textSecondary
                 )
             }
 
@@ -277,15 +281,15 @@ fun SunTimesCard(
                 if (maxWidth < 300.dp || fontScale > 1.3f) {
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally) {
-                        SunTimeItem("Gün Doğumu", sunrise, themeColors)
+                        SunTimeItem("Gün doğumu", sunrise, themeColors)
                         SunTimeItem("Gündüz ortası", solarNoon, themeColors)
-                        SunTimeItem("Gün Batımı", sunset, themeColors)
+                        SunTimeItem("Gün batımı", sunset, themeColors)
                     }
                 } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        SunTimeItem("Gün Doğumu", sunrise, themeColors)
+                        SunTimeItem("Gün doğumu", sunrise, themeColors)
                         SunTimeItem("Gündüz ortası", solarNoon, themeColors)
-                        SunTimeItem("Gün Batımı", sunset, themeColors)
+                        SunTimeItem("Gün batımı", sunset, themeColors)
                     }
                 }
             }
@@ -297,7 +301,7 @@ fun SunTimesCard(
 private fun SunTimeItem(label: String, time: String?, themeColors: com.havamania.ui.theme.HavamaniaColors) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(time ?: "Veri yok", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = themeColors.textSecondary.copy(alpha = 0.6f))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = themeColors.textSecondary)
     }
 }
 
@@ -342,7 +346,7 @@ fun WeatherSuitabilityCard(
                 Text(
                     text = "HAVAMANIA DURUM SKORU",
                     style = HavamaniaTheme.typography.sectionTitle,
-                    color = themeColors.textSecondary.copy(alpha = 0.5f)
+                    color = themeColors.textSecondary
                 )
                 Text(
                     text = text,
@@ -352,7 +356,7 @@ fun WeatherSuitabilityCard(
                 Text(
                     text = description,
                     style = HavamaniaTheme.typography.bodySmall,
-                    color = themeColors.textSecondary.copy(alpha = 0.6f)
+                    color = themeColors.textSecondary
                 )
             }
         }

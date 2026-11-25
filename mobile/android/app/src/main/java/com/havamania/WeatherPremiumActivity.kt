@@ -34,7 +34,7 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavOptionsBuilder
-import androidx.navigation.NavGraph.Companion.findStartDestination
+
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -173,6 +173,7 @@ if (BuildConfig.DEBUG) {
                 }
                 val authViewModel: AuthViewModel = viewModel()
                 val profileViewModel: ProfileViewModel = viewModel()
+                AuthSessionForegroundCheck(authViewModel, profileModel = profileViewModel)
                 val themeViewModel: ThemeViewModel = viewModel()
 
                 val authState by authViewModel.authState.collectAsState()
@@ -182,7 +183,7 @@ if (BuildConfig.DEBUG) {
                 val navController = key(navigationOwner) { rememberNavController() }
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val activeRoute = navBackStackEntry?.destination?.route
-                val currentRoute = activeRoute ?: Routes.WEATHER_ROOT
+                val currentRoute = activeRoute ?: if (navigationOwner != null) Routes.ACCOUNT_LOADING else Routes.AUTH_WELCOME
 
                 var appState by remember { mutableStateOf("splash") }
                 LaunchedEffect(notificationTap.pendingInboxLaunch, navigationOwner, appState, isReady, activeRoute, deletionState.busy) {
@@ -257,43 +258,8 @@ if (BuildConfig.DEBUG) {
                     }
                 }
 
-                // Auth Redirection Logic
-                LaunchedEffect(appState, authState, isReady, profileState, activeRoute) {
-                    if (isReady && appState == "main" && activeRoute != null) {
-                        val currentUser = authViewModel.currentUser
-                        val state = profileState
-
-                        if (currentUser == null) {
-                            if (currentRoute !in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
-                                try {
-                                    navController.navigate(Routes.AUTH_WELCOME) {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                                        Log.e("Nav", "Initial redirection failed", e)
-}
-                                }
-                            }
-                        } else if (state is ProfileState.Success) {
-                            // If in Auth root, move to Main root
-                            if (currentRoute in listOf(Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD)) {
-                                val profile = state.profile
-                                val target = if (!profile.onboardingCompleted) Routes.PERSONALIZATION else Routes.WEATHER_ROOT
-
-                                try {
-                                    navController.navigate(target) {
-                                        popUpTo(0) { inclusive = true }
-                                    }
-                                } catch (e: Exception) {
-if (BuildConfig.DEBUG) {
-                                        Log.e("Nav", "Main redirection failed", e)
-}
-                                }
-                            }
-                        }
-                    }
-                }
+                AccountEntryRedirect(navController, navigationOwner, profileState,
+                    enabled = isReady && appState == "main")
 
                 // Havamania Splash (Sloganlı) süresini ayarla
                 LaunchedEffect(isReady, splashMinimumTimedOut) {
@@ -319,6 +285,8 @@ if (BuildConfig.DEBUG) {
                         Routes.LOGIN,
                         Routes.REGISTER,
                         Routes.FORGOT_PASSWORD,
+                        Routes.ACCOUNT_LOADING,
+                        Routes.PERSONALIZATION,
                         Routes.SETTINGS,
                         Routes.EDIT_PROFILE,
                         Routes.CITIES,
@@ -347,14 +315,9 @@ if (BuildConfig.DEBUG) {
                                             return@navigate
                                         }
                                         try {
-                                            val startDestId = navController.graph.findStartDestination().id
 
                                             navController.navigate(route) {
-                                                popUpTo(startDestId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
+                                                accountTabOptions()
                                             }
                                         } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
@@ -383,10 +346,15 @@ if (BuildConfig.DEBUG) {
                             key(navigationOwner) {
                                 NavHost(
                                     navController = navController,
-                                    startDestination = if (authViewModel.currentUser != null) Routes.WEATHER_ROOT else Routes.AUTH_WELCOME,
+                                    startDestination = if (navigationOwner != null) Routes.ACCOUNT_LOADING else Routes.AUTH_WELCOME,
                                     enterTransition = { appScreenEnterTransition() },
                                     exitTransition = { appScreenExitTransition() }
                                 ) {
+                                    composable(Routes.ACCOUNT_LOADING) {
+                                        AccountProfileLoadingScreen(navigationOwner, profileState,
+                                            onRetry = { profileViewModel.refresh() },
+                                            onExit = { authViewModel.signOut() })
+                                    }
                                     // --- AUTH ROUTES ---
                                     composable(Routes.AUTH_WELCOME) {
                                         AuthWelcomeScreen(
@@ -502,13 +470,8 @@ if (BuildConfig.DEBUG) {
                                             onNavigateToEditProfile = { navController.navigateFromActiveScreen(backStackEntry, Routes.EDIT_PROFILE) },
                                             onNavigateToPersonalization = { navController.navigateFromActiveScreen(backStackEntry, Routes.PERSONALIZATION) },
                                             onNavigateToTravels = {
-                                                val startDestId = navController.graph.findStartDestination().id
                                                 navController.navigateFromActiveScreen(backStackEntry, Routes.CALENDAR_ROOT) {
-                                                    popUpTo(startDestId) {
-                                                        saveState = true
-                                                    }
-                                                    launchSingleTop = true
-                                                    restoreState = true
+                                                    accountTabOptions()
                                                 }
                                             }
                                         )
@@ -555,7 +518,7 @@ if (BuildConfig.DEBUG) {
                                                     popUpTo(Routes.PERSONALIZATION) { inclusive = true }
                                                 }
                                             },
-                                            onBack = { navController.popActiveScreen(backStackEntry) }
+                                            onBack = { navController.leavePersonalization(backStackEntry) { authViewModel.signOut() } }
                                         )
                                     }
                                     composable(

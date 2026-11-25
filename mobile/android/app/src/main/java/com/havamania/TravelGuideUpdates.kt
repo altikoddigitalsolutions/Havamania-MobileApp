@@ -46,10 +46,10 @@ internal data class PublishedTravelGuide(
         }
 
     fun guide() = LocalTravelGuide(description, visit, food, experience)
-    fun selected(type: TripType?) = experiences.map {
+    fun selected(type: TripType?, interests: Set<String> = emptySet()) = selectGuideExperiences(experiences.map {
         TravelGuideExperience(it.title, it.category, it.description, it.sourceUrl,
             it.tripTypes.map(TripType::valueOf).toSet())
-    }.sortedByDescending { type in it.preferredTripTypes }.take(2)
+    }, type, interests)
 }
 
 internal fun officialGuideUrl(value: String): Boolean = runCatching {

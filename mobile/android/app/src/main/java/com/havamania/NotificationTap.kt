@@ -31,7 +31,7 @@ internal class NotificationTapViewModel : ViewModel() {
 
 internal fun canNavigateFromNotification(route: String?): Boolean = when (route) {
     null, Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
-    Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION -> false
+    Routes.FORGOT_PASSWORD, Routes.ACCOUNT_LOADING, Routes.PERSONALIZATION -> false
     else -> true
 }
 

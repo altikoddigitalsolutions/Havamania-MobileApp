@@ -163,24 +163,25 @@ object RecommendationEngine {
         aboutMe: String? = null,
         interests: Set<String> = emptySet(),
         tone: AssistantTone = AssistantTone.DENGELI,
-        travelPlans: List<TravelPlan> = emptyList()
+        travelPlans: List<TravelPlan> = emptyList(),
+        now: java.time.Instant = java.time.Instant.now()
     ): String {
         if (weatherData == null) return "Hava durumu verilerine şu an erişilemiyor. Lütfen kısa süre sonra tekrar dene."
 
         val intent = AiIntentParser.detectIntent(userPrompt)
-        val today = LocalDate.now()
+        val today = ForecastTime.localNow(weatherData.timezone, now).toLocalDate()
         val nextPlan = travelPlans
             .filter { !it.isArchived && !it.endDate.isBefore(today) }
             .minByOrNull { it.startDate }
 
         val promptCity = AiIntentParser.detectCity(userPrompt)
-        val targetDate = AiIntentParser.detectDate(userPrompt)
+        val targetDate = AiIntentParser.detectDate(userPrompt, today)
         val localWeatherIntent = intent != AiIntent.PACKING && intent != AiIntent.TRAVEL
         if (localWeatherIntent && promptCity != null && !promptCity.equals(weatherData.cityName, ignoreCase = true)) {
             return "$promptCity için doğrulanmış hava verisi bulunmuyor. Mevcut veriler ${weatherData.cityName} için; önce ilgili şehri seçin."
         }
         if (localWeatherIntent && intent != AiIntent.WEEKEND_FORECAST && targetDate != null &&
-            targetDate != ForecastTime.localNow(weatherData.timezone, java.time.Instant.now()).toLocalDate()) {
+            targetDate != today) {
             return "$targetDate için saatlik ölçümlerle doğrulanmış bir yanıt hazırlayamıyorum. Takvimde ilgili günün tahminini kontrol edin."
         }
         val rainQuestion = intent == AiIntent.GENERAL_WEATHER &&

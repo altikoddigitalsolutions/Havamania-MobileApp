@@ -61,4 +61,18 @@ class AssistantMissingWeatherTest {
         assertTrue(text, text.contains("8°"))
         assertFalse(text.contains("25°"))
     }
+    @Test fun `today uses forecast location day across UTC midnight`() {
+        val now = java.time.Instant.parse("2030-01-02T00:30:00Z")
+        val text = RecommendationEngine.generateAssistantFallbackReply("Bugün ne giymeliyim?",
+            weather.copy(timezone = "America/Los_Angeles", feelsLike = "7°"),
+            tone = AssistantTone.DETAYLI_UZMAN, now = now)
+        assertTrue(text, text.contains("7°C"))
+        assertFalse(text, text.contains("doğrulanmış bir yanıt hazırlayamıyorum"))
+    }
+    @Test fun `tomorrow still cannot use current observation at location midnight`() {
+        val text = RecommendationEngine.generateAssistantFallbackReply("Yarın ne giymeliyim?",
+            weather.copy(timezone = "Europe/Istanbul"), now = java.time.Instant.parse("2030-01-01T22:30:00Z"))
+        assertTrue(text, text.contains("2030-01-03"))
+        assertTrue(text, text.contains("ilgili günün tahminini"))
+    }
 }

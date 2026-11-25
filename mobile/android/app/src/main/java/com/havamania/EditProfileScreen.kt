@@ -36,13 +36,14 @@ fun EditProfileScreen(
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
-    val userProfileRepository = remember { UserProfileRepository.getInstance() }
-    val profile by userProfileRepository.profile.collectAsStateWithLifecycle()
+    val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
+    val profile = (profileState as? ProfileState.Success)?.profile
     val owner by profileViewModel.activeUid.collectAsStateWithLifecycle()
     var name by rememberSaveable(owner) { mutableStateOf("") }
     var bio by rememberSaveable(owner) { mutableStateOf("") }
     var initialized by rememberSaveable(owner) { mutableStateOf(false) }
     val saveState by profileViewModel.saveState.collectAsStateWithLifecycle()
+    val reconciling by profileViewModel.profileReconciliationBusy.collectAsStateWithLifecycle()
     val saving = saveState == ProfileSaveState.Saving
     val email = profile?.takeIf { it.uid == owner }?.email.orEmpty()
     val createdAt = profile?.takeIf { it.uid == owner }?.createdAt ?: 0L
@@ -175,7 +176,7 @@ fun EditProfileScreen(
             }
             HavamaniaPrimaryButton(
                 text = "DEĞİŞİKLİKLERİ KAYDET",
-                enabled = initialized && !saving,
+                enabled = initialized && profile?.uid == owner && owner != null && !saving && !reconciling,
                 isLoading = saving,
                 onClick = {
                     profileViewModel.updateProfile(name, bio)

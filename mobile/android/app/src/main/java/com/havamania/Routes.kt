@@ -9,6 +9,8 @@ object Routes {
     const val REGISTER = "auth_register"
     const val FORGOT_PASSWORD = "auth_forgot_password"
 
+    const val ACCOUNT_LOADING = "account_loading"
+
     // Root Tabs
     const val WEATHER_ROOT = "root_weather"
     const val CALENDAR_ROOT = "root_calendar"

@@ -29,10 +29,15 @@ class ProfileViewModel internal constructor(
     private val userProfileRepository: UserProfileRepository,
     private val writeGate: (() -> Boolean)? = null,
     private val snapshotWriter: (suspend (UserProfile) -> Unit)? = null,
-    private val storageProvider: () -> FirebaseStorage = { FirebaseStorage.getInstance() }
+    private val storageProvider: () -> FirebaseStorage = { FirebaseStorage.getInstance() },
+    private val personalizationBasicsWriter: (suspend (String, Set<String>) -> Unit)? = null,
+    private val sessionStore: RegistrationPendingStore = MemoryRegistrationPendingStore(),
+    private val profileBasicsWriter: (suspend (String, String, String) -> Unit)? = null,
+    private val beforeProfileSdkWrite: (suspend (String) -> Unit)? = null
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, FirebaseAuth.getInstance(),
-        FirebaseFirestore.getInstance(), UserProfileRepository.getInstance())
+        FirebaseFirestore.getInstance(), UserProfileRepository.getInstance(),
+        sessionStore = FileRegistrationPendingStore(java.io.File(application.noBackupFilesDir, "auth-session-state.json")))
 
 
     private val _activeUid = MutableStateFlow(auth.currentUser?.uid)
@@ -40,6 +45,10 @@ class ProfileViewModel internal constructor(
     private val accountTasks = AccountTaskScope(viewModelScope) { auth.currentUser?.uid ?: "legacy" }
     private val saveController = ProfileSaveController()
     internal val saveState = saveController.state
+    private var reconciliationTicket: Any? = null
+    private val _profileReconciliationBusy = MutableStateFlow(false)
+    internal val profileReconciliationBusy: StateFlow<Boolean> = _profileReconciliationBusy
+    private val sessionFence get() = AuthSessionFences.forAuth(auth, sessionStore)
     internal fun resetSaveState() = saveController.reset()
     private val personalizationSave = PersonalizationSaveController(viewModelScope, { auth.currentUser?.uid ?: "legacy" })
     internal val personalizationSaveState = personalizationSave.state
@@ -122,8 +131,11 @@ class ProfileViewModel internal constructor(
                 when (state) {
                     is ProfileReadState.Ready -> {
                         _profileState.value = ProfileState.Success(state.profile)
-                        if (snapshotWriter != null) snapshotWriter.invoke(state.profile)
-                        else ThemeManager.saveProfileSnapshot(getApplication(), state.profile)
+                        if (!state.hasPendingWrites) {
+                            if (snapshotWriter != null) snapshotWriter.invoke(state.profile)
+                            else ThemeManager.saveProfileSnapshot(getApplication(), state.profile)
+                        }
+                        reconcileProfileName(state)
                     }
                     is ProfileReadState.Missing -> {
                         _profileState.value = ProfileState.Loading
@@ -140,6 +152,42 @@ class ProfileViewModel internal constructor(
                 publishAccountResult(uid, { auth.currentUser?.uid ?: "legacy" }) {
                     if (profileWritesAllowed()) _profileState.value = ProfileState.Error("Profil yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.")
                 }
+            }
+        }
+    }
+
+    internal fun reconcileAfterSessionReady() {
+        accountTasks.launch { owner ->
+            val ready = userProfileRepository.readState.value as? ProfileReadState.Ready ?: return@launch
+            if (ready.profile.uid == owner) reconcileProfileName(ready)
+        }
+    }
+
+    private suspend fun reconcileProfileName(state: ProfileReadState.Ready) {
+        if (_profileReconciliationBusy.value) return
+        val user = auth.currentUser ?: return
+        if (!needsProfileNameReconciliation(state.profile, user.uid, user.displayName,
+                state.serverConfirmed, sessionFence.canStartProfileWrite(user.uid),
+                saveState.value == ProfileSaveState.Saving)) return
+        val ticket = Any()
+        reconciliationTicket = ticket
+        _profileReconciliationBusy.value = true
+        try {
+            kotlinx.coroutines.withTimeout(20_000) {
+                runAccountProfileWrite(user.uid, { auth.currentUser?.uid }, ::profileWritesAllowed, {
+                    awaitOwnedSdkMutation<Void>(auth, sessionFence, user.uid) {
+                        user.updateProfile(com.google.firebase.auth.userProfileChangeRequest { displayName = state.profile.name })
+                    }
+                })
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
+        } catch (_: Exception) {
+            // Keep the server profile visible. Refresh/new server events may retry the mirror.
+        } finally {
+            if (reconciliationTicket === ticket) {
+                reconciliationTicket = null
+                _profileReconciliationBusy.value = false
             }
         }
     }
@@ -178,6 +226,10 @@ class ProfileViewModel internal constructor(
 
     fun updateProfile(name: String, bio: String) {
         val user = auth.currentUser ?: return
+        if (_profileReconciliationBusy.value || !sessionFence.canStartProfileWrite(user.uid)) {
+            saveController.reject("Önceki profil işlemi tamamlanıyor. Biraz sonra tekrar deneyin.")
+            return
+        }
         accountTasks.launch { ownerUid ->
             if (user.uid != ownerUid) return@launch
             saveController.save(name, bio) { finalName, finalBio ->
@@ -188,8 +240,12 @@ class ProfileViewModel internal constructor(
                 )
                 runAccountProfileWrite(ownerUid, { auth.currentUser?.uid }, ::profileWritesAllowed,
                     { db.collection("users").document(ownerUid).update(updates).await() },
-                    { user.updateProfile(com.google.firebase.auth.userProfileChangeRequest { displayName = finalName }).await() },
-                    { ThemeManager.saveProfileBasics(getApplication(), ownerUid, finalName, finalBio) })
+                    { beforeProfileSdkWrite?.invoke(ownerUid)
+                      awaitOwnedSdkMutation<Void>(auth, AuthSessionFences.forAuth(auth, sessionStore), ownerUid) {
+                        user.updateProfile(com.google.firebase.auth.userProfileChangeRequest { displayName = finalName })
+                    } },
+                    { profileBasicsWriter?.invoke(ownerUid, finalName, finalBio)
+                        ?: ThemeManager.saveProfileBasics(getApplication(), ownerUid, finalName, finalBio) })
             }
         }
     }
@@ -205,7 +261,8 @@ class ProfileViewModel internal constructor(
                     "personalizationProfile" to personalization,
                     "onboardingCompleted" to true, "updatedAt" to System.currentTimeMillis()
                 )).await() },
-                { ThemeManager.savePersonalizationBasics(getApplication(), owner, interests.toSet()) })
+                { personalizationBasicsWriter?.invoke(owner, interests.toSet())
+                        ?: ThemeManager.savePersonalizationBasics(getApplication(), owner, interests.toSet()) })
         }
     }
 

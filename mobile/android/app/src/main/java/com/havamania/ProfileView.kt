@@ -5,6 +5,7 @@ package com.havamania
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -106,7 +107,7 @@ fun ProfileScreen(
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Rounded.Settings, null, tint = themeColors.textPrimary)
+                        Icon(Icons.Rounded.Settings, "Ayarlar", tint = themeColors.textPrimary)
                     }
                 }
             )
@@ -168,7 +169,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(HavamaniaTheme.styles.spacingLG))
 
                 SectionHeader("KİŞİSEL ANALİZ")
-                PremiumAboutMeCard(aboutMe) { showAboutMeSheet = true }
+                PremiumAboutMeCard(aboutMe, interests = userInterests) { showAboutMeSheet = true }
 
                 Spacer(modifier = Modifier.height(HavamaniaTheme.styles.spacingLG))
 
@@ -222,7 +223,7 @@ fun ProfileScreen(
 }
 
 @Composable
-fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
+fun PremiumAboutMeCard(text: String, interests: Set<String> = emptySet(), onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
     val hasContent = text.isNotBlank()
 
@@ -233,16 +234,12 @@ fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
         border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(themeColors.accent.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text("Kendinden Bahset", style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                        Text("AI seni tanısın, önerileri özelleştirilsin.", style = HavamaniaTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary)
-                    }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Kendinden bahset", style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                    Text("Öneriler için kendini tanıt.", style = HavamaniaTheme.typography.bodySmall, color = themeColors.textSecondary)
                 }
                 Icon(Icons.Rounded.ChevronRight, null, tint = themeColors.textMuted)
             }
@@ -252,12 +249,12 @@ fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
                 Text(text = text, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp), color = themeColors.textPrimary.copy(alpha = 0.9f), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(16.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val badges = remember(text) { generateBadges(text) }
+                    val badges = remember(text, interests) { generateBadges(text, interests) }
                     badges.forEach { PremiumBadge(it) }
                 }
             } else {
                 Spacer(Modifier.height(16.dp))
-                Text("Henüz bir bilgi eklemedin. AI önerileri için profilini tamamla.", style = MaterialTheme.typography.bodySmall, color = themeColors.textMuted)
+                Text("Henüz bir bilgi eklemedin. Öneriler için profilini tamamla.", style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
             }
         }
     }
@@ -266,27 +263,11 @@ fun PremiumAboutMeCard(text: String, onClick: () -> Unit) {
 @Composable
 fun PremiumBadge(text: String) {
     val themeColors = HavamaniaTheme.colors
-    Surface(color = themeColors.surfaceGlass, shape = CircleShape, border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(themeColors.accent))
-            Spacer(Modifier.width(6.dp))
-            Text(text, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
-        }
+    Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(themeColors.accent))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = themeColors.textSecondary)
     }
-}
-
-fun generateBadges(text: String): List<String> {
-    val badges = mutableListOf<String>()
-    val t = text.lowercase()
-    if (t.contains("kamp") || t.contains("doğa") || t.contains("yürüyüş")) badges.add("Doğa Dostu")
-    if (t.contains("çocuk") || t.contains("aile")) badges.add("Aile Odaklı")
-    if (t.contains("seyahat") || t.contains("rota")) badges.add("Aktif Gezgin")
-    if (t.contains("bisiklet") || t.contains("spor") || t.contains("koşu")) badges.add("Sporcu")
-    if (t.contains("yağmur") || t.contains("kar") || t.contains("kış")) badges.add("Kar Tutkunu")
-    if (t.contains("drone") || t.contains("pilot")) badges.add("Hava Meraklısı")
-    if (t.contains("şehir") || t.contains("fotoğraf")) badges.add("Şehir Kaşifi")
-    if (badges.isEmpty() && text.isNotBlank()) badges.add("Hava Analisti")
-    return badges.take(3)
 }
 
 @Composable
@@ -337,8 +318,8 @@ fun StatsDetailContent(type: String, userInterests: Set<String>, travelPlans: Li
                             Icon(Icons.Rounded.AutoAwesome, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text(item.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(item.summary, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = themeColors.textPrimary)
+                                Text(item.summary, style = MaterialTheme.typography.bodySmall, color = themeColors.textSecondary)
                             }
                         }
                     }}
@@ -351,15 +332,15 @@ fun StatsDetailContent(type: String, userInterests: Set<String>, travelPlans: Li
 
 @Composable
 fun PremiumInterestsSection(selectedInterests: Set<String>, onInterestToggle: (String) -> Unit) {
-    val prioritized = InterestsData.categories.filter { listOf("Hava & Atmosfer", "Ulaşım & Yol", "Outdoor & Macera").contains(it.title) }
-    val others = InterestsData.categories.filter { !listOf("Hava & Atmosfer", "Ulaşım & Yol", "Outdoor & Macera").contains(it.title) }
-    var showOthers by remember { mutableStateOf(false) }
+    val prioritized = InterestsData.categories.filter { listOf("Hava & Atmosfer", "Ulaşım", "Outdoor").contains(it.title) }
+    val others = InterestsData.categories.filter { !listOf("Hava & Atmosfer", "Ulaşım", "Outdoor").contains(it.title) }
+    var showOthers by rememberSaveable { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         prioritized.forEach { PremiumInterestCategoryCard(it, selectedInterests, onInterestToggle) }
         if (!showOthers) {
             TextButton(onClick = { showOthers = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("DAHA FAZLA GÖSTER", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp), color = HavamaniaTheme.colors.accent)
+                Text("Daha fazla göster", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp), color = HavamaniaTheme.colors.accent)
             }
         } else {
             others.forEach { PremiumInterestCategoryCard(it, selectedInterests, onInterestToggle) }
@@ -370,7 +351,7 @@ fun PremiumInterestsSection(selectedInterests: Set<String>, onInterestToggle: (S
 @Composable
 fun PremiumInterestCategoryCard(category: InterestCategory, selectedInterests: Set<String>, onInterestToggle: (String) -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable(category.title) { mutableStateOf(false) }
     val selectedCount = remember(selectedInterests) { category.interests.count { selectedInterests.contains(it.id) } }
 
     Surface(
@@ -380,20 +361,17 @@ fun PremiumInterestCategoryCard(category: InterestCategory, selectedInterests: S
         border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(themeColors.accent.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
+            Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+                stateDescription = if (expanded) "Açık" else "Kapalı"
+            }.clickable(role = Role.Button) { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                     Icon(category.icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(category.title, style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-                    Text(category.description, style = HavamaniaTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (selectedCount > 0) {
-                    Surface(color = themeColors.accent, shape = CircleShape) {
-                        Text(selectedCount.toString(), modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black), color = Color.White)
-                    }
-                    Spacer(Modifier.width(12.dp))
+                    Text(category.description, style = HavamaniaTheme.typography.bodySmall.copy(fontSize = 11.sp), color = themeColors.textSecondary)
+                    if (selectedCount > 0) Text("$selectedCount seçili", style = MaterialTheme.typography.labelSmall, color = themeColors.textSecondary)
                 }
                 Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = themeColors.textMuted)
             }
@@ -411,22 +389,20 @@ fun PremiumInterestCategoryCard(category: InterestCategory, selectedInterests: S
 
 @Composable
 fun PremiumInterestChip(item: InterestItem, isSelected: Boolean, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "chip_scale")
-
+    val colors = HavamaniaTheme.colors
+    val palette = themeButtonPalette(listOf(colors.accent), colors.onAccent)
     Surface(
-        onClick = onClick, interactionSource = interactionSource,
-        color = if (isSelected) themeColors.accent else themeColors.surfaceGlass.copy(alpha = 0.5f),
-        shape = CircleShape,
-        border = BorderStroke(1.dp, if (isSelected) themeColors.accent else themeColors.border.copy(alpha = 0.1f)),
-        modifier = Modifier.scale(scale)
+        color = if (isSelected) palette.stops.first() else Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.widthIn(max = 280.dp).heightIn(min = 48.dp).toggleable(value = isSelected,
+            role = Role.Checkbox, onValueChange = { onClick() })
     ) {
-        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(item.icon, null, tint = if (isSelected) Color.White else themeColors.accent, modifier = Modifier.size(16.dp))
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(item.icon, null, tint = if (isSelected) palette.content else colors.accent, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(item.label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = if (isSelected) Color.White else themeColors.textPrimary)
+            Text(item.label, modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                color = if (isSelected) palette.content else colors.textPrimary)
         }
     }
 }
@@ -451,12 +427,12 @@ fun PremiumAboutMeContent(initialText: String, isSaving: Boolean = false, errorM
         Spacer(Modifier.height(16.dp))
         androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(end = 40.dp)) {
             items(sampleCards) { sample ->
-                PremiumSampleCard(sample = sample) { if (!isSaving) text = sample.text }
+                PremiumSampleCard(sample = sample, enabled = !isSaving) { text = sample.text }
             }
         }
         Spacer(Modifier.height(32.dp))
         Surface(color = themeColors.surfaceGlass.copy(alpha = 0.3f), shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f))) {
-            TextField(value = text, onValueChange = { text = it }, enabled = !isSaving, label = { Text("Hakkımda") }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, cursorColor = themeColors.accent, focusedTextColor = themeColors.textPrimary, unfocusedTextColor = themeColors.textPrimary))
+            TextField(value = text, onValueChange = { text = it }, enabled = !isSaving, label = { Text("Hakkımda") }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, disabledTextColor = themeColors.textSecondary, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, cursorColor = themeColors.accent, focusedTextColor = themeColors.textPrimary, unfocusedTextColor = themeColors.textPrimary))
         }
         Spacer(Modifier.height(32.dp))
         HavamaniaPrimaryButton(text = "PROFİLİ GÜNCELLE", onClick = { onSave(text) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), isLoading = isSaving, enabled = text.isNotBlank() && !isSaving)
@@ -465,17 +441,19 @@ fun PremiumAboutMeContent(initialText: String, isSaving: Boolean = false, errorM
 }
 
 @Composable
-fun PremiumSampleCard(sample: AboutMeSample, onClick: () -> Unit) {
+fun PremiumSampleCard(sample: AboutMeSample, enabled: Boolean = true, onClick: () -> Unit) {
     val themeColors = HavamaniaTheme.colors
-    HavamaniaGlassCard(onClick = onClick, alpha = 0.4f, modifier = Modifier.width(220.dp)) {
+    HavamaniaCard(onClick = if (enabled) onClick else null, elevation = 0.dp,
+        backgroundColor = themeColors.surface, padding = 16.dp,
+        modifier = Modifier.width(220.dp).semantics { if (!enabled) disabled() }) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(themeColors.accent.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) { Icon(sample.icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp)) }
+                Icon(sample.icon, null, tint = themeColors.accent, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
-                Text(sample.label, style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
+                Text(sample.label, modifier = Modifier.weight(1f), style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
             }
             Spacer(Modifier.height(12.dp))
-            Text(sample.text, style = HavamaniaTheme.typography.bodySmall.copy(lineHeight = 16.sp), color = themeColors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Text(sample.text, style = HavamaniaTheme.typography.bodySmall.copy(lineHeight = 16.sp), color = themeColors.textSecondary)
         }
     }
 }

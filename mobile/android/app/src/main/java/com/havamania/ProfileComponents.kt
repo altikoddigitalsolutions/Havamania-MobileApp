@@ -46,19 +46,7 @@ fun PremiumProfileHeader(
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
-            val infiniteTransition = rememberInfiniteTransition(label = "profile_glow")
-            val glowAlpha by infiniteTransition.animateFloat(
-                initialValue = 0.05f, targetValue = 0.2f,
-                animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Reverse),
-                label = "glow_alpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .blur(40.dp)
-                    .background(themeColors.accent.copy(alpha = glowAlpha), CircleShape)
-            )
+            Box(Modifier.size(112.dp).background(themeColors.accent.copy(alpha = 0.06f), CircleShape))
 
             Box(
                 modifier = Modifier
@@ -86,7 +74,7 @@ fun PremiumProfileHeader(
                         name.split(" ")
                             .filter { it.isNotBlank() }
                             .take(2)
-                            .joinToString("") { it.take(1).uppercase() }
+                            .joinToString("") { it.take(1).uppercase(java.util.Locale.forLanguageTag("tr-TR")) }
                     }
 
                     if (initials.isNotEmpty()) {
@@ -123,9 +111,11 @@ fun PremiumProfileHeader(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Text(
                 text = name.ifBlank { "Gezgin" },
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 style = HavamaniaTheme.typography.screenTitle.copy(fontWeight = FontWeight.Black),
                 color = themeColors.textPrimary
             )
@@ -162,43 +152,37 @@ fun PremiumProfileHeader(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.SpaceAround
-        ) {
-            ProfileStatItem(stats["İlgi"] ?: "0", "TERCİHLER") { onStatClick("İlgi") }
-            ProfileStatItem(stats["Rota"] ?: "0", "ROTALAR") { onStatClick("Rota") }
-            ProfileStatItem(stats["Analiz"] ?: "0", "KAYDEDİLEN ANALİZ") { onStatClick("Analiz") }
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            val entries = listOf(Triple("İlgi", "Tercihler", stats["İlgi"] ?: "0"),
+                Triple("Rota", "Rotalar", stats["Rota"] ?: "0"),
+                Triple("Analiz", "Kaydedilen analiz", stats["Analiz"] ?: "0"))
+            if (maxWidth < 360.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f) {
+                Column(Modifier.fillMaxWidth()) {
+                    entries.forEach { (key, label, value) ->
+                        ProfileStatItem(value, label, Modifier.fillMaxWidth()) { onStatClick(key) }
+                    }
+                }
+            } else Row(Modifier.fillMaxWidth()) {
+                entries.forEach { (key, label, value) ->
+                    ProfileStatItem(value, label, Modifier.weight(1f)) { onStatClick(key) }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun ProfileStatItem(value: String, label: String, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clip(RoundedCornerShape(HavamaniaTheme.styles.radiusSmall)).clickable { onClick() }.padding(HavamaniaTheme.styles.spacingXS)
-    ) {
-        Text(value, style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = themeColors.textPrimary)
-        Text(label, style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold), color = themeColors.textMuted)
+fun ProfileStatItem(value: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = HavamaniaTheme.colors
+    Column(horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(HavamaniaTheme.styles.radiusSmall))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick).padding(8.dp)) {
+        Text(value, style = HavamaniaTheme.typography.cardTitle.copy(fontWeight = FontWeight.Black), color = colors.textPrimary)
+        Text(label, style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = colors.textSecondary)
     }
 }
 
-fun generateAiPersonality(interests: Set<String>, aboutMe: String): String {
-    val t = aboutMe.lowercase()
-    return when {
-        t.contains("firtina") || interests.contains("firtina_takibi") -> "Atmosfer Avcısı"
-        t.contains("kamp") || interests.contains("kamp") || interests.contains("outdoor") -> "Doğa Gezgini"
-        t.contains("cocuk") || interests.contains("cocuklar_icin") -> "Aile Meteoroloğu"
-        t.contains("drone") || interests.contains("drone") -> "Gökyüzü Kaşifi"
-        t.contains("motorsiklet") || interests.contains("motorsiklet") -> "Yol Savaşçısı"
-        interests.contains("snowboard") || interests.contains("kayak") -> "Kış Tutkunu"
-        interests.size > 12 -> "Hava Gurusu"
-        interests.size > 5 -> "Atmosfer Kaşifi"
-        else -> "Yeni Hava Meraklısı"
-    }
-}
 
 @Composable
 fun QuickActionsGrid(
@@ -209,18 +193,20 @@ fun QuickActionsGrid(
     onEditProfile: () -> Unit,
     onPremium: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionItem("Şehirler", Icons.Rounded.Map, Modifier.weight(1f), onManageCities)
-            QuickActionItem("Asistan Geçmişi", Icons.Rounded.History, Modifier.weight(1f), onAiHistory)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionItem("Seyahatlerim", Icons.Rounded.Route, Modifier.weight(1f), onMyTravels)
-            QuickActionItem("Tercihlerim", Icons.Rounded.AutoAwesome, Modifier.weight(1f), onPersonalization)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionItem("Premium", Icons.Rounded.WorkspacePremium, Modifier.weight(1f), onPremium)
-            QuickActionItem("Profili Düzenle", Icons.Rounded.AccountCircle, Modifier.weight(1f), onEditProfile)
+    val actions = listOf(Triple("Şehirler", Icons.Rounded.Map, onManageCities),
+        Triple("Asistan geçmişi", Icons.Rounded.History, onAiHistory),
+        Triple("Seyahatlerim", Icons.Rounded.Route, onMyTravels),
+        Triple("Tercihlerim", Icons.Rounded.AutoAwesome, onPersonalization),
+        Triple("Premium", Icons.Rounded.WorkspacePremium, onPremium),
+        Triple("Profili düzenle", Icons.Rounded.AccountCircle, onEditProfile))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val singleColumn = maxWidth < 360.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            actions.chunked(if (singleColumn) 1 else 2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { (title, icon, action) -> QuickActionItem(title, icon, Modifier.weight(1f), action) }
+                }
+            }
         }
     }
 }
@@ -234,14 +220,14 @@ fun QuickActionItem(title: String, icon: ImageVector, modifier: Modifier = Modif
         color = themeColors.surfaceGlass.copy(alpha = 0.3f),
         shape = RoundedCornerShape(themeStyles.radiusMedium),
         border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.1f)),
-        modifier = modifier
+        modifier = modifier.heightIn(min = 48.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(themeStyles.spacingMD)
         ) {
             Box(
-                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(themeColors.accent.copy(alpha = 0.1f)),
+                modifier = Modifier.size(24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(16.dp))
@@ -249,10 +235,9 @@ fun QuickActionItem(title: String, icon: ImageVector, modifier: Modifier = Modif
             Spacer(modifier = Modifier.width(themeStyles.spacingMD))
             Text(
                 text = title,
+                modifier = Modifier.weight(1f),
                 style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Bold),
-                color = themeColors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                color = themeColors.textPrimary
             )
         }
     }

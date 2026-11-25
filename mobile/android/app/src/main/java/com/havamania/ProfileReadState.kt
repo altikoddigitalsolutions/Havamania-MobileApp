@@ -5,7 +5,7 @@ import kotlinx.coroutines.CancellationException
 internal sealed class ProfileReadState(open val uid: String?) {
     object Idle : ProfileReadState(null)
     data class Loading(override val uid: String) : ProfileReadState(uid)
-    data class Ready(val profile: UserProfile) : ProfileReadState(profile.uid)
+    data class Ready(val profile: UserProfile, val serverConfirmed: Boolean = false, val hasPendingWrites: Boolean = false) : ProfileReadState(profile.uid)
     data class Missing(override val uid: String) : ProfileReadState(uid)
     data class Failed(override val uid: String, val message: String) : ProfileReadState(uid)
 }

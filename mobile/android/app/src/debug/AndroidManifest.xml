@@ -6,6 +6,9 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="28"
         tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name=".ProfileEditSdkActivity" android:exported="false" />
+        <activity android:name=".AccountEntrySdkActivity" android:exported="false" />
+        <activity android:name=".AccountEntryTestActivity" android:exported="false" />
         <activity android:name=".ProfileSettingsIntegrationActivity" android:exported="false" />
         <activity android:name=".ProfileSettingsTestActivity" android:exported="false" />
         <activity android:name=".TravelEditorTestActivity" android:exported="false" />

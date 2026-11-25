@@ -38,7 +38,7 @@ object InterestsData {
             icon = Icons.Rounded.DirectionsCar,
             description = "Yolculuklarınızı hava durumuna göre planlayın.",
             interests = listOf(
-                InterestItem("motorsiklet", "Motorsiklet", Icons.Rounded.TwoWheeler),
+                InterestItem("motorsiklet", "Motosiklet", Icons.Rounded.TwoWheeler),
                 InterestItem("kis_surusu", "Kış Sürüşü", Icons.Rounded.AcUnit),
                 InterestItem("off_road", "Off-Road", Icons.Rounded.Terrain),
                 InterestItem("drone", "Drone", Icons.Rounded.AirplanemodeActive),

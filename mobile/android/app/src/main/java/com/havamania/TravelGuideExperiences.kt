@@ -275,8 +275,6 @@ internal object TravelGuideExperiences {
         )
     )
 
-    fun forLocation(city: String, district: String?, tripType: TripType?): List<TravelGuideExperience> =
-        entries[city to district].orEmpty()
-            .sortedByDescending { tripType in it.preferredTripTypes }
-            .take(2)
+    fun forLocation(city: String, district: String?, tripType: TripType?, interests: Set<String> = emptySet()): List<TravelGuideExperience> =
+        selectGuideExperiences(entries[city to district].orEmpty(), tripType, interests)
 }

@@ -21,7 +21,7 @@ class NotificationTapTest {
 
     @Test fun navigationWaitsForAnActualNonAuthBackStackEntry() {
         for (route in listOf(null, Routes.AUTH_WELCOME, Routes.LOGIN, Routes.REGISTER,
-            Routes.FORGOT_PASSWORD, Routes.PERSONALIZATION)) {
+            Routes.FORGOT_PASSWORD, Routes.ACCOUNT_LOADING, Routes.PERSONALIZATION)) {
             assertFalse(canNavigateFromNotification(route))
         }
         assertTrue(canNavigateFromNotification(Routes.WEATHER_ROOT))

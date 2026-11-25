@@ -32,7 +32,13 @@ def firebase_user(token: str, db: Session) -> User:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     try:
         claims = verify_firebase_token(token, project_id)
-    except (ValueError, auth.InvalidIdTokenError, auth.RevokedIdTokenError, auth.UserDisabledError) as exc:
+    except (
+        ValueError,
+        auth.InvalidIdTokenError,
+        auth.RevokedIdTokenError,
+        auth.UserDisabledError,
+        auth.UserNotFoundError,
+    ) as exc:
         raise HTTPException(status_code=401, detail="Invalid Firebase credentials") from exc
     uid = claims.get("uid") or claims.get("sub")
     email = claims.get("email")

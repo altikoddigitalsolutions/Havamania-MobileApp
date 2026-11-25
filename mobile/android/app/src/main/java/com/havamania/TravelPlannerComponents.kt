@@ -119,7 +119,10 @@ fun NextTripHero(
 
         // City Personality for Hero
         val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
-    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
+    val guidePersonalization = LocalTravelPersonalization.current?.takeIf { it.uid == plan.userId }
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision, guidePersonalization) {
+        CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType, guidePersonalization)
+    }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = if (isOngoing) themeColors.success else themeColors.accent, modifier = Modifier.size(14.dp))
@@ -315,7 +318,7 @@ fun TravelPlanCard(
                                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                 color = themeColors.textPrimary
                             )
-                            Text(tripForecastTimeLabel(plan.lastForecastSnapshot),
+                            Text(tripAnalysisDisplayLabel(plan),
                                 style = HavamaniaTheme.typography.caption, color = themeColors.textMuted)
                             Text(
                                 text = "Konfor skoru: sıcaklık, yağış ve rüzgâr.",
@@ -354,7 +357,10 @@ fun TravelPlanCard(
             // City Personality Section (Trip-Type Aware & Clean Surface)
             val isTablet = LocalWindowSize.current.isTablet || LocalWindowSize.current.isLargeTablet
             val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
-    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
+    val guidePersonalization = LocalTravelPersonalization.current?.takeIf { it.uid == plan.userId }
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision, guidePersonalization) {
+        CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType, guidePersonalization)
+    }
 
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
@@ -419,7 +425,10 @@ fun RichTravelGuideView(
     }
     val themeColors = HavamaniaTheme.colors
     val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
-    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision) { CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType) }
+    val guidePersonalization = LocalTravelPersonalization.current?.takeIf { it.uid == plan.userId }
+    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision, guidePersonalization) {
+        CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType, guidePersonalization)
+    }
     val analysis = plan.analyses.lastOrNull()
 
     val avgTemp = analysis?.averageTemperature?.toInt()
@@ -428,7 +437,7 @@ fun RichTravelGuideView(
 
     val avgTempText = avgTemp?.let { "$it°C" } ?: "Veri bekleniyor"
     val rainRiskText = rainRisk?.let { "%$it" } ?: "Veri bekleniyor"
-    val scoreText = score?.let { "$it/100" } ?: "Analiz Bekleniyor"
+    val scoreText = score?.let { "$it/100" } ?: "Analiz bekleniyor"
 
     LaunchedEffect(plan) {
         if (BuildConfig.DEBUG) {
@@ -464,7 +473,7 @@ if (BuildConfig.DEBUG) {
             ?: analysis?.let { RecommendationEngine.getShortWeatherSummaryFromAnalysis(it) }
             ?: "Bu seyahat için henüz detaylı hava analizi yapılmadı. Tahminler hazır olduğunda burada görünecek."
         Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
-        Text(tripForecastTimeLabel(plan.lastForecastSnapshot), style = HavamaniaTheme.typography.caption,
+        Text(tripAnalysisDisplayLabel(plan), style = HavamaniaTheme.typography.caption,
             color = themeColors.textMuted)
 
         Spacer(Modifier.height(16.dp))
@@ -484,29 +493,15 @@ if (BuildConfig.DEBUG) {
         // Valiz / Hazırlık Tavsiyesi
         SectionHeader("VALİZ / HAZIRLIK TAVSİYESİ", Icons.Rounded.Backpack)
         Spacer(Modifier.height(6.dp))
-        val packingTip = if (avgTemp != null && rainRisk != null) {
-            val weatherPart = when {
-                avgTemp < 12 -> "Hava serin/soğuk; kalın mont ve sıcak tutan katmanlar al."
-                rainRisk > 40 -> "Yağış ihtimali yüksek; yağmurluk veya şemsiye ekle."
-                avgTemp > 28 -> "Hava sıcak; hafif kıyafetler ve güneş koruması al."
-                else -> "Mevsim koşullarına uygun giysiler tercih et."
-            }
-            val tripTypePart = when (plan.tripType) {
-                TripType.GASTRONOMY -> "Şehir içindeki lezzet durakları arasında rahat hareket etmek için konforlu günlük ayakkabılar ve pratik çanta seç."
-                TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Doğa yürüyüşlerine uygun sağlam tabanlı ayakkabı ve esnek outdoor kıyafetler tercih et."
-                TripType.CULTURE -> "Uzun müze ve sokak gezileri için rahat yürüyüş ayakkabıları idealdir."
-                TripType.BEACH -> "Plaj giysileri, havlu ve güneş gözlüğü unutma."
-                else -> "Seyahat konforunu artıracak rahat günlük eşyalar al."
-            }
-            "$weatherPart $tripTypePart"
-        } else {
-            when (plan.tripType) {
-                TripType.GASTRONOMY -> "Şehir içi keşifler ve lezzet durakları için konforlu günlük ayakkabılar tercih et."
-                TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Doğa yürüyüşlerine uygun sağlam tabanlı ayakkabılar ve rahat outdoor kıyafetler seç."
-                else -> "Mevsim şartlarına uygun temel seyahat hazırlıkları yapılabilir."
-            }
+        val packingTip = travelWeatherPacking(plan.lastForecastSnapshot, guidePersonalization)
+        val activityPacking = when (plan.tripType) {
+            TripType.GASTRONOMY -> "Lezzet durakları arasında yürümek için rahat ayakkabı ve pratik bir çanta hazırla."
+            TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Planladığın parkura uygun sağlam tabanlı ayakkabı hazırla."
+            TripType.CULTURE -> "Müze ve sokak gezileri için rahat yürüyüş ayakkabısı hazırla."
+            TripType.BEACH -> "Plaj planın için havlu ve yüzme eşyalarını hazırla."
+            else -> "Hazırlığını planladığın etkinliklere göre tamamla."
         }
-        Text(packingTip, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
+        Text("$packingTip $activityPacking", style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
 
         Spacer(Modifier.height(16.dp))
 

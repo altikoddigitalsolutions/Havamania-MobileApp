@@ -427,7 +427,7 @@ private fun SettingsNavRow(title: String, subtitle: String?, icon: ImageVector, 
 }
 
 @Composable
-private fun SettingsClickRow(
+internal fun SettingsClickRow(
     title: String,
     value: String?,
     icon: ImageVector,
@@ -437,9 +437,11 @@ private fun SettingsClickRow(
     onClick: () -> Unit
 ) {
     val themeColors = HavamaniaTheme.colors
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val stackValue = isVertical || maxWidth < 360.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxWidth().heightIn(min = 48.dp)
             .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button) { onClick() }
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -447,7 +449,7 @@ private fun SettingsClickRow(
         Icon(icon, null, tint = themeColors.accent, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(16.dp))
 
-        if (isVertical) {
+        if (stackValue) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -463,7 +465,7 @@ private fun SettingsClickRow(
                     Text(
                         text = value,
                         style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
-                        color = themeColors.textSecondary.copy(alpha = 0.7f),
+                        color = themeColors.textSecondary,
                         softWrap = true
                     )
                 }
@@ -491,6 +493,7 @@ private fun SettingsClickRow(
             tint = themeColors.textMuted,
             modifier = Modifier.size(16.dp)
         )
+    }
     }
 }
 
@@ -592,18 +595,20 @@ fun ThemeSelectionDialog(currentTheme: AppTheme, onThemeSelected: (AppTheme) -> 
     val themeColors = HavamaniaTheme.colors
     HavamaniaDialog(
         onDismissRequest = onDismiss,
-        title = "Görünüm Seç",
+        title = "Görünüm seç",
         text = "",
         confirmText = "Kapat",
         onConfirm = onDismiss,
         content = {
-            Column {
+            Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
                 AppTheme.entries.filter { it != AppTheme.AUTO }.forEach { theme ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onThemeSelected(theme) }.padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().selectable(selected = theme == currentTheme,
+                            role = androidx.compose.ui.semantics.Role.RadioButton,
+                            onClick = { onThemeSelected(theme) }).heightIn(min = 48.dp).padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = theme == currentTheme, onClick = { onThemeSelected(theme) })
+                        RadioButton(selected = theme == currentTheme, onClick = null)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(theme.title, color = themeColors.textPrimary)
                     }
@@ -654,7 +659,7 @@ fun ToneSelectionDialog(currentTone: AssistantTone, onToneSelected: (AssistantTo
     val themeColors = HavamaniaTheme.colors
     HavamaniaDialog(
         onDismissRequest = onDismiss,
-        title = "Asistan Üslubu",
+        title = "Asistan üslubu",
         text = "",
         confirmText = "Kapat",
         onConfirm = onDismiss,
@@ -662,10 +667,12 @@ fun ToneSelectionDialog(currentTone: AssistantTone, onToneSelected: (AssistantTo
             Column(modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
                 AssistantTone.entries.forEach { tone ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clickable { onToneSelected(tone) }.padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().selectable(selected = tone == currentTone,
+                            role = androidx.compose.ui.semantics.Role.RadioButton,
+                            onClick = { onToneSelected(tone) }).heightIn(min = 48.dp).padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = tone == currentTone, onClick = { onToneSelected(tone) })
+                        RadioButton(selected = tone == currentTone, onClick = null)
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(tone.title, fontWeight = FontWeight.Bold, color = themeColors.textPrimary)

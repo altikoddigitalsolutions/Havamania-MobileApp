@@ -22,6 +22,10 @@ internal class ProfileSaveController(private val timeoutMillis: Long = 20_000) {
     private var generation = 0L
     fun reset() { generation++; mutableState.value = ProfileSaveState.Idle }
 
+    fun reject(message: String) {
+        if (mutableState.value != ProfileSaveState.Saving) mutableState.value = ProfileSaveState.Failed(message)
+    }
+
     suspend fun save(name: String, bio: String, persist: suspend (String, String) -> Unit) {
         if (mutableState.value == ProfileSaveState.Saving) return
         val trimmedName = name.trim()

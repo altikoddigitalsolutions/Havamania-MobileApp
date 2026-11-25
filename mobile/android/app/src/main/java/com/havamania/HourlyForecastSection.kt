@@ -6,6 +6,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -47,11 +48,23 @@ fun HourlyForecastRow(
     onItemSelect: (Int) -> Unit = {},
     themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
+    val currentTheme by themeViewModel.currentTheme.collectAsState()
+    HourlyForecastContent(modifier, items, sunriseTime, sunsetTime, onItemSelect, currentTheme)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun HourlyForecastContent(
+    modifier: Modifier = Modifier,
+    items: List<HourlyWeather>,
+    sunriseTime: String? = null,
+    sunsetTime: String? = null,
+    onItemSelect: (Int) -> Unit = {},
+    currentTheme: AppTheme
+) {
     val listState = rememberLazyListState()
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val themeColors = HavamaniaTheme.colors
-    val currentTheme by themeViewModel.currentTheme.collectAsState()
-
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "SAATLİK TAHMİN",
@@ -59,7 +72,7 @@ fun HourlyForecastRow(
                 letterSpacing = 2.5.sp,
                 fontWeight = FontWeight.Black
             ),
-            color = themeColors.textPrimary.copy(alpha = 0.35f),
+            color = themeColors.textSecondary,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
         )
 
@@ -73,7 +86,7 @@ fun HourlyForecastRow(
         ) {
             itemsIndexed(
                 items = items,
-                key = { _, item -> item.time }
+                key = { index, item -> item.fullTime.ifBlank { "$index:${item.time}" } }
             ) { index, item ->
                 HourlyForecastItem(
                     data = item,
@@ -105,12 +118,6 @@ fun HourlyForecastItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressedState = interactionSource.collectIsPressedAsState()
     val isPressed = isPressedState.value
-
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.05f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
-        label = "scale"
-    )
 
     val phase = remember(data.fullTime, data.time, sunriseTime, sunsetTime) {
         val sunrise = sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
@@ -147,20 +154,20 @@ fun HourlyForecastItem(
         label = "itemAlpha"
     )
 
-    // Premium Blue/Cyan Gradient for Selected State
-    val selectedGradient = remember {
-        Brush.verticalGradient(listOf(Color(0xFF32BDF2), Color(0xFF1298D6)))
-    }
+    // Shared theme palette keeps selected text readable across the full gradient.
+    val palette = com.havamania.ui.theme.themeButtonPalette(themeColors.gradientSecondary, themeColors.onAccent)
+    val selectedGradient = Brush.verticalGradient(palette.stops)
+    val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceIn(1f, 2f)
     val unselectedBackground = if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.06f)
 
     Box(
         modifier = Modifier
-            .width(88.dp)
-            .height(160.dp)
+            .width((88 * fontScale).dp)
+            .heightIn(min = 160.dp)
             .graphicsLayer {
                 val pressScale = if (isPressed) 0.96f else 1f
-                scaleX = scale * pressScale
-                scaleY = scale * pressScale
+                scaleX = pressScale
+                scaleY = pressScale
                 alpha = itemAlpha
             }
             .clip(RoundedCornerShape(28.dp))
@@ -170,32 +177,20 @@ fun HourlyForecastItem(
                 color = if (isSelected) Color.White.copy(alpha = 0.35f) else if (currentTheme == AppTheme.LIGHT) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f),
                 shape = RoundedCornerShape(28.dp)
             )
-            .clickable(
+            .selectable(
+                selected = isSelected,
+                role = androidx.compose.ui.semantics.Role.Tab,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
     ) {
-        // Subtle glow for selected
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-                            radius = 180f
-                        )
-                    )
-            )
-        }
-
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = 16.dp, horizontal = 4.dp),
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = data.time,
@@ -203,62 +198,60 @@ fun HourlyForecastItem(
                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                     fontSize = 12.sp
                 ),
-                color = if (isSelected) Color.White else themeColors.textPrimary
+                color = if (isSelected) palette.content else themeColors.textPrimary
             )
 
             Icon(
                 imageVector = spec.mainIcon,
                 contentDescription = null,
                 modifier = Modifier.size(if (isSelected) 32.dp else 28.dp),
-                tint = if (isSelected) Color.White else themeColors.textPrimary
+                tint = if (isSelected) palette.content else themeColors.textPrimary
             )
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = data.temp,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp
                     ),
-                    color = if (isSelected) Color.White else themeColors.textPrimary
+                    color = if (isSelected) palette.content else themeColors.textPrimary
                 )
 
                 Spacer(Modifier.height(4.dp))
 
                 Box(
-                    modifier = Modifier.height(22.dp).width(44.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 22.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!data.precipProb.isNullOrEmpty() && data.precipProb != "0%" && data.precipProb != "0") {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color.White.copy(alpha = 0.22f) else themeColors.accent.copy(alpha = 0.12f))
-                                .padding(horizontal = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
                         ) {
                             Icon(
                                 Icons.Rounded.WaterDrop,
                                 null,
-                                tint = if (isSelected) Color.White else themeColors.accent,
+                                tint = if (isSelected) palette.content else themeColors.accent,
                                 modifier = Modifier.size(10.dp)
                             )
                             Spacer(Modifier.width(2.dp))
                             Text(
                                 text = data.precipProb,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Clip,
-                                color = if (isSelected) Color.White else themeColors.accent
+                                color = if (isSelected) palette.content else themeColors.accent
                             )
                         }
                     } else {
-                        Spacer(Modifier.fillMaxSize())
+                        Spacer(Modifier.height(22.dp))
                     }
                 }
             }

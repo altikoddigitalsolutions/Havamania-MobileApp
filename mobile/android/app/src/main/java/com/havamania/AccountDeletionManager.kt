@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.work.WorkManager
 import androidx.work.await
 import coil.imageLoader
-import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.havamania.ui.theme.dataStore
@@ -42,6 +41,11 @@ class AccountDeletionManager private constructor(private val app: Application) {
     val state = mutableState.asStateFlow()
     private val api by lazy { BackendChatbotFactory.create() }
     private val auth get() = FirebaseAuth.getInstance()
+    private val authFence get() = AuthSessionFences.forAuth(auth,
+        FileRegistrationPendingStore(File(app.noBackupFilesDir, "auth-session-state.json")))
+    private fun signOutSession() {
+        try { authFence.lockSignedOut() } finally { auth.signOut() }
+    }
 
     init {
         try {
@@ -59,23 +63,32 @@ class AccountDeletionManager private constructor(private val app: Application) {
 
     fun start(password: String, onComplete: (Boolean, String?) -> Unit) {
         if (state.value.busy || state.value.pending) return
+        val user = auth.currentUser
+        val email = user?.email
+        if (user == null || email == null) {
+            onComplete(false, "Oturum bulunamadı. Yeniden giriş yapın.")
+            return
+        }
         accountPreferenceWriteEpoch.invalidate()
         mutableState.value = AccountDeletionState(busy = true)
         scope.launch {
             try {
-                val availability = api.deletionAvailability()
-                val available = availability.isSuccessful && availability.body()?.available == true
-                availability.errorBody()?.close()
-                if (!available) {
+                val token = prepareDeletionOwner(user.uid, { auth.currentUser?.uid }, authFence,
+                    available = {
+                        val availability = api.deletionAvailability()
+                        val available = availability.isSuccessful && availability.body()?.available == true
+                        availability.errorBody()?.close()
+                        available
+                    },
+                    reauthenticate = { reauthenticateDeletionOwner(auth, authFence, user, email, password, user.uid) },
+                    token = { awaitOwnedSdkMutation(auth, authFence, user.uid) { user.getIdToken(true) }.token
+                        ?: error("Kimlik doğrulanamadı") })
+                if (token == null) {
                     val message = "Hesap silme hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin."
                     mutableState.value = AccountDeletionState(message = message)
                     onComplete(false, message)
                     return@launch
                 }
-                val user = auth.currentUser ?: error("Oturum bulunamadı")
-                val email = user.email ?: error("E-posta bulunamadı")
-                user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
-                val token = user.getIdToken(true).await().token ?: error("Kimlik doğrulanamadı")
                 val key = ByteArray(32).also { SecureRandom().nextBytes(it) }
                     .joinToString("") { "%02x".format(it.toInt() and 0xff) }
                 val record = DeletionJournal(user.uid, key)
@@ -108,18 +121,23 @@ class AccountDeletionManager private constructor(private val app: Application) {
                 if (password.isNotEmpty()) {
                     var user = auth.currentUser
                     if (user == null) {
-                        user = auth.signInWithEmailAndPassword(email.trim(), password).await().user
+                        user = authenticateDeletionOwner(auth, authFence, email, password, record.uid)
                     } else {
-                        user.reauthenticate(EmailAuthProvider.getCredential(user.email ?: email, password)).await()
+                        reauthenticateDeletionOwner(auth, authFence, user, user.email ?: email, password, record.uid)
                     }
                     if (user?.uid != record.uid) {
-                        auth.signOut()
+                        signOutSession()
                         error("Different account")
                     }
-                    token = user.getIdToken(true).await().token
+                    token = awaitDeletionOwnerToken(record.uid, { auth.currentUser?.uid }, authFence) {
+                        awaitOwnedSdkMutation(auth, authFence, record.uid) { user.getIdToken(true) }.token
+                    }
                 } else if (auth.currentUser?.uid == record.uid) {
                     try {
-                        token = auth.currentUser?.getIdToken(false)?.await()?.token
+                        token = awaitDeletionOwnerToken(record.uid, { auth.currentUser?.uid }, authFence) {
+                            val tokenUser = checkNotNull(auth.currentUser?.takeIf { it.uid == record.uid })
+                            awaitOwnedSdkMutation(auth, authFence, record.uid) { tokenUser.getIdToken(false) }.token
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -173,7 +191,7 @@ class AccountDeletionManager private constructor(private val app: Application) {
     private suspend fun finishLocally(record: DeletionJournal) {
         mutableState.value = AccountDeletionState(pending = true, busy = true,
             message = "Sunucudaki silme tamamlandı. Cihazdaki hesap verileri temizleniyor.")
-        auth.signOut()
+        signOutSession()
         UserProfileRepository.getInstance().stopObserving()
         yield()
         cleanLocalData(record.uid)

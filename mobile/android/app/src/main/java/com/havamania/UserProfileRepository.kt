@@ -91,7 +91,10 @@ class UserProfileRepository internal constructor(
                         _serverDefaultCity.value = null
                         confirmedPremium = false
                     }
-                    _readState.value = decoded
+                    _readState.value = if (decoded is ProfileReadState.Ready)
+                        decoded.copy(serverConfirmed = !snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites(),
+                            hasPendingWrites = snapshot.metadata.hasPendingWrites())
+                    else decoded
                 }
             }
     }

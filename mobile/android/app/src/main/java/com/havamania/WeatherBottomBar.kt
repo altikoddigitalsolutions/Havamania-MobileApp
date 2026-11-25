@@ -57,7 +57,8 @@ fun WeatherBottomBar(
         modifier = modifier.fillMaxWidth(),
         tonalElevation = 0.dp
     ) {
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val labelWidth = (minOf(maxWidth, responsive.maxContentWidth) / 4 - 4.dp).coerceAtLeast(1.dp)
             Column(
                 modifier = Modifier
                     .then(
@@ -75,24 +76,14 @@ fun WeatherBottomBar(
             )
 
             NavigationBar(
+                modifier = Modifier.heightIn(min = if (androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f) 112.dp else 80.dp),
                 containerColor = Color.Transparent,
                 tonalElevation = 0.dp,
                 windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 items.forEach { item ->
                     // Logic: Match base route precisely to avoid cross-tab activation
-                    val isSelected = when (item.route) {
-                        Routes.WEATHER_ROOT -> currentRoute == Routes.WEATHER_ROOT
-                        Routes.CALENDAR_ROOT -> currentRoute?.startsWith(Routes.CALENDAR_ROOT) == true
-                        Routes.AI_ROOT -> currentRoute?.startsWith(Routes.AI_ROOT) == true || currentRoute?.startsWith(Routes.AI_HISTORY) == true
-                        Routes.PROFILE_ROOT -> {
-                            currentRoute == Routes.PROFILE_ROOT ||
-                            currentRoute == Routes.EDIT_PROFILE ||
-                            currentRoute == Routes.CITIES ||
-                            currentRoute == Routes.SETTINGS
-                        }
-                        else -> currentRoute == item.route
-                    }
+                    val isSelected = bottomNavigationOwner(currentRoute) == item.route
 
                     NavigationBarItem(
                         selected = isSelected,
@@ -100,33 +91,27 @@ fun WeatherBottomBar(
 if (BuildConfig.DEBUG) {
                                 android.util.Log.d("Navigation", "Tab Click: ${item.route}")
 }
-                            onNavigate(item.route)
+                            if (currentRoute?.substringBefore("?") != item.route) onNavigate(item.route)
                         },
                         label = {
                             Text(
                                 text = item.title,
+                                modifier = Modifier.requiredWidth(labelWidth),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 style = HavamaniaTheme.typography.label.copy(
                                     fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                                     fontSize = 10.sp,
-                                    letterSpacing = 0.5.sp
+                                    letterSpacing = 0.sp
                                 ),
                                 color = if (isSelected) themeColors.accent else themeColors.textSecondary,
-                                maxLines = 1
+                                maxLines = 2
                             )
                         },
                         icon = {
                             val iconSize by animateDpAsState(targetValue = if (isSelected) 24.dp else 22.dp, label = "iconSize")
 
                             Box(contentAlignment = Alignment.Center) {
-                                if (isSelected) {
-                                    // Subtle Glow behind icon
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .blur(10.dp)
-                                            .background(themeColors.accent.copy(alpha = 0.15f), CircleShape)
-                                    )
-                                }
+
 
                                 Icon(
                                     imageVector = item.icon,

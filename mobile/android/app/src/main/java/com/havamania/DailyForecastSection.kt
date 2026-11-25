@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -110,7 +113,7 @@ fun DailyForecastPanel(
     selectedDate: String = "",
     onDayClick: (DailyForecast) -> Unit
 ) {
-    var expandedForecast by remember { mutableStateOf(false) }
+    var expandedForecast by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val visibleForecast = if (expandedForecast) forecasts else forecasts.take(7)
 
     val themeColors = HavamaniaTheme.colors
@@ -206,180 +209,65 @@ fun DailyForecastPanel(
 }
 
 @Composable
-fun ForecastExpandButton(
-    expanded: Boolean,
-    onClick: () -> Unit
-) {
-    val themeColors = HavamaniaTheme.colors
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressedState = interactionSource.collectIsPressedAsState()
-    val isPressed = isPressedState.value
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-        label = "buttonScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .scale(scale)
-            .clip(CircleShape)
-            .background(themeColors.textPrimary.copy(alpha = 0.06f))
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    listOf(themeColors.border.copy(alpha = 0.4f), Color.Transparent)
-                ),
-                shape = CircleShape
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 20.dp, vertical = 10.dp)
+fun ForecastExpandButton(expanded: Boolean, onClick: () -> Unit) {
+    val colors = HavamaniaTheme.colors
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp).semantics {
+            stateDescription = if (expanded) "Tüm günler gösteriliyor" else "İlk 7 gün gösteriliyor"
+        },
+        colors = ButtonDefaults.textButtonColors(contentColor = colors.textPrimary),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = if (expanded) "7 güne düşür" else "Tüm günleri göster",
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = themeColors.textPrimary.copy(alpha = 0.8f),
-                    letterSpacing = 0.5.sp
-                )
-            )
-            Icon(
-                imageVector = if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
-                contentDescription = null,
-                tint = themeColors.accent,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        Text(if (expanded) "7 güne düşür" else "Tüm günleri göster",
+            modifier = Modifier.weight(1f, fill = false), fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(8.dp))
+        Icon(if (expanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+            contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
     }
 }
-
 
 @Composable
 fun DailyForecastRow(data: DailyForecast, isSelected: Boolean = false, onClick: () -> Unit) {
-    val themeColors = HavamaniaTheme.colors
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressedState = interactionSource.collectIsPressedAsState()
-    val isPressed = isPressedState.value
+    val colors = HavamaniaTheme.colors
     val style = DailyForecastStyleMapper.getStyle(data.weatherCode)
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
-        label = "pressScale"
-    )
-
-    SideEffect {
-if (BuildConfig.DEBUG) {
-            Log.d(
-                "DailyForecastStyle",
-                "label=${if (data.isToday) "Bugün" else data.day} date=${data.date} selected=$isSelected today=${data.isToday}"
-            )
-}
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp) // Even taller for more air
-            .scale(scale)
-            .clip(RoundedCornerShape(20.dp)) // More rounded
-            .background(
-                if (isSelected) themeColors.accent.copy(alpha = 0.12f)
-                else Color.Transparent
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Day Label
-        Column(modifier = Modifier.width(90.dp)) {
-            Text(
-                text = if (data.isToday) "Bugün" else data.day.split(" ").last(),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                    fontSize = 16.sp
-                ),
-                color = if (isSelected) themeColors.textPrimary else themeColors.textPrimary.copy(alpha = 0.9f)
-            )
-            Text(
-                text = if (data.isToday) "Şimdi" else {
-                    try {
-                        val dateObj = LocalDate.parse(data.date)
-                        dateObj.format(DateTimeFormatter.ofPattern("dd/MM", Locale("tr", "TR")))
-                    } catch (e: Exception) {
-                        data.date.split("-").let { if (it.size >= 3) "${it[2]}/${it[1]}" else data.date }
-                    }
-                },
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 11.sp
-                ),
-                color = themeColors.textSecondary.copy(alpha = 0.5f)
-            )
+    val dateLabel = if (data.isToday) "Bugün" else runCatching {
+        LocalDate.parse(data.date).format(DateTimeFormatter.ofPattern("dd/MM", Locale("tr", "TR")))
+    }.getOrDefault(data.date)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val stacked = maxWidth < 360.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+        val selection = Modifier.fillMaxWidth().heightIn(min = 72.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (isSelected) colors.accent.copy(alpha = 0.12f) else Color.Transparent)
+            .selectable(selected = isSelected, role = androidx.compose.ui.semantics.Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
+        @Composable fun Day(modifier: Modifier = Modifier) {
+            Column(modifier) {
+                Text(if (data.isToday) "Bugün" else data.day.split(" ").last(),
+                    style = MaterialTheme.typography.titleMedium, color = colors.textPrimary,
+                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold)
+                if (!data.isToday) Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+            }
         }
-
-        // Weather Icon
-        Box(
-            modifier = Modifier.width(50.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = WeatherMapper.getIconFromName(data.iconName),
-                contentDescription = null,
-                tint = if (isSelected) themeColors.accent else style.iconColor.copy(alpha = 0.8f),
-                modifier = Modifier.size(30.dp)
-            )
+        @Composable fun Symbol() {
+            Icon(WeatherMapper.getIconFromName(data.iconName), null,
+                tint = if (isSelected) colors.accent else style.iconColor,
+                modifier = Modifier.size(28.dp))
         }
-
-        Spacer(Modifier.width(12.dp))
-
-        // Min Temp
-        Text(
-            text = "${data.minTemp}°",
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
-            ),
-            color = themeColors.textPrimary.copy(alpha = 0.4f),
-            modifier = Modifier.width(36.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
-        )
-
-        // Range Bar
-        TemperatureRangeBar(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 12.dp),
-            min = data.minTemp,
-            max = data.maxTemp,
-            style = style,
-            isSelected = isSelected
-        )
-
-        // Max Temp
-        Text(
-            text = "${data.maxTemp}°",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Black,
-                fontSize = 17.sp
-            ),
-            color = themeColors.textPrimary,
-            modifier = Modifier.width(40.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
-        )
+        @Composable fun Temperatures(modifier: Modifier = Modifier) {
+            Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${data.minTemp}°", style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary)
+                TemperatureRangeBar(Modifier.weight(1f), data.minTemp, data.maxTemp, style, isSelected)
+                Text("${data.maxTemp}°", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            }
+        }
+        if (stacked) Column(selection, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Day(Modifier.weight(1f)); Symbol() }
+            Temperatures(Modifier.fillMaxWidth())
+        } else Row(selection, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Day(Modifier.weight(1f)); Symbol(); Temperatures(Modifier.weight(1.5f))
+        }
     }
 }
 

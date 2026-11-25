@@ -123,12 +123,12 @@ internal object LocalTravelGuides {
         return if (districtKey == null) cities[cityKey] else districts[cityKey to districtKey]
     }
 
-    fun experiences(city: String, district: String?, tripType: TripType?): List<TravelGuideExperience> {
-        TravelGuideUpdates.current(city, district)?.let { return it.selected(tripType) }
+    fun experiences(city: String, district: String?, tripType: TripType?, interests: Set<String> = emptySet()): List<TravelGuideExperience> {
+        TravelGuideUpdates.current(city, district)?.let { return it.selected(tripType, interests) }
         if (find(city, district) == null) return emptyList()
         val cityKey = key(city)
         val districtKey = district?.let(::key)?.takeIf { it.isNotEmpty() && it != cityKey }
-        return TravelGuideExperiences.forLocation(cityKey, districtKey, tripType)
+        return TravelGuideExperiences.forLocation(cityKey, districtKey, tripType, interests)
     }
 
     internal fun key(value: String): String = value.trim().lowercase(Locale.forLanguageTag("tr"))

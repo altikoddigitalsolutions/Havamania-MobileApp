@@ -120,8 +120,7 @@ if (BuildConfig.DEBUG) {
         val snapshot = baseSnapshot.copy(travelScore = calculateTravelScore(baseSnapshot, plan.tripType))
 
         // Kişiselleştirme
-        val interests = ThemeManager.getUserInterests(context, currentUid).first()
-        val personalization = PersonalizationProfile(uid = currentUid, selectedInterests = interests.toList())
+        val personalization = ThemeManager.getPersonalizationSnapshot(context, currentUid).first()
 
         val aiResult = TravelAiHelper.generateTravelAiSuggestion(
             plan.city, plan.tripType, snapshot, plan.lastForecastSnapshot,

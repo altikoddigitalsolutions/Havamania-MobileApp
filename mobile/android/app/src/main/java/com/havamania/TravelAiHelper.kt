@@ -2,7 +2,6 @@ package com.havamania
 
 import com.havamania.ui.theme.AssistantTone
 import java.time.LocalDate
-import java.util.Locale
 
 object TravelAiHelper {
 
@@ -29,13 +28,12 @@ object TravelAiHelper {
         }
 
         // Kişiselleştirme Katmanı (Personalization Layer)
-        val interests = personalization?.selectedInterests ?: emptyList()
-        val isPersonalizationActive = personalization?.personalizationEnabled ?: true
+        val interests = personalization.travelInterests()
 
         val windowDays = TRIP_ANALYSIS_WINDOW_DAYS
 
         val guide = LocalTravelGuides.find(city, district)
-        val experiences = LocalTravelGuides.experiences(city, district, tripType)
+        val experiences = LocalTravelGuides.experiences(city, district, tripType, interests)
         val experienceAdvice = experiences.takeIf { it.isNotEmpty() }
             ?.joinToString("\n\n") { "${it.title}\n${it.description}" } ?: guide?.experience
         val destination = district?.takeIf { it.isNotBlank() }?.let { "$it, $city" } ?: city
@@ -45,124 +43,8 @@ object TravelAiHelper {
             return "HAVA ÖZETİ|Hava tahmini seyahate $windowDays gün kala hazırlanacak. [SEP] VALİZ TAVSİYESİ|Havaya göre valiz önerisi için tahmin bekleniyor. [SEP] MUTLAKA GÖR|${guide?.visit ?: missingGuide} [SEP] DENEMEDEN DÖNME|${guide?.food ?: missingGuide} [SEP] YEREL TAVSİYE|${experienceAdvice ?: missingGuide}"
         }
 
-        var weatherBlock = ""
-        if (forecastSnapshot != null) {
-            val precip = forecastSnapshot.precipitationProbability ?: 0
-            val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
-            val windSpeed = forecastSnapshot.windSpeed ?: 0.0
-            val code = forecastSnapshot.weatherCode ?: 0
-            val cond = (forecastSnapshot.conditionSummary ?: "Açık").lowercase(Locale("tr"))
-
-            val formattedPrecip = WeatherUtils.formatRainProbability(precip)
-            val windText = WeatherUtils.formatWindWithLevel(windSpeed)
-
-            weatherBlock = when (tone) {
-                AssistantTone.SAMIMI -> {
-                    when {
-                        code >= 95 -> "Hava biraz huysuz, fırtına çıkabilir! Rüzgar $windText civarında, dışarı çıkarken iki kere düşün canım."
-                        code >= 80 -> "Sağanak yağmur geliyor, ıslanmaya hazır ol! Şemsiyeni sakın unutma tatlım."
-                        precip > 60 -> "Gökyüzü biraz ağlamaklı, $formattedPrecip yağmur ihtimali var. Hazırlıklı ol!"
-                        maxTemp > 30 -> "Sıcaklık $maxTemp°C civarında olacak. Güncel hava koşullarını takip etmeni öneririm."
-                        maxTemp < 10 -> "Hava biraz sert, buz gibi olacak. Sıkı giyinmeyi unutma!"
-                        else -> "Tam gezmelik harika bir hava! $maxTemp° derece ve $cond gökyüzü seni bekliyor."
-                    }
-                }
-                AssistantTone.RESMI -> {
-                    when {
-                        code >= 95 -> "İlgili tarihlerde fırtına riski ve $windText hızında rüzgar öngörülmektedir. Tedbirli olunması tavsiye edilir."
-                        code >= 80 -> "Kuvvetli sağanak yağış beklenmektedir. Olumsuz hava şartlarına karşı hazırlıklı olunmalıdır."
-                        precip > 60 -> "Hava durumunun yağışlı geçeceği (%$precip) tahmin edilmektedir. Şemsiye bulundurulması önerilir."
-                        maxTemp > 30 -> "Sıcaklık değerlerinin $maxTemp°C seviyelerinde seyretmesi beklenmektedir."
-                        maxTemp < 10 -> "Düşük sıcaklık değerleri ($maxTemp°) ve serin hava koşulları hakim olacaktır."
-                        else -> "Meteorolojik koşullar seyahat için elverişli olup, sıcaklık $maxTemp° civarında seyrecektir."
-                    }
-                }
-                AssistantTone.KISA_NET -> {
-                    when {
-                        code >= 95 -> "Fırtına riski, rüzgar $windText. Dikkatli ol."
-                        code >= 80 -> "Sağanak yağışlı. Şemsiye al."
-                        precip > 60 -> "Yağmurlu (%$precip). Önlem al."
-                        maxTemp > 30 -> "Sıcak ($maxTemp°C)."
-                        maxTemp < 10 -> "Soğuk ($maxTemp°). Kalın giyin."
-                        else -> "Hava uygun ($maxTemp°, $cond)."
-                    }
-                }
-                AssistantTone.DETAYLI_UZMAN -> {
-                    when {
-                        code >= 95 -> "Troposferik instabilite: Fırtına olasılığı mevcuttur. Rüzgar vektörü $windText seviyesindedir."
-                        code >= 80 -> "Presipitasyon zirvesi: Kuvvetli sağanak geçişleri öngörülmektedir. Termal konfor düşük."
-                        precip > 60 -> "Atmosferik nem doygunluğu: $formattedPrecip olasılıkla yağış beklenmektedir. Görüş mesafesi etkilenebilir."
-                        maxTemp > 30 -> "Tahmin edilen en yüksek sıcaklık $maxTemp°C. Güncel hava koşulları takip edilmelidir."
-                        maxTemp < 10 -> "Hipotermi riski: Sıcaklık $maxTemp°C civarındadır. İzolasyon sağlayan katmanlar önerilir."
-                        else -> "Meteorolojik stabilite: Hava $maxTemp°C ve $cond durumdadır. Aktivite parametreleri için ideal."
-                    }
-                }
-                else -> { // DENGELİ
-                    when {
-                        code >= 95 -> "Hava fırtınalı görünüyor, yağış riski yüksek. Rüzgar $windText hızına ulaşabilir. Yaklaşık $maxTemp° civarında olacak, tedbirli olmalısın."
-                        code >= 80 -> "Hava sağanak yağışlı görünüyor, yağış riski yüksek. Yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
-                        precip > 60 -> "Gideceğin tarihlerde gökyüzü biraz ağlamaklı görünüyor, $formattedPrecip yağmur ihtimali var. Hava yaklaşık $maxTemp° civarında olacak, şemsiyeni sakın unutma."
-                        maxTemp > 30 -> "Sıcaklığın $maxTemp°C civarında olması bekleniyor. Diğer hava koşullarını güncel tahminden takip edebilirsin."
-                        maxTemp < 10 -> "Hava biraz sert ve serin olacak, termometreler $maxTemp° civarında gezecek. Kalın bir şeyler almanı öneririm."
-                        windSpeed > 30 -> "Hava oldukça rüzgarlı ($windText) olacak. $maxTemp° sıcaklıkta bile esinti üşütebilir, rüzgar kesici bir şeyler almanı öneririm."
-                        else -> "Tam gezmelik, harika bir hava seni bekliyor! $maxTemp° derece ve $cond gökyüzü seyahatine ayrı bir keyif katacak. Yağmur ihtimali $formattedPrecip."
-                    }
-                }
-            }
-
-            // A rare hazardous day must not turn into an optimistic summary in any tone.
-            tripWeatherWarning(forecastSnapshot)?.let { weatherBlock = it }
-
-            forecastSnapshot.uvIndex?.takeIf { it.isFinite() && it > 5 }?.let { uv ->
-                weatherBlock += " Tahminde UV indeksi: $uv. Güncel uyarıları kontrol edin."
-            }
-
-            // Kişiselleştirilmiş Ek Bilgi (Personalized Extra Info)
-            if (isPersonalizationActive) {
-                if (interests.any { it.contains("kamp", true) || it.contains("outdoor", true) } && (precip > 30 || windSpeed > 25)) {
-                    weatherBlock += " 🏕️ Kamp için zemin ıslaklığına ve rüzgar şiddetine dikkat etmeni öneririm."
-                }
-                if (interests.any { it.contains("bisiklet", true) || it.contains("kis_surusu", true) } && windSpeed > 20) {
-                    weatherBlock += " 🚲 Rüzgar hızı sürüşü biraz zorlaştırabilir."
-                }
-                if (interests.contains("cocuklar_icin") && maxTemp < 15) {
-                    weatherBlock += " 👶 Minik gezginler için yedek katmanlar almayı unutma."
-                }
-            }
-        } else {
-            weatherBlock = when (tone) {
-                AssistantTone.SAMIMI -> "Şu an tam veriye bakamadım ama mevsime göre hazırlan canım. Keyifli geçeceğine eminim!"
-                AssistantTone.RESMI -> "Veri erişimi kısıtlılığı nedeniyle mevsim normallerine göre planlama yapılması önerilmektedir."
-                AssistantTone.KISA_NET -> "Veri yok. Mevsimlik plan yap."
-                else -> "Şu an hava servisine ulaşılamadı ama mevsim normallerine göre plan yapabilirsin. Genel olarak seyahat için elverişli ve güzel bir dönem."
-            }
-        }
-
-        var packingBlock = ""
-        if (forecastSnapshot != null) {
-            val precip = forecastSnapshot.precipitationProbability ?: 0
-            val maxTemp = forecastSnapshot.maxTemp?.toInt() ?: 20
-            val minTemp = forecastSnapshot.minTemp?.toInt() ?: 15
-
-            val basePacking = when {
-                precip > 50 -> "Hava yağışlı geçeceği için şık bir yağmurluk ve su geçirmeyen bir ayakkabı hayat kurtarır. Valizine mutlaka sağlam bir şemsiye eklemelisin."
-                maxTemp > 28 -> "Hava oldukça sıcak geçecek; pamuklu ve ferah kıyafetler seçmeni öneririm. Güneş gözlüğün ve yüksek koruyucu kremin olmazsa olmazın."
-                maxTemp < 12 -> "Hava sert; kalın bir mont, atkı ve bere ikilisini valizine eklemelisin. Kat kat giyinmek seni gün boyu soğuktan koruyacaktır."
-                else -> "Hafif bir ceket veya sweatshirt yanına almak mantıklı olur. Akşam serinliği için tedarikli olmakta fayda var."
-            }
-
-            packingBlock = basePacking
-
-            // Kişiselleştirilmiş Valiz Önerisi
-            if (isPersonalizationActive) {
-                if (interests.any { it.contains("kamp", true) }) packingBlock += " ⛺ Uyku tulumu ve matını kontrol etmeyi unutma."
-                if (interests.any { it.contains("koşu", true) }) packingBlock += " 🏃 En rahat koşu ayakkabılarını yanına almayı ihmal etme."
-                if (interests.any { it.contains("fotoğraf", true) }) packingBlock += " 📷 Yedek piller ve lens temizleme kiti hayat kurtarabilir."
-                if (maxTemp - minTemp > 10) packingBlock += " 🧥 Seyahat dönemindeki sıcaklık farkı fazla, hırka almanı öneririm."
-            }
-        } else {
-            packingBlock = "Rahat bir yürüyüş ayakkabısı ve her ihtimale karşı akşamları serinleyebilecek havaya karşı hafif bir ceket valizinin olmazsa olmazı."
-        }
+        val weatherBlock = travelWeatherAdvice(forecastSnapshot, tone, personalization)
+        val packingBlock = travelWeatherPacking(forecastSnapshot, personalization)
 
         return "HAVA ÖZETİ|$weatherBlock [SEP] VALİZ TAVSİYESİ|$packingBlock [SEP] MUTLAKA GÖR|${guide?.visit ?: missingGuide} [SEP] DENEMEDEN DÖNME|${guide?.food ?: missingGuide} [SEP] YEREL TAVSİYE|${experienceAdvice ?: missingGuide}"
     }
@@ -209,9 +91,9 @@ object TravelAiHelper {
         }
 
         // 2. Yağış Karşılaştırması
-        val oldPrecip = old.precipitationProbability ?: 0
-        val newPrecip = new.precipitationProbability ?: 0
-        if (Math.abs(newPrecip - oldPrecip) >= 10) {
+        val oldPrecip = old.precipitationProbability?.takeIf { it in 0..100 }
+        val newPrecip = new.precipitationProbability?.takeIf { it in 0..100 }
+        if (oldPrecip != null && newPrecip != null && Math.abs(newPrecip - oldPrecip) >= 10) {
             if (newPrecip > oldPrecip) {
                 changes.add(formatDiff(
                     "Yağmur riski arttı.",
@@ -232,7 +114,9 @@ object TravelAiHelper {
         }
 
         return when {
-            changes.isEmpty() -> formatDiff("Büyük bir değişiklik yok.", "Hava aynı canım, sürpriz yok.", "Hava koşulları stabil seyretmektedir.", "Değişim yok.", "Meteorolojik parametrelerde anlamlı bir sapma gözlemlenmemiştir.")
+            changes.isEmpty() -> if (oldPrecip == null || newPrecip == null || old.travelScore == null || new.travelScore == null)
+                "Karşılaştırma için bazı veriler eksik; hava koşullarının değişmediği söylenemez."
+            else "Karşılaştırılan yağış olasılığı ve seyahat skorunda belirgin değişiklik yok."
             changes.size == 1 -> changes.first()
             else -> changes.joinToString(" ")
         }

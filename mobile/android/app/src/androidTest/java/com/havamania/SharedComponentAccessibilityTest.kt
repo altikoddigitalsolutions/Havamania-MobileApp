@@ -491,9 +491,9 @@ class SharedComponentAccessibilityTest {
                 TestTheme { Box(Modifier.width(260.dp)) { SunTimesCard("06:15", "12:30", "18:45") } }
             }
         }
-        val rise = compose.onNodeWithText("Gün Doğumu").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val rise = compose.onNodeWithText("Gün doğumu").assertIsDisplayed().getUnclippedBoundsInRoot()
         val middle = compose.onNodeWithText("Gündüz ortası").assertIsDisplayed().getUnclippedBoundsInRoot()
-        val set = compose.onNodeWithText("Gün Batımı").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val set = compose.onNodeWithText("Gün batımı").assertIsDisplayed().getUnclippedBoundsInRoot()
         org.junit.Assert.assertTrue(rise.bottom < middle.top && middle.bottom < set.top)
     }
 

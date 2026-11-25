@@ -10,7 +10,7 @@ data class CityPersonality(
 )
 
 object CityPersonalityProvider {
-    fun getPersonality(cityName: String, district: String? = null, tripType: TripType? = null): CityPersonality {
+    fun getPersonality(cityName: String, district: String? = null, tripType: TripType? = null, personalization: PersonalizationProfile? = null): CityPersonality {
         val guide = LocalTravelGuides.find(cityName, district)
         if (guide != null) {
             return CityPersonality(
@@ -19,7 +19,7 @@ object CityPersonalityProvider {
                 mustSee = listOf(guide.visit),
                 food = listOf(guide.food),
                 tip = guide.experience,
-                experiences = LocalTravelGuides.experiences(cityName, district, tripType)
+                experiences = LocalTravelGuides.experiences(cityName, district, tripType, personalization.travelInterests())
             )
         }
         val location = district?.takeIf { it.isNotBlank() }?.let { "$it, $cityName" } ?: cityName

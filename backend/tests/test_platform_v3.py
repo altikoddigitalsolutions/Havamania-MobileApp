@@ -370,3 +370,15 @@ def test_replay_cannot_reuse_old_consent_after_new_document_acceptance(
     )
     assert fresh.status_code == 200, fresh.text
     assert calls[-1]["consent_version"] == 3
+
+
+def test_bridge_wire_drops_health_interest_ids_without_health_consent(client, connected_bridge):
+    headers, calls, _ = connected_bridge
+    response = client.post("/v1/chatbot/ask", headers=headers, json={
+        "question": "Yerel test", "personalization_enabled": True,
+        "selected_interests": ["migren", "polen", "uv_hassasiyeti", "basinc_hassasiyeti", "kamp"],
+        "request_id": str(uuid4()),
+    })
+    assert response.status_code == 200, response.text
+    assert calls[-1]["health_consent"] is False
+    assert calls[-1]["context"]["profile"]["interest"] == "kamp"

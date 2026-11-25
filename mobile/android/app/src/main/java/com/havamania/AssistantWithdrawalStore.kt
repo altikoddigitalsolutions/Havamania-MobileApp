@@ -92,8 +92,19 @@ internal class WithdrawalTrackingConsentGateway(private val delegate: AssistantC
     }
 }
 
-internal fun applyAssistantHealthPrivacy(request: BackendChatbotAskRequest, blocked: Boolean): BackendChatbotAskRequest =
-    if (blocked) request.copy(health_consent = false, health_consent_version = null) else request
+/** Known structured health selections obey the same independent consent as health fields. */
+internal fun assistantHealthInterest(value: String): Boolean =
+    AiIntentParser.normalizeTurkish(value).filter { it.isLetterOrDigit() } in setOf(
+        "migren", "migrenhassasiyeti", "uvhassasiyeti", "polen", "polenhassasiyeti", "basinchassasiyeti", "saglikhassasiyeti")
+
+internal fun applyAssistantHealthPrivacy(request: BackendChatbotAskRequest, blocked: Boolean): BackendChatbotAskRequest {
+    val allowed = !blocked && request.personalization_enabled && request.health_consent
+    return request.copy(health_consent = allowed,
+        health_consent_version = request.health_consent_version.takeIf { allowed },
+        selected_interests = if (!request.personalization_enabled) null else
+            request.selected_interests?.filter { allowed || !assistantHealthInterest(it) },
+        context = if (request.personalization_enabled) request.context else request.context?.copy(trips = null))
+}
 
 internal fun defaultAssistantConsentGateway(): AssistantConsentGateway =
     WithdrawalTrackingConsentGateway(AssistantConsentRepository(), AndroidAssistantWithdrawalStore())

@@ -191,6 +191,15 @@ object ThemeManager {
 
     suspend fun savePersonalizationEnabled(context: Context, uid: String, enabled: Boolean) = context.dataStore.edit { it[personalizationEnabledKey(uid)] = enabled }
     fun getPersonalizationEnabled(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[personalizationEnabledKey(uid)] ?: true }
+    fun getPersonalizationSnapshot(context: Context, uid: String) = getPersonalizationSnapshot(context.dataStore, uid)
+    internal fun getPersonalizationSnapshot(store: DataStore<Preferences>, uid: String): Flow<com.havamania.PersonalizationProfile> =
+        store.data.map { prefs ->
+            val enabled = uid.isNotBlank() && uid != "legacy" && (prefs[personalizationEnabledKey(uid)] ?: true)
+            com.havamania.PersonalizationProfile(uid = uid, personalizationEnabled = enabled,
+                selectedInterests = if (enabled) prefs[interestsKey(uid)].orEmpty().split(',').filter { it.isNotBlank() }.distinct() else emptyList(),
+                lastUpdated = 0)
+        }
+
 
     suspend fun saveHasSeededTrips(context: Context, seeded: Boolean, uid: String) = context.dataStore.edit { it[seededTripsKey(uid)] = seeded }
     fun getHasSeededTrips(context: Context, uid: String): Flow<Boolean> = context.dataStore.data.map { it[seededTripsKey(uid)] ?: false }
@@ -254,10 +263,45 @@ object ThemeManager {
         }, transform)
     }
     internal suspend fun saveProfileBasics(context: Context, uid: String, name: String, bio: String) =
-        context.editProfilePreferences(uid) { it[nameKey(uid)] = name; it[bioKey(uid)] = bio }
-    internal suspend fun savePersonalizationBasics(context: Context, uid: String, interests: Set<String>) =
-        context.editProfilePreferences(uid) { it[interestsKey(uid)] = interests.joinToString(","); it[onboardingCompletedKey(uid)] = true }
+        saveProfileBasics(context.dataStore, uid, name, bio,
+            currentOwner = { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            writesBlocked = {
+                val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+                state.pending || state.busy
+            })
 
+    internal suspend fun saveProfileBasics(
+        store: DataStore<Preferences>, uid: String, name: String, bio: String,
+        currentOwner: () -> String?, writesBlocked: () -> Boolean,
+        writeEpoch: com.havamania.PreferenceWriteEpoch = com.havamania.accountPreferenceWriteEpoch
+    ) {
+        require(uid.isNotBlank())
+        val epoch = writeEpoch.capture()
+        var applied = false
+        com.havamania.saveProfilePreferences(store, {
+            writeEpoch.permits(epoch, uid, currentOwner(), writesBlocked())
+        }) { it[nameKey(uid)] = name; it[bioKey(uid)] = bio; applied = true }
+        check(applied) { "Profile preference write was superseded" }
+    }
+    internal suspend fun savePersonalizationBasics(context: Context, uid: String, interests: Set<String>) =
+        savePersonalizationBasics(context.dataStore, uid, interests,
+            currentOwner = { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid },
+            writesBlocked = {
+                val state = com.havamania.AccountDeletionManager.getInstance(context.applicationContext as android.app.Application).state.value
+                state.pending || state.busy
+            })
+
+    internal suspend fun savePersonalizationBasics(
+        store: DataStore<Preferences>, uid: String, interests: Set<String>,
+        currentOwner: () -> String?, writesBlocked: () -> Boolean,
+        writeEpoch: com.havamania.PreferenceWriteEpoch = com.havamania.accountPreferenceWriteEpoch
+    ) {
+        require(uid.isNotBlank())
+        val epoch = writeEpoch.capture()
+        com.havamania.saveProfilePreferences(store, {
+            writeEpoch.permits(epoch, uid, currentOwner(), writesBlocked())
+        }) { it[interestsKey(uid)] = interests.joinToString(","); it[onboardingCompletedKey(uid)] = true }
+    }
     suspend fun saveUserName(context: Context, uid: String, name: String) = context.editProfilePreferences(uid) { it[nameKey(uid)] = name }
     fun getUserName(context: Context, uid: String): Flow<String> = context.dataStore.data.map { it[nameKey(uid)] ?: "" }
 

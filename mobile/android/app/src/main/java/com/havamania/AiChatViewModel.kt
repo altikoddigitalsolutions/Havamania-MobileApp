@@ -319,9 +319,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                     else -> {
-                        val personalized = ThemeManager.getPersonalizationEnabled(getApplication(), owner).first()
-                        val interests = if (personalized) ThemeManager.getUserInterests(getApplication(), owner)
-                            .first().sorted().take(20).map { it.take(50) } else emptyList()
+                        val preferences = ThemeManager.getPersonalizationSnapshot(getApplication<Application>(), owner).first()
+                        val personalized = preferences.personalizationEnabled
+                        val interests = preferences.selectedInterests.sorted().take(20).map { it.take(50) }
                         ensureOwner(owner)
                         val context = assistantClientContext(AiIntentParser.detectCity(userPrompt) ?: contextCity,
                             _weatherData.value, _activeTravels.value, personalized)
