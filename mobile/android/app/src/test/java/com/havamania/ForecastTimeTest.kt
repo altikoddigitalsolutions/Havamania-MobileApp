@@ -40,11 +40,11 @@ class ForecastTimeTest {
         assertEquals("2026-10-23", days.single().date)
     }
 
-    @Test fun invalidTimezoneUsesUtcAndMalformedHoursAreExcluded() {
+    @Test fun invalidTimezoneCannotOfferCurrentHours() {
         val data = WeatherData(timezone = "bad/zone", hourlyForecast = listOf(hour("bad"), hour("2026-10-22T14:00")))
         val now = Instant.parse("2026-10-22T14:20:00Z")
-        assertEquals(14, ForecastTime.localNow(data.timezone, now).hour)
-        assertEquals(1, ForecastTime.hoursForDate(data, LocalDate.parse("2026-10-22"), now).size)
+        assertNull(ForecastTime.knownZone(data.timezone))
+        assertTrue(ForecastTime.hoursForDate(data, LocalDate.parse("2026-10-22"), now).isEmpty())
     }
 
     @Test fun springDstGapDoesNotOfferNonexistentLocalHour() {

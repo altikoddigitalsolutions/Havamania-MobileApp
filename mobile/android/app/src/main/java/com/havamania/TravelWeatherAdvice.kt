@@ -4,7 +4,7 @@ import com.havamania.ui.theme.AssistantTone
 import java.util.Locale
 
 /** Missing or malformed observations remain unknown; never substitute pleasant weather. */
-private fun ForecastSnapshot.validAdviceData(): ForecastSnapshot {
+internal fun ForecastSnapshot.validAdviceData(): ForecastSnapshot {
     var low = minTemp?.takeIf { it.isFinite() && it in -100.0..65.0 }
     var high = maxTemp?.takeIf { it.isFinite() && it in -100.0..65.0 }
     if (low != null && high != null && low > high) { low = null; high = null }
@@ -53,19 +53,30 @@ internal fun travelWeatherAdvice(snapshot: ForecastSnapshot?, tone: AssistantTon
 internal fun travelWeatherPacking(snapshot: ForecastSnapshot?, profile: PersonalizationProfile?): String {
     val data = snapshot?.validAdviceData()
     val items = mutableListOf<String>()
-    val code = data?.weatherCode
-    if (data?.precipitationProbability?.let { it > 50 } == true || code in setOf(51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99))
-        items += "Yağış tahminine karşı yağmurluk ve su geçirmeyen ayakkabı hazırla."
-    if (data?.minTemp?.let { it <= 0 } == true || data?.maxTemp?.let { it < 12 } == true || code in setOf(56, 57, 66, 67, 71, 73, 75, 77, 85, 86))
-        items += "Soğuk veya donan yağış tahminine karşı sıcak tutan katmanlar ve kaymayan ayakkabı hazırla."
-    if (data?.maxTemp?.let { it > 28 } == true) items += "Sıcaklık tahminine göre hafif, nefes alan kıyafetler ve içme suyu hazırla."
-    if (data?.windSpeed?.let { it > 30 } == true) items += "Rüzgara karşı koruyucu bir dış katman hazırla."
-    if (data?.uvIndex?.let { it > 5 } == true) items += "Yüksek UV tahminine karşı güneşten korunma ürünlerini hazırla."
-    if (data?.maxTemp != null && data.minTemp != null && data.maxTemp - data.minTemp > 10)
-        items += "Seyahat dönemindeki sıcaklık farkı fazla; hırka ve katmanlı kıyafet hazırla."
+    val preparation = travelWeatherPreparation(data)
+    if (WeatherPreparation.RAIN in preparation) items += "Yağış tahminine karşı yağmurluk ve su geçirmeyen ayakkabı hazırla."
+    if (WeatherPreparation.COLD in preparation) items += "Soğuk veya donan yağış tahminine karşı sıcak tutan katmanlar ve kaymayan ayakkabı hazırla."
+    if (WeatherPreparation.HEAT in preparation) items += "Sıcaklık tahminine göre hafif, nefes alan kıyafetler ve içme suyu hazırla."
+    if (WeatherPreparation.WIND in preparation) items += "Rüzgara karşı koruyucu bir dış katman hazırla."
+    if (WeatherPreparation.UV in preparation) items += "Yüksek UV tahminine karşı güneşten korunma ürünlerini hazırla."
+    if (WeatherPreparation.TEMPERATURE_SWING in preparation) items += "Seyahat dönemindeki sıcaklık farkı fazla; hırka ve katmanlı kıyafet hazırla."
     if (data == null || data.maxTemp == null || data.minTemp == null || data.precipitationProbability == null || data.windSpeed == null)
         items += "Havaya göre valizi tamamlamak için eksik tahmin verilerinin güncellenmesini bekleyin."
     else if (items.isEmpty()) items += "Kıyafetlerini tahmindeki sıcaklık aralığına ve planladığın etkinliklere göre seç."
     personalizedTravelPacking(profile).takeIf { it.isNotBlank() }?.let(items::add)
     return items.joinToString(" ")
+}
+internal enum class WeatherPreparation { RAIN, COLD, HEAT, WIND, UV, TEMPERATURE_SWING }
+
+/** One evidence rule set for guide prose and notification equipment. Unknown is never mild. */
+internal fun travelWeatherPreparation(snapshot: ForecastSnapshot?): Set<WeatherPreparation> {
+    val data = snapshot?.validAdviceData() ?: return emptySet()
+    return buildSet {
+        if (data.precipitationProbability?.let { it > 50 } == true || data.weatherCode in setOf(51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99)) add(WeatherPreparation.RAIN)
+        if (data.minTemp?.let { it <= 0 } == true || data.maxTemp?.let { it < 12 } == true || data.weatherCode in setOf(56, 57, 66, 67, 71, 73, 75, 77, 85, 86)) add(WeatherPreparation.COLD)
+        if (data.maxTemp?.let { it > 28 } == true) add(WeatherPreparation.HEAT)
+        if (data.windSpeed?.let { it > 30 } == true) add(WeatherPreparation.WIND)
+        if (data.uvIndex?.let { it > 5 } == true) add(WeatherPreparation.UV)
+        if (data.maxTemp != null && data.minTemp != null && data.maxTemp - data.minTemp > 10) add(WeatherPreparation.TEMPERATURE_SWING)
+    }
 }

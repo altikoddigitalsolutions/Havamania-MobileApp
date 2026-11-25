@@ -12,7 +12,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.job
 import kotlinx.coroutines.Job
-import java.time.ZoneId
+import java.time.Instant
 
 class TravelRouteViewModel(application: Application) : AndroidViewModel(application) {
     private val database = WeatherDatabase.getDatabase(application)
@@ -58,6 +58,10 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
     private val _departureMillis = MutableStateFlow<Long?>(null)
     val departureMillis: StateFlow<Long?> = _departureMillis.asStateFlow()
 
+    private val _departureState = MutableStateFlow(RouteDepartureUiState())
+    internal val departureState = _departureState.asStateFlow()
+
+    private val calculationGate = RouteCalculationGate()
     private var tripJob: kotlinx.coroutines.Job? = null
     private var routeJob: kotlinx.coroutines.Job? = null
 
@@ -70,6 +74,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
 
     fun loadTrip(tripId: String) {
         tripJob?.cancel()
+        calculationGate.reset()
         resetRoute()
         _trip.value = null
         _departureMillis.value = null
@@ -84,16 +89,10 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
                     val plan = entity.toDomain()
                     _trip.value = plan
 
-                    val departureDateTime = plan.departureDateTime
-                    if (departureDateTime != null) {
-                        _departureMillis.value = departureDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                    } else {
-                        _departureMillis.value = null
-                    }
-
                     // Only recalculate route if essential fields changed or first load
-                    calculateRoute(plan)
+                    if (calculationGate.shouldRecalculate(plan)) calculateRoute(plan)
                 } else {
+                    calculationGate.reset()
                     resetRoute()
                     _trip.value = null
                     _routeState.value = null
@@ -116,6 +115,8 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         _hasIncompleteForecast.value = false
         _analysisError.value = null
         _errorMessage.value = null
+        _departureMillis.value = null
+        _departureState.value = RouteDepartureUiState()
     }
 
     private fun calculateRoute(plan: TravelPlan) {
@@ -123,6 +124,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             Log.d("RouteVM", "Calculating route.")
         }
         resetRoute()
+        if (plan.departureDateTime != null) _departureState.value = RouteDepartureUiState(loading = true)
         routeJob = viewModelScope.launch {
             var origin = plan.originPoint?.let { GeoPoint(it.first, it.second) }
 
@@ -155,6 +157,23 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             if (result is RouteResult.Success) {
                 val sampled = RouteSampler.sample(result.route)
                 _waypoints.value = sampled
+                if (plan.departureDateTime != null) {
+                    _departureState.value = RouteDepartureUiState(loading = true)
+                    try {
+                        val state = kotlinx.coroutines.withTimeout(10_000) {
+                            resolveRouteScreenClock(plan, origin, Instant.now()) { lat, lon ->
+                                NetworkModule.apiService.getLocationTimezone(lat, lon).timezone
+                            }
+                        }
+                        coroutineContext.ensureActive()
+                        _departureState.value = state
+                        _departureMillis.value = state.clock?.departure?.toEpochMilli()
+                    } catch (error: Exception) {
+                        coroutineContext.ensureActive()
+                        if (error is kotlinx.coroutines.CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+                        _departureState.value = RouteDepartureUiState(error = "Çıkış konumunun saat dilimi alınamadı. Tekrar deneyin.")
+                    }
+                }
             }
         }
     }
@@ -166,7 +185,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
         val routeResult = _routeState.value as? RouteResult.Success ?: return@coroutineScope
         val depMillis = _departureMillis.value ?: return@coroutineScope
 
-        if (!TravelStatusResolver.isRouteWeatherEligible(plan)) {
+        if (!routeClockEligible(plan, _departureState.value.clock, Instant.now())) {
             _analysisError.value = "Bu seyahatin güzergâh hava analizi henüz kullanılamıyor. Kalkış tarihini ve saatini kontrol edin."
             return@coroutineScope
         }
@@ -210,7 +229,7 @@ class TravelRouteViewModel(application: Application) : AndroidViewModel(applicat
             _startWeather.value = weatherResults.first()
             _endWeather.value = weatherResults.last()
             _waypoints.value = geocodedWaypoints
-            _hasIncompleteForecast.value = weatherResults.any { it == null }
+            _hasIncompleteForecast.value = weatherResults.any { it == null || it.hasIncompleteData }
             _isAnalyzed.value = true
 
         } catch (e: Exception) {

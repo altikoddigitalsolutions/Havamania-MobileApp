@@ -100,6 +100,7 @@ class WeatherAndAnalysisTest {
         val response = OpenMeteoResponse(
             latitude = 41.0,
             longitude = 29.0,
+            timezone = "Europe/Istanbul",
             daily = DailyDto(
                 time = listOf("2026-09-05"),
                 weatherCode = listOf(0),

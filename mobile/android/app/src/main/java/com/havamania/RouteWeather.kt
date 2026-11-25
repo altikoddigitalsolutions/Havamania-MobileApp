@@ -17,7 +17,7 @@ import java.time.ZoneId
 
 /** Bir güzergâh noktasının sürüş riski (marker rengi + panel özeti bu değerden gelir). */
 enum class RouteRisk {
-    /** Uygun — hava sürüşü etkilemiyor (yeşil). */
+    /** Mevcut değerlendirilen alanlarda belirgin risk yok (yeşil). */
     OK,
     /** Dikkat — yağmur, sis, yüksek yağış ihtimali (amber). */
     CAUTION,
@@ -28,42 +28,50 @@ enum class RouteRisk {
 /** Tek bir noktanın çözümlenmiş hava + risk verisi. */
 data class WaypointWeather(
     val weatherCode: Int,
-    val temperatureC: Double,
+    val temperatureC: Double?,
     val apparentTempC: Double?,
     val precipProbability: Int?,
     val windSpeedKmh: Double?,
     val humidity: Int?,
     val risk: RouteRisk,
     /** Riski açıklayan kısa metin (OK ise null). */
-    val riskReason: String?
+    val riskReason: String?,
+    val isDay: Boolean? = null,
+    val windGustKmh: Double? = null,
+    val hasIncompleteData: Boolean = false
 )
 
-/** WMO hava koduna + sıcaklığa + yağış ihtimaline göre sürüş riski üretir. */
+/** Precautionary app risk policy; missing inputs cannot prove an OK route. */
 object RouteRiskAssessor {
-    fun assess(weatherCode: Int, precipProbability: Int?, temperatureC: Double): Pair<RouteRisk, String?> =
-        when {
-            // Buzlanan yağmur / çiseleme
-            weatherCode in listOf(56, 57, 66, 67) -> RouteRisk.DANGER to "Buzlanma riski (donan yağış)"
-            // Kar
-            weatherCode in listOf(71, 73, 75, 77, 85, 86) -> RouteRisk.DANGER to "Kar yağışı"
-            // Gök gürültülü fırtına
-            weatherCode in listOf(95, 96, 99) -> RouteRisk.DANGER to "Gök gürültülü fırtına"
-            // Şiddetli sağanak
-            weatherCode == 82 -> RouteRisk.DANGER to "Şiddetli sağanak"
-            // Donma noktası — yol buzlanması
-            temperatureC <= 0.0 -> RouteRisk.DANGER to "Buzlanma (sıcaklık ${temperatureC.toInt()}°C)"
-
-            // Sis — görüş
-            weatherCode in listOf(45, 48) -> RouteRisk.CAUTION to "Sis, görüş mesafesi düşük"
-            // Yağmur / sağanak
-            weatherCode in listOf(61, 63, 65, 80, 81) -> RouteRisk.CAUTION to "Yağmur"
-            // Çiseleme
-            weatherCode in listOf(51, 53, 55) -> RouteRisk.CAUTION to "Çiseleyen yağmur"
-            // Yüksek yağış ihtimali (kod hafif ama olasılık yüksek)
-            (precipProbability ?: 0) >= 60 -> RouteRisk.CAUTION to "Yüksek yağış ihtimali"
-
-            else -> RouteRisk.OK to null
+    fun assess(weatherCode: Int, precipProbability: Int?, temperatureC: Double?,
+        windSpeedKmh: Double? = null, windGustKmh: Double? = null): Pair<RouteRisk, String?> {
+        val temp = validRouteTemperature(temperatureC)
+        val prob = precipProbability?.takeIf { it in 0..100 }
+        val wind = validRouteWind(windSpeedKmh)
+        val gust = validRouteWind(windGustKmh)
+        val risks = mutableListOf<Pair<RouteRisk, String>>()
+        when (weatherCode) {
+            56, 57, 66, 67 -> risks += RouteRisk.DANGER to "Buzlanma riski (donan yağış)"
+            71, 73, 75, 77, 85, 86 -> risks += RouteRisk.DANGER to "Kar yağışı"
+            95, 96, 99 -> risks += RouteRisk.DANGER to "Gök gürültülü fırtına"
+            82 -> risks += RouteRisk.DANGER to "Şiddetli sağanak"
+            45, 48 -> risks += RouteRisk.CAUTION to "Sis, görüş mesafesi düşük"
+            61, 63, 65, 80, 81 -> risks += RouteRisk.CAUTION to "Yağmur"
+            51, 53, 55 -> risks += RouteRisk.CAUTION to "Çiseleyen yağmur"
         }
+        if (temp != null && temp <= 0) risks += RouteRisk.DANGER to "Donma düzeyinde sıcaklık (${temp.toInt()}°C); buzlanma açısından dikkat"
+        if (prob != null && prob >= 60) risks += RouteRisk.CAUTION to "Yüksek yağış ihtimali"
+        wind?.takeIf { it >= ROUTE_WIND_CAUTION_KMH }?.let {
+            risks += (if (it >= ROUTE_WIND_DANGER_KMH) RouteRisk.DANGER else RouteRisk.CAUTION) to "Kuvvetli rüzgar (${it.toInt()} km/sa)"
+        }
+        gust?.takeIf { it >= ROUTE_WIND_CAUTION_KMH }?.let {
+            risks += (if (it >= ROUTE_WIND_DANGER_KMH) RouteRisk.DANGER else RouteRisk.CAUTION) to "Kuvvetli rüzgar hamlesi (${it.toInt()} km/sa)"
+        }
+        if (!WeatherUtils.isKnownCode(weatherCode) || temp == null || prob == null || wind == null || gust == null)
+            risks += RouteRisk.CAUTION to "Hava verisi eksik; tüm sürüş riskleri değerlendirilemedi"
+        if (risks.isEmpty()) return RouteRisk.OK to null
+        return risks.maxBy { it.first.ordinal }.first to risks.map { it.second }.distinct().joinToString("; ")
+    }
 }
 
 /** ETA'ya en yakın saatlik tahmini getiren sağlayıcı (Open-Meteo, key gerektirmez). */
@@ -81,15 +89,7 @@ class RouteWeatherProvider(
                 val hourly = resp.hourly ?: return@withContext null
                 val idx = hourly.indexNearest(etaEpochMillis, resp.timezone) ?: return@withContext null
 
-                val code = hourly.weatherCode.getOrNull(idx) ?: return@withContext null
-                val temp = hourly.temperature.getOrNull(idx) ?: return@withContext null
-                val feels = hourly.apparentTemperature?.getOrNull(idx)
-                val prob = hourly.precipitationProbability?.getOrNull(idx)
-                val wind = hourly.windSpeed?.getOrNull(idx)
-                val hum = hourly.humidity?.getOrNull(idx)
-
-                val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
-                WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
+                hourly.routeWeatherSample(idx)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 null
@@ -115,15 +115,7 @@ class RouteWeatherProvider(
                 val eta = etas.getOrNull(i)
                 val idx = hourly.indexNearest(eta, resp.timezone) ?: return@map null
 
-                val code = hourly.weatherCode.getOrNull(idx) ?: return@map null
-                val temp = hourly.temperature.getOrNull(idx) ?: return@map null
-                val feels = hourly.apparentTemperature?.getOrNull(idx)
-                val prob = hourly.precipitationProbability?.getOrNull(idx)
-                val wind = hourly.windSpeed?.getOrNull(idx)
-                val hum = hourly.humidity?.getOrNull(idx)
-
-                val (risk, reason) = RouteRiskAssessor.assess(code, prob, temp)
-                WaypointWeather(code, temp, feels, prob, wind, hum, risk, reason)
+                hourly.routeWeatherSample(idx)
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -137,14 +129,10 @@ if (BuildConfig.DEBUG) {
     }
 
     /** Saatlik zaman dizisinde hedef ana en yakın indeksi bulur. */
-    private fun HourlyDto.indexNearest(etaEpochMillis: Long?, timezone: String): Int? {
+    private fun RouteHourlyDto.indexNearest(etaEpochMillis: Long?, timezone: String?): Int? {
         if (time.isEmpty()) return null
         if (etaEpochMillis == null) return null
-        val zone = try {
-            ZoneId.of(timezone)
-        } catch (e: Exception) {
-            return null
-        }
+        val zone = timezone?.let(::validTripForecastZone) ?: return null
         // Open-Meteo timezone=auto → saatlik zamanlar noktanın yerel saatinde döner.
         val target = Instant.ofEpochMilli(etaEpochMillis).atZone(zone).toLocalDateTime()
         var earlierIndex = -1

@@ -101,7 +101,7 @@ data class TravelHistorySummary(
     val sunnyDays: Int,
     val cloudyDays: Int,
     val riskDayText: String,
-    val comfortScore: Int,
+    val comfortScore: Int?,
     val summaryText: String,
     val packingAdvice: String,
     val nextTripAdvice: String,

@@ -7,35 +7,30 @@ internal fun buildTripForecastSnapshot(daily: DailyDto?, start: LocalDate, end: 
     timezone: String? = null, now: java.time.Instant = java.time.Instant.now()): ForecastSnapshot? {
     if (daily == null || end.isBefore(start)) return null
     val zone = timezone?.let { validTripForecastZone(it) ?: return null }
-    val validCodes = setOf(0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99)
-    val rows = daily.time.mapIndexedNotNull { index, raw ->
-        val date = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return@mapIndexedNotNull null
+    val dates = daily.time.mapIndexedNotNull { index, raw ->
+        val date = raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapIndexedNotNull null
         if (date.isBefore(start) || date.isAfter(end)) return@mapIndexedNotNull null
         date to index
     }
-    // Duplicate dates and incomplete trip coverage must not look like a full-trip analysis.
-    if (rows.size.toLong() != ChronoUnit.DAYS.between(start, end) + 1 || rows.map { it.first }.distinct().size != rows.size) return null
-    val indices = rows.map { it.second }
-    if (indices.any { index ->
-        val min = daily.tempMin.getOrNull(index)
-        val max = daily.tempMax.getOrNull(index)
-        val wind = daily.windSpeedMax.getOrNull(index)
-        val rain = daily.precipProbMax?.getOrNull(index)
-        daily.weatherCode.getOrNull(index) !in validCodes || min == null || max == null ||
-            !min.isFinite() || !max.isFinite() || min > max || wind == null || !wind.isFinite() || wind < 0 ||
-            rain == null || rain !in 0..100
-    }) return null
-    val codes = orderedTripWeatherCodes(indices.map { daily.weatherCode[it] })
+    if (dates.size.toLong() != ChronoUnit.DAYS.between(start, end) + 1 || dates.map { it.first }.distinct().size != dates.size) return null
+    data class Row(val code: Int, val min: Double, val max: Double, val rain: Int, val wind: Double, val uv: Double?)
+    val rows = dates.map { (_, index) ->
+        val code = daily.weatherCode.getOrNull(index)?.takeIf(WeatherUtils::isKnownCode) ?: return null
+        val min = daily.tempMin.getOrNull(index)?.takeIf { it.isFinite() && it in -100.0..65.0 } ?: return null
+        val max = daily.tempMax.getOrNull(index)?.takeIf { it.isFinite() && it in -100.0..65.0 } ?: return null
+        if (min > max) return null
+        val wind = daily.windSpeedMax.getOrNull(index)?.takeIf { it.isFinite() && it in 0.0..500.0 } ?: return null
+        val rain = daily.precipProbMax?.getOrNull(index)?.takeIf { it in 0..100 } ?: return null
+        val uv = daily.uvIndexMax?.getOrNull(index)?.takeIf { it.isFinite() && it >= 0 }
+        Row(code, min, max, rain, wind, uv)
+    }
+    val codes = orderedTripWeatherCodes(rows.map { it.code })
     val code = codes.first()
     val risks = codes.mapNotNull(::tripWeatherRiskLabel).distinct()
     val summary = risks.takeIf { it.isNotEmpty() }?.joinToString(" / ") ?: WeatherMapper.getWeatherCondition(code)
-    return ForecastSnapshot(
-        minTemp = indices.minOf { daily.tempMin[it] },
-        maxTemp = indices.maxOf { daily.tempMax[it] },
-        averageTemperature = indices.map { daily.tempMin[it] / 2.0 + daily.tempMax[it] / 2.0 }.average(),
-        precipitationProbability = indices.maxOf { daily.precipProbMax!![it] },
-        windSpeed = indices.maxOf { daily.windSpeedMax[it] },
-        uvIndex = indices.mapNotNull { daily.uvIndexMax?.getOrNull(it)?.takeIf { value -> value.isFinite() && value >= 0 } }.maxOrNull(),
-        conditionSummary = summary, weatherCode = code, generatedAt = now.toEpochMilli(), timezone = zone?.id
-    )
+    return ForecastSnapshot(minTemp = rows.minOf { it.min }, maxTemp = rows.maxOf { it.max },
+        averageTemperature = rows.map { it.min / 2.0 + it.max / 2.0 }.average(),
+        precipitationProbability = rows.maxOf { it.rain }, windSpeed = rows.maxOf { it.wind },
+        uvIndex = rows.mapNotNull { it.uv }.maxOrNull(), conditionSummary = summary,
+        weatherCode = code, generatedAt = now.toEpochMilli(), timezone = zone?.id)
 }

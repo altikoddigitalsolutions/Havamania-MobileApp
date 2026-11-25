@@ -1,5 +1,7 @@
 package com.havamania
 
+import androidx.lifecycle.repeatOnLifecycle
+
 import androidx.activity.compose.BackHandler
 
 import android.util.Log
@@ -76,6 +78,7 @@ fun TravelRouteWeatherScreen(
     val analysisError by viewModel.analysisError.collectAsStateWithLifecycle()
     val analyzed by viewModel.isAnalyzed.collectAsStateWithLifecycle()
     val departureMillis by viewModel.departureMillis.collectAsStateWithLifecycle()
+    val departureState by viewModel.departureState.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
 
     val mapView = rememberMapViewWithLifecycle()
@@ -212,6 +215,7 @@ if (BuildConfig.DEBUG) {
             overlappingWaypoints = matches
         }
     }
+    CompositionLocalProvider(LocalRouteDepartureState provides departureState) {
     if (overlappingWaypoints.isNotEmpty()) {
         RoutePassageDialog(overlappingWaypoints, onDismiss = { overlappingWaypoints = emptyList() }) {
             overlappingWaypoints = emptyList()
@@ -437,6 +441,7 @@ if (BuildConfig.DEBUG) {
         }
     }
 }
+}
 
 @Composable
 internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClose: () -> Unit) {
@@ -444,7 +449,7 @@ internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClo
     val colors = HavamaniaTheme.colors
     val weather = wp.weather
     val timeStr = wp.etaEpochMillis?.let {
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+        formatRouteMoment(it, LocalRouteDepartureState.current.clock)
     } ?: "--:--"
 
     Surface(
@@ -469,7 +474,7 @@ internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClo
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "Tahmini Geçiş: $timeStr",
+                        text = "Tahmini geçiş (çıkış saati): $timeStr",
                         style = HavamaniaTheme.typography.caption,
                         color = colors.textSecondary
                     )
@@ -488,18 +493,18 @@ internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClo
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
+                            text = routeWeatherEmoji(weather.weatherCode, weather.isDay),
                             fontSize = 28.sp
                         )
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = routeWeatherDisplayName(weather.weatherCode, wp.etaEpochMillis),
+                                text = routeWeatherDisplayName(weather.weatherCode, weather.isDay),
                                 style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "Sıcaklık: ${weather.temperatureC.toInt()}°C",
+                                text = "Sıcaklık: ${routeTemperatureText(weather.temperatureC, "°C")}",
                                 style = HavamaniaTheme.typography.bodySmall,
                                 color = colors.textSecondary
                             )
@@ -507,15 +512,16 @@ internal fun RouteWaypointDetailCard(wp: RouteWaypoint, analyzed: Boolean, onClo
                     }
                 }
                 if (weather.risk != RouteRisk.OK && !weather.riskReason.isNullOrBlank()) {
+                    val riskColor = if (weather.risk == RouteRisk.DANGER) colors.error else colors.warning
                     Surface(
-                        color = colors.warning.copy(alpha = 0.1f),
+                        color = riskColor.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, colors.warning.copy(alpha = 0.3f))
+                        border = BorderStroke(1.dp, riskColor.copy(alpha = 0.3f))
                     ) {
                         Text(
                             text = "⚠️ ${weather.riskReason}",
                             style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
-                            color = colors.warning,
+                            color = riskColor,
                             modifier = Modifier.padding(8.dp)
                         )
                     }
@@ -564,11 +570,17 @@ internal fun RouteContent(
 
         Spacer(Modifier.height(16.dp))
 
-        val now = java.time.Instant.now()
-        val tripStatus = TravelStatusResolver.getStatus(t.startDate, t.endDate, now.atZone(ZoneId.systemDefault()).toLocalDate())
-        val isPast = tripStatus == TravelStatus.PAST
+        val departureState = LocalRouteDepartureState.current
+        val clock = departureState.clock
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        val now by produceState(Instant.now(), owner, clock) {
+            owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                while (true) { value = Instant.now(); kotlinx.coroutines.delay(30_000) }
+            }
+        }
+        val isPast = clock?.let { TravelStatusResolver.getStatus(t.startDate, t.endDate, now.atZone(it.zone).toLocalDate()) == TravelStatus.PAST } ?: false
         val departureDateTime = t.departureDateTime
-        val isWeatherReady = TravelStatusResolver.isRouteWeatherEligible(t, now)
+        val isWeatherReady = routeClockEligible(t, clock, now)
 
         if (routeState is RouteResult.Error || routeState is RouteResult.NoRoute) {
             Text(
@@ -581,6 +593,9 @@ internal fun RouteContent(
             RoutePastTripCard(t, colors)
         } else if (t.departureTime == null) {
             RouteTimeMissingCard(colors)
+        } else if (clock == null && departureDateTime != null) {
+            Text(if (departureState.loading) "Çıkış saat dilimi belirleniyor…" else departureState.error ?: "Çıkış saat dilimi henüz belirlenmedi.", color = colors.textPrimary)
+            if (!departureState.loading) TextButton(onClick = onRetryRoute) { Text("Çıkış saatini tekrar çöz") }
         } else if (!isWeatherReady && departureDateTime != null) {
             RouteWeatherNotReadyCard(departureDateTime, colors)
         } else if (!isWeatherReady && departureDateTime == null) {
@@ -592,18 +607,18 @@ internal fun RouteContent(
             val route = routeState.route
             if (hasIncompleteForecast) {
                 Text(
-                    text = "Bazı güzergâh noktaları için hava tahmini alınamadı. Bu kesimlerde hava riski değerlendirilemedi.",
+                    text = "Bazı güzergâh noktalarında hava verisi eksik. Bu kesimlerde tüm hava riskleri değerlendirilemedi.",
                     color = colors.textPrimary
                 )
             }
+            Text("Saatler çıkış saat diliminde: ${clock?.zone?.id}.", style = HavamaniaTheme.typography.caption)
             val arrivalMillis = departureMillis?.let { it + (route.durationSeconds * 1000).toLong() }
 
             RouteMetricRow(
                 distance = "${(route.distanceMeters / 1000).toInt()} km",
                 duration = "${(route.durationSeconds / 3600).toInt()} sa ${(route.durationSeconds % 3600 / 60).toInt()} dk",
                 arrival = arrivalMillis?.let {
-                    val dt = LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
-                    dt.format(DateTimeFormatter.ofPattern("HH:mm"))
+                    formatRouteMoment(it, clock)
                 }
             )
 
@@ -626,11 +641,9 @@ internal fun TimelineContent(
     analyzed: Boolean,
     onSelect: (RouteWaypoint) -> Unit
 ) {
-    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-
-    val depTime = if (departureMillis != null) {
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(departureMillis), ZoneId.systemDefault()).format(timeFormatter)
-    } else "--:--"
+    val clock = LocalRouteDepartureState.current.clock
+    Text(clock?.let { "Tüm saatler çıkış saat diliminde: ${it.zone.id}." } ?: "Çıkış saat dilimi bilinmiyor.", style = HavamaniaTheme.typography.caption)
+    val depTime = formatRouteMoment(departureMillis, clock)
 
     val missingForecastLabel = if (analyzed) "Tahmin alınamadı" else "Analiz tamamlanmadı"
     val startName = trip.originCity ?: "Başlangıç"
@@ -639,17 +652,13 @@ internal fun TimelineContent(
     }
 
     waypoints.forEach { wp ->
-        val eta = if (wp.etaEpochMillis != null) {
-            LocalDateTime.ofInstant(Instant.ofEpochMilli(wp.etaEpochMillis), ZoneId.systemDefault()).format(timeFormatter)
-        } else "--:--"
+        val eta = formatRouteMoment(wp.etaEpochMillis, clock)
 
         TimelineWaypointItem(wp.placeName ?: "Ara Nokta", eta, wp.weather, missingForecastLabel = missingForecastLabel, etaEpochMillis = wp.etaEpochMillis) { onSelect(wp) }
     }
 
     val arrivalMillis = departureMillis?.plus((route.durationSeconds * 1000).toLong())
-    val arrTime = if (arrivalMillis != null) {
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(arrivalMillis), ZoneId.systemDefault()).format(timeFormatter)
-    } else "--:--"
+    val arrTime = formatRouteMoment(arrivalMillis, clock)
 
     TimelineWaypointItem(trip.city, arrTime, endWeather, isLast = true, missingForecastLabel = missingForecastLabel, etaEpochMillis = arrivalMillis) {
         route.destination?.let {
@@ -850,8 +859,7 @@ internal fun RoutePassageDialog(
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 waypoints.forEachIndexed { index, waypoint ->
                     val time = waypoint.etaEpochMillis?.let {
-                        LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault())
-                            .format(DateTimeFormatter.ofPattern("HH:mm"))
+                        formatRouteMoment(it, LocalRouteDepartureState.current.clock)
                     }
                     TextButton(onClick = {
                         onSelect(waypoint)

@@ -50,7 +50,8 @@ class RouteRetryDeviceTest {
             val colors = ThemeFactory.createColors(AppTheme.AUTO)
             CompositionLocalProvider(
                 LocalHavamaniaColors provides colors,
-                LocalHavamaniaTypography provides ThemeFactory.createTypography(colors)
+                LocalHavamaniaTypography provides ThemeFactory.createTypography(colors),
+                LocalRouteDepartureState provides RouteDepartureUiState(clock = routeNotificationClock(trip, java.time.ZoneId.systemDefault().id, java.time.Instant.now()))
             ) {
                 RouteContent(
                     trip = trip,

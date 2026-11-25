@@ -435,7 +435,10 @@ object RecommendationEngine {
     fun getShortWeatherSummaryFromAnalysis(analysis: TravelWeatherAnalysis, isOngoing: Boolean = false): String {
         if (analysis.summary.isNotBlank()) return analysis.summary
         val prefix = if (isOngoing) "Devam eden seyahat tahmini" else "Seyahat tahmini"
-        val rain = analysis.rainRiskPercent?.let { " Yağış olasılığı: %$it." } ?: " Yağış olasılığı bilinmiyor."
-        return "$prefix: dönem ortalaması ${analysis.averageTemperature.toInt()}°C.$rain"
+        val rain = analysis.rainRiskPercent?.takeIf { it in 0..100 }?.let { " Yağış olasılığı: %$it." }
+            ?: " Yağış olasılığı bilinmiyor."
+        val temperature = analysis.averageTemperature.takeIf { it.isFinite() && it in -100.0..65.0 }
+            ?.let { "dönem ortalaması ${it.toInt()}°C." } ?: "Ortalama sıcaklık bilinmiyor."
+        return "$prefix: $temperature$rain"
     }
 }

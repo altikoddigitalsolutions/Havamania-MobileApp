@@ -8,7 +8,7 @@ class WeatherSuitabilityCompletenessTest {
         tempMax = emptyList(), tempMin = emptyList(), precipProbMax = listOf(0), uvIndexMax = listOf(1.0))
     private val current = CurrentWeatherDto(weatherCode = 0, temperature = 20.0, windSpeed = 5.0, visibility = 10000.0, uvIndex = 1.0)
     private fun map(value: CurrentWeatherDto?, days: DailyDto? = daily) =
-        WeatherMapper.mapToDomain(OpenMeteoResponse(40.2, 29.1, current = value, daily = days), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
+        WeatherMapper.mapToDomain(OpenMeteoResponse(40.2, 29.1, timezone = "Europe/Istanbul", current = value, daily = days), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
 
     @Test fun `missing observations never imply perfect suitability`() {
         listOf(map(null), map(CurrentWeatherDto()), map(current.copy(windSpeed = null)),

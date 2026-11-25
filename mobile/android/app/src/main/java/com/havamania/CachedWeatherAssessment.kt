@@ -8,9 +8,10 @@ internal fun normalizeCachedWeatherAssessment(data: WeatherData): WeatherData =
         weatherSuitabilityDesc = "Kayıtlı hava ölçümleri korunuyor. Uygunluk değerlendirmesi için veriyi yenileyin."
     )
 
-internal fun cachedWeatherSameLocalDay(data: WeatherData, now: java.time.Instant): Boolean =
-    ForecastTime.localNow(data.timezone, java.time.Instant.ofEpochMilli(data.timestamp)).toLocalDate() ==
-        ForecastTime.localNow(data.timezone, now).toLocalDate()
+internal fun cachedWeatherSameLocalDay(data: WeatherData, now: java.time.Instant): Boolean {
+    val zone = ForecastTime.knownZone(data.timezone) ?: return false
+    return java.time.Instant.ofEpochMilli(data.timestamp).atZone(zone).toLocalDate() == now.atZone(zone).toLocalDate()
+}
 
 internal fun presentCachedWeather(data: WeatherData, now: java.time.Instant): WeatherData {
     val normalized = normalizeCachedWeatherAssessment(data)

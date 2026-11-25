@@ -5,6 +5,16 @@ import retrofit2.http.Query
 import retrofit2.http.Url
 
 interface WeatherApiService {
+    /** Resolve the departure location's timezone without borrowing the destination or device zone. */
+    @GET("v1/forecast")
+    suspend fun getLocationTimezone(
+        @Query("latitude") lat: Double,
+        @Query("longitude") lon: Double,
+        @Query("timezone") timezone: String = "auto",
+        @Query("hourly") hourly: String = "temperature_2m",
+        @Query("forecast_days") days: Int = 1
+    ): LocationTimezoneResponse
+
     @GET("v1/forecast")
     suspend fun getFullWeather(
         @Query("latitude") lat: Double,
@@ -21,20 +31,22 @@ interface WeatherApiService {
     suspend fun getRouteHourly(
         @Query("latitude") lat: Double,
         @Query("longitude") lon: Double,
-        @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m",
+        @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m,is_day,wind_gusts_10m",
         @Query("timezone") timezone: String = "auto",
-        @Query("forecast_days") days: Int = 14
-    ): OpenMeteoResponse
+        @Query("forecast_days") days: Int = 14,
+        @Query("wind_speed_unit") speedUnit: String = "kmh"
+    ): RouteForecastResponse
 
     /** Birden fazla nokta için toplu hava durumu verisi çekme (Güzergâh optimizasyonu). */
     @GET("v1/forecast")
     suspend fun getBatchRouteHourly(
         @Query("latitude") lats: String,
         @Query("longitude") lons: String,
-        @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m",
+        @Query("hourly") hourly: String = "temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,relative_humidity_2m,is_day,wind_gusts_10m",
         @Query("timezone") timezone: String = "auto",
-        @Query("forecast_days") days: Int = 14
-    ): List<OpenMeteoResponse>
+        @Query("forecast_days") days: Int = 14,
+        @Query("wind_speed_unit") speedUnit: String = "kmh"
+    ): List<RouteForecastResponse>
 
     @GET
     suspend fun searchCity(

@@ -33,11 +33,6 @@ object TravelStatusResolver {
         return !untilDeparture.isNegative && untilDeparture <= Duration.ofHours(48)
     }
 
-    fun isRouteWeatherEligible(plan: TravelPlan, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean {
-        val status = getStatus(plan.startDate, plan.endDate, now.atZone(zone).toLocalDate())
-        if (status == TravelStatus.PAST) return false
-        val departure = plan.departureDateTime?.atZone(zone)?.toInstant() ?: return false
-        // Existing ongoing-trip access is retained; pre-departure access is exactly 48 elapsed hours.
-        return status == TravelStatus.ONGOING || isWithinRouteWeatherWindow(departure, now)
-    }
+    fun isRouteWeatherEligible(plan: TravelPlan, now: Instant = Instant.now(), zone: ZoneId): Boolean =
+        routeClockEligible(plan, routeNotificationClock(plan, zone.id, now), now)
 }

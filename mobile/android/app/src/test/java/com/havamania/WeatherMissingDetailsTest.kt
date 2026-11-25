@@ -5,7 +5,7 @@ import org.junit.Test
 
 class WeatherMissingDetailsTest {
     private fun details(current: CurrentWeatherDto? = null, daily: DailyDto? = null) =
-        WeatherMapper.mapToDomain(OpenMeteoResponse(40.2, 29.1, current = current, daily = daily), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
+        WeatherMapper.mapToDomain(OpenMeteoResponse(40.2, 29.1, timezone = "Europe/Istanbul", current = current, daily = daily), "Bursa", now = java.time.Instant.parse("2026-11-12T12:00:00Z"))
             .details.associateBy { it.title }
 
     @Test fun `missing measurements do not create observations or low risk descriptions`() {

@@ -19,7 +19,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import com.havamania.NotificationItem
 import com.havamania.NotificationCategory
@@ -30,6 +29,7 @@ class TravelNotificationWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     private var executionEpoch = Long.MIN_VALUE
+    private val routeOriginZones = mutableMapOf<Pair<Double, Double>, ZoneId>()
 
     override suspend fun doWork(): Result = try {
         performWork()
@@ -57,7 +57,6 @@ class TravelNotificationWorker(
 
         val plans = weatherDao.getAllTravelPlans(currentUid)
         val today = LocalDate.now()
-        val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
 
         var retryRouteForecast = false
         plans.map { it.toDomain() }.forEach { plan ->
@@ -72,7 +71,8 @@ class TravelNotificationWorker(
             // Sadece yaklaşan veya devam eden seyahatler için günlük özet gönder
             if (isUpcoming || isOngoing) {
                 // Bugün bu seyahat için bildirim gönderildi mi?
-                if (plan.lastDailyNotificationDate == dateStr) {
+                val existingIdentity = travelDailyIdentity(plan, Instant.now())
+                if (existingIdentity != null && plan.lastDailyNotificationDate == existingIdentity.day.toString()) {
                     if (routeForecastNeedsRetry(plan, application) { }) retryRouteForecast = true
                     return@forEach
                 }
@@ -101,10 +101,14 @@ class TravelNotificationWorker(
                 } else plan.updatedAt
                 if (weatherDao.getTravelPlanByIdRaw(plan.id)?.updatedAt != analysisRevision) return@forEach
 
-                val travelData = buildNotificationData(updatedPlan, daysUntil)
-                val (title, message) = generateNotificationText(updatedPlan, daysUntil, isOngoing, travelData)
+                val identity = travelDailyIdentity(updatedPlan, Instant.now()) ?: return@forEach
+                val notificationToday = identity.day
+                val notificationDays = ChronoUnit.DAYS.between(notificationToday, updatedPlan.startDate).toInt()
+                val notificationOngoing = !notificationToday.isBefore(updatedPlan.startDate) && !notificationToday.isAfter(updatedPlan.endDate)
+                val travelData = buildTravelNotificationData(updatedPlan, notificationDays)
+                val (title, message) = buildTravelNotificationText(updatedPlan, notificationDays, notificationOngoing, travelData, notificationToday)
 
-                val notificationId = "travel_${currentUid}_${plan.id}_$dateStr"
+                val notificationId = identity.notificationId
 
                 val notificationItem = NotificationItem(
                     id = notificationId,
@@ -113,14 +117,14 @@ class TravelNotificationWorker(
                     message = message,
                     category = NotificationCategory.TRAVEL,
                     createdAt = System.currentTimeMillis(),
-                    eventAt = plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                    eventAt = identity.eventAt,
                     deepLinkTarget = "havamania://app/calendar?focusId=${Uri.encode(plan.id)}",
                     actionType = NotificationActionType.TRAVEL_DETAIL,
                     targetId = plan.id,
                     relatedTripId = plan.id,
                     actionLabel = "Analizi Gör",
                     travelData = travelData,
-                    deduplicationKey = "travel_daily_${currentUid}_${plan.id}_$dateStr"
+                    deduplicationKey = identity.deduplicationKey
                 )
 
                 if (!canPublishFor(currentUid)) return Result.success()
@@ -136,7 +140,7 @@ class TravelNotificationWorker(
                 }
 
                 // Update only tracking metadata, never overwrite the whole trip with an old copy.
-                weatherDao.markTripDailyNotification(currentUid, plan.id, finalRevision, dateStr)
+                weatherDao.markTripDailyNotification(currentUid, plan.id, finalRevision, identity.day.toString())
             }
         }
 
@@ -147,121 +151,44 @@ class TravelNotificationWorker(
         }
     }
 
-    private fun buildNotificationData(plan: TravelPlan, daysLeft: Int): TravelNotificationData {
-        val snapshot = plan.lastForecastSnapshot
-        val prevSnapshot = plan.previousForecastSnapshot
-
-        val comparisonText = if (snapshot != null && prevSnapshot != null) {
-            TravelAiHelper.generateComparisonText(prevSnapshot, snapshot)
-        } else null
-
-        val recommendedItems = mutableListOf<String>()
-        if ((snapshot?.precipitationProbability ?: 0) > 40) {
-            recommendedItems.add("Şemsiye")
-            recommendedItems.add("Yağmurluk")
-            recommendedItems.add("Yedek Ayakkabı")
-        }
-        if ((snapshot?.maxTemp ?: 20.0) < 15.0) {
-            recommendedItems.add("Kalın Mont")
-        } else if ((snapshot?.maxTemp ?: 20.0) > 28.0) {
-            recommendedItems.add("Güneş Kremi")
-            recommendedItems.add("Şapka")
-        }
-
-        return TravelNotificationData(
-            travelId = plan.id,
-            destination = plan.city,
-            travelStartDate = plan.startDate.toString(),
-            travelEndDate = plan.endDate.toString(),
-            daysLeft = daysLeft,
-            weatherSummary = snapshot?.conditionSummary,
-            rainProbability = snapshot?.precipitationProbability,
-            minTemp = snapshot?.minTemp,
-            maxTemp = snapshot?.maxTemp,
-            windRisk = WeatherUtils.formatWindWithLevel(snapshot?.windSpeed),
-            previousAnalysisSummary = plan.weatherSummary,
-            comparisonText = comparisonText,
-            recommendedItems = recommendedItems
-        )
-    }
-
-    private fun generateNotificationText(
-        plan: TravelPlan,
-        daysLeft: Int,
-        isOngoing: Boolean,
-        data: TravelNotificationData
-    ): Pair<String, String> {
-        val latestAnalysis = plan.analyses.lastOrNull()
-        val dateFormatter = DateTimeFormatter.ofPattern("d MMM", Locale("tr"))
-        val dateRange = "${plan.startDate.format(dateFormatter)} - ${plan.endDate.format(dateFormatter)}"
-
-        val title = "Seyahat Güncellemesi"
-        val cityLabel = "${plan.city} • $dateRange"
-
-        val message = when {
-            isOngoing -> {
-                val today = LocalDate.now()
-                val dayCount = ChronoUnit.DAYS.between(plan.startDate, today).toInt() + 1
-                val weather = if (data.weatherSummary != null)
-                    "Bugün hava ${data.weatherSummary.lowercase()}, ${data.maxTemp?.toInt()}°."
-                    else "Hava tahminlerini kontrol etmeyi unutma."
-                "$cityLabel: Seyahatin devam ediyor (Gün: $dayCount). $weather"
-            }
-            daysLeft == 0 -> {
-                val weather = if (data.weatherSummary != null)
-                    "Hava ${data.weatherSummary.lowercase()}, sıcaklık ${data.minTemp?.toInt()}-${data.maxTemp?.toInt()}°."
-                    else "Seyahatin bugün başlıyor."
-                "$cityLabel: Seyahatin bugün başlıyor! $weather Çıkmadan önce son kontrollerini yapmayı unutma! ✈️"
-            }
-            daysLeft == 1 -> "$cityLabel: Seyahatine yarın çıkıyorsun! Bugünkü güncel hava analizi ve valiz önerilerin hazır. 🎒"
-            else -> {
-                val base = if (latestAnalysis?.comparisonText != null && !latestAnalysis.comparisonText.contains("ilk analiz")) {
-                    "Hava tahminlerinde bazı değişiklikler var. Güncel analizi inceleyebilirsin."
-                } else {
-                    "Seyahatin yaklaşıyor ($daysLeft gün kaldı), hava analizin hazır. Hazırlıklarını gözden geçir."
-                }
-                "$cityLabel: $base 🎒"
-            }
-        }
-
-        return title to message
-    }
-
     private suspend fun routeForecastNeedsRetry(plan: TravelPlan, context: Context, onRevision: (Long) -> Unit): Boolean {
         if (!canPublishFor(plan.userId)) return false
-        val departureDateTime = plan.departureDateTime ?: return false
+        if (plan.departureDateTime == null) return false
+        val origin = routeOriginCoordinates(plan) ?: return false
+        val zone = routeOriginZones[origin] ?: try {
+            kotlinx.coroutines.withTimeout(10_000) {
+                routeOriginZone(plan) { lat, lon -> NetworkModule.apiService.getLocationTimezone(lat, lon).timezone }
+            }?.also { routeOriginZones[origin] = it } ?: return true
+        } catch (error: Exception) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (error is kotlinx.coroutines.CancellationException && error !is kotlinx.coroutines.TimeoutCancellationException) throw error
+            return true
+        }
+        if (!canPublishFor(plan.userId)) return false
         val nowInstant = Instant.now()
-        val now = nowInstant.atZone(ZoneId.systemDefault()).toLocalDateTime()
-        val departureInstant = departureDateTime.atZone(ZoneId.systemDefault()).toInstant()
-        if (!TravelStatusResolver.isWithinRouteWeatherWindow(departureInstant, nowInstant)) return false
+        val clock = routeNotificationClock(plan, zone.id, nowInstant) ?: return false
+        if (!TravelStatusResolver.isWithinRouteWeatherWindow(clock.departure, nowInstant)) return false
 
         val notificationDao = NotificationDatabase.getDatabase(context).notificationDao()
         val weatherDao = WeatherDatabase.getDatabase(context).weatherDao()
 
-        val todayStr = now.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val dailyKey = "route_daily_${plan.userId}_${plan.id}_$todayStr"
-        val notificationId = notificationEventRecordId(plan.userId, "route_daily", dailyKey)
+        val dailyKey = clock.dailyKey
+        val notificationId = clock.notificationId
         if (notificationDao.getVisibleNotification(plan.userId, notificationId) != null) return false
 
-        val summary = when (val forecast = performRouteWeatherAnalysis(plan)) {
+        val summary = when (val forecast = performRouteWeatherAnalysis(plan, clock.departure)) {
             RouteForecastOutcome.Unavailable -> return true
             RouteForecastOutcome.Ineligible -> return false
             is RouteForecastOutcome.Ready -> forecast.summary
         }
 
-        val oldSummary = plan.routeWeatherSummary
-
-
-        val title = when {
-            oldSummary == null -> "Güzergâh hava tahminin hazır"
-            oldSummary != summary -> "Güzergâhında hava değişikliği var"
-            else -> "Güzergâhında hava güncellendi"
-        }
+        val title = routeForecastNotificationTitle(plan.routeWeatherSummary, summary)
         val notificationItem = NotificationItem(
             userId = plan.userId,
             id = notificationId,
             title = title,
             message = summary,
+            eventAt = clock.departure.toEpochMilli(),
             category = NotificationCategory.TRAVEL,
             createdAt = System.currentTimeMillis(),
             deepLinkTarget = "havamania://app/route/${Uri.encode(plan.id)}",
@@ -284,7 +211,7 @@ class TravelNotificationWorker(
         return false
     }
 
-    private suspend fun performRouteWeatherAnalysis(plan: TravelPlan): RouteForecastOutcome {
+    private suspend fun performRouteWeatherAnalysis(plan: TravelPlan, departure: Instant): RouteForecastOutcome {
         try {
             val origin = plan.originPoint?.let { GeoPoint(it.first, it.second) } ?: return RouteForecastOutcome.Ineligible
             val dest = GeoPoint(plan.latitude, plan.longitude)
@@ -298,8 +225,7 @@ class TravelNotificationWorker(
             }
 
             val route = routeResult.route
-            val departureDateTime = plan.departureDateTime ?: return RouteForecastOutcome.Ineligible
-            val departureMillis = departureDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val departureMillis = departure.toEpochMilli()
 
             val forecastPoints = route.forecastWaypoints(departureMillis)
             val results = RouteWeatherProvider().weatherAtBatch(
@@ -468,16 +394,19 @@ internal fun travelRouteForecastSummary(results: List<WaypointWeather?>): String
     if (forecasts.isEmpty()) return null
 
     val dangerCount = forecasts.count { it.risk == RouteRisk.DANGER }
+    val incomplete = forecasts.any { it.hasIncompleteData }
     val summary = when {
         dangerCount > 0 -> "Güzergâhta $dangerCount noktada tehlikeli hava koşulları bekleniyor."
+        incomplete -> "Güzergâhın bazı noktalarında dikkat gerekiyor; hava verisi eksik olduğundan tüm riskler değerlendirilemedi."
         forecasts.any { it.risk == RouteRisk.CAUTION } -> "Güzergâhın bazı noktalarında dikkat gerektiren hava koşulları bekleniyor."
         forecasts.size == results.size -> "İncelenen güzergâh noktalarında önemli bir hava riski görülmedi."
         else -> return "Güzergâhın bazı noktalarında tahmin alınamadı. Hava riski kısmen değerlendirilebildi."
     }
+    val detail = if (incomplete && dangerCount > 0) "$summary Bazı noktalarda hava verisi eksik; tüm riskler değerlendirilemedi." else summary
     return if (forecasts.size < results.size) {
-        "$summary Bazı noktalar için tahmin alınamadı."
+        "$detail Bazı noktalar için tahmin alınamadı."
     } else {
-        summary
+        detail
     }
 }
 

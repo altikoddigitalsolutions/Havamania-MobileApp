@@ -28,7 +28,7 @@ class WeatherCacheTest {
         }
         val api = proxy(WeatherApiService::class.java) { _, args ->
             requests++
-            OpenMeteoResponse(args[0] as Double, args[1] as Double,
+            OpenMeteoResponse(args[0] as Double, args[1] as Double, timezone = "Europe/Istanbul",
                 current = CurrentWeatherDto(temperature = requests * 10.0))
         }
         val repository = WeatherRepository(api, dao)
@@ -36,6 +36,28 @@ class WeatherCacheTest {
         assertEquals("20°", repository.getWeatherData(42.0, 30.0, "Merkez").toList().last().temperature)
         assertEquals("10°", repository.getWeatherData(41.0, 29.0, " MERKEZ ").toList().last().temperature)
         assertEquals(2, requests)
+    }
+
+    @Test fun unknownTimezoneCacheRequiresAnotherNetworkFetch() = runBlocking {
+        val cache = mutableMapOf<String, WeatherCacheEntity>()
+        var requests = 0
+        val dao = proxy(WeatherDao::class.java) { method, args ->
+            when (method) {
+                "getCachedWeather" -> cache[args[0]]
+                "insertWeather" -> { val row = args[0] as WeatherCacheEntity; cache[row.cityName] = row; Unit }
+                else -> error(method)
+            }
+        }
+        val api = proxy(WeatherApiService::class.java) { _, args ->
+            requests++
+            OpenMeteoResponse(args[0] as Double, args[1] as Double,
+                current = CurrentWeatherDto(temperature = requests * 10.0))
+        }
+        val repository = WeatherRepository(api, dao)
+        assertEquals("10°", repository.getWeatherData(41.0, 29.0, "Merkez").toList().last().temperature)
+        assertEquals("20°", repository.getWeatherData(42.0, 30.0, "Merkez").toList().last().temperature)
+        assertEquals("30°", repository.getWeatherData(41.0, 29.0, " MERKEZ ").toList().last().temperature)
+        assertEquals(3, requests)
     }
 
     @Test fun diskFailureStillDeliversValidNetworkWeather() = runBlocking {

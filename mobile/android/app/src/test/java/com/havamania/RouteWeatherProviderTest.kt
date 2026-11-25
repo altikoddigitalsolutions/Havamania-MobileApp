@@ -7,7 +7,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RouteWeatherProviderTest {
-    private val response = OpenMeteoResponse(41.0, 29.0, hourly = HourlyDto(
+    private val response = RouteForecastResponse(41.0, 29.0, timezone = "UTC", hourly = RouteHourlyDto(
         time = listOf("2026-09-15T12:00"), temperature = listOf(20.0), weatherCode = listOf(0)
     ))
     private val eta = Instant.parse("2026-09-15T12:00:00Z").toEpochMilli()
@@ -63,7 +63,7 @@ class RouteWeatherProviderTest {
 
     @Test
     fun `missing hourly sample is not replaced by adjacent forecasts`() = runBlocking {
-        val hourly = HourlyDto(
+        val hourly = RouteHourlyDto(
             time = listOf("2026-09-15T12:00", "2026-09-15T13:00", "2026-09-15T15:00"),
             temperature = listOf(20.0, 21.0, 22.0),
             weatherCode = listOf(0, 0, 0)
@@ -75,11 +75,9 @@ class RouteWeatherProviderTest {
     }
 
     @Test
-    fun routeWeatherLabelUsesEstimatedPassageTime() {
-        val zone = java.time.ZoneId.of("Europe/Istanbul")
-        val evening = Instant.parse("2026-09-15T18:00:00Z").toEpochMilli()
-        assertEquals("Güneşli", routeWeatherDisplayName(0, eta, zone))
-        assertEquals("Açık Gece", routeWeatherDisplayName(0, evening, zone))
-        assertEquals("Hava tahmini", routeWeatherDisplayName(0, null, zone))
+    fun routeWeatherLabelUsesProviderSolarEvidence() {
+        assertEquals("Güneşli", routeWeatherDisplayName(0, true))
+        assertEquals("Açık gece", routeWeatherDisplayName(0, false))
+        assertEquals("Açık", routeWeatherDisplayName(0, null))
     }
 }

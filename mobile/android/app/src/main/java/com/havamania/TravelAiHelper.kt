@@ -53,136 +53,67 @@ object TravelAiHelper {
         LocalTravelGuides.find(city, null)?.description ?: city
 
     fun generateComparisonText(old: ForecastSnapshot, new: ForecastSnapshot, tone: AssistantTone = AssistantTone.DENGELI): String {
-        val changes = mutableListOf<String>()
-
-        // Helper to format based on tone
-        fun formatDiff(text: String, samimi: String, resmi: String, kisa: String, uzman: String): String {
-            return when(tone) {
-                AssistantTone.SAMIMI -> samimi
-                AssistantTone.RESMI -> resmi
-                AssistantTone.KISA_NET -> kisa
-                AssistantTone.DETAYLI_UZMAN -> uzman
-                else -> text
-            }
+        if (old.generatedAt > 0 && new.generatedAt > 0 && new.generatedAt < old.generatedAt)
+            return "Yeni kabul edilen kayıt önceki kayıttan eski; değişim karşılaştırılamıyor."
+        val oldScore = old.travelScore?.takeIf { it in 0..100 }
+        val newScore = new.travelScore?.takeIf { it in 0..100 }
+        val oldRain = old.precipitationProbability?.takeIf { it in 0..100 }
+        val newRain = new.precipitationProbability?.takeIf { it in 0..100 }
+        val parts = mutableListOf<String>()
+        if (oldScore != null && newScore != null && kotlin.math.abs(newScore - oldScore) >= 5) {
+            val direction = if (newScore > oldScore) "arttı" else "azaldı"
+            parts += "Konfor skoru $oldScore/100 → $newScore/100 $direction."
         }
-
-        // 1. Skor Karşılaştırması
-        if (old.travelScore != null && new.travelScore != null) {
-            val scoreDiff = new.travelScore - old.travelScore
-            if (Math.abs(scoreDiff) >= 5) {
-                if (scoreDiff > 0) {
-                    changes.add(formatDiff(
-                        "Seyahat skoru iyileşiyor.",
-                        "Seyahat şansın artıyor canım, koşullar daha iyi!",
-                        "Seyahat uygunluk katsayısı pozitif yönde güncellenmiştir.",
-                        "Skor arttı.",
-                        "Termal stabilite indeksi %${old.travelScore}'den %${new.travelScore}'e yükselerek seyahat optimizasyonunu artırmıştır."
-                    ))
-                } else {
-                    changes.add(formatDiff(
-                        "Seyahat skoru düşüyor.",
-                        "Hava biraz bozuyor sanki, planlarına dikkat et tatlım.",
-                        "Meteorolojik riskler nedeniyle seyahat skoru düşürülmüştür.",
-                        "Skor düştü.",
-                        "Atmosferik perturbasyonlar nedeniyle seyahat skoru %${new.travelScore}'e gerilemiştir."
-                    ))
-                }
-            }
+        if (oldRain != null && newRain != null && kotlin.math.abs(newRain - oldRain) >= 10) {
+            val direction = if (newRain > oldRain) "arttı" else "azaldı"
+            parts += "Yağış olasılığı %$oldRain → %$newRain $direction."
         }
-
-        // 2. Yağış Karşılaştırması
-        val oldPrecip = old.precipitationProbability?.takeIf { it in 0..100 }
-        val newPrecip = new.precipitationProbability?.takeIf { it in 0..100 }
-        if (oldPrecip != null && newPrecip != null && Math.abs(newPrecip - oldPrecip) >= 10) {
-            if (newPrecip > oldPrecip) {
-                changes.add(formatDiff(
-                    "Yağmur riski arttı.",
-                    "Daha çok yağmur yağacak gibi, şemsiyeni hazırla canım.",
-                    "Yağış olasılığı artış göstermiştir.",
-                    "Yağış arttı.",
-                    "Presipitasyon gradyanı %$oldPrecip'ten %$newPrecip'e yükselmiştir."
-                ))
-            } else {
-                changes.add(formatDiff(
-                    "Yağış ihtimali azaldı.",
-                    "Hava açıyor canım, yağmur ihtimali düştü!",
-                    "Yağış beklentisi minimize edilmiştir.",
-                    "Yağış azaldı.",
-                    "Bulut kapalılık oranı ve presipitasyon riski azalma eğilimindedir."
-                ))
-            }
+        val incomplete = oldScore == null || newScore == null || oldRain == null || newRain == null
+        if (incomplete) parts += "Karşılaştırma için bazı veriler eksik veya geçersiz; eksik alanların değişimi değerlendirilemiyor."
+        else if (parts.isEmpty()) parts += "Karşılaştırılan yağış olasılığı ve konfor skorunda belirgin değişiklik yok."
+        // A score change cannot replace a known snow, fog or storm warning.
+        tripWeatherWarning(new)?.let(parts::add)
+        val prefix = when (tone) {
+            AssistantTone.SAMIMI -> "Tahmindeki değişim şöyle: "
+            AssistantTone.RESMI -> "Kayıtlı tahminlerin karşılaştırması: "
+            AssistantTone.DETAYLI_UZMAN -> "Sayısal tahmin karşılaştırması: "
+            else -> ""
         }
-
-        return when {
-            changes.isEmpty() -> if (oldPrecip == null || newPrecip == null || old.travelScore == null || new.travelScore == null)
-                "Karşılaştırma için bazı veriler eksik; hava koşullarının değişmediği söylenemez."
-            else "Karşılaştırılan yağış olasılığı ve seyahat skorunda belirgin değişiklik yok."
-            changes.size == 1 -> changes.first()
-            else -> changes.joinToString(" ")
-        }
+        return prefix + parts.joinToString(" ")
     }
 
     fun generateHistorySummary(plan: TravelPlan, tone: AssistantTone = AssistantTone.DENGELI): TravelHistorySummary {
-        val duration = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate).toInt() + 1
-
-        // Use the actual historical analyses list if available
-        // PROOF: This comes from the 'analyses' field of the TravelPlan which is persisted in Room/Firestore.
-        val historicalData = plan.analyses
-        val hasData = historicalData.isNotEmpty() && historicalData.any { it.summary.isNotBlank() }
-
-        if (!hasData) {
-            return TravelHistorySummary(
-                averageTemp = null,
-                minTemp = null,
-                maxTemp = null,
-                rainyDays = -1,
-                sunnyDays = -1,
-                cloudyDays = -1,
-                riskDayText = "Hava verisi arşivde bulunamadı.",
-                comfortScore = 0,
-                summaryText = "Bu seyahat için kayıtlı hava analizi bulunmuyor.",
-                packingAdvice = "Geçmiş seyahat için öneri sunulmuyor.",
-                nextTripAdvice = "Gelecek planların için ana ekrandaki tahminleri takip edebilirsin.",
-                durationDays = duration
-            )
+        val days = java.time.temporal.ChronoUnit.DAYS.between(plan.startDate, plan.endDate) + 1
+        val duration = days.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
+        // Stored forecast revisions are not daily observations. Use one latest record, never mix gaps.
+        val latest = plan.analyses.withIndex().maxWithOrNull(
+            compareBy<IndexedValue<TravelWeatherAnalysis>> { it.value.createdAt.coerceAtLeast(0) }.thenBy { it.index })?.value
+        val temperature = latest?.averageTemperature?.takeIf { it.isFinite() && it in -100.0..65.0 }?.toInt()
+        val score = latest?.travelScore?.takeIf { it in 0..100 }
+        val rain = latest?.rainRiskPercent?.takeIf { it in 0..100 }
+        val rainText = rain?.let { "Planlama tahmininde yağış olasılığı %$it olarak kaydedilmişti." }
+            ?: "Kaydedilen analizde yağış olasılığı bilgisi bulunmuyor."
+        val temperatureText = temperature?.let { "Planlama tahmininde dönem ortalaması $it°C olarak kaydedilmişti." }
+            ?: "Kaydedilen analizde geçerli sıcaklık bilgisi bulunmuyor."
+        val dateText = if (duration == 0) "Seyahat tarih aralığı geçersiz." else when (tone) {
+            AssistantTone.RESMI -> "${plan.city} seyahatinin kayıtlı süresi $duration gündür."
+            AssistantTone.SAMIMI -> "${plan.city} seyahatinin kayıtlı süresi $duration gün."
+            else -> "${plan.city} seyahati: $duration gün."
         }
-
-        // Derive summary from the LATEST recorded analysis for this trip in retrospective past tense
-        val latestRecorded = historicalData.last()
-        val avgT = latestRecorded.averageTemperature.toInt()
-        val avgScore = latestRecorded.travelScore
-        val rainRisk = latestRecorded.rainRiskPercent
-
-        val weatherDesc = when {
-            avgT > 28 -> "sıcak"
-            avgT < 10 -> "serin ve soğuk"
-            else -> "ılıman"
-        }
-
-        val rainText = when {
-            rainRisk == null -> "Kaydedilen analizde yağış olasılığı bilgisi bulunmuyor."
-            rainRisk > 20 -> "Planlama tahmininde yağış riski %$rainRisk olarak öngörülüyordu."
-            else -> "Planlama tahmininde yağış riski düşüktü."
-        }
-
-        val summaryText = when(tone) {
-            AssistantTone.SAMIMI -> "${plan.city} seyahatin $duration gün sürdü canım. Planlama sırasında kaydedilen hava tahmininde hava genel olarak $weatherDesc idi ve ortalama sıcaklık ${avgT}°C civarında öngörülüyordu. $rainText"
-            AssistantTone.RESMI -> "${plan.city} seyahati $duration günlük periyotta gerçekleşmiştir. Planlama evresindeki tahmin verilerine göre hava koşulları $weatherDesc öngörülmüş, sıcaklık ortalaması ${avgT}°C olarak hesaplanmıştır. $rainText"
-            else -> "${plan.city} seyahatin $duration gün sürdü. Planlama sırasında kaydedilen hava tahmininde hava genel olarak $weatherDesc idi ve ortalama sıcaklık ${avgT}°C civarında öngörülüyordu. $rainText"
-        }
-
         return TravelHistorySummary(
-            averageTemp = avgT,
-            minTemp = historicalData.map { it.averageTemperature }.minOrNull()?.toInt() ?: avgT,
-            maxTemp = historicalData.map { it.averageTemperature }.maxOrNull()?.toInt() ?: avgT,
+            averageTemp = temperature,
+            minTemp = null,
+            maxTemp = null,
             rainyDays = -1,
             sunnyDays = -1,
             cloudyDays = -1,
-            riskDayText = "Arşivlenen analiz verileri kullanılıyor.",
-            comfortScore = avgScore,
-            summaryText = summaryText,
-            packingAdvice = "Kaydedilen ortalama sıcaklık: $avgT°C",
-            nextTripAdvice = "Seyahat geçmişin, gelecek planların için bir rehber niteliğindedir.",
+            riskDayText = if (latest == null) "Hava verisi arşivde bulunamadı." else "Kayıtlı planlama tahmini kullanılıyor; gerçekleşen hava ölçümü değildir.",
+            comfortScore = score,
+            summaryText = if (latest == null) "Bu seyahat için kayıtlı hava analizi bulunmuyor."
+                else "$dateText $temperatureText $rainText Bu değerler gerçekleşen hava ölçümleri değildir.",
+            packingAdvice = temperature?.let { "Kaydedilen tahmini dönem ortalaması: $it°C" }
+                ?: "Geçmiş seyahat için sıcaklığa dayalı öneri sunulamıyor.",
+            nextTripAdvice = "Gelecek planların için güncel tahminleri takip edebilirsin.",
             durationDays = duration
         )
     }

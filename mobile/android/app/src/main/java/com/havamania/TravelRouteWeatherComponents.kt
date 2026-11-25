@@ -174,7 +174,7 @@ fun TimelineWaypointItem(
             text = time,
             style = typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             color = colors.accent,
-            modifier = Modifier.width(48.dp).padding(top = 16.dp)
+            modifier = Modifier.width((48f * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceIn(1f, 2f)).dp).padding(top = 16.dp)
         )
 
         // Middle: Dot and Line
@@ -238,7 +238,7 @@ fun TimelineWaypointItem(
                     )
                     if (weather != null) {
                         Text(
-                            text = routeWeatherDisplayName(weather.weatherCode, etaEpochMillis),
+                            text = routeWeatherDisplayName(weather.weatherCode, weather.isDay),
                             style = typography.caption.copy(fontSize = 11.sp),
                             color = colors.textSecondary,
                             maxLines = 1,
@@ -248,8 +248,7 @@ fun TimelineWaypointItem(
                             Text(
                                 text = "⚠️ ${weather.riskReason}",
                                 style = typography.caption.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                color = colors.warning,
-                                maxLines = 1
+                                color = if (weather.risk == RouteRisk.DANGER) colors.error else colors.warning
                             )
                         }
                     } else {
@@ -261,12 +260,12 @@ fun TimelineWaypointItem(
                     Spacer(Modifier.width(12.dp))
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "${weather.temperatureC.toInt()}°",
+                            text = routeTemperatureText(weather.temperatureC),
                             style = typography.cardTitle.copy(fontWeight = FontWeight.Black, fontSize = 20.sp),
                             color = colors.textPrimary
                         )
                         Text(
-                            text = WeatherUtils.getWeatherEmoji(weather.weatherCode),
+                            text = routeWeatherEmoji(weather.weatherCode, weather.isDay),
                             fontSize = 24.sp
                         )
                     }
@@ -274,10 +273,4 @@ fun TimelineWaypointItem(
             }
         }
     }
-}
-
-internal fun routeWeatherDisplayName(code: Int, etaEpochMillis: Long?, zone: ZoneId = ZoneId.systemDefault()): String {
-    val eta = etaEpochMillis ?: return "Hava tahmini"
-    val time = LocalDateTime.ofInstant(Instant.ofEpochMilli(eta), zone)
-    return WeatherUtils.getWeatherDisplayName(code, time, null, null)
 }

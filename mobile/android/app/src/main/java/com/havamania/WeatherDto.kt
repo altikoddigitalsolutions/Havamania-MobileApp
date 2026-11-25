@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 data class OpenMeteoResponse(
     val latitude: Double,
     val longitude: Double,
-    val timezone: String = "UTC",
+    val timezone: String = "",
     @SerialName("timezone_abbreviation")
     val timezoneAbbreviation: String = "UTC",
     val current: CurrentWeatherDto? = null,
@@ -51,42 +51,41 @@ data class CurrentWeatherDto(
 
 @Serializable
 data class DailyDto(
-    val time: List<String>,
+    val time: List<String?> = emptyList(),
     @SerialName("weather_code")
-    val weatherCode: List<Int>,
+    val weatherCode: List<Int?> = emptyList(),
     @SerialName("temperature_2m_max")
-    val tempMax: List<Double>,
+    val tempMax: List<Double?> = emptyList(),
     @SerialName("temperature_2m_min")
-    val tempMin: List<Double>,
+    val tempMin: List<Double?> = emptyList(),
     @SerialName("precipitation_probability_max")
-    val precipProbMax: List<Int>? = null,
+    val precipProbMax: List<Int?>? = null,
     @SerialName("uv_index_max")
-    val uvIndexMax: List<Double>? = null,
+    val uvIndexMax: List<Double?>? = null,
     @SerialName("sunrise")
-    val sunrise: List<String> = emptyList(),
+    val sunrise: List<String?> = emptyList(),
     @SerialName("sunset")
-    val sunset: List<String> = emptyList(),
+    val sunset: List<String?> = emptyList(),
     @SerialName("wind_speed_10m_max")
-    val windSpeedMax: List<Double> = emptyList(),
+    val windSpeedMax: List<Double?> = emptyList(),
     @SerialName("wind_gusts_10m_max")
-    val windGustsMax: List<Double> = emptyList()
+    val windGustsMax: List<Double?> = emptyList()
 )
 
 @Serializable
 data class HourlyDto(
-    val time: List<String>,
+    val time: List<String?> = emptyList(),
     @SerialName("temperature_2m")
-    val temperature: List<Double>,
+    val temperature: List<Double?> = emptyList(),
     @SerialName("weather_code")
-    val weatherCode: List<Int>,
+    val weatherCode: List<Int?> = emptyList(),
     @SerialName("precipitation_probability")
-    val precipitationProbability: List<Int>? = null,
-    // Aşağıdakiler yalnızca güzergâh noktası isteğinde (getRouteHourly) doldurulur;
-    // mevcut getFullWeather çağrılarında null kalır (geriye dönük uyumlu).
+    val precipitationProbability: List<Int?>? = null,
+    // İsteğe bağlı saatlik alanlar; eski yanıt ve önbelleklerle uyumlu.
     @SerialName("apparent_temperature")
-    val apparentTemperature: List<Double>? = null,
+    val apparentTemperature: List<Double?>? = null,
     @SerialName("wind_speed_10m")
-    val windSpeed: List<Double>? = null,
+    val windSpeed: List<Double?>? = null,
     @SerialName("relative_humidity_2m")
-    val humidity: List<Int>? = null
+    val humidity: List<Int?>? = null
 )

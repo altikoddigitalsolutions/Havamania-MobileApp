@@ -189,4 +189,21 @@ object WeatherUtils {
         val index = ((degrees + 22.5) / 45).toInt() % 8
         return directions[index]
     }
+
+    /** Explicit provider/solar evidence; unknown phase stays neutral. */
+    fun describeWeatherPhase(code: Int, isDay: Boolean?): String {
+        val night = isDay == false
+        return when (code) {
+            0 -> if (isDay == true) "Güneşli" else if (night) "Açık gece" else "Açık"
+            1, 2 -> if (night) "Az bulutlu gece" else "Az bulutlu"
+            3 -> if (night) "Bulutlu gece" else "Bulutlu"
+            45, 48 -> "Sisli"
+            51, 53, 55, 56, 57 -> "Çiseleyen yağmur"
+            61, 63, 65, 66, 67 -> if (night) "Yağmurlu gece" else "Yağmurlu"
+            80, 81, 82 -> if (night) "Sağanak yağışlı gece" else "Sağanak yağış"
+            95, 96, 99 -> if (night) "Fırtınalı gece" else "Fırtınalı"
+            71, 73, 75, 77, 85, 86 -> if (night) "Karlı gece" else "Karlı"
+            else -> "Veri yok"
+        }
+    }
 }

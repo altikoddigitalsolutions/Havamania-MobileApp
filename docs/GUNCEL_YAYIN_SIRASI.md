@@ -808,3 +808,88 @@ Eksik veriden 20 derece/açık/uygun hava ve mevsimlik valiz çıkarımı kaldı
 Seyahat kartı ve rehber ortak metinle ilk yükleme, kayıtlı veriyle yenileme, kısmi/başarısız yenileme ve asistan hatasını ayırıyor; zaman damgası/önceki gün uyarısı korunuyor. Rehberin ayrı ortalama sıcaklıktan valiz hesabı kaldırıldı; ortak snapshot temelli güvenli öneri kullanılıyor. Son kaynakla 733 JVM +3 izole tablet senaryosu hatasız; yeni test eski hata/soğuk hazırlığının yeni snapshot ve durumla kalkmasını gerçek rehber bileşeninde doğruladı. Tam ağ/takvim/Activity akışı ve görsel matris kabulü değil. [Rapor](25_KASIM_REHBER_ANALIZ_YENILEME.md).
 
 Sıradaki yerel iş: analiz özet/metrik tüketicilerinde geçersiz/eski sayısal veri ve kayıtlı analiz/snapshot tutarlılığı. Periyodik zaman etiketi güncellemesi, kalan iç içe dikdörtgen/görsel matris, canlı servisler ve yayın kapıları açık. Push yok.
+## 25 Kasım Seyahat metriklerinin kaynak tutarlılığı
+
+Kart/rehber kısa özet ve metrikleri ortak TripDisplayMetrics kaynağına bağlandı. Snapshot varsa eski analizden boşluk doldurulmaz; geçersiz sıcaklık/yüzde/skor bilinmeyen kalır, gerçek sıfır korunur. Bilinmeyen yağış nötr renkte; bilinmeyen skor kartta sıfır rozete dönüşmez. Snapshot olmayan eski tehlike özeti Kayıtlı analiz olarak korunur. Sekiz yeni JVM regresyonu; son toplam741 JVM +3 izole tablet senaryosu hatasız. [Rapor](25_KASIM_SEYAHAT_METRIK_TUTARLILIGI.md).
+
+Sıradaki: geçmiş seyahat özeti ve diğer eski analiz tüketicilerinin eksik/NaN veriye dayanıklılığı. Tam ekran görsel matris/iç içe dikdörtgenler, canlı yenileme/senkronizasyon ve yayın kapıları açık. Push yok.
+## 25 Kasım Geçmiş seyahat özetlerinde veri doğruluğu
+
+Geçmiş özeti en yeni zaman damgalı analizden üretiliyor; boş açıklamalı sayısal veri korunuyor, NaN/sonsuz/sınır dışı sıcaklık ve yüzde/skor bilinmeyen kalıyor. Tahmin revizyonları gerçek sıcaklık uçları/günlük gözlem sayılmıyor; bilinmeyen skor sıfır değildir. Metin kayıtlı planlama tahmini ile gerçekleşen ölçümü ayırıyor. Yedi yeni regresyonun tamamı eski kodda hatayı üretti. Son kaynakla 748 JVM +1 gerçek geçmiş özet dialog testi geçti. [Rapor](25_KASIM_GECMIS_SEYAHAT_VERI_DOGRULUGU.md).
+
+Sıradaki: eski kısa özet fallback'i ve diğer sayısal karşılaştırma tüketicileri. Geçmiş dialog büyük yazı/küçük ekran kaydırma ve görsel sadeleştirme açık matrise bağlıdır. Önceki tam ekran/tema/erişilebilirlik, canlı servis, aralıklı Activity/profil ve yayın kapıları açık. Push yok.
+## 25 Kasım Kısa özet ve sayısal karşılaştırmalar
+
+Eski kısa özet fallback'i bozuk sıcaklık/yüzdeyi bilinmeyen gösteriyor; kayıtlı açık uyarı metni korunuyor. Analiz ve bildirim karşılaştırmaları geçerli skor/yağış değerleriyle hesaplanıyor; skordan genel hava iyileşmesi veya yağıştan bulut azalması çıkarılmıyor. Bilinen yeni tehlike uyarısı korunuyor, daha eski gelen zaman damgalı kayıt değişim olarak sunulmuyor. Altı yeni JVM senaryosunun dördü eski kodda hatayı yeniden üretti. Son kaynakla754 JVM hatasız, QA APK derlemesi başarılı; cihaz testi bu tur yok. [Rapor](25_KASIM_KISA_OZET_KARSILASTIRMA.md).
+
+Sıradaki: TravelNotificationWorker ekipman önerilerinde ayrı hava varsayımları ve sıcaklıktan güneş koruması çıkarımı. Bildirim teslim/tepsi/izin/kanal kabulü, görsel matris/iç içe dikdörtgenler, canlı servis ve yayın kapıları açık. Push yok.
+## 25 Kasım Bildirim ekipman önerilerinin tutarlılığı
+
+Worker bildirim verisi üretimi test edilebilir yordamda toplandı. Rehber ve bildirim ortak yağış/kar-don/sıcak/rüzgar/UV/sıcaklık farkı kurallarını kullanıyor. Eksik/geçersiz hava değerleri payload'a taşınmıyor; sıcaklık UV yerine geçmiyor, birleşik riskler korunuyor. Yedi yeni JVM senaryosunun altısı önceki davranışta hatayı üretti; son kaynakla761 JVM hatasız, QA APK derlemesi başarılı. Sistem tepsisi ve cihaz teslim kabulü bu tur yok. [Rapor](25_KASIM_BILDIRIM_EKIPMAN_TUTARLILIGI.md).
+
+Sıradaki: generateNotificationText kısmi alanlarla null derece yazabiliyor ve seyahat dönemi tahminini Bugün hava diye adlandırabiliyor. Eksik veri ve dönem/gün ayrımı test/düzeltmesi açık. Diğer bildirim teslim/izin/kanal, görsel matris/iç içe dikdörtgenler, canlı servisler ve yayın kapıları açık. Push yok.
+## 25 Kasım Bildirim metninde eksik veri ve dönem ayrımı
+
+Metin üretimi ortak test edilebilir yordamda: kısmi sıcaklık null derece üretmiyor, geçerli tek alan korunuyor; seyahat dönemi tahmini Bugün hava ölçümü olarak sunulmuyor. Eksik veride hazır ve comparisonText varlığından değişiklik iddiası kaldırıldı. Gün/kalan süre/ongoing metni güncel snapshot konum tarihine bağlandı. Altı yeni JVM testinin beşi eski davranışta hatayı üretti; son kaynakla767 JVM hatasız, QA APK derlemesi başarılı. Fiziksel teslim/tepsi kabulü yok. [Rapor](25_KASIM_BILDIRIM_METIN_DOGRULUGU.md).
+
+Sıradaki: cihaz saat dilimiyle üretilen günlük bildirim dateStr/anahtarı ve eventAt için konum günü/tekil teslim tutarlılığı. Diğer bildirim kanal/izin/teslim, görsel matris/iç içe dikdörtgenler, canlı servis ve yayın kapıları açık. Push yok.
+## 25 Kasım Günlük seyahat bildiriminde konum günü
+
+Günlük ID/tekrar anahtarı, gönderim takip tarihi, metin günü ve başlangıç eventAt geçerli snapshot konum saat dilimine bağlandı. Bilinmeyen saat diliminde cihaz tarihine sessiz dönüş yok; analiz sonrası kimlik yeniden hesaplanıyor. Yedi yeni JVM senaryosunun beşi eski hesapta hatayı üretti. Son kaynakla774 JVM +1 kalıcı Room cihaz testi hatasız: 20 eşzamanlı rezervasyonda tek kayıt, tamamlayıp yeniden açılışta aynı gün tekrar yok, yeni gün ve B kullanıcısı ayrı. Gerçek tepsi/Worker ağ kabulü değildir. Eski tarih alanının saat dilimi metadata eksikliği raporda açık. [Rapor](25_KASIM_GUNLUK_BILDIRIM_KONUM_GUNU.md).
+
+Sıradaki: güzergâh bildiriminin cihaz saat dilimine dayanan günlük anahtarı ve hareket saati; çıkış/varış saat dilimi ayrımı incelenecek. Diğer bildirim teslim/izin/kanal, görsel matris/iç içe dikdörtgenler, canlı servis ve yayın kapıları açık. Push yok.
+## 25 Kasım Güzergâh bildiriminde çıkış saati
+
+Bildirim hareket anı çıkış koordinatından çözülen saat dilimiyle hesaplanıyor; günlük anahtar çıkış gününe, eventAt gerçek hareket anına bağlı. Aynı Instant 48 saat kontrolü ve rota ETA hesaplarına veriliyor. DST boşluğu/çift offset ve eksik saat diliminde cihaz/varış saati varsayımı yok. Çözüm kısa provider isteği, zaman aşımı ve mevcut sınırlı retry ile bağlı; iptal yayılır. Yedi saat regresyonunun tamamı ilk hesapta hata üretti; dört resolver testi eklendi. Son kaynakla785 JVM hatasız, QA APK derlemesi başarılı. Cihaz/canlı servis kabulü yok. [Rapor](25_KASIM_GUZERGAH_CIKIS_SAAT_DILIMI.md).
+
+Sıradaki zorunlu devam: TravelRouteViewModel/TravelRouteWeatherScreen/TravelStatusResolver hâlâ cihaz saati varsayımı içeriyor. Ekran hareket anı, 48 saat kilidi, konuma göre saat etiketleri ve belirsiz saat hata durumu incelenecek. Bildirim düzeltmesi tüm güzergâh kabulü değildir. Görsel matris/iç içe dikdörtgenler, canlı servisler ve yayın kapıları açık. Push yok.
+## 25 Kasım Güzergâh ekranında açık çıkış saati
+
+ViewModel gerçek başlangıç noktasından saat dilimi çözüyor; yükleme/hata/yeniden çöz durumları var, bilinmeyen saatte analiz kilitli. UI/VM ortak 48 geçen saat politikasını kullanıyor, geçmiş gün çıkış bölgesine bağlı. Görünen ETA metinleri açık çıkış saat diliminde tarih-saat olarak sunuluyor; ara/varış yerel saati iddiası yok. Görünür yaşam döngüsünde en fazla30sn saat yenileniyor. Son793 JVM ve QA APK derlemesi geçti; 7 izole cihaz senaryosu da geçti (son VM başlangıç yükleme koruması sonrası yalnız JVM/derleme tekrarlandı). Tam canlı ViewModel/harita/ağ kabulü değildir. [Rapor](25_KASIM_GUZERGAH_EKRAN_CIKIS_SAATI.md).
+
+Sıradaki: routeWeatherDisplayName cihaz saatinden gündüz/gece açıklaması türetebiliyor. DAO metaveri değişiminde gereksiz rota/saat çözümü, tam iptal/hesap değişimi ve ara/varışın kendi yerel saati ayrıca açık. Görsel matris/iç içe dikdörtgenler, canlı servis ve yayın kapıları korunuyor. Push yok.
+## 25 Kasım Güzergâh gündüz/gece açıklaması
+
+Saatlik is_day verisi tekil/toplu sağlayıcıdan aynı örnek idx ile rota noktasına taşınıyor; eksik/geçersiz değer bilinmeyen. Metin ve simge cihaz saatinden güneş/gece uydurmuyor, bilinen tehlike korunuyor. Resmî Open-Meteo doküman/şema desteği kontrol edildi; canlı yanıt kabulü ayrı. Son805 JVM +8 izole cihaz senaryosu hatasız; bir yeni cihaz testi metin/simge bilinmeyen→gece→gündüz geçişini doğruladı. [Rapor](25_KASIM_GUZERGAH_FAZ_VE_HESAPLAMA.md).
+
+## 25 Kasım Gereksiz rota hesaplaması
+
+RouteCalculationGate kullanıcı/seyahat/koordinat/yer etiketi/tarih/hareket girdilerini izliyor. Not, puan, bildirim takibi ve varış hava metaverisi güncellemeleri mevcut rota/analizi sıfırlamıyor; gerçek girdi değişimi ve açık Rotayı yenile yine hesaplıyor. İlk dokuz yeni regresyonun altısı eski davranışta hatayı üretti; son kapsam altı kapı+altı faz/provider JVM testidir. Gerçek HTTP sayacı, pil/profiler ve tam ViewModel entegrasyonu ölçülmedi. Aynı raporda sınırlar korunur; push yok.
+
+Sıradaki: RouteWeatherProvider sayısal veri doğrulaması ve kuvvetli rüzgarın sürüş riski değerlendirmesinde atlanıp atlanmadığı. Ara/varışın kendi yerel saati, tam iptal/hesap değişimi, görsel matris/iç içe dikdörtgenler, canlı servisler ve yayın kapıları açık.
+## 25 Kasım Rota sayısal doğruluğu
+
+Tekil/toplu rota çözümü ortak doğrulamaya bağlandı; ayrı RouteForecastResponse/RouteHourlyDto null ölçümleri kabul ediyor. Eksik sıcaklık sıfır olmuyor, bilinen tehlike korunuyor; tamamen kullanılamaz örnek veri yoktur. Eksik kod/sıcaklık/yağış/rüzgar/hamle yeşil uygun sayılmaz; UI ve özet kısmi veriyi açıklıyor. İlk7 regresyonun tamamı eski kodda hatayı üretti. Son kaynakla820 JVM +9 izole cihaz senaryosu hatasız; gerçek risk Text çok satır/taşma kontrolü geçti. İlk cihaz ölçümü birleşik satırı okuyordu; gerçek Text seçilip güçlü assert'lerle yeniden geçti. [Rapor](25_KASIM_ROTA_SAYISAL_VERI_RUZGAR.md).
+
+## 25 Kasım Rota rüzgar ve hamle riski
+
+Saatlik wind_gusts_10m ve açık kmh birimi ekli; hız/hamle 39/62 km/sa uygulama ihtiyat bantlarıyla riske katılıyor. Birleşik kar/fırtına/rüzgar nedenleri korunuyor, tek satır uyarı kesilmesi kaldırıldı; DANGER metin rengi tutarlı. Resmî ölçek/alan kaynakları ve bu puanın resmî yol güvenliği garantisi olmadığı raporda. Canlı servis/tam ViewModel/harita/tepsi kabulü açık; push yok.
+
+Sıradaki: güzergâh bildirim başlığı özet metni değişiminden hava değişti çıkarımı yapıyor; genel hava ekranı HourlyDto null ölçüm dizileri ayrıca incelenecek. Ara/varış yerel saati, tam hesap değişimi/iptal, görsel matris/iç içe dikdörtgenler, canlı servis ve yayın kapıları korunur.
+## 25 Kasım Güzergâh bildirim başlığı
+
+Özet metni farkı hava değişikliği kanıtı sayılmıyor. Başlık ilk veri/hazır, güncelleme ve boş yeni veri durumlarını saf ortak yordamda ayırıyor. Üç yeni başlık regresyonu eski davranışta hatayı üretti. [Rapor](25_KASIM_BASLIK_ANA_HAVA_NULL_OLCUMLER.md).
+
+## 25 Kasım Ana hava saatlik null ölçümleri
+
+Genel HourlyDto nullable dizi öğeleri ve boş saatlik nesneyi kabul ediyor; mapper geçersiz gerekli satırı indeksleri kaydırmadan atlıyor. Current ve komşu saatler korunuyor, bilinmeyen yüzde sıfıra çevrilmiyor, gerçek sıfır geçerli. İlk dört saatlik regresyon da eski davranışta hata üretti; sıfır kontrolü eklendi. Son kaynakla828 JVM +1 saatlik bileşen tablet testi hatasız; 14:00/18 derece görünümü, sahte sıfır olmaması ve doğru seçim callback'i geçti. Tam hava ekranı/tepsi/ağ kabulü değil. Aynı raporda sınırlar açık; push yok.
+
+Sıradaki: DailyDto null ölçüm dizileri; ana WeatherMapper gündüz/gece ve saat dilimi varsayımları. Eksik saatlerin kapsam/yer tutucu gösterimi, rota ara/varış yerel saati, tam hesap/iptal, görsel matris/iç içe dikdörtgenler, canlı servisler ve yayın kapıları korunur.
+
+## 25 Kasım Günlük null ölçümler
+
+Günlük nullable ölçümler anlık havayı bozmuyor; geçerli günler özgün indekslerle korunuyor. Seyahat özeti eksik aralığı tam saymıyor. 838 JVM ve debug APK derlemesi başarılı. Yeni günlük bileşen cihaz testi hazır; tablet ADB üzerinde yok, fiziksel doğrulama açık. [Rapor](25_KASIM_GUNLUK_NULL_KONUM_ACIKLAMASI.md).
+
+## 25 Kasım Ana hava açıklamalarında saat kaynağı
+
+Mapper cihazın anlık saatini açıklamaya taşımıyor; sağlayıcı fazı veya ilgili güne ait doğrulanmış güneş aralığı kullanılıyor. Bilinmeyen faz nötr. Sıradaki: eksik/geçersiz timezone UTC varsayımı, eski UI faz yardımcıları, eksik tahmin kapsamının görünümü. Diğer görsel/hesap/servis/yayın kapıları açık; push yok.
+
+
+## 26 Kasım Mapper bilinmeyen saat dilimi
+
+Eksik timezone UTC olarak doldurulmuyor; mapper geçersiz/bilinmeyen konum zamanıyla Bugün veya güncel saat seçmiyor. 840 JVM, sıfır hata/atlama; debug APK başarılı. Tablet bağlı değil. [Rapor](26_KASIM_BILINMEYEN_SAAT_DILIMI.md). Sıradaki: eski ForecastTime.zone/localNow tüketicileri (önbellek, ViewModel/UI, asistan/öneri) ve eksik kapsam görünümü. Önceki görsel ve yayın kontrolleri korunuyor; push yok.
+
+
+## 26 Kasım Önbellek konum günü
+
+Boş/geçersiz saat dilimi aynı yerel gün sayılmıyor; önbellek güncel kabul edilmiyor, eski gün/saat seçimi bayrakları temizleniyor. Tarihli günlük kayıtlar korunuyor fakat Bugün işareti üretilmiyor. Bilinmeyen zamanla saat seçimi kapalı. 845 JVM ve debug APK başarılı. Repository yeniden ağ isteği regresyonu geçti. [Rapor](26_KASIM_ONBELLEK_KONUM_GUNU.md). Sıradaki: ViewModel ve WeatherView zaman seçimi, yerel asistan/öneri UTC tüketicileri. Fiziksel/görsel ve yayın kapıları korunur; push yok.

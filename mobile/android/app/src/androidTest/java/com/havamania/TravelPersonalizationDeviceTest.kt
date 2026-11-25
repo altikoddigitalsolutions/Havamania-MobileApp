@@ -98,15 +98,18 @@ class TravelPersonalizationDeviceTest {
             }
         }
         compose.onNodeWithText("Hava verisi eksik veya yenilenemedi", substring = true).assertExists()
+        compose.onNodeWithText("35°C").assertDoesNotExist()
         compose.onNodeWithText("Soğuk veya donan yağış tahminine karşı", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("güneş koruması al", substring = true).assertDoesNotExist()
         compose.runOnIdle {
             plan = plan.copy(weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY,
                 lastForecastSnapshot = ForecastSnapshot(minTemp = 18.0, maxTemp = 31.0, precipitationProbability = 10,
-                    windSpeed = 5.0, weatherCode = 0, generatedAt = System.currentTimeMillis(), timezone = "Europe/Istanbul"))
+                    windSpeed = 5.0, weatherCode = 0, averageTemperature = 24.0, travelScore = 85, generatedAt = System.currentTimeMillis(), timezone = "Europe/Istanbul"))
         }
         compose.onNodeWithText("Hava verisi eksik veya yenilenemedi", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Soğuk veya donan yağış tahminine karşı", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Sıcaklık tahminine göre hafif", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("24°C").assertExists()
+        compose.onNodeWithText("85/100").assertExists()
     }
 }

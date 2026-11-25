@@ -139,7 +139,7 @@ fun NextTripHero(
         val analysis = plan.analyses.lastOrNull()
         if (analysis != null) {
             Text(
-                text = RecommendationEngine.getShortWeatherSummaryFromAnalysis(analysis, isOngoing),
+                text = tripDisplaySummary(plan),
                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                 color = themeColors.textPrimary,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -309,12 +309,11 @@ fun TravelPlanCard(
                     )
                 } else if (latestAnalysis != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        WeatherScoreIndicator(latestAnalysis.travelScore, plan.lastForecastSnapshot?.let(::tripWeatherWarning) != null)
+                        tripDisplayMetrics(plan).score?.let { WeatherScoreIndicator(it, plan.lastForecastSnapshot?.let(::tripWeatherWarning) != null) }
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = plan.lastForecastSnapshot?.let(::tripWeatherWarning)
-                                    ?: RecommendationEngine.getShortWeatherSummaryFromAnalysis(latestAnalysis),
+                                text = tripDisplaySummary(plan),
                                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                 color = themeColors.textPrimary
                             )
@@ -431,9 +430,10 @@ fun RichTravelGuideView(
     }
     val analysis = plan.analyses.lastOrNull()
 
-    val avgTemp = analysis?.averageTemperature?.toInt()
-    val rainRisk = analysis?.rainRiskPercent
-    val score = analysis?.travelScore
+    val metrics = tripDisplayMetrics(plan)
+    val avgTemp = metrics.averageTemperature?.toInt()
+    val rainRisk = metrics.rainProbability
+    val score = metrics.score
 
     val avgTempText = avgTemp?.let { "$it°C" } ?: "Veri bekleniyor"
     val rainRiskText = rainRisk?.let { "%$it" } ?: "Veri bekleniyor"
@@ -469,9 +469,7 @@ if (BuildConfig.DEBUG) {
         // HAVA ÖZETİ Section
         SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
         Spacer(Modifier.height(6.dp))
-        val weatherSummaryText = plan.lastForecastSnapshot?.let(::tripWeatherWarning)
-            ?: analysis?.let { RecommendationEngine.getShortWeatherSummaryFromAnalysis(it) }
-            ?: "Bu seyahat için henüz detaylı hava analizi yapılmadı. Tahminler hazır olduğunda burada görünecek."
+        val weatherSummaryText = tripDisplaySummary(plan)
         Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
         Text(tripAnalysisDisplayLabel(plan), style = HavamaniaTheme.typography.caption,
             color = themeColors.textMuted)
@@ -485,7 +483,7 @@ if (BuildConfig.DEBUG) {
         ) {
             MetricTile("KONFOR SKORU", scoreText, Icons.Rounded.Star, themeColors.warning, Modifier.weight(1f))
             MetricTile("ORT. SICAKLIK", avgTempText, Icons.Rounded.Thermostat, themeColors.accent, Modifier.weight(1f))
-            MetricTile("YAĞIŞ RİSKİ", rainRiskText, Icons.Rounded.WaterDrop, if ((rainRisk ?: 0) > 50) themeColors.error else themeColors.success, Modifier.weight(1f))
+            MetricTile("YAĞIŞ RİSKİ", rainRiskText, Icons.Rounded.WaterDrop, if (rainRisk == null) themeColors.textMuted else if (rainRisk > 50) themeColors.error else themeColors.success, Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(16.dp))

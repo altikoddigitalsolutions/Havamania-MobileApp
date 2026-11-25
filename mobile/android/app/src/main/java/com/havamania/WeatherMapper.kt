@@ -3,7 +3,6 @@ package com.havamania
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.ui.graphics.vector.ImageVector
-import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -16,6 +15,7 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 
 object WeatherMapper {
+    private val dayNameFormatter = DateTimeFormatter.ofPattern("d MMMM EEEE", Locale.forLanguageTag("tr-TR"))
 
     fun mapToDomain(response: OpenMeteoResponse, cityName: String, districtName: String? = null,
                     now: java.time.Instant = java.time.Instant.now()): WeatherData {
@@ -35,8 +35,8 @@ object WeatherMapper {
             uvIndex = value.uvIndex?.takeIf { it.isFinite() && it >= 0 }
         ) }
         val allDaily = response.daily
-        val today = ForecastTime.localNow(response.timezone, now).toLocalDate()
-        val daily = allDaily?.let { source ->
+        val today = ForecastTime.knownZone(response.timezone)?.let { now.atZone(it).toLocalDate() }
+        val daily = allDaily?.takeIf { today != null }?.let { source ->
             val indices = source.time.indices.filter { source.time[it] == today.toString() }
             val index = indices.singleOrNull() ?: return@let null
             source.copy(time = listOf(today.toString()),
@@ -73,7 +73,7 @@ object WeatherMapper {
             latitude = response.latitude,
             longitude = response.longitude,
             temperature = current?.temperature?.let { "${it.roundToInt()}°" } ?: "--",
-            condition = getWeatherCondition(current?.weatherCode ?: -1),
+            condition = WeatherUtils.describeWeatherPhase(current?.weatherCode ?: -1, current?.isDay?.let { when (it) { 0 -> false; 1 -> true; else -> null } }),
             weatherCode = current?.weatherCode ?: -1,
             isDay = current?.isDay == 1,
             high = dailyMax?.takeIf { rangeValid }?.let { "${it.roundToInt()}°" } ?: "--",
@@ -174,14 +174,14 @@ object WeatherMapper {
 
     private fun mapHourly(hourly: HourlyDto?, daily: DailyDto?, timezone: String, now: java.time.Instant): List<HourlyWeather> {
         if (hourly == null) return emptyList()
-        val zone = try { java.time.ZoneId.of(timezone) } catch (_: Exception) { java.time.ZoneOffset.UTC }
-        val currentHourStr = now.atZone(zone).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:00", Locale.US))
+        val zone = ForecastTime.knownZone(timezone)
+        val currentHourStr = zone?.let { now.atZone(it).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:00", Locale.US)) }
 
         val sunTimesByDate = mutableMapOf<String, Pair<LocalTime, LocalTime>>()
         if (daily != null) {
             val uniqueDates = daily.time.groupingBy { it }.eachCount()
             for (i in daily.time.indices) {
-                val date = daily.time[i]
+                val date = daily.time[i] ?: continue
                 if (uniqueDates[date] != 1) continue
                 val rise = ForecastSun.timeForDate(daily.sunrise.getOrNull(i), date)?.let(LocalTime::parse)
                 val set = ForecastSun.timeForDate(daily.sunset.getOrNull(i), date)?.let(LocalTime::parse)
@@ -192,8 +192,8 @@ object WeatherMapper {
         val mapped = hourly.time.indices.mapNotNull { i ->
             val code = hourly.weatherCode.getOrNull(i) ?: return@mapNotNull null
             val temperature = hourly.temperature.getOrNull(i) ?: return@mapNotNull null
-            if (!temperature.isFinite()) return@mapNotNull null
-            val fullTime = hourly.time[i]
+            if (!WeatherUtils.isKnownCode(code) || !temperature.isFinite() || temperature !in -100.0..65.0) return@mapNotNull null
+            val fullTime = hourly.time[i] ?: return@mapNotNull null
             val parts = fullTime.split("T")
             if (parts.size != 2) return@mapNotNull null
             val datePart = parts[0]
@@ -222,7 +222,7 @@ object WeatherMapper {
                 time = hourLabel,
                 fullTime = fullTime,
                 iconName = getWeatherIconName(code),
-                condition = getWeatherCondition(code),
+                condition = WeatherUtils.describeWeatherPhase(code, isDay),
                 weatherCode = code,
                 isDay = isDay,
                 temp = "${temperature.roundToInt()}°",
@@ -234,13 +234,14 @@ object WeatherMapper {
         return uniqueForecastEntries(mapped) { LocalDateTime.parse(it.fullTime) }
     }
 
-    private fun mapDaily(daily: DailyDto?, today: LocalDate): List<DailyForecast> {
+    private fun mapDaily(daily: DailyDto?, today: LocalDate?): List<DailyForecast> {
         if (daily == null) return emptyList()
-        val mapped = daily.time.mapIndexedNotNull { index, time ->
+        val mapped = daily.time.mapIndexedNotNull { index, rawTime ->
+            val time = rawTime ?: return@mapIndexedNotNull null
             val code = daily.weatherCode.getOrNull(index) ?: return@mapIndexedNotNull null
             val min = daily.tempMin.getOrNull(index) ?: return@mapIndexedNotNull null
             val max = daily.tempMax.getOrNull(index) ?: return@mapIndexedNotNull null
-            if (!min.isFinite() || !max.isFinite() || min > max) return@mapIndexedNotNull null
+            if (!WeatherUtils.isKnownCode(code) || !min.isFinite() || !max.isFinite() || min !in -100.0..65.0 || max !in -100.0..65.0 || min > max) return@mapIndexedNotNull null
             try { LocalDate.parse(time) } catch (_: Exception) { return@mapIndexedNotNull null }
             val (rise, set) = ForecastSun.validTimes(ForecastSun.timeForDate(daily.sunrise.getOrNull(index), time),
                 ForecastSun.timeForDate(daily.sunset.getOrNull(index), time))
@@ -260,16 +261,9 @@ object WeatherMapper {
         return uniqueForecastEntries(mapped) { LocalDate.parse(it.date) }
     }
 
-    private fun getDayName(dateStr: String): String {
-        return try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val date = inputFormat.parse(dateStr)
-            val outputFormat = SimpleDateFormat("d MMMM EEEE", Locale("tr", "TR"))
-            outputFormat.format(date ?: Date())
-        } catch (e: Exception) {
-            dateStr
-        }
-    }
+    private fun getDayName(dateStr: String): String = runCatching {
+        LocalDate.parse(dateStr).format(dayNameFormatter)
+    }.getOrDefault(dateStr)
 
     private fun mapDetails(current: CurrentWeatherDto?, daily: DailyDto?): List<WeatherDetailData> {
         val precipProb = daily?.precipProbMax?.firstOrNull()?.takeIf { it in 0..100 }
@@ -378,14 +372,7 @@ object WeatherMapper {
         else -> Icons.Rounded.Cloud
     }
 
-    fun getWeatherCondition(code: Int): String {
-        return WeatherUtils.getWeatherDisplayName(
-            weatherCode = code,
-            currentTime = LocalDateTime.now(),
-            sunrise = null, // Default behavior
-            sunset = null
-        )
-    }
+    fun getWeatherCondition(code: Int): String = WeatherUtils.describeWeatherPhase(code, null)
 
     /**
      * UI ekranında görünecek condition metnini günün saatine göre normalize eder.
