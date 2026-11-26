@@ -1,5 +1,34 @@
 # Güncel yayın sırası — 20 Kasım 2026
 
+## 26 Kasım — Gerçek sistem fotoğraf seçicisi ve güvenli açılış
+
+Kullanıcı onayıyla AiChatScreen seçici kodu ortak rememberAssistantPhotoPicker bileşenine taşındı; izole debug fixture gerçek üretim seçicisini kullanır. ActivityNotFoundException ve SecurityException güvenli hata mesajına çevrilir; bekleyen token temizlendiği için yeniden açılış engellenmez. Seçici açıkken ikinci launch engellenir. Açılıştaki token sonuç gelene kadar korunur; mevcut ViewModel token/UID kontrolü devam eder. Bu son korumalar teslim edilmiş 26da94a / 1.3-v6 AAB içinde yoktur; sonraki AAB gerekir.
+
+SM-T500 Android 12 / Google medya modülünde son AssistantPhotoPickerSystemTest koşusu 5/5 hatasız/atlamasız (4 dk 9 sn): gerçek aç/iptal; gerçek test fotoğrafını seçme/hazırlama/önizleme/kaldırma; açılış token'ini koruma (fixture-A/B, gerçek Firebase hesapları değil); hızlı iki launch ile tek pencere; seçici yok/erişim reddi istisnalarını yakalama (iki hata sentetik). JVM 948/948 geçti. Önceki dokuzluk koşuda mevcut dört fotoğraf testi geçti, yeni seçim testi otomasyon/test verisinde takıldı; test uyarlandıktan sonra beş seçici testi yeniden başarılı oldu. Eski dört test son beşlikte tekrar koşulmadı.
+
+Test yalnız kendi geçici MediaStore JPEG kaydını okur; dönen URI kendi kayıt adı veya yerel medya kimliğiyle eşleşmeden hazırlanmaz. Kayıt finally içinde silindi. Kullanıcının galeri fotoğrafları okunmadı/gönderilmedi; hesap, sunucu veya model çağrısı yapılmadı. Test Activity yalnız debug manifestinde, exported=false. USB ekran ayarı önceki 0 değerine döndü. İlk derlemedeki fixture alanı uyumsuzluğu güncel kaynakla derlenerek giderildi. Test verisinde yayımlama sonrası kabul edilmeyen DATE_TAKEN güncellemesi kaldırıldı; zaman insert sırasında verilir. Kullanılmayan test yardımcı metodu temizlendi.
+
+Açık: aynı seçicide çoklu 4/5 fotoğraf; mevcut ek varken iptal; HEIC/HEIF/cloud URI cihaz matrisi; gerçek Activity/process recreate; ViewModel/Firebase A-B oturum geçişi; tam asistan rıza-yükleme-yanıt/geçmiş ve canlı sahiplik/silme kabulü. Bu yerel kanıt tam canlı akışı veya tüm cihazları kapatmaz. Değişiklikler yerel; push/yeni AAB yok.
+
+
+## 26 Kasım — Fotoğraf alınırken hesap silinmesi / izin iptali yarışı
+
+Dosya gövdesi alınırken User satırının kaldırılması, db.expire_all sonrası current_user.id erişiminde ObjectDeletedError ve sunucu hatası oluşturuyordu. Yeni API regresyonu düzeltme öncesinde bu hatayla başarısız oldu. Kimlik await öncesinde düz str olarak yakalanır; gövde alındıktan sonra hesap varlığı/silme durumu bu kimlikle kilitli sorgudan yeniden kontrol edilir, ardından güncel izin okunur. Silinen kullanıcıya 409 account_deletion_pending, bu sırada izni geri çekilen kullanıcıya 428 consent_required döner; platform upload çağrılmaz. İzin reddinde dört yükleme yuvasının da serbest kaldığı ayrıca doğrulandı.
+
+İlgili fotoğraf/izin paketi 38/38; son tam backend 292 geçti, 13 PostgreSQL testi atlandı, dört mevcut FCM bağımlılık uyarısı var. Ruff (önbelleksiz) ve diff kontrolü başarılı. Bu kanıt geçici SQLite veritabanında, gövde okuma sırasında durum değiştiren API testidir; PostgreSQL iki oturum/kilit yarışı ve canlı hesap silme akışı kabulü ayrıca açıktır. Gerçek servis veya gerçek kullanıcı verisine dokunulmadı. Değişiklik backend tarafında ve yereldir; yeni AAB/push/dağıtım yapılmadı, teslim edilmiş 1.3/v6 AAB değişmedi.
+
+Tablet bu turun sonunda R9WNC0ZN2EJ olarak yeniden bağlı görüldü. Bir sonraki cihaz işi gerçek Photo Picker seçimi/iptali, fotoğrafın asistan girişine dönüşü ve hesap/ekran değişiminde geç seçici sonucunun korunmasıdır. Önceki HEIC, tam ekran, canlı aktarım/silme ve Play iç test kabulleri açık tutulur.
+
+
+## 26 Kasım — Fotoğraf yüklemede bozuk multipart gövdesi dayanıklılığı
+
+İç içe message/rfc822 taşıyan yaklaşık 40 KB bir dosya isteği eski email.BytesParser yolunda RecursionError üretiyordu; regresyon testi düzeltme öncesinde başarısız oldu. Gövde artık yalnız tek file alanını kabul eden, bellek içinde çalışan python-multipart callback ayrıştırıcısıyla işlenir. İç içe MIME, ikinci alan, tekrarlı başlık, 8 KB üstü başlık ve eksik kapanış reddedilir; ham ikili içerik ve sınır metnine benzeyen dosya baytları aynen korunur. Ayrıştırma ASGI ana döngüsü yerine worker thread üzerinde yapılır. 8 MB dosya/30 saniye okuma/dört aktif istek/on yükleme-dakika limitleri ve diske yazmama korunur. Docker'ın pyproject.toml yolu ile requirements.txt aynı test edilen alt sürüme (python-multipart 0.0.22) yükseltildi.
+
+Son yerel tam backend sonucu: 290 geçti, ayrı PostgreSQL ortamı isteyen 13 test atlandı, dört mevcut FCM bağımlılık deprecation uyarısı var. Yeni yedi regresyon dahil fotoğraf paketi toplam 23 testtir. Ruff başarılı. Tablet bağlı olmadığından gerçek Photo Picker/tam asistan ve HEIC cihaz kabulleri bu tur çalıştırılmadı; sırada korunuyor. Gerçek servis çağrısı yapılmadı. Bu backend düzeltmesi yereldir; dağıtım/push yapılmadı.
+
+Önceki teslim güncellemesi: 4fadb87 entegrasyonu GitHub'a gönderildi. Sonrasında 26da94a commit'inden 1.3 / versionCode 6 imzalı AAB hazırlandı; paket com.havamania.mobile, minSdk 24, targetSdk 36 ve beklenen 58:9C:…:89:BC upload sertifikası doğrulandı. R8/lintVital, ZIP/imza/manifest ve altı ELF64 kütüphanesinde 16 KB statik LOAD hizalaması geçti. Dosya İndirilenler/Havamania-1.3-v6-26da94a.aab. Bu tur Android kaynakları değişmedi; AAB geçerli. Play iç test, 16 KB runtime cihaz ve canlı fotoğraf aktarımı/sahiplik/silme kabulü açık. Sürüm artışı commit'i hâlâ yerel; son backend düzeltmesi bu AAB'nin parçası değil, sunucuda dağıtılmalıdır.
+
+
 ## 26 Kasım — Asistan fotoğraf eki sözleşmesi geldi; uygulama entegrasyonu
 
 Fotoğraf API belgesi bekleme işi kapandı. Platform v4 sözleşmesine göre Android seçim/önizleme/kaldırma, bellek içinde hazırlama, backend /attachments yüklemesi ve /ask attachment_ids aktarımı eklendi. Fotoğraf-only mesaj ve fotoğraflı selamlaşma uzak asistanı kullanır. Kısmi yükleme tekrarları tamamlanmış kimlikleri korur; süreç kaybında eksik fotoğraflarla gönderim engellenir. Hesap/sohbet değişimi ve izin geri çekme belleği temizler. Teknik sözleşme: ASISTAN_PLATFORM_KOPRUSU.md son bölüm; OpenAPI ve API referansı güncellendi.

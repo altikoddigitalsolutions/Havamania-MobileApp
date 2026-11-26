@@ -133,6 +133,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         photoError = null
     }
 
+    fun photoPickerUnavailable() {
+        photoError = "Fotoğraf seçici açılamadı. Lütfen daha sonra tekrar deneyin."
+    }
+
     fun photoSelectionToken(): String = "$currentUid:$photoGeneration"
 
     fun addPhotos(uris: List<android.net.Uri>, selectionToken: String = photoSelectionToken()) {

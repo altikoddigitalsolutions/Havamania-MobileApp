@@ -49,13 +49,11 @@ fun AiChatScreen(
     val consentState by viewModel.assistantConsent.state.collectAsStateWithLifecycle()
     AssistantConsentDialog(consentState, viewModel.assistantConsent::save, viewModel::revokeAssistantConsent,
         viewModel::retryAssistantConsent, viewModel::dismissAssistantConsent)
-    var photoSelectionToken by rememberSaveable { mutableStateOf<String?>(null) }
-    val photoPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia(ASSISTANT_MAX_PHOTOS)
-    ) { uris ->
-        photoSelectionToken?.let { viewModel.addPhotos(uris, it) }
-        photoSelectionToken = null
-    }
+    val openPhotoPicker = rememberAssistantPhotoPicker(
+        viewModel::photoSelectionToken,
+        { uris, token -> viewModel.addPhotos(uris, token) },
+        viewModel::photoPickerUnavailable
+    )
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
@@ -160,11 +158,7 @@ fun AiChatScreen(
                 preparingPhotos = viewModel.preparingPhotos,
                 photoError = viewModel.photoError,
                 onRemovePhoto = viewModel::removePhoto,
-                onAttachPhoto = if (viewModel.photosEnabled) ({
-                    photoSelectionToken = viewModel.photoSelectionToken()
-                    photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(
-                        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) else null,
+                onAttachPhoto = openPhotoPicker.takeIf { viewModel.photosEnabled },
                 photoControlsEnabled = !consentState.visible && !savingHistory
             )
         }

@@ -4,8 +4,7 @@ from collections import deque
 from threading import Lock, BoundedSemaphore
 from time import monotonic
 from math import ceil
-from email.parser import BytesParser
-from email.policy import default
+from python_multipart.multipart import MultipartParser, MultipartParseError, parse_options_header
 from app.services.chatbot_bridge import BridgeError
 
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
@@ -15,33 +14,99 @@ MAX_BODY_BYTES = MAX_PHOTO_BYTES + 64 * 1024
 def parse_photo(content_type: str, body: bytes) -> tuple[bytes, str]:
     if len(body) > MAX_BODY_BYTES:
         raise BridgeError(413, "too_large", "Fotoğraf en fazla 8 MB olabilir.")
-    if len(content_type) > 256 or "\r" in content_type or "\n" in content_type:
-        raise BridgeError(400, "invalid_request", "Fotoğraf isteği geçerli değil.")
-    message = BytesParser(policy=default).parsebytes(
-        b"Content-Type: "
-        + content_type.encode("ascii", errors="replace")
-        + b"\r\nMIME-Version: 1.0\r\n\r\n"
-        + body
-    )
-    parts = list(message.iter_parts())
-    if message.get_content_type() != "multipart/form-data" or len(parts) != 1 or message.defects:
-        raise BridgeError(400, "invalid_request", "Yalnızca bir fotoğraf gönderin.")
-    part = parts[0]
     if (
-        part.get_content_disposition() != "form-data"
-        or part.get_param("name", header="content-disposition") != "file"
-        or part.defects
-        or part.is_multipart()
+        len(content_type) > 256
+        or not content_type.isascii()
+        or "\r" in content_type
+        or "\n" in content_type
     ):
-        raise BridgeError(400, "invalid_request", "Fotoğraf alanı geçerli değil.")
-    if part.get("Content-Transfer-Encoding"):
-        raise BridgeError(400, "invalid_request", "Fotoğraf kodlaması geçerli değil.")
-    content = part.get_payload(decode=True)
-    if not content:
-        raise BridgeError(400, "invalid_request", "Bir fotoğraf seçin.")
-    if len(content) > MAX_PHOTO_BYTES:
-        raise BridgeError(413, "too_large", "Fotoğraf en fazla 8 MB olabilir.")
-    media_type = part.get_content_type()
+        raise BridgeError(400, "invalid_request", "Fotoğraf isteği geçerli değil.")
+
+    def invalid():
+        raise BridgeError(
+            400, "invalid_request", "Yalnızca tek bir geçerli fotoğraf alanı gönderin."
+        )
+
+    mime, options = parse_options_header(content_type)
+    boundary = options.get(b"boundary", b"")
+    if mime.lower() != b"multipart/form-data" or not 1 <= len(boundary) <= 70:
+        invalid()
+    headers = {}
+    field, value, content = bytearray(), bytearray(), bytearray()
+    part_count = 0
+    header_bytes = 0
+    complete = False
+    media_type = ""
+
+    def part_begin():
+        nonlocal part_count
+        part_count += 1
+        if part_count != 1:
+            invalid()
+
+    def header_data(target, data, start, end):
+        nonlocal header_bytes
+        header_bytes += end - start
+        if header_bytes > 8192:
+            invalid()
+        target.extend(data[start:end])
+
+    def header_end():
+        key = bytes(field).lower()
+        if not key or key in headers or len(headers) >= 8:
+            invalid()
+        headers[key] = bytes(value)
+        field.clear()
+        value.clear()
+
+    def headers_finished():
+        nonlocal media_type
+        disposition, params = parse_options_header(headers.get(b"content-disposition", b""))
+        if disposition.lower() != b"form-data" or params.get(b"name") != b"file":
+            invalid()
+        if b"content-transfer-encoding" in headers:
+            invalid()
+        media, _ = parse_options_header(headers.get(b"content-type", b""))
+        # Never recursively interpret uploaded bytes as MIME messages or subparts.
+        if media.lower().startswith((b"message/", b"multipart/")):
+            invalid()
+        if media.lower() not in {b"image/jpeg", b"image/png", b"image/gif", b"image/webp"}:
+            raise BridgeError(
+                415, "unsupported_media_type", "JPEG, PNG, WebP veya GIF fotoğraf seçin."
+            )
+        media_type = media.decode("ascii").lower()
+
+    def part_data(data, start, end):
+        if len(content) + end - start > MAX_PHOTO_BYTES:
+            raise BridgeError(413, "too_large", "Fotoğraf en fazla 8 MB olabilir.")
+        content.extend(data[start:end])
+
+    def on_end():
+        nonlocal complete
+        complete = True
+
+    parser = MultipartParser(
+        boundary,
+        callbacks={
+            "on_part_begin": part_begin,
+            "on_header_field": lambda data, start, end: header_data(field, data, start, end),
+            "on_header_value": lambda data, start, end: header_data(value, data, start, end),
+            "on_header_end": header_end,
+            "on_headers_finished": headers_finished,
+            "on_part_data": part_data,
+            "on_end": on_end,
+        },
+        max_size=MAX_BODY_BYTES,
+    )
+    try:
+        parser.write(body)
+        parser.finalize()
+    except MultipartParseError:
+        raise BridgeError(400, "invalid_request", "Fotoğraf isteği geçerli değil.") from None
+    # finalize() alone does not reject an unfinished body in python-multipart.
+    if not complete or part_count != 1 or not content:
+        invalid()
+    content = bytes(content)
     valid = {
         "image/jpeg": content.startswith(b"\xff\xd8\xff"),
         "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),

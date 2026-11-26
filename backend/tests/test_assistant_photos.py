@@ -276,3 +276,124 @@ def test_slow_body_cannot_hold_upload_slot_forever(monkeypatch):
         assert error.value.status == 408
 
     anyio.run(run)
+
+
+def test_nested_messages_are_rejected_without_recursive_parsing():
+    nested = b"Content-Type: message/rfc822\r\n\r\n" * 1100 + b"payload"
+    with pytest.raises(BridgeError) as error:
+        parse_photo("multipart/form-data; boundary=test", multipart(nested, media="message/rfc822"))
+    assert error.value.status == 400
+
+
+def test_photo_binary_is_preserved_exactly():
+    photo = b"\xff\xd8\xff" + bytes(range(256)) + b"\r\n\r\n"
+    assert parse_photo("multipart/form-data; boundary=test", multipart(photo))[0] == photo
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        multipart().removesuffix(b"--test--\r\n"),
+        multipart().replace(
+            b"--test--",
+            b"--test\r\nContent-Disposition: form-data; name=other\r\n\r\nx\r\n--test--",
+        ),
+        multipart().replace(
+            b"Content-Type: image/jpeg", b"Content-Type: image/jpeg\r\nContent-Type: image/png"
+        ),
+        multipart().replace(
+            b"Content-Type: image/jpeg", b"Content-Type: image/jpeg\r\nX-Large: " + b"x" * 8192
+        ),
+    ],
+)
+def test_malformed_or_extra_parts_are_rejected(body):
+    with pytest.raises(BridgeError) as error:
+        parse_photo("multipart/form-data; boundary=test", body)
+    assert error.value.status == 400
+
+
+def test_boundary_prefix_inside_image_does_not_change_bytes():
+    photo = b"\xff\xd8\xffbinary\r\n--testX\r\n--tes\r\nend"
+    assert parse_photo("multipart/form-data; boundary=test", multipart(photo))[0] == photo
+
+
+def test_account_removed_while_body_arrives_is_rejected_before_platform(
+    client, assistant_texts, monkeypatch, db_session
+):
+    from sqlalchemy import delete
+    from app.api.v1.routes import chatbot as route
+    from app.models.user import User
+    from app.services import assistant_upload
+
+    headers = signup(client, "mid-upload-delete@example.com")
+    assert accept(client, headers).status_code == 200
+
+    async def deleted_during_read(request):
+        body = await request.body()
+        db_session.execute(
+            delete(User)
+            .where(User.email == "mid-upload-delete@example.com")
+            .execution_options(synchronize_session=False)
+        )
+        db_session.commit()
+        return body
+
+    monkeypatch.setattr(assistant_upload, "read_photo_body", deleted_during_read)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Deleted user photo must not reach the platform")
+
+    monkeypatch.setattr(route.chatbot_bridge_client, "upload", forbidden)
+    response = client.post(
+        "/v1/chatbot/attachments",
+        headers=headers,
+        files={"file": ("x.jpg", b"\xff\xd8\xffx", "image/jpeg")},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"] == "account_deletion_pending"
+
+
+def test_revocation_during_body_read_stops_upload_and_releases_capacity(
+    client, assistant_texts, monkeypatch, db_session
+):
+    from sqlalchemy import update
+    from app.api.v1.routes import chatbot as route
+    from app.models.assistant_consent import AssistantConsent
+    from app.services import assistant_upload
+
+    headers = signup(client, "mid-upload-revoke@example.com")
+    assert accept(client, headers).status_code == 200
+
+    async def revoked_during_read(request):
+        body = await request.body()
+        db_session.execute(
+            update(AssistantConsent)
+            .values(assistant_accepted=False)
+            .execution_options(synchronize_session=False)
+        )
+        db_session.commit()
+        return body
+
+    monkeypatch.setattr(assistant_upload, "read_photo_body", revoked_during_read)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Revoked photo must not reach the platform")
+
+    monkeypatch.setattr(route.chatbot_bridge_client, "upload", forbidden)
+    response = client.post(
+        "/v1/chatbot/attachments",
+        headers=headers,
+        files={"file": ("x.jpg", b"\xff\xd8\xffx", "image/jpeg")},
+    )
+    assert response.status_code == 428
+    assert response.json()["error"] == "consent_required"
+    held = []
+    try:
+        for _ in range(4):
+            acquired = assistant_upload._upload_slots.acquire(blocking=False)
+            held.append(acquired)
+        assert all(held), "Upload capacity leaked on consent rejection"
+    finally:
+        for acquired in held:
+            if acquired:
+                assistant_upload._upload_slots.release()
