@@ -1,8 +1,8 @@
 package com.havamania
 
-internal fun buildTravelNotificationData(plan: TravelPlan, daysLeft: Int): TravelNotificationData {
-    val snapshot = plan.lastForecastSnapshot?.validAdviceData()
-    val prevSnapshot = plan.previousForecastSnapshot
+internal fun buildTravelNotificationData(plan: TravelPlan, daysLeft: Int, now: java.time.Instant = java.time.Instant.now()): TravelNotificationData {
+    val snapshot = plan.lastForecastSnapshot?.takeIf { tripForecastMatchesPlan(plan, it, now) }?.validAdviceData()
+    val prevSnapshot = plan.previousForecastSnapshot?.takeIf { snapshot != null && tripForecastMatchesPlan(plan, it, now) }?.validAdviceData()
 
     val comparisonText = if (snapshot != null && prevSnapshot != null) {
         TravelAiHelper.generateComparisonText(prevSnapshot, snapshot)
@@ -28,7 +28,7 @@ internal fun buildTravelNotificationData(plan: TravelPlan, daysLeft: Int): Trave
         minTemp = snapshot?.minTemp,
         maxTemp = snapshot?.maxTemp,
         windRisk = snapshot?.windSpeed?.let(WeatherUtils::formatWindWithLevel),
-        previousAnalysisSummary = plan.weatherSummary,
+        previousAnalysisSummary = prevSnapshot?.conditionSummary,
         comparisonText = comparisonText,
         recommendedItems = recommendedItems
     )

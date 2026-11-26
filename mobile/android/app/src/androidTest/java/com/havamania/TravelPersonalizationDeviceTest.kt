@@ -85,6 +85,8 @@ class TravelPersonalizationDeviceTest {
             weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_PARTIAL_READY,
             lastForecastSnapshot = ForecastSnapshot(minTemp = -3.0, maxTemp = 5.0, weatherCode = 71),
             analyses = listOf(TravelWeatherAnalysis(averageTemperature = 35.0, summary = "Eski sıcak tahmin"))))
+        plan = plan.copy(lastForecastSnapshot = plan.lastForecastSnapshot!!.copy(timezone = "Europe/Istanbul",
+            binding = createTripForecastBinding(plan, plan.startDate, plan.endDate)))
         compose.setContent {
             val colors = ThemeFactory.createColors(AppTheme.LIGHT)
             CompositionLocalProvider(LocalHavamaniaColors provides colors,
@@ -104,12 +106,18 @@ class TravelPersonalizationDeviceTest {
         compose.runOnIdle {
             plan = plan.copy(weatherAnalysisStatus = TravelWeatherAnalysisStatus.WEATHER_READY_ANALYSIS_READY,
                 lastForecastSnapshot = ForecastSnapshot(minTemp = 18.0, maxTemp = 31.0, precipitationProbability = 10,
-                    windSpeed = 5.0, weatherCode = 0, averageTemperature = 24.0, travelScore = 85, generatedAt = System.currentTimeMillis(), timezone = "Europe/Istanbul"))
+                    windSpeed = 5.0, weatherCode = 0, averageTemperature = 24.0, travelScore = 85, generatedAt = System.currentTimeMillis(), timezone = "Europe/Istanbul", binding = createTripForecastBinding(plan, plan.startDate, plan.endDate)))
         }
         compose.onNodeWithText("Hava verisi eksik veya yenilenemedi", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Soğuk veya donan yağış tahminine karşı", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Sıcaklık tahminine göre hafif", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("24°C").assertExists()
         compose.onNodeWithText("85/100").assertExists()
+        compose.runOnIdle { plan = plan.copy(city = "Bursa") }
+        compose.onNodeWithText("24°C").assertDoesNotExist()
+        compose.onNodeWithText("85/100").assertDoesNotExist()
+        compose.onNodeWithText("Sıcaklık tahminine göre hafif", substring = true).assertDoesNotExist()
+        compose.onAllNodesWithText("eşleşmesi doğrulanamadı", substring = true)[0].performScrollTo().assertIsDisplayed()
+
     }
 }

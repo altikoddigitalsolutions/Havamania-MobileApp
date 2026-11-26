@@ -68,7 +68,8 @@ data class ForecastSnapshot(
     val travelScore: Int? = null,
     val generatedAt: Long = 0L,
     val averageTemperature: Double? = null,
-    val timezone: String? = null
+    val timezone: String? = null,
+    val binding: TripForecastBinding? = null
 )
 
 @Keep
@@ -221,8 +222,10 @@ data class TravelPlan(
         originLatitude = originLatitude,
         originLongitude = originLongitude,
         tripType = tripType.name,
-        startDate = startDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        endDate = endDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+        startDateIso = startDate.toString(),
+        endDateIso = endDate.toString(),
+        startDate = startDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+        endDate = endDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
         createdAt = createdAt,
         updatedAt = updatedAt,
         archivedAt = archivedAt,

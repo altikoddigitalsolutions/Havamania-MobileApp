@@ -70,6 +70,11 @@ class WeatherLoadErrorDeviceTest {
         val cached = compose.onNodeWithText("Önbellekteki hava verisi", substring = true)
         offline.assertIsDisplayed()
         compose.onNodeWithText("7 Kas 2026, 01:05", substring = true).assertIsDisplayed()
+        compose.runOnIdle { weather.value = weather.value.copy(timezone = "") }
+        compose.onNodeWithText("Saat dilimi doğrulanamadı", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("7 Kas 2026, 01:05", substring = true).assertDoesNotExist()
+        compose.runOnIdle { weather.value = weather.value.copy(timezone = "Europe/Istanbul") }
+
 
         compose.runOnIdle {
             online.value = true

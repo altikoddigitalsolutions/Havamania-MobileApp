@@ -148,7 +148,9 @@ data class TravelPlanEntity(
     var routeWeatherSummary: String? = null,
     @get:PropertyName("lastRouteAnalysisAt")
     @set:PropertyName("lastRouteAnalysisAt")
-    var lastRouteAnalysisAt: Long? = null
+    var lastRouteAnalysisAt: Long? = null,
+    var startDateIso: String? = null,
+    var endDateIso: String? = null
 ) {
     fun toDomain() = TravelPlan(
         id = id,
@@ -162,8 +164,8 @@ data class TravelPlanEntity(
         originLatitude = originLatitude,
         originLongitude = originLongitude,
         tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
-        startDate = java.time.Instant.ofEpochMilli(startDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
-        endDate = java.time.Instant.ofEpochMilli(endDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+        startDate = storedTripDates(this).first,
+        endDate = storedTripDates(this).second,
         createdAt = createdAt,
         updatedAt = updatedAt,
         archivedAt = archivedAt,
@@ -283,13 +285,13 @@ interface WeatherDao {
     @Query("SELECT * FROM travel_plans WHERE id = :id AND userId = :uid LIMIT 1")
     fun getTravelPlanByIdFlow(id: String, uid: String): kotlinx.coroutines.flow.Flow<TravelPlanEntity?>
 
-    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDateIso ASC, startDate ASC")
     fun getAllTravelPlansFlow(uid: String): kotlinx.coroutines.flow.Flow<List<TravelPlanEntity>>
 
-    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDate ASC")
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid ORDER BY startDateIso ASC, startDate ASC")
     suspend fun getAllTravelPlans(uid: String): List<TravelPlanEntity>
 
-    @Query("SELECT * FROM travel_plans WHERE userId = :uid AND isDemo = 0 ORDER BY startDate ASC")
+    @Query("SELECT * FROM travel_plans WHERE userId = :uid AND isDemo = 0 ORDER BY startDateIso ASC, startDate ASC")
     suspend fun getUserTravelPlans(uid: String): List<TravelPlanEntity>
 
     @Query("SELECT * FROM travel_plans WHERE id = :id LIMIT 1")
@@ -307,7 +309,7 @@ interface WeatherDao {
             return
         }
         if (pendingTripUploadVersion(plan.userId, plan.id) != null) return
-        insertTravelPlanRaw(plan)
+        insertTravelPlanRaw(freezeTripDates(plan, previous = existing))
     }
 
     @Query("DELETE FROM travel_plans WHERE id = :id AND userId = :uid")
@@ -503,7 +505,7 @@ interface WeatherDao {
         val old = getTravelPlanByIdRaw(plan.id)
         if (old != null && old.userId != plan.userId) return null
         val revision = maxOf(plan.updatedAt, (old?.updatedAt ?: 0) + 1)
-        insertTravelPlanRaw(plan.copy(updatedAt = revision))
+        insertTravelPlanRaw(freezeTripDates(plan.copy(updatedAt = revision), previous = old))
         if (plan.userId != "legacy") enqueueTripUpload(TripUploadRequest(plan.userId, plan.id, revision))
         return revision
     }
@@ -566,7 +568,7 @@ data class TripDeletionRequest(val userId: String, val recordId: String, val com
 @Entity(tableName = "trip_uploads", primaryKeys = ["userId", "recordId"])
 data class TripUploadRequest(val userId: String, val recordId: String, val revision: Long)
 
-@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class, WeatherAccountDeletion::class], version = 23, exportSchema = false)
+@Database(entities = [WeatherCacheEntity::class, TravelPlanEntity::class, AiHistoryEntity::class, HistoryDeletionRequest::class, TripDeletionRequest::class, TripUploadRequest::class, WeatherAccountDeletion::class], version = 24, exportSchema = false)
 @TypeConverters(ChatTypeConverters::class)
 abstract class WeatherDatabase : RoomDatabase() {
     abstract fun weatherDao(): WeatherDao
@@ -676,6 +678,26 @@ abstract class WeatherDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN startDateIso TEXT")
+                database.execSQL("ALTER TABLE travel_plans ADD COLUMN endDateIso TEXT")
+                val zone = java.time.ZoneId.systemDefault()
+                val converter = ChatTypeConverters()
+                database.query("SELECT id, userId, city, district, latitude, longitude, startDate, endDate, lastForecastSnapshot FROM travel_plans").use { rows ->
+                    while (rows.moveToNext()) {
+                        val entity = TravelPlanEntity(id = rows.getString(0), userId = rows.getString(1), city = rows.getString(2),
+                            district = if (rows.isNull(3)) null else rows.getString(3), latitude = rows.getDouble(4), longitude = rows.getDouble(5),
+                            startDate = rows.getLong(6), endDate = rows.getLong(7),
+                            lastForecastSnapshot = converter.toForecastSnapshot(if (rows.isNull(8)) null else rows.getString(8)))
+                        val stable = freezeTripDates(entity, zone)
+                        database.execSQL("UPDATE travel_plans SET startDateIso = ?, endDateIso = ? WHERE id = ?",
+                            arrayOf(stable.startDateIso, stable.endDateIso, stable.id))
+                    }
+                }
+            }
+        }
+
         fun getDatabase(context: android.content.Context): WeatherDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -683,7 +705,7 @@ abstract class WeatherDatabase : RoomDatabase() {
                     WeatherDatabase::class.java,
                     "weather_database"
                 )
-                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                .addMigrations(MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
                 .build()
                 INSTANCE = instance
                 instance

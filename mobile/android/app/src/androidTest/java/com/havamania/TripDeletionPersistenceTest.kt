@@ -72,13 +72,14 @@ class TripDeletionPersistenceTest {
             val sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
                 context.getDatabasePath(name).path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE)
             try {
+                stripTripDateIsoColumnsForLegacyFixture(sqlite)
                 sqlite.execSQL("DROP TABLE trip_deletions")
                 sqlite.execSQL("DROP TABLE trip_uploads")
                 sqlite.execSQL("DROP TABLE weather_account_deletions")
                 sqlite.version = 20
             } finally { sqlite.close() }
             database = Room.databaseBuilder(context, WeatherDatabase::class.java, name)
-                .addMigrations(WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23).build()
+                .addMigrations(WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23, WeatherDatabase.MIGRATION_23_24).build()
             val dao = database.weatherDao()
             assertEquals("İzmir", dao.getTravelPlanByIdRaw("kept")?.city)
             dao.enqueueTripDeletion(TripDeletionRequest("A", "kept"))

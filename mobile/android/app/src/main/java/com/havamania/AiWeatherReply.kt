@@ -24,8 +24,12 @@ internal object AiWeatherReply {
         else -> "bilinmiyor"
     }
 
+    fun locationTimeUnavailable(city: String): String =
+        "$city için konumun saat dilimi doğrulanamadı. Hava verisini yenileyin; bugün, yarın veya hafta sonunu güvenilir biçimde eşleştiremiyorum."
+
     fun datedReply(prompt: String, data: WeatherData, now: Instant = Instant.now()): String? {
-        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
+        val today = ForecastTime.knownZone(data.timezone)?.let { now.atZone(it).toLocalDate() }
+            ?: return locationTimeUnavailable(data.cityName)
         val date = AiIntentParser.detectDate(prompt, today) ?: return null
         val label = date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.forLanguageTag("tr")))
         val day = data.dailyForecast.singleOrNull { it.date == date.toString() }

@@ -893,3 +893,58 @@ Eksik timezone UTC olarak doldurulmuyor; mapper geçersiz/bilinmeyen konum zaman
 ## 26 Kasım Önbellek konum günü
 
 Boş/geçersiz saat dilimi aynı yerel gün sayılmıyor; önbellek güncel kabul edilmiyor, eski gün/saat seçimi bayrakları temizleniyor. Tarihli günlük kayıtlar korunuyor fakat Bugün işareti üretilmiyor. Bilinmeyen zamanla saat seçimi kapalı. 845 JVM ve debug APK başarılı. Repository yeniden ağ isteği regresyonu geçti. [Rapor](26_KASIM_ONBELLEK_KONUM_GUNU.md). Sıradaki: ViewModel ve WeatherView zaman seçimi, yerel asistan/öneri UTC tüketicileri. Fiziksel/görsel ve yayın kapıları korunur; push yok.
+
+
+## 26 Kasım Hava ekranı başlangıç seçimi
+
+Nullable seçim, doğrulanmış konum günü ve saatlik/günlük açıklama ayrımı uygulandı. Bilinmeyen bölgede otomatik tahmin seçimi yok; güncelleme etiketi sahte UTC saat göstermiyor. 851 JVM +7 SM-T500 cihaz testi hatasız; debug APK/test paketi derlendi. Önceki günlük null cihaz testi geçti. [Rapor](26_KASIM_HAVA_EKRANI_TAHMIN_SECIMI.md). Sıradaki: asistan/öneri UTC dönüşleri; hero dekorasyonunda nötr faz, gerçek Activity/ViewModel başlangıcı, eksik kapsam ve görsel/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Yerel asistan konum tarihi
+
+Bilinmeyen saat diliminde tarihli hava/yerel öneri üretilmiyor; açık yenileme uyarısı var. Hafta sonu aynı enjekte edilmiş konum gününü kullanıyor; ikinci sistem saati okuması kaldırıldı. Valiz gün kontrolü aynı tarih üzerinden. 856 JVM, sıfır hata/atlama; debug APK başarılı. [Rapor](26_KASIM_ASISTAN_KONUM_TARIHI.md). Sıradaki öncelik: eski yerel valiz yanıtının 20/15 derece ve sıfır yağış varsayımları, günlük minimumu gece gibi anlatması; ortak ekipman kurallarıyla birleştirme. Seyahat önerilerindeki cihaz tarihi, nötr hero dekorasyonu ve önceki görsel/canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Yerel valiz veri doğruluğu
+
+Eksik 20/15 derece ve sıfır yağış varsayımları kaldırıldı; dönem minimumu gece/akşam diye sunulmuyor. Ekipman önerisi ortak travelWeatherPacking kurallarını kullanıyor. 7 regresyon eski kodda başarısızdı; son kaynakta 863 JVM, sıfır hata/atlama, debug APK başarılı. [Rapor](26_KASIM_YEREL_VALIZ_VERI_DOGRULUGU.md). Sıradaki: seyahat yanıtı/kartındaki cihaz tarihi ve dönem/bugün ifadeleri; snapshot güncellik/dönem/hedef eşleşmesi ve yerel valiz kişiselleştirme aktarımı açık. Diğer öneri sayı ayrıştırıcıları, hero dekorasyonu ve önceki görsel/canlı/yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Seyahat önerisinde dönem ve hedef günü
+
+Yerel seyahat yanıtı adayları kendi hedef saat dilimiyle süzüyor; bilinmeyen bölgeye sahip kayıt yok sayılmıyor. Çağrısız eski generateTravelRecommendation yordamı hedef günü/bitmiş plan/dönem anlatımı için düzeltildi, ekran kabulü sayılmadı. 7 yeni regresyon eski kodda başarısızdı; son kaynakta 870 JVM, sıfır hata/atlama; debug APK başarılı. [Rapor](26_KASIM_SEYAHAT_ONERI_DONEMI.md). Sıradaki: valiz aday seçimini hedef gününe bağlama; snapshot güncellik/dönem/hedef eşleşmesi. Diğer sayı ayrıştırıcıları, nötr hero, görsel/canlı/yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Valiz hedef günü ve analiz zamanı
+
+Valiz ve yerel seyahat plan seçimi ortak hedef günü yordamına bağlandı. Mevcut şehir hava/bölge verisi valizi engellemiyor. Bilinmeyen/eski/gelecek analiz zamanı valiz yanıtında açık; aynı gün kaydı canlı güncellik garantisi sayılmıyor. 7 regresyon eski kodda başarısızdı; son kaynakta 877 JVM, sıfır hata/atlama; debug APK başarılı. [Rapor](26_KASIM_VALIZ_HEDEF_GUNU_ANALIZ_ZAMANI.md). Sıradaki: snapshot kapsanan tarih aralığı/hedef metadata ve legacy/uyuşmazlık kontrolleri. Diğer kişiselleştirme, sayı ayrıştırma, hero, görsel/canlı/yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Tahmin hedef/tarih bağı
+
+Yeni snapshot plan/kullanıcı, hedef ve kapsanan günleri saklıyor. Üretim analiz yolu dolduruyor; valiz uyuşmayan veya legacy kayıttan doğrulanmış ölçüm/ekipman üretmiyor. 885 JVM +1 izole Room tablet testi hatasız; debug APK başarılı. [Rapor](26_KASIM_TAHMIN_HEDEF_TARIH_BAGI.md). Sıradaki: eşleşme kontrolünü diğer rehber/özet/bildirim tüketicilerine yayma. Ek kontrol: Room tarihlerinin systemDefault epoch dönüşünde cihaz bölgesi değişimi. Kişiselleştirme, hero, görsel/canlı/yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Bildirim tahmin eşleşmesi
+
+Bildirim payload ve Worker gönderim hazırlığı hedef/tarih/plan/kullanıcı eşleşmesi gerektiriyor. Eşleşmeyen önceki snapshot karşılaştırması ve ham eski analiz metni taşınmıyor. 7 regresyonun 6'sı eski davranışta başarısızdı; son kaynakta 892 JVM, sıfır hata/atlama; debug APK başarılı. [Rapor](26_KASIM_BILDIRIM_TAHMIN_ESLESMESI.md). Sıradaki: rehber/özet metrics ve packing tüketicileri. Worker/OS uçtan uca kabulü, eski bildirim payload'ları, Room bölge değişimi, görsel/canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Rehber ve özet tahmin eşleşmesi
+
+Doğrulanmamış snapshot/ham eski analiz güncel metrik veya uyarı üretmiyor. Rehber metrik, özet ve valiz kontrolünü aynı forecastNow ile kullanıyor. 899 JVM +4 SM-T500 testi hatasız; APK/test paketi derlendi. Hedef değişiminde sıcaklık/puan/hava hazırlığı temizliği ve geçmiş detay korunması geçti. [Rapor](26_KASIM_REHBER_OZET_TAHMIN_ESLESMESI.md). Sıradaki: Room tarihlerinde cihaz saat dilimi değişimi. Eski bildirim payload'ları, çağrısız öneri, hero, kişiselleştirme ve önceki görsel/canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Seyahat tarih saklama / Room 24
+
+ISO gün alanları ve Room 23→24 geçişi eklendi. Yeni kayıtlar ve sabitlenen legacy günler bölge değişiminde korunuyor; aynı eski uzak kayıt tekrarı da günü kaydırmıyor. Geçiş kuyruk sürümlerini/notları koruyor; Worker dönüşüm kopyaları kaldırıldı. İlk 4 birim ve ek tekrar-yükleme cihaz regresyonu hatayı doğruladı. Son kaynak: 908 JVM +10 tablet testi hatasız, debug APK başarılı. [Rapor](26_KASIM_SEYAHAT_TARIH_SAKLAMA.md). Orijinal bölgesi/metadata'sı kaybolmuş legacy tarihin özgün günü kesin çıkarılamaz; canlı çapraz sürüm ve takvim görsel kabulü açık. Sıradaki: hava önerilerinin sıcaklık metni ayrıştırıcıları. Önceki görsel/canlı/yayın kapıları korunur; push yok.
+
+
+## 26 Kasım Öneri sıcaklık ayrıştırması
+
+Rakam süzme ve eksik sıcaklığı 20 sayma kaldırıldı; ondalık/negatif/Celsius girdisi ortak doğrulanıyor. Kısa özet eksik/eski veri ve geceyi doğru sınırlıyor; bilinen kritik kodda aktivite/öncelik çelişkisi giderildi. 12 regresyonun güçlendirilmiş halinde 11'i eski kodda başarısızdı. Son kaynak: 920 JVM +1 kısa özet kartı tablet testi hatasız; debug APK başarılı. [Rapor](26_KASIM_ONERI_SICAKLIK_AYRISTIRMA.md). Sıradaki: hero güneş/ay dekorasyonunda bilinmeyen fazın nötr sunumu. Önceki tüm görsel/canlı/yayın ve legacy tarih sınırları korunur; push yok.
+
+
+## 26 Kasım Hero nötr faz
+
+Ana kart 06/18/öğlen varsayımı kullanmıyor; doğrulanmış sağlayıcı fazı, yoksa geçerli güneş aralığı/saat, yoksa nötr stil. Günlük/eskimiş/legacy Boolean güncel faz sayılmıyor. Gün batımı başlık/efekt çelişkisi giderildi. 930 JVM +1 gerçek kart tablet testi hatasız; APK derlendi. Dört açık/koyu/gece/gündüz QA görseli incelendi. [Rapor](26_KASIM_HAVA_KARTI_NOTR_FAZ.md). Sıradaki: canlı efekt/hareket azaltma tercihinin arka plana uygulanması; gündüz küçük ikon kontrastı. Büyük yazı/yatay/tüm tema ve iç içe dikdörtgen matrisi ile önceki canlı/yayın kapıları açık. Push yok.

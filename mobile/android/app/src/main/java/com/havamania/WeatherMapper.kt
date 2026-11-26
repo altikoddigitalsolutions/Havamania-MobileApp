@@ -76,6 +76,7 @@ object WeatherMapper {
             condition = WeatherUtils.describeWeatherPhase(current?.weatherCode ?: -1, current?.isDay?.let { when (it) { 0 -> false; 1 -> true; else -> null } }),
             weatherCode = current?.weatherCode ?: -1,
             isDay = current?.isDay == 1,
+            verifiedIsDay = current?.isDay?.let { when (it) { 0 -> false; 1 -> true; else -> null } },
             high = dailyMax?.takeIf { rangeValid }?.let { "${it.roundToInt()}°" } ?: "--",
             low = dailyMin?.takeIf { rangeValid }?.let { "${it.roundToInt()}°" } ?: "--",
             feelsLike = current?.apparentTemperature?.let { "${it.roundToInt()}°" } ?: "--",

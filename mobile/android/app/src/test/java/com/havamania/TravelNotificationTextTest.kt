@@ -6,10 +6,13 @@ import org.junit.Test
 
 class TravelNotificationTextTest {
     private val day = LocalDate.of(2026, 11, 26)
-    private fun plan(snapshot: ForecastSnapshot? = null) = TravelPlan(city = "Ankara", startDate = day,
-        endDate = day.plusDays(3), lastForecastSnapshot = snapshot)
+    private val now = java.time.Instant.parse("2026-11-27T12:00:00Z")
+    private fun plan(snapshot: ForecastSnapshot? = null): TravelPlan {
+        val plan = TravelPlan(city = "Ankara", startDate = day, endDate = day.plusDays(3))
+        return plan.copy(lastForecastSnapshot = snapshot?.copy(timezone = "Europe/Istanbul", binding = createTripForecastBinding(plan, plan.startDate, plan.endDate)))
+    }
     private fun text(snapshot: ForecastSnapshot?, days: Int = 0, ongoing: Boolean = true) =
-        plan(snapshot).let { buildTravelNotificationText(it, days, ongoing, buildTravelNotificationData(it, days), day.plusDays(1)).second }
+        plan(snapshot).let { buildTravelNotificationText(it, days, ongoing, buildTravelNotificationData(it, days, now), day.plusDays(1)).second }
     @Test fun `partial temperatures never render null degrees`() {
         listOf(ForecastSnapshot(conditionSummary = "Bulutlu"), ForecastSnapshot(conditionSummary = "Bulutlu", maxTemp = 20.0)).forEach {
             listOf(true, false).forEach { ongoing -> assertFalse(text(it, ongoing = ongoing).contains("null")) }
@@ -35,7 +38,7 @@ class TravelNotificationTextTest {
     }
     @Test fun `comparison presence alone cannot claim changed weather`() {
         val value = plan().copy(analyses = listOf(TravelWeatherAnalysis(comparisonText = "Karşılaştırma için veri eksik")))
-        val result = buildTravelNotificationText(value, 3, false, buildTravelNotificationData(value, 3), day).second
+        val result = buildTravelNotificationText(value, 3, false, buildTravelNotificationData(value, 3, now), day).second
         assertFalse(result, result.contains("değişiklikler var"))
     }
 }

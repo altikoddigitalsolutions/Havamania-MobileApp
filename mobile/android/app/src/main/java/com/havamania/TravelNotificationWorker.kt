@@ -101,11 +101,13 @@ class TravelNotificationWorker(
                 } else plan.updatedAt
                 if (weatherDao.getTravelPlanByIdRaw(plan.id)?.updatedAt != analysisRevision) return@forEach
 
-                val identity = travelDailyIdentity(updatedPlan, Instant.now()) ?: return@forEach
+                val notificationNow = Instant.now()
+                if (!tripForecastMatchesPlan(updatedPlan, updatedPlan.lastForecastSnapshot, notificationNow)) return@forEach
+                val identity = travelDailyIdentity(updatedPlan, notificationNow) ?: return@forEach
                 val notificationToday = identity.day
                 val notificationDays = ChronoUnit.DAYS.between(notificationToday, updatedPlan.startDate).toInt()
                 val notificationOngoing = !notificationToday.isBefore(updatedPlan.startDate) && !notificationToday.isAfter(updatedPlan.endDate)
-                val travelData = buildTravelNotificationData(updatedPlan, notificationDays)
+                val travelData = buildTravelNotificationData(updatedPlan, notificationDays, notificationNow)
                 val (title, message) = buildTravelNotificationText(updatedPlan, notificationDays, notificationOngoing, travelData, notificationToday)
 
                 val notificationId = identity.notificationId
@@ -288,84 +290,6 @@ if (BuildConfig.DEBUG) {
             notificationManager.notify(notificationSystemTag(item), 0, notification)
         }
     }
-
-    private fun TravelPlanEntity.toDomain() = TravelPlan(
-        id = id,
-        userId = userId,
-        city = city,
-        district = district,
-        latitude = latitude,
-        longitude = longitude,
-        originCity = originCity,
-        originDistrict = originDistrict,
-        originLatitude = originLatitude,
-        originLongitude = originLongitude,
-        tripType = try { TripType.valueOf(tripType) } catch (e: Exception) { TripType.OTHER },
-        startDate = Instant.ofEpochMilli(startDate).atZone(ZoneId.systemDefault()).toLocalDate(),
-        endDate = Instant.ofEpochMilli(endDate).atZone(ZoneId.systemDefault()).toLocalDate(),
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        archivedAt = archivedAt,
-        lastAnalysisAt = lastAnalysisAt,
-        weatherSummary = weatherSummary,
-        packingAdvice = packingAdvice,
-        mustSee = mustSee,
-        foodAdvice = foodAdvice,
-        localAdvice = localAdvice,
-        aiSuggestion = aiSuggestion,
-        comfortScore = comfortScore,
-        userNote = userNote,
-        userRating = userRating,
-        isAnalyzing = false,
-        weatherAnalysisStatus = try { TravelWeatherAnalysisStatus.valueOf(weatherAnalysisStatus) } catch (e: Exception) { TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW },
-        isArchived = isArchived,
-        analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate,
-        isDemo = isDemo,
-        lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot,
-        departureTime = departureTime
-    )
-
-    private fun TravelPlan.toEntity() = TravelPlanEntity(
-        id = id,
-        userId = userId,
-        city = city,
-        district = district,
-        latitude = latitude,
-        longitude = longitude,
-        originCity = originCity,
-        originDistrict = originDistrict,
-        originLatitude = originLatitude,
-        originLongitude = originLongitude,
-        tripType = tripType.name,
-        startDate = startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        endDate = endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-        archivedAt = archivedAt,
-        lastAnalysisAt = lastAnalysisAt,
-        weatherSummary = weatherSummary,
-        packingAdvice = packingAdvice,
-        mustSee = mustSee,
-        foodAdvice = foodAdvice,
-        localAdvice = localAdvice,
-        aiSuggestion = aiSuggestion,
-        comfortScore = comfortScore,
-        userNote = userNote,
-        userRating = userRating,
-        lastWeatherAnalysisText = if (weatherAnalysisStatus == TravelWeatherAnalysisStatus.WAITING_FOR_WINDOW) "Bekleniyor" else "Hazır",
-        lastWeatherAnalysisDate = lastAnalysisAt,
-        lastForecastSnapshot = lastForecastSnapshot,
-        previousForecastSnapshot = previousForecastSnapshot,
-        nextAnalysisEligibleDate = null,
-        weatherAnalysisStatus = weatherAnalysisStatus.name,
-        isArchived = isArchived,
-        analyses = analyses,
-        lastDailyNotificationDate = lastDailyNotificationDate,
-        isDemo = isDemo,
-        departureTime = departureTime
-    )
 
     companion object {
         fun schedule(context: Context) {

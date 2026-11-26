@@ -86,7 +86,7 @@ class DatabaseMigrationTest {
         val database = Room.databaseBuilder(context, WeatherDatabase::class.java, name)
             .addMigrations(WeatherDatabase.MIGRATION_11_13, WeatherDatabase.MIGRATION_13_14,
                 WeatherDatabase.MIGRATION_14_15, WeatherDatabase.MIGRATION_15_16,
-                WeatherDatabase.MIGRATION_16_17, WeatherDatabase.MIGRATION_17_18, WeatherDatabase.MIGRATION_18_19, WeatherDatabase.MIGRATION_19_20, WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23).build()
+                WeatherDatabase.MIGRATION_16_17, WeatherDatabase.MIGRATION_17_18, WeatherDatabase.MIGRATION_18_19, WeatherDatabase.MIGRATION_19_20, WeatherDatabase.MIGRATION_20_21, WeatherDatabase.MIGRATION_21_22, WeatherDatabase.MIGRATION_22_23, WeatherDatabase.MIGRATION_23_24).build()
         try {
             val dao = database.weatherDao()
             val plan = dao.getAllTravelPlans("owner").single()

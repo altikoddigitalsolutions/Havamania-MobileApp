@@ -49,14 +49,15 @@ class ForecastInvalidValuesTest {
         assertNull(value.windChill)
     }
     @Test fun `travel summary never replaces missing or invalid maximum with twenty`() {
-        val today = LocalDate.now()
+        val today = LocalDate.of(2026, 11, 26)
+        val now = java.time.Instant.parse("2026-11-26T12:00:00Z")
         val plan = TravelPlan(city = "Bursa", startDate = today, endDate = today.plusDays(1))
         listOf(null, Double.NaN, Double.POSITIVE_INFINITY).forEach { max ->
-            val text = RecommendationEngine.generateTravelRecommendation(plan, ForecastSnapshot(maxTemp = max))
-            assertTrue(text, text.contains("verisi bulunmuyor"))
+            val text = RecommendationEngine.generateTravelRecommendation(plan, ForecastSnapshot(maxTemp = max, timezone = "Europe/Istanbul"), now = now)
+            assertTrue(text, text.contains("eksik"))
             assertFalse(text.contains("20°"))
         }
-        val valid = RecommendationEngine.generateTravelRecommendation(plan, ForecastSnapshot(maxTemp = 0.0))
-        assertTrue(valid, valid.contains("0°"))
+        val valid = RecommendationEngine.generateTravelRecommendation(plan, ForecastSnapshot(maxTemp = 0.0, timezone = "Europe/Istanbul"), now = now)
+        assertTrue(valid, valid.contains("0,0°C"))
     }
 }

@@ -4,9 +4,10 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 internal fun buildTripForecastSnapshot(daily: DailyDto?, start: LocalDate, end: LocalDate,
-    timezone: String? = null, now: java.time.Instant = java.time.Instant.now()): ForecastSnapshot? {
+    timezone: String? = null, now: java.time.Instant = java.time.Instant.now(), plan: TravelPlan? = null): ForecastSnapshot? {
     if (daily == null || end.isBefore(start)) return null
     val zone = timezone?.let { validTripForecastZone(it) ?: return null }
+    val binding = plan?.let { createTripForecastBinding(it, start, end) ?: return null }
     val dates = daily.time.mapIndexedNotNull { index, raw ->
         val date = raw?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapIndexedNotNull null
         if (date.isBefore(start) || date.isAfter(end)) return@mapIndexedNotNull null
@@ -32,5 +33,5 @@ internal fun buildTripForecastSnapshot(daily: DailyDto?, start: LocalDate, end: 
         averageTemperature = rows.map { it.min / 2.0 + it.max / 2.0 }.average(),
         precipitationProbability = rows.maxOf { it.rain }, windSpeed = rows.maxOf { it.wind },
         uvIndex = rows.mapNotNull { it.uv }.maxOrNull(), conditionSummary = summary,
-        weatherCode = code, generatedAt = now.toEpochMilli(), timezone = zone?.id)
+        weatherCode = code, generatedAt = now.toEpochMilli(), timezone = zone?.id, binding = binding)
 }

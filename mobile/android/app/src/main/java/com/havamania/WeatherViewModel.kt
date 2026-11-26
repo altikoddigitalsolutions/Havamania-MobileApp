@@ -82,8 +82,8 @@ class WeatherViewModel internal constructor(
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
 
-    private val _selectedForecastDate = MutableStateFlow<LocalDate>(LocalDate.now())
-    val selectedForecastDate: StateFlow<LocalDate> = _selectedForecastDate.asStateFlow()
+    private val _selectedForecastDate = MutableStateFlow<LocalDate?>(null)
+    val selectedForecastDate: StateFlow<LocalDate?> = _selectedForecastDate.asStateFlow()
 
     private val _selectedDailyForecast = MutableStateFlow<DailyForecast?>(null)
     val selectedDailyForecast: StateFlow<DailyForecast?> = _selectedDailyForecast.asStateFlow()
@@ -384,8 +384,8 @@ class WeatherViewModel internal constructor(
         } else emptyList()
         if (aged == data) return
         _uiState.value = WeatherUiState.Success(aged)
-        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
-        if (_selectedForecastDate.value.isBefore(today)) selectInitialForecast(aged)
+        val today = ForecastTime.knownZone(data.timezone)?.let { now.atZone(it).toLocalDate() }
+        if (today == null || _selectedForecastDate.value?.isBefore(today) != false) selectInitialForecast(aged)
         updateRecommendation()
         if (!data.isStale && aged.isStale && isOnline.value && fetchJob?.isActive != true) refreshWeather()
     }
@@ -453,14 +453,10 @@ class WeatherViewModel internal constructor(
     }
 
     private fun selectInitialForecast(data: WeatherData) {
-        val now = java.time.Instant.now()
-        val today = ForecastTime.localNow(data.timezone, now).toLocalDate()
-        val days = ForecastTime.dailyFromToday(data, now)
-        val day = days.firstOrNull { it.date == today.toString() } ?: days.firstOrNull()
-        val date = day?.let { LocalDate.parse(it.date) } ?: today
-        _selectedForecastDate.value = date
-        _selectedDailyForecast.value = day
-        _selectedHourlyWeather.value = ForecastTime.hoursForDate(data, date, now).firstOrNull()
+        val selection = initialWeatherForecastSelection(data, java.time.Instant.now())
+        _selectedForecastDate.value = selection.date
+        _selectedDailyForecast.value = selection.day
+        _selectedHourlyWeather.value = selection.hour
     }
 
     fun selectDailyForecast(day: DailyForecast) {

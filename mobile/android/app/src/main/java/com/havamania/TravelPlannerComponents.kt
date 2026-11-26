@@ -430,7 +430,8 @@ fun RichTravelGuideView(
     }
     val analysis = plan.analyses.lastOrNull()
 
-    val metrics = tripDisplayMetrics(plan)
+    val forecastNow = java.time.Instant.now()
+    val metrics = tripDisplayMetrics(plan, forecastNow)
     val avgTemp = metrics.averageTemperature?.toInt()
     val rainRisk = metrics.rainProbability
     val score = metrics.score
@@ -469,7 +470,7 @@ if (BuildConfig.DEBUG) {
         // HAVA ÖZETİ Section
         SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
         Spacer(Modifier.height(6.dp))
-        val weatherSummaryText = tripDisplaySummary(plan)
+        val weatherSummaryText = tripDisplaySummary(plan, forecastNow)
         Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
         Text(tripAnalysisDisplayLabel(plan), style = HavamaniaTheme.typography.caption,
             color = themeColors.textMuted)
@@ -491,7 +492,7 @@ if (BuildConfig.DEBUG) {
         // Valiz / Hazırlık Tavsiyesi
         SectionHeader("VALİZ / HAZIRLIK TAVSİYESİ", Icons.Rounded.Backpack)
         Spacer(Modifier.height(6.dp))
-        val packingTip = travelWeatherPacking(plan.lastForecastSnapshot, guidePersonalization)
+        val packingTip = tripGuidePacking(plan, guidePersonalization, forecastNow)
         val activityPacking = when (plan.tripType) {
             TripType.GASTRONOMY -> "Lezzet durakları arasında yürümek için rahat ayakkabı ve pratik bir çanta hazırla."
             TripType.NATURE, TripType.CAMPING, TripType.ADVENTURE -> "Planladığın parkura uygun sağlam tabanlı ayakkabı hazırla."

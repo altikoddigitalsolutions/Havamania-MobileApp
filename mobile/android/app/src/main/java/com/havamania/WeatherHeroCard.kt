@@ -17,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -34,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.AppTheme
 import com.havamania.ui.theme.HavamaniaTheme
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.random.Random
@@ -58,7 +59,8 @@ data class HeroThemeSpec(
     val cloudColor: Color,
     val sunMoonPosition: Offset,
     val sunMoonSize: Float, // Added for dynamic sizing
-    val overlayAlpha: Float
+    val overlayAlpha: Float,
+    val phaseKnown: Boolean = true
 )
 
 /**
@@ -108,30 +110,17 @@ object WeatherHeroStyleManager {
     fun resolveWeatherHeroTheme(
         weatherCode: Int,
         conditionText: String,
-        selectedTime: LocalTime,
+        selectedTime: LocalTime?,
         latitude: Double,
         longitude: Double,
         sunrise: LocalTime?,
-        sunset: LocalTime?
+        sunset: LocalTime?,
+        isDay: Boolean? = null
     ): HeroThemeSpec {
-        val rise = sunrise ?: LocalTime.of(6, 0)
-        val set = sunset ?: LocalTime.of(18, 0)
-        // 1. Resolve Day Part
-        val dayPart = when {
-            selectedTime.isBefore(rise) -> DayPhase.NIGHT
-            !selectedTime.isBefore(rise) && selectedTime.isBefore(rise.plusHours(2)) -> DayPhase.MORNING
-            !selectedTime.isBefore(rise.plusHours(2)) && selectedTime.isBefore(set.minusHours(2)) -> DayPhase.DAY
-            !selectedTime.isBefore(set.minusHours(2)) && selectedTime.isBefore(set.plusHours(1)) -> DayPhase.EVENING
-            else -> DayPhase.NIGHT
-        }
-
+        val dayPart = heroDayPhase(selectedTime, sunrise, sunset, isDay) ?: return neutralHeroTheme(weatherCode)
         // 1.1 Calculate Dynamic Sun/Moon Position and Size
-        val isDaytime = !selectedTime.isBefore(rise) && selectedTime.isBefore(set)
-        val daylightProgress = if (isDaytime) {
-            val daylightSeconds = java.time.Duration.between(rise, set).seconds.toFloat()
-            val elapsedSeconds = java.time.Duration.between(rise, selectedTime).seconds.toFloat()
-            (elapsedSeconds / daylightSeconds.coerceAtLeast(1f)).coerceIn(0f, 1f)
-        } else 0f
+        val isDaytime = dayPart != DayPhase.NIGHT
+        val daylightProgress = if (isDaytime) heroDaylightProgress(selectedTime, sunrise, sunset) ?: 0.5f else 0f
 
         val sunMoonPos = if (isDaytime) {
             val x = 0.1f + daylightProgress * 0.8f
@@ -150,17 +139,7 @@ object WeatherHeroStyleManager {
         }
 
         // 2. Resolve Theme Type (More granular)
-        val themeType = when (weatherCode) {
-            0 -> WeatherThemeType.SUNNY
-            1 -> WeatherThemeType.MOSTLY_SUNNY
-            2 -> WeatherThemeType.PARTLY_CLOUDY
-            3 -> WeatherThemeType.CLOUDY
-            45, 48 -> WeatherThemeType.FOGGY
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> WeatherThemeType.RAINY
-            71, 73, 75, 77, 85, 86 -> WeatherThemeType.SNOWY
-            95, 96, 99 -> WeatherThemeType.STORMY
-            else -> WeatherThemeType.CLOUDY
-        }
+        val themeType = heroWeatherTheme(weatherCode)
 
         // 3. Define Palettes - Premium & Atmospheric Identity
         val gradientColors = when (themeType) {
@@ -256,12 +235,7 @@ object WeatherHeroStyleManager {
             else -> Color.White.copy(alpha = 0.75f)
         }
 
-        val displayTitle = WeatherUtils.getWeatherDisplayName(
-            weatherCode = weatherCode,
-            currentTime = selectedTime.atDate(LocalDate.now()),
-            sunrise = sunrise,
-            sunset = sunset
-        )
+        val displayTitle = WeatherUtils.describeWeatherPhase(weatherCode, isDaytime)
 
         return HeroThemeSpec(
             themeType = themeType,
@@ -299,22 +273,23 @@ fun WeatherHeroCard(
     unreadCount: Int = 0,
     modifier: Modifier = Modifier,
     districtName: String? = null,
-    time: LocalTime = LocalTime.now(),
+    time: LocalTime? = null,
     latitude: Double = 41.0082,
     longitude: Double = 28.9784,
     sunriseTime: String? = null,
     sunsetTime: String? = null,
     parallaxOffset: Float = 0f,
-    themeViewModel: com.havamania.ui.theme.ThemeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    themeViewModel: com.havamania.ui.theme.ThemeViewModel? = null,
+    liveEffectsOverride: Boolean? = null
 ) {
     val sunrise = remember(sunriseTime) { sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } } }
     val sunset = remember(sunsetTime) { sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } } }
 
-    val spec = remember(weatherCode, conditionLabel, time, sunrise, sunset, latitude, longitude) {
-        WeatherHeroStyleManager.resolveWeatherHeroTheme(weatherCode, conditionLabel, time, latitude, longitude, sunrise, sunset)
+    val spec = remember(weatherCode, conditionLabel, isDay, time, sunrise, sunset, latitude, longitude) {
+        WeatherHeroStyleManager.resolveWeatherHeroTheme(weatherCode, conditionLabel, time, latitude, longitude, sunrise, sunset, isDay)
     }
 
-    val liveEffectsEnabled by themeViewModel.liveEffectsEnabled.collectAsState()
+    val liveEffectsEnabled = liveEffectsOverride ?: (themeViewModel ?: androidx.lifecycle.viewmodel.compose.viewModel<com.havamania.ui.theme.ThemeViewModel>()).liveEffectsEnabled.collectAsState().value
 
     val context = LocalContext.current
     val isReducedMotion = remember {
@@ -331,6 +306,12 @@ fun WeatherHeroCard(
         modifier = modifier
             .fillMaxWidth()
             .height(340.dp)
+            .semantics { stateDescription = when {
+                !spec.phaseKnown -> "Gündüz/gece bilgisi bilinmiyor"
+                spec.dayPart == DayPhase.NIGHT -> "Gece görünümü"
+                else -> "Gündüz görünümü"
+            } }
+
             .graphicsLayer {
                 this.alpha = if (isReducedMotion) 1f else alpha
                 this.scaleX = if (isReducedMotion) 1f else scale
@@ -366,6 +347,11 @@ fun WeatherHeroCard(
 
 @Composable
 fun LiveBackgroundLayer(spec: HeroThemeSpec) {
+    if (!spec.phaseKnown) {
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(spec.gradientColors)))
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "bg")
     val bgShift by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -797,7 +783,7 @@ fun PremiumWeatherContent(
 ) {
     val textColor = spec.textColor
     val secondaryColor = textColor.copy(alpha = 0.65f)
-    val isDark = spec.dayPart == DayPhase.NIGHT || spec.dayPart == DayPhase.EVENING || spec.themeType == WeatherThemeType.STORMY
+    val isDark = !spec.phaseKnown || spec.dayPart == DayPhase.NIGHT || spec.dayPart == DayPhase.EVENING || spec.themeType == WeatherThemeType.STORMY
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

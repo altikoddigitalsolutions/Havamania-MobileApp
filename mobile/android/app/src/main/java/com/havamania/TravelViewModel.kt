@@ -407,11 +407,12 @@ if (BuildConfig.DEBUG) {
 
             val existing = dao.getAllTravelPlans(currentUid)
             val isDuplicate = existing.any {
+                val stored = it.toDomain()
                 it.id != plan.id && // Don't check against self when editing
                 it.city.equals(cityNameTrimmed, ignoreCase = true) &&
                 (it.district ?: "").equals(plan.district ?: "", ignoreCase = true) &&
-                it.startDate == plan.startDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() &&
-                it.endDate == plan.endDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                stored.startDate == plan.startDate &&
+                stored.endDate == plan.endDate
             }
 
             if (isDuplicate && !plan.isDemo) {

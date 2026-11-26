@@ -16,6 +16,7 @@ data class WeatherData(
     val condition: String = "Parçalı Bulutlu",
     val weatherCode: Int = -1,
     val isDay: Boolean = true,
+    val verifiedIsDay: Boolean? = null,
     val high: String = "17°",
     val low: String = "3°",
     val feelsLike: String = "8°",

@@ -59,3 +59,23 @@ Telefon/tablet, yatay/dikey, büyük yazı ve klavye durumları kapsamda. Yazı 
 ## 25 Kasım Günlük eksik ölçüm bileşeni
 
 MainDailyNullDeviceTest eklendi: eksik komşu ölçümden sonra doğru gün/sıcaklık ve seçim. Tablet ADB bağlantısında bulunamadığından fiziksel kabul bekliyor. 838 JVM başarılı; tüm hava ekranı veya tüm tema kabulü değildir. Ayrıntı: 25_KASIM_GUNLUK_NULL_KONUM_ACIKLAMASI.md.
+
+
+## 26 Kasım Tahmin seçimi ve saat dilimi etiketi
+
+851 JVM +7 SM-T500 testi geçti. Bekleyen MainDailyNullDeviceTest, MainHourlyNullDeviceTest, RouteWeatherPhaseDeviceTest ve WeatherLoadErrorDeviceTest (4 senaryo) başarılı. Güncelleme etiketinde bilinen/bilinmeyen bölge geçişi doğrulandı. Tam Activity, bütün tema ve nötr hero dekorasyonu kabulü açık. Ayrıntı: 26_KASIM_HAVA_EKRANI_TAHMIN_SECIMI.md.
+
+
+## 26 Kasım Rehber hedef değişimi
+
+899 JVM +4 tablet testi geçti. TravelPersonalizationDeviceTest rehber kısmi/yeni tahmin ve ardından hedef değişiminde eski metrik/valiz önerisinin kalkmasını, uyarının görünmesini doğruluyor. TravelHistoryDeviceTest ayrı geçmiş detay kontrolünü koruyor. Tam ekran/tema veya geçmiş kartların görsel kabulü değildir. Rapor: 26_KASIM_REHBER_OZET_TAHMIN_ESLESMESI.md.
+
+
+## 26 Kasım Kısa hava özeti veri geçişi
+
+920 JVM +1 SM-T500 testi geçti. 320 dp DailyInsightCard ondalık/eksik/eski/fırtına durumları arasında güncelleniyor; sahte sıcak uyarısı yok. Tam tema/ekran kabulü veya hero nötr fazı bu testin kapsamında değil. Rapor: 26_KASIM_ONERI_SICAKLIK_AYRISTIRMA.md.
+
+
+## 26 Kasım Hero fazı
+
+930 JVM +1 SM-T500 kart testi geçti. 360 dp kartta açık/koyu nötr, doğrulanmış gece/gündüz ve tekrar nötr geçişi doğrulandı. Yerel .artifacts/hero-phase-20261126 PNG görüntüleri incelendi; bu örnekte taşma yok. Gündüz küçük ikon kontrastı ve hareket azaltmanın arka plana uygulanması sırada. Tüm tema/büyük yazı/yatay kabulü değil. Rapor: 26_KASIM_HAVA_KARTI_NOTR_FAZ.md.

@@ -6,8 +6,11 @@ import org.junit.Test
 
 class TravelNotificationAdviceTest {
     private val day = LocalDate.of(2026, 11, 26)
-    private fun data(snapshot: ForecastSnapshot?) = buildTravelNotificationData(TravelPlan(city = "Ankara",
-        startDate = day, endDate = day, lastForecastSnapshot = snapshot), 1)
+    private fun data(snapshot: ForecastSnapshot?): TravelNotificationData {
+        val plan = TravelPlan(city = "Ankara", startDate = day, endDate = day)
+        val bound = snapshot?.copy(timezone = "Europe/Istanbul", binding = createTripForecastBinding(plan, day, day))
+        return buildTravelNotificationData(plan.copy(lastForecastSnapshot = bound), 1, java.time.Instant.parse("2026-11-26T12:00:00Z"))
+    }
     @Test fun `missing weather does not invent equipment or measurements`() {
         val result = data(null)
         assertTrue(result.recommendedItems.isEmpty()); assertNull(result.minTemp); assertNull(result.maxTemp)

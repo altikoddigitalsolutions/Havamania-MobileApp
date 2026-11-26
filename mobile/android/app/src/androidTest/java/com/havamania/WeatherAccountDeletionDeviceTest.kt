@@ -196,10 +196,10 @@ class WeatherAccountDeletionDeviceTest {
             db.close()
             val sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,
                 null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE)
-            try { sqlite.execSQL("DROP TABLE weather_account_deletions"); sqlite.version = 22 }
+            try { stripTripDateIsoColumnsForLegacyFixture(sqlite); sqlite.execSQL("DROP TABLE weather_account_deletions"); sqlite.version = 22 }
             finally { sqlite.close() }
             db = Room.databaseBuilder(context, WeatherDatabase::class.java, name)
-                .addMigrations(WeatherDatabase.MIGRATION_22_23).build()
+                .addMigrations(WeatherDatabase.MIGRATION_22_23, WeatherDatabase.MIGRATION_23_24).build()
             val dao = db.weatherDao()
             assertEquals("Ankara", dao.getAllTravelPlans("a").single().city)
             assertEquals("Keep", dao.getAllAiHistory("a").single().title)

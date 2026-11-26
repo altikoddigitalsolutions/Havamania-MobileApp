@@ -238,7 +238,7 @@ fun HomeScreen(
 fun BoxScope.WeatherSuccessContent(
     data: WeatherData,
     selectedHourlyWeather: HourlyWeather?,
-    selectedForecastDate: LocalDate,
+    selectedForecastDate: LocalDate?,
     selectedDailyForecast: DailyForecast?,
     recommendation: HavamaniaRecommendation?,
     userInterests: Set<String> = emptySet(),
@@ -257,11 +257,16 @@ fun BoxScope.WeatherSuccessContent(
     val responsive = LocalResponsiveValues.current
     val windowSize = LocalWindowSize.current
 
-    val locationNow = ForecastTime.localNow(data.timezone)
-    val selectedSun = data.dailyForecast.singleOrNull { it.date == selectedForecastDate.toString() }
-    val sunriseTime = selectedSun?.sunriseTime
-    val sunsetTime = selectedSun?.sunsetTime
-    val displayTime = selectedHourlyWeather?.let { ForecastTime.parseHour(it) }?.toLocalTime() ?: locationNow.toLocalTime()
+
+    val locationTime = ForecastTime.knownZone(data.timezone)?.let { java.time.Instant.now().atZone(it).toLocalTime() }
+    val selectedSun = data.dailyForecast.singleOrNull { it.date == selectedForecastDate?.toString() }
+    val sunriseTime = selectedSun?.sunriseTime ?: if (selectedDailyForecast == null && selectedHourlyWeather == null) data.sunriseTime else null
+    val sunsetTime = selectedSun?.sunsetTime ?: if (selectedDailyForecast == null && selectedHourlyWeather == null) data.sunsetTime else null
+    val displayTime = when {
+        selectedHourlyWeather != null -> ForecastTime.parseHour(selectedHourlyWeather)?.toLocalTime()
+        selectedDailyForecast != null || data.isStale -> null
+        else -> locationTime
+    }
 
     val displayTemp by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf {
@@ -269,25 +274,13 @@ fun BoxScope.WeatherSuccessContent(
         }
     }
 
-    val displayCondition by remember(data, selectedHourlyWeather, selectedDailyForecast, locationNow, sunriseTime, sunsetTime) {
-        derivedStateOf {
-            val code = selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode
-            val sunrise = sunriseTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
-            val sunset = sunsetTime?.let { try { LocalTime.parse(it) } catch (e: Exception) { null } }
-            val now = if (selectedHourlyWeather != null) {
-                try { java.time.LocalDateTime.parse(selectedHourlyWeather.fullTime) } catch (e: Exception) { displayTime.atDate(selectedForecastDate) }
-            } else { locationNow }
-            WeatherUtils.getWeatherDisplayName(code, now, sunrise, sunset)
-        }
-    }
+    val displayCondition = weatherSelectionCondition(data, selectedHourlyWeather, selectedDailyForecast)
 
     val displayWeatherCode by remember(data, selectedHourlyWeather, selectedDailyForecast) {
         derivedStateOf { selectedHourlyWeather?.weatherCode ?: selectedDailyForecast?.weatherCode ?: data.weatherCode }
     }
 
-    val displayIsDay by remember(data, selectedHourlyWeather) {
-        derivedStateOf { selectedHourlyWeather?.isDay }
-    }
+    val displayIsDay = weatherSelectionDaylight(data, selectedHourlyWeather, selectedDailyForecast)
     val heroMetrics = remember(data) { weatherHeroMetrics(data) }
 
     Column(
@@ -308,9 +301,7 @@ fun BoxScope.WeatherSuccessContent(
 
         if (data.isStale || !isOnline) {
             val formattedTime = remember(data.timestamp, data.timezone) {
-                java.time.Instant.ofEpochMilli(data.timestamp)
-                    .atZone(ForecastTime.zone(data.timezone))
-                    .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.forLanguageTag("tr-TR")))
+                weatherUpdatedTimeLabel(data)
             }
             val status = if (isOnline) "Önbellekteki hava verisi" else "Çevrimdışı hava verisi"
             Surface(
@@ -382,7 +373,7 @@ fun BoxScope.WeatherSuccessContent(
 
         // 3. HOURLY FORECAST
         EntranceAnimation(delayMillis = 250) {
-            val filteredHourly = ForecastTime.hoursForDate(data, selectedForecastDate)
+            val filteredHourly = selectedForecastDate?.let { ForecastTime.hoursForDate(data, it) }.orEmpty()
 
             if (filteredHourly.isNotEmpty()) {
                 val hourlyWithSelection = remember(filteredHourly, selectedHourlyWeather) {
@@ -417,7 +408,7 @@ fun BoxScope.WeatherSuccessContent(
             val futureDaily = ForecastTime.dailyFromToday(data)
             DailyForecastSection(
                 forecasts = futureDaily,
-                selectedDate = selectedForecastDate.toString(),
+                selectedDate = selectedForecastDate?.toString().orEmpty(),
                 onDayClick = onSelectDaily
             )
         }

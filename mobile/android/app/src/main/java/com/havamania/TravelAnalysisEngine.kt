@@ -115,7 +115,7 @@ if (BuildConfig.DEBUG) {
         }
         val forecastDaysUntil = ChronoUnit.DAYS.between(forecastToday, plan.startDate).toInt()
         val baseSnapshot = buildTripForecastSnapshot(response.daily, maxOf(plan.startDate, forecastToday), plan.endDate,
-            timezone = response.timezone, now = forecastNow)
+            timezone = response.timezone, now = forecastNow, plan = plan.copy(latitude = lat, longitude = lon))
             ?: throw IllegalStateException("Seyahat tarihlerinin tamamı için yeterli hava verisi yok.")
         val snapshot = baseSnapshot.copy(travelScore = calculateTravelScore(baseSnapshot, plan.tripType))
 
