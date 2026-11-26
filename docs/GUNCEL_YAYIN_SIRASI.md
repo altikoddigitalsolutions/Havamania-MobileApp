@@ -973,3 +973,8 @@ Konum/bildirim alanları ayrıldı; büyük yazıda kart yüksekliği artıyor. 
 ## 26 Kasım Hava API hız sınırı
 
 İstemcinin max_requests/window_seconds ile kotayı değiştirmesi kapatıldı; OpenAPI/ref güncellendi. Sunucu 60/60 ortak IP kotası, monotonic süre, atomik thread kontrolü, sınırlı bellek ve Retry-After kullanıyor. Eski kodda üç regresyon başarısız; ilgili 11 test ve tam backend 267 test başarılı. PostgreSQL ortamı yok: 13 migration testi atlandı. [Rapor](26_KASIM_HAVA_API_HIZ_SINIRI.md). Sıradaki proxy IP güveni/çok worker ortak kota yapılandırması; önceki canlı FCM, Firebase/senkronizasyon, görsel ve yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Asistan platform yönlendirmesi / AAB 1.2
+
+Tam selamlaşma dışındaki sorular izin kapısından sonra platforma gidiyor; yerel hava/tarih/şehir kestirmesi kaldırıldı. Hava bağlamı ve kimlikler korunuyor, platform hava araçlarını engelleyen bağlam metni ve izin açıklaması düzeltildi. Kaynak 3dec7be; 939 JVM testi, R8/kritik lint ve imzalı AAB başarılı. Paket/sürüm/minSdk ve beklenen 58:9C sertifikası dosyadan doğrulandı. [Rapor](26_KASIM_ASISTAN_PLATFORM_YONLENDIRME.md). Canlı platform konuşma/araç kabulü ve Play iç test açık; önceki proxy/ortak kota, Firebase, görsel ve yayın kapıları korunur.
