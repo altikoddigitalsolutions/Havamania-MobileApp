@@ -5,6 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteSamplerTest {
+    @org.junit.Test fun subTwoHourIntercityRouteStillHasAnIntermediateWeatherPoint() {
+        val route = RoutePath(listOf(GeoPoint(38.42, 27.14), GeoPoint(39.65, 27.88)), 203000.0, 7080.0)
+        val points = RouteSampler.sample(route)
+        org.junit.Assert.assertEquals(1, points.size)
+        org.junit.Assert.assertTrue(points.single().cumulativeDistanceMeters > 0)
+        org.junit.Assert.assertTrue(points.single().cumulativeDistanceMeters < route.distanceMeters)
+    }
+
 
     // ---- Haversine ----
 

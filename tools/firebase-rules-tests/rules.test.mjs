@@ -2,7 +2,7 @@ import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, getDocs, collection, deleteField, deleteDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, getDocs, collection, deleteField, deleteDoc, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 
 let env;
@@ -303,4 +303,51 @@ test('malformed premium types are rejected without blocking unrelated legacy edi
     await setDoc(doc(context.firestore(), 'users/owner'), { premium: 'old-invalid' });
   });
   await assertSucceeds(setDoc(doc(db, 'users/owner'), { name: 'Edited' }, { merge: true }));
+});
+
+// Same field paths as the Android preference writer; preserve opt-out and unrelated fields.
+test('preference field updates preserve opt-out, clear lists and remain owner-only', async () => {
+  const source = await readFile(new URL('../../mobile/android/app/src/main/java/com/havamania/PersonalizationPreferenceUpdates.kt', import.meta.url), 'utf8');
+  const fieldNames = [...source.matchAll(/"([a-zA-Z.]+)" to /g)].map(match => match[1]);
+  const changes = {
+    'personalizationProfile.uid': 'owner',
+    'personalizationProfile.selectedInterests': [],
+    'personalizationProfile.travelStyles': ['Kültür'],
+    'personalizationProfile.weatherPreferences': { rainSensitive: true },
+    'personalizationProfile.lastUpdated': 123,
+    onboardingCompleted: true, updatedAt: 123
+  };
+  assert.deepEqual([...fieldNames].sort(), Object.keys(changes).sort());
+  const owner = env.authenticatedContext('owner').firestore();
+  const other = env.authenticatedContext('other').firestore();
+  await setDoc(doc(owner, 'users/owner'), { displayName: 'Keep', personalizationProfile: {
+    uid: 'owner', personalizationEnabled: false, futureField: 'keep', selectedInterests: ['old']
+  }});
+  await assertFails(updateDoc(doc(other, 'users/owner'), changes));
+  await assertSucceeds(updateDoc(doc(owner, 'users/owner'), changes));
+  const value = (await getDoc(doc(owner, 'users/owner'))).data();
+  assert.equal(value.personalizationProfile.personalizationEnabled, false);
+  assert.equal(value.personalizationProfile.futureField, 'keep');
+  assert.equal(value.displayName, 'Keep');
+  assert.deepEqual(value.personalizationProfile.selectedInterests, []);
+  assert.deepEqual(value.personalizationProfile.travelStyles, ['Kültür']);
+  assert.equal(value.personalizationProfile.weatherPreferences.rainSensitive, true);
+});
+
+test('preference field updates create nested map on legacy profile without permitting deleted owner', async () => {
+  const owner = env.authenticatedContext('owner').firestore();
+  const profile = doc(owner, 'users/owner');
+  await setDoc(profile, { displayName: 'Legacy' });
+  await assertSucceeds(updateDoc(profile, {
+    'personalizationProfile.uid': 'owner', 'personalizationProfile.travelStyles': [],
+    'personalizationProfile.selectedInterests': [], 'personalizationProfile.lastUpdated': 123
+  }));
+  const data = (await getDoc(profile)).data();
+  assert.equal(data.displayName, 'Legacy');
+  assert.equal(data.personalizationProfile.uid, 'owner');
+  assert.equal(data.personalizationProfile.personalizationEnabled, undefined);
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'account_deletions/owner'), { blocked: true });
+  });
+  await assertFails(updateDoc(profile, { 'personalizationProfile.selectedInterests': ['camp'] }));
 });

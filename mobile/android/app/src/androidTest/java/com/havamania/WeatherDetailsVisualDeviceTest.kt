@@ -23,7 +23,7 @@ import org.junit.Test
 
 class WeatherDetailsVisualDeviceTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun darkDetailsUseOneSectionAndPreserveAllValues() = verify(AppTheme.DARK, 420, 1f)
+    @Test fun darkDetailsSeparateMetricsAndPreserveAllValues() = verify(AppTheme.DARK, 420, 1f)
     @Test fun lightLargeTextStacksMetricsAndKeepsSolarTimesReachable() = verify(AppTheme.LIGHT, 320, 2f)
     private fun verify(theme: AppTheme, width: Int, fontScale: Float) {
         val sample = WeatherData(details = listOf(
@@ -52,7 +52,7 @@ class WeatherDetailsVisualDeviceTest {
             assertTrue("Metrics must stack at large font", second.top > first.bottom)
         }
         saveImage("weather-details-${theme.name.lowercase()}")
-        listOf("34 km", "RÜZGAR YÖNÜ", "Gün doğumu", "Gündüz ortası", "Gün batımı", "17:55").forEach {
+        listOf("34 km", "RÜZGÂR YÖNÜ", "Gün doğumu", "Gündüz ortası", "Gün batımı", "17:55").forEach {
             compose.onNodeWithText(it).performScrollTo().assertIsDisplayed()
         }
     }

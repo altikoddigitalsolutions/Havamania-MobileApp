@@ -50,15 +50,9 @@ fun WeatherDetailsPanel(
             description = data.weatherSuitabilityDesc
         )
 
-        // One section surface; nested metrics and solar times stay visually flat.
-        HavamaniaCard(padding = 0.dp) {
-            DetailMetricGrid(data = data)
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = HavamaniaTheme.colors.border
-            )
-            SunTimesCard(sunrise = sunriseTime, solarNoon = solarNoon, sunset = sunsetTime)
-        }
+        // Each metric has its own surface; no outer card nesting them together.
+        DetailMetricGrid(data = data)
+        SunTimesCard(sunrise = sunriseTime, solarNoon = solarNoon, sunset = sunsetTime)
 
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -147,9 +141,9 @@ fun WeatherDetailCard(
     }
 
     HavamaniaCard(
-        modifier = modifier.heightIn(min = 130.dp),
-        backgroundColor = Color.Transparent,
-        borderColor = Color.Transparent,
+        modifier = modifier,
+        backgroundColor = themeColors.surface,
+        borderColor = themeColors.border.copy(alpha = 0.35f),
         elevation = 0.dp,
         padding = 16.dp,
         onClick = null
@@ -231,7 +225,7 @@ fun WindDirectionCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Rounded.CompassCalibration, null, tint = themeColors.textMuted, modifier = Modifier.size(14.dp))
                     Text(
-                        "RÜZGAR YÖNÜ",
+                        "RÜZGÂR YÖNÜ",
                         style = HavamaniaTheme.typography.sectionTitle,
                         color = themeColors.textSecondary
                     )
@@ -242,7 +236,7 @@ fun WindDirectionCard(
                     color = themeColors.textPrimary
                 )
                 Text(
-                    text = "Anlık rüzgar yönü",
+                    text = "Anlık rüzgâr yönü",
                     style = HavamaniaTheme.typography.bodySmall,
                     color = themeColors.textSecondary
                 )

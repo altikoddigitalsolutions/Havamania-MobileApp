@@ -253,13 +253,9 @@ class ProfileViewModel internal constructor(
     fun updatePersonalization(interests: List<String>, travelStyles: List<String>, weatherPrefs: WeatherPreferences) {
         if (auth.currentUser == null) return
         personalizationSave.save { owner ->
-            val personalization = PersonalizationProfile(
-                uid = owner, selectedInterests = interests.toList(),
-                travelStyles = travelStyles.toList(), weatherPreferences = weatherPrefs)
             runAccountProfileWrite(owner, { auth.currentUser?.uid }, ::profileWritesAllowed,
-                { db.collection("users").document(owner).update(mapOf(
-                    "personalizationProfile" to personalization,
-                    "onboardingCompleted" to true, "updatedAt" to System.currentTimeMillis()
+                { db.collection("users").document(owner).update(personalizationPreferenceUpdates(
+                    owner, interests, travelStyles, weatherPrefs
                 )).await() },
                 { personalizationBasicsWriter?.invoke(owner, interests.toSet())
                         ?: ThemeManager.savePersonalizationBasics(getApplication(), owner, interests.toSet()) })

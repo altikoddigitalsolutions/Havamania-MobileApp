@@ -20,6 +20,7 @@ import kotlinx.serialization.json.Json
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +78,18 @@ fun PersonalizationScreen(
             onComplete()
         }
     }
-    DisposableEffect(profileViewModel) { onDispose { profileViewModel.resetPersonalizationSave() } }
+    val screenContext = androidx.compose.ui.platform.LocalContext.current
+    DisposableEffect(profileViewModel, screenContext) {
+        onDispose {
+            var context = screenContext
+            while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+                context = context.baseContext
+            }
+            resetPersonalizationAfterScreenExit((context as? android.app.Activity)?.isChangingConfigurations == true) {
+                profileViewModel.resetPersonalizationSave()
+            }
+        }
+    }
     BackHandler(enabled = saving) { }
 
     // Saved state may outlive an authentication change during process recreation.
@@ -130,6 +142,7 @@ fun PersonalizationScreen(
                     isSelected = expandedCategoryId == category.title,
                     onToggle = { expandedCategoryId = if (expandedCategoryId == category.title) null else category.title },
                     selectedInterests = selectedInterests,
+                    enabled = editable,
                     onInterestToggle = { id ->
                         if (editable) selectedInterests = if (selectedInterests.contains(id)) selectedInterests - id else selectedInterests + id
                     }
@@ -144,21 +157,8 @@ fun PersonalizationScreen(
                 isSelected = expandedCategoryId == "TRAVEL_STYLES",
                 onToggle = { expandedCategoryId = if (expandedCategoryId == "TRAVEL_STYLES") null else "TRAVEL_STYLES" }
             ) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(themeStyles.spacingSM),
-                    verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)
-                ) {
-                    for (style in PersonalizationDefaults.TRAVEL_STYLES) {
-                        HavamaniaChip(
-                            selected = selectedStyles.contains(style),
-                            onClick = {
-                                if (editable) selectedStyles = if (selectedStyles.contains(style)) selectedStyles - style else selectedStyles + style
-                            },
-                            label = style,
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        )
-                    }
+                TravelStyleChoices(selectedStyles, editable) { style ->
+                    selectedStyles = if (style in selectedStyles) selectedStyles - style else selectedStyles + style
                 }
             }
 
@@ -175,7 +175,7 @@ fun PersonalizationScreen(
                     PreferenceSwitch("Sıcağı Severim", weatherPrefs.likesHeat, enabled = editable) { weatherPrefs = weatherPrefs.copy(likesHeat = it) }
                     PreferenceSwitch("Serin Havayı Severim", weatherPrefs.likesCool, enabled = editable) { weatherPrefs = weatherPrefs.copy(likesCool = it) }
                     PreferenceSwitch("Yağmura Hassasım", weatherPrefs.rainSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(rainSensitive = it) }
-                    PreferenceSwitch("Rüzgara Hassasım", weatherPrefs.windSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(windSensitive = it) }
+                    PreferenceSwitch("Rüzgâra Hassasım", weatherPrefs.windSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(windSensitive = it) }
                     PreferenceSwitch("Yüksek UV Hassasiyeti", weatherPrefs.uvSensitive, enabled = editable) { weatherPrefs = weatherPrefs.copy(uvSensitive = it) }
                 }
             }
@@ -222,14 +222,19 @@ fun PersonalizationAccordionItem(
     isSelected: Boolean,
     onToggle: () -> Unit,
     selectedInterests: Set<String>,
-    onInterestToggle: (String) -> Unit
+    onInterestToggle: (String) -> Unit,
+    enabled: Boolean = true
 ) {
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
 
-    HavamaniaGlassCard(
+    HavamaniaCard(
+        modifier = Modifier.fillMaxWidth(),
         onClick = onToggle,
-        alpha = if (isSelected) 0.6f else 0.3f
+        backgroundColor = themeColors.surface.compositeOver(themeColors.background),
+        borderColor = if (isSelected) themeColors.accent else themeColors.border,
+        elevation = 0.dp,
+        padding = 16.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -267,6 +272,7 @@ fun PersonalizationAccordionItem(
                             selected = selectedInterests.contains(interest.id),
                             onClick = { onInterestToggle(interest.id) },
                             label = interest.label,
+                            enabled = enabled,
                             modifier = Modifier.minimumInteractiveComponentSize()
                         )
                     }
@@ -287,9 +293,13 @@ fun PersonalizationAccordionItemSimple(
     val themeStyles = HavamaniaTheme.styles
     val themeColors = HavamaniaTheme.colors
 
-    HavamaniaGlassCard(
+    HavamaniaCard(
+        modifier = Modifier.fillMaxWidth(),
         onClick = onToggle,
-        alpha = if (isSelected) 0.6f else 0.3f
+        backgroundColor = themeColors.surface.compositeOver(themeColors.background),
+        borderColor = if (isSelected) themeColors.accent else themeColors.border,
+        elevation = 0.dp,
+        padding = 16.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -319,7 +329,7 @@ fun PersonalizationAccordionItemSimple(
 }
 
 @Composable
-private fun PreferenceSwitch(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
+internal fun PreferenceSwitch(label: String, checked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -330,5 +340,21 @@ private fun PreferenceSwitch(label: String, checked: Boolean, enabled: Boolean =
     ) {
         Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp), style = HavamaniaTheme.typography.bodyLarge, color = HavamaniaTheme.colors.textPrimary)
         HavamaniaToggle(checked = checked, enabled = enabled, modifier = Modifier.semantics { contentDescription = label }, onCheckedChange = onCheckedChange)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun TravelStyleChoices(selectedStyles: Set<String>, editable: Boolean, onToggle: (String) -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(HavamaniaTheme.styles.spacingSM),
+        verticalArrangement = Arrangement.spacedBy(HavamaniaTheme.styles.spacingSM)
+    ) {
+        PersonalizationDefaults.TRAVEL_STYLES.forEach { style ->
+            HavamaniaChip(selected = style in selectedStyles,
+                onClick = { if (editable) onToggle(style) }, label = style, enabled = editable,
+                modifier = Modifier.minimumInteractiveComponentSize())
+        }
     }
 }

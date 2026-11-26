@@ -338,39 +338,30 @@ fun HavamaniaChip(
     selected: Boolean,
     onClick: () -> Unit,
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val colors = HavamaniaTheme.colors
 
-    FilterChip(
-        selected = selected,
+    val palette = themeButtonPalette(listOf(colors.accent), colors.onAccent)
+    Surface(
         onClick = onClick,
-        label = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                softWrap = false,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        modifier = modifier,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp).semantics { this.selected = selected },
         shape = RoundedCornerShape(14.dp),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = if (selected) colors.accent else Color.Transparent,
-            labelColor = if (selected) colors.onAccent else colors.textSecondary,
-            selectedContainerColor = colors.accent,
-            selectedLabelColor = colors.onAccent,
-            selectedLeadingIconColor = colors.onAccent
-        ),
-        border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = if (selected) colors.accent else colors.border.copy(alpha = 0.25f),
-            selectedBorderColor = colors.accent
+        color = if (selected) palette.stops.first() else Color.Transparent,
+        contentColor = if (selected) palette.content else colors.textSecondary,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, if (selected) palette.stops.first() else colors.border)
+    ) {
+        Text(
+            text = label,
+            style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, background = Color.Transparent),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
         )
-    )
+    }
 }
 
 /**

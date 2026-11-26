@@ -55,7 +55,8 @@ object RouteSampler {
 
     /** Intermediate point count based on duration. */
     fun getTargetIntermediateCount(durationHrs: Double): Int = when {
-        durationHrs < 2.0 -> 0
+        !durationHrs.isFinite() || durationHrs < 0.5 -> 0
+        durationHrs < 2.0 -> 1
         durationHrs < 5.0 -> 2
         durationHrs < 9.0 -> 3
         durationHrs < 15.0 -> 4

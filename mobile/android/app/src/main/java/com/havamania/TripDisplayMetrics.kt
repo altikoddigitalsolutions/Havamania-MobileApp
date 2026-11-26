@@ -27,3 +27,9 @@ internal fun tripDisplaySummary(plan: TravelPlan, now: java.time.Instant = java.
 internal fun tripGuidePacking(plan: TravelPlan, profile: PersonalizationProfile?, now: java.time.Instant = java.time.Instant.now()): String =
     if (tripForecastMatchesPlan(plan, plan.lastForecastSnapshot, now)) travelWeatherPacking(plan.lastForecastSnapshot, profile)
     else UNVERIFIED_TRIP_FORECAST_TEXT
+
+/** Compact cards retain warnings; numerical weather details belong to the guide. */
+internal fun tripWeatherOverviewLabel(plan: TravelPlan, now: java.time.Instant = java.time.Instant.now()): String {
+    if (!tripForecastMatchesPlan(plan, plan.lastForecastSnapshot, now)) return UNVERIFIED_TRIP_FORECAST_TEXT
+    return plan.lastForecastSnapshot?.let(::tripWeatherWarning) ?: "Seyahat hava analizi hazır."
+}

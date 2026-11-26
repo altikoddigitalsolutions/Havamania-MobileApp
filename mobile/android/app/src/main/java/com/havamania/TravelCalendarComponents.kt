@@ -15,6 +15,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.havamania.ui.theme.HavamaniaTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.first
 import java.util.Locale
 
 @Composable
@@ -45,20 +47,32 @@ fun TravelCalendarStripe(
 ) {
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = 30)
 
     // Keep the window bounded even for a deep link years away from today.
-    var anchor by remember(today) { mutableStateOf(today) }
+    var anchorDay by rememberSaveable(today.toEpochDay()) { mutableStateOf(today.toEpochDay()) }
+    val anchor = LocalDate.ofEpochDay(anchorDay)
     val windowAnchor = if (selectedDate.isBefore(anchor.minusDays(30)) ||
         selectedDate.isAfter(anchor.plusDays(90))) selectedDate else anchor
     val dates = remember(windowAnchor) {
         (-30..90).map { windowAnchor.plusDays(it.toLong()) }
     }
 
+    // Recreating the composition must not treat the restored selection as a new command.
+    var lastPositionedDay by rememberSaveable { mutableStateOf<Long?>(null) }
     LaunchedEffect(selectedDate, today, windowAnchor) {
-        anchor = windowAnchor
+        if (lastPositionedDay == selectedDate.toEpochDay()) return@LaunchedEffect
+        anchorDay = windowAnchor.toEpochDay()
+        // Wait for layout after a date-window change; preserve already visible selections.
+        androidx.compose.runtime.snapshotFlow { listState.layoutInfo }
+            .first { it.totalItemsCount == dates.size && it.visibleItemsInfo.isNotEmpty() }
         val index = dates.indexOf(selectedDate)
-        if (index >= 0) listState.scrollToItem(index)
+        val layout = listState.layoutInfo
+        val item = layout.visibleItemsInfo.firstOrNull { it.key == selectedDate.toString() }
+        val fullyVisible = item != null && item.offset >= layout.viewportStartOffset &&
+            item.offset + item.size <= layout.viewportEndOffset
+        if (index >= 0 && !fullyVisible) listState.animateScrollToItem(index)
+        lastPositionedDay = selectedDate.toEpochDay()
     }
 
     Column(modifier = modifier.fillMaxWidth()) {

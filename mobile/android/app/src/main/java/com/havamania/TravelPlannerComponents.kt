@@ -139,7 +139,7 @@ fun NextTripHero(
         val analysis = plan.analyses.lastOrNull()
         if (analysis != null) {
             Text(
-                text = tripDisplaySummary(plan),
+                text = tripWeatherOverviewLabel(plan),
                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                 color = themeColors.textPrimary,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -313,7 +313,7 @@ fun TravelPlanCard(
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = tripDisplaySummary(plan),
+                                text = tripWeatherOverviewLabel(plan),
                                 style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                 color = themeColors.textPrimary
                             )
@@ -470,8 +470,11 @@ if (BuildConfig.DEBUG) {
         // HAVA ÖZETİ Section
         SectionHeader("HAVA ÖZETİ", Icons.Rounded.WbSunny)
         Spacer(Modifier.height(6.dp))
-        val weatherSummaryText = tripDisplaySummary(plan, forecastNow)
-        Text(weatherSummaryText, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
+        // Values are displayed once in the metric tiles below; keep missing/stale warnings visible.
+        val weatherWarning = tripWeatherOverviewLabel(plan, forecastNow)
+        if (weatherWarning != "Seyahat hava analizi hazır.") {
+            Text(weatherWarning, style = HavamaniaTheme.typography.bodySmall, color = themeColors.textPrimary)
+        }
         Text(tripAnalysisDisplayLabel(plan), style = HavamaniaTheme.typography.caption,
             color = themeColors.textMuted)
 

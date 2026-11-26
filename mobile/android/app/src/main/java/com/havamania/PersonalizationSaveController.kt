@@ -25,3 +25,8 @@ internal class PersonalizationSaveController(scope: CoroutineScope, currentUid: 
         )
     }
 }
+
+/** A configuration recreation keeps the owning ViewModel and its pending save alive. */
+internal fun resetPersonalizationAfterScreenExit(changingConfigurations: Boolean, reset: () -> Unit) {
+    if (!changingConfigurations) reset()
+}

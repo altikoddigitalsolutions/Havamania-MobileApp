@@ -58,4 +58,24 @@ class PersonalizationSaveControllerTest {
         controller.reset()
         assertEquals(ProfileSaveState.Idle, controller.state.value)
     }
+    @Test fun configurationDisposalKeepsPendingSaveButRealExitCancelsIt() = runBlocking {
+        val reply = CompletableDeferred<Unit>()
+        val controller = PersonalizationSaveController(this, { "A" })
+        controller.save { reply.await() }
+        yield()
+        resetPersonalizationAfterScreenExit(true, controller::reset)
+        assertEquals(ProfileSaveState.Saving, controller.state.value)
+        reply.complete(Unit)
+        yield()
+        assertEquals(ProfileSaveState.Saved, controller.state.value)
+        resetPersonalizationAfterScreenExit(false, controller::reset)
+        assertEquals(ProfileSaveState.Idle, controller.state.value)
+        val pending = CompletableDeferred<Unit>()
+        controller.save { pending.await() }
+        yield()
+        resetPersonalizationAfterScreenExit(false, controller::reset)
+        pending.complete(Unit)
+        yield()
+        assertEquals(ProfileSaveState.Idle, controller.state.value)
+    }
 }
