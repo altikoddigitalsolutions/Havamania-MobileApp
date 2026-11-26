@@ -50,6 +50,13 @@ internal class RateLimitedAssistantException(val seconds: Long?) : Exception(
         ?: "Çok hızlı mesaj gönderdiniz. Lütfen kısa bir süre bekleyin."
 )
 
+private val localAssistantGreetings = setOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
+
+/** Only an entire greeting may bypass the consent-gated platform request. */
 internal fun isLocalAssistantPrompt(prompt: String): Boolean =
-    prompt.trim().lowercase(java.util.Locale.forLanguageTag("tr")) in listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler") ||
-        AiIntentParser.isWeatherQuery(prompt) || AiIntentParser.detectDate(prompt) != null
+    prompt.trim().lowercase(java.util.Locale.forLanguageTag("tr")) in localAssistantGreetings
+
+internal suspend fun assistantPromptReply(prompt: String, platform: suspend () -> String): String =
+    if (isLocalAssistantPrompt(prompt))
+        "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?"
+    else platform()

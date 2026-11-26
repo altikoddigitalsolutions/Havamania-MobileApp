@@ -24,8 +24,6 @@ import java.time.LocalDate
 
 enum class AssistantRequestState { IDLE, LOADING, SUCCESS, ERROR }
 
-private const val FORECAST_DAYS = 10
-private const val CITY_WEATHER_TTL_MS = 30 * 60 * 1000L // 30 minutes
 
 class AiChatViewModel(application: Application) : AndroidViewModel(application) {
     private val assistantRepository = AiAssistantRepository()
@@ -251,25 +249,6 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private data class CityWeatherEntry(val data: WeatherData, val fetchedAt: Long)
-    private val cityWeatherCache = mutableMapOf<String, CityWeatherEntry>()
-
-    private suspend fun resolveCityWeather(city: String): WeatherData? {
-        val entry = cityWeatherCache[city]
-        if (entry != null && System.currentTimeMillis() - entry.fetchedAt < CITY_WEATHER_TTL_MS) {
-            return entry.data
-        }
-
-        val geo = repository.searchCity(city)
-        if (geo.isEmpty()) return null
-
-        val data = repository.fetchWeatherSnapshot(geo[0].latitude, geo[0].longitude, geo[0].name, geo[0].district)
-        if (data != null) {
-            cityWeatherCache[city] = CityWeatherEntry(data, System.currentTimeMillis())
-        }
-        return data
-    }
-
     fun sendDraft(prompt: String) {
         if (prompt == draft) sendMessage(prompt, fromDraft = true)
     }
@@ -303,27 +282,12 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                 } + if (isRetry) emptyList() else listOf(userMessage)
             },
             operation = { owner ->
-                val greetings = listOf("merhaba", "selam", "hi", "hello", "hey", "günaydın", "iyi günler")
-                val greeting = "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?"
-                when {
-                    greetings.any { userPrompt.lowercase(java.util.Locale.forLanguageTag("tr")).trim() == it } -> greeting
-                    AiIntentParser.isWeatherQuery(userPrompt) || AiIntentParser.detectDate(userPrompt) != null -> {
-                        val targetCity = AiIntentParser.detectCity(userPrompt) ?: _weatherData.value?.cityName
-                        if (targetCity == null) {
-                            "Hangi şehir hakkında bilgi almak istediğinizi belirtir misiniz?"
-                        } else {
-                            val data = resolveCityWeather(targetCity)
-                            if (data == null) "$targetCity için hava durumu verilerine şu an ulaşılamıyor."
-                            else AiWeatherReply.datedReply(userPrompt, data)
-                                ?: "${data.cityName} şehrinde hava ${data.condition}, sıcaklık ${data.temperature} (Hissedilen: ${data.feelsLike})."
-                        }
-                    }
-                    else -> {
+                assistantPromptReply(userPrompt) {
                         val preferences = ThemeManager.getPersonalizationSnapshot(getApplication<Application>(), owner).first()
                         val personalized = preferences.personalizationEnabled
                         val interests = preferences.selectedInterests.sorted().take(20).map { it.take(50) }
                         ensureOwner(owner)
-                        val context = assistantClientContext(AiIntentParser.detectCity(userPrompt) ?: contextCity,
+                        val context = assistantClientContext(contextCity,
                             _weatherData.value, _activeTravels.value, personalized)
                         when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId, userMessage.id,
                             assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
@@ -353,17 +317,13 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                             is AssistantResult.ModeDisabled -> throw TerminalAssistantException("Bu asistan modu şu anda kullanılamıyor.")
                             is AssistantResult.TooLong -> throw TerminalAssistantException("Mesaj veya bağlam çok uzun. Lütfen kısaltın.")
                             is AssistantResult.Success -> { platformReply = result; result.content }
-                            is AssistantResult.QuestionRejected -> {
-                                if (greetings.any { userPrompt.lowercase(java.util.Locale.forLanguageTag("tr")).contains(it) }) greeting
-                                else throw Exception("Lütfen geçerli bir soru sorunuz.")
-                            }
+                            is AssistantResult.QuestionRejected -> throw Exception("Lütfen geçerli bir soru sorunuz.")
                             is AssistantResult.HttpError -> throw Exception(
                                 if (result.code == 429) "Çok fazla istek gönderildi."
                                 else "Asistan sunucusuna ulaşılamadı (Hata: ${result.code}).")
                             is AssistantResult.NetworkError -> throw Exception("İnternet bağlantısı sorunu.")
                             else -> throw Exception("Asistan şu anda yanıt veremiyor.")
                         }
-                    }
                 }
             },
             onSuccess = { reply ->

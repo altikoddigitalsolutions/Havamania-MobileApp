@@ -67,13 +67,13 @@ internal fun assistantClientContext(city: String?, weather: WeatherData?, trips:
             append("Paylaşılan tahmin tarihleri: ")
             append(weather.dailyForecast.filter { it.minTemp <= it.maxTemp &&
                 runCatching { LocalDate.parse(it.date) }.isSuccess }.take(10).joinToString("; ") { "${it.date}: ${it.minTemp}/${it.maxTemp} °C, kod ${it.weatherCode}" })
-            append(". Paylaşılmayan tarihler için hava tahmini üretme.")
+            append(". Paylaşılmayan tarihler için güncel hava gerekiyorsa platformun hava araçlarıyla doğrula; doğrulanmayan değer üretme.")
         }.take(2000)
-    } else "Bu konum için doğrulanmış güncel hava verisi paylaşılmadı. Hava değeri veya tahmin üretme."
+    } else "Bu konum için uygulamadan doğrulanmış güncel hava verisi paylaşılmadı. Güncel hava gerekiyorsa platformun hava araçlarını kullan; doğrulanmayan değer üretme."
     val tripText = if (personalization) trips.sortedBy { it.startDate }.take(3).joinToString("; ") {
         "${it.city.take(100)}: ${it.startDate}–${it.endDate}"
     }.take(2000).ifBlank { null } else null
     val snapshot = assistantWeatherSnapshot(selected, weather, now)
-    val text = if (snapshot != null && !fresh) "Hava bilgisi weather_data alanında veri zamanı ve eski veri işaretiyle paylaşıldı. Verilen tarihlerin dışında tahmin üretme." else weatherText
+    val text = if (snapshot != null && !fresh) "Hava bilgisi weather_data alanında veri zamanı ve eski veri işaretiyle paylaşıldı. Güncel veya verilen tarihlerin dışında hava gerekiyorsa platformun hava araçlarıyla doğrula; doğrulanmayan değer üretme." else weatherText
     return AssistantClientContext(selected, text, tripText, snapshot)
 }

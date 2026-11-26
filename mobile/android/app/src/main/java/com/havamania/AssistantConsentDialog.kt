@@ -41,7 +41,7 @@ internal fun AssistantConsentDialog(state: AssistantConsentState, onSave: (Boole
                 Text("Asistan izinleri", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
                 Column(Modifier.padding(vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Bu izinler uzak yapay zekâ asistanı içindir. Cihazda hazırlanan hava yanıtları bu servise gönderilmez.",
+                    Text("Bu izinler yapay zekâ asistanı içindir. Yalnızca tam selamlaşmalar cihazda yanıtlanır. Diğer mesajların ve mevcut hava bağlamın, izin verdiğinde asistan hizmetine gönderilir.",
                         color = colors.textSecondary)
                     if (state.busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
