@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from math import ceil
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Response, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import select, update
@@ -18,6 +18,7 @@ from app.models.chatbot_request import ChatbotRequest
 from app.models.profile import Profile
 from app.models.user import User
 from app.schemas.chatbot import (
+    AssistantAttachmentReceipt,
     AssistantConsentUpdate,
     ChatbotAskRequest,
     ChatbotAskResponse,
@@ -114,6 +115,7 @@ def _ask(
     def make_wire(assistant, health, consent_state):
         allowed_health = assistant_consent.health_is_allowed(consent_state, health, payload)
         return {
+            **({"attachment_ids": [str(value) for value in payload.attachment_ids]} if payload.attachment_ids else {}),
             "question": payload.question,
             "user_id": user_id,
             "request_id": request_id,
@@ -229,6 +231,7 @@ def _ask(
                         "health_consent_version",
                     )
                 )
+                and saved.get("attachment_ids", []) == wire.get("attachment_ids", [])
                 and request_fingerprint(payload, saved) == fingerprint
             )
         except (KeyError, TypeError, ValueError):
@@ -413,3 +416,54 @@ def update_assistant_consent(
 ):
     response.headers["Cache-Control"] = "no-store"
     return assistant_consent.save_consent(db, current_user.id, payload)
+
+
+@router.post("/attachments", status_code=201, response_model=AssistantAttachmentReceipt,
+    openapi_extra={"requestBody": {"required": True, "content": {"multipart/form-data": {
+        "schema": {"type": "object", "required": ["file"], "additionalProperties": False,
+            "properties": {"file": {"type": "string", "format": "binary"}}}}}}})
+async def upload_assistant_photo(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    app_version: str | None = Header(None, alias="X-App-Version", max_length=40),
+):
+    from starlette.concurrency import run_in_threadpool
+    from app.services.assistant_upload import MAX_BODY_BYTES, parse_photo, check_upload_rate, _upload_slots, read_photo_body
+
+    if _deletion_pending(db, current_user.id):
+        return _deletion_response()
+    assistant_doc, _ = assistant_consent.current_documents()
+    consent = assistant_consent.consent_state(db, current_user.id)
+    if not assistant_consent.assistant_is_allowed(consent, assistant_doc):
+        return JSONResponse(status_code=428, content={"error": "consent_required",
+            "message": "Fotoğraf göndermeden önce güncel asistan metnini onaylayın."})
+    acquired = False
+    try:
+        check_upload_rate(current_user.id)
+        acquired = _upload_slots.acquire(blocking=False)
+        if not acquired:
+            raise BridgeError(503, "busy", "Fotoğraf hizmeti yoğun. Daha sonra deneyin.", "5")
+        length = request.headers.get("content-length")
+        if length is not None and (not length.isascii() or not length.isdecimal() or len(length) > 10 or int(length) > MAX_BODY_BYTES):
+            raise BridgeError(413, "too_large", "Fotoğraf en fazla 8 MB olabilir.")
+        body = await read_photo_body(request)
+        photo, media_type = parse_photo(request.headers.get("content-type", ""), body)
+        del body
+        # Recheck current consent/deletion after reading the bounded body.
+        db.expire_all()
+        if not assistant_consent.assistant_is_allowed(assistant_consent.consent_state(db, current_user.id), assistant_doc):
+            raise BridgeError(428, "consent_required", "Güncel asistan izni gerekiyor.")
+        if _deletion_pending(db, current_user.id):
+            return _deletion_response()
+        receipt = await run_in_threadpool(chatbot_bridge_client.upload, photo, media_type,
+            current_user.id, assistant_doc["version"], app_version)
+        return JSONResponse(status_code=201, content=receipt.model_dump(mode="json"))
+    except BridgeError as error:
+        return JSONResponse(status_code=error.status,
+            content={"error": error.code, "message": error.message},
+            headers={"Retry-After": error.retry_after} if error.retry_after else None)
+
+    finally:
+        if acquired:
+            _upload_slots.release()

@@ -1,6 +1,8 @@
 package com.havamania
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -119,6 +121,8 @@ fun ChatBubble(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 if (isUser) {
+                    if (message.photoCount > 0) Text("${message.photoCount} fotoğraf", color = contentColor,
+                        style = HavamaniaTheme.typography.caption)
                     Text(text = message.text, color = contentColor)
                 } else {
                     AssistantMessageContent(text = message.text, c = c)
@@ -230,10 +234,16 @@ fun ChatInput(
     isSending: Boolean,
     c: HavamaniaColors,
     s: HavamaniaStyles,
-    contextInfo: String? = null
+    contextInfo: String? = null,
+    photos: List<AssistantPhoto> = emptyList(),
+    preparingPhotos: Boolean = false,
+    photoError: String? = null,
+    onRemovePhoto: (String) -> Unit = {},
+    onAttachPhoto: (() -> Unit)? = null,
+    photoControlsEnabled: Boolean = true
 ) {
     val tooLong = assistantQuestionTooLong(text)
-    val canSend = text.isNotBlank() && !isSending && !tooLong
+    val canSend = (text.isNotBlank() || photos.isNotEmpty()) && !isSending && !preparingPhotos && !tooLong && photoControlsEnabled
 
     Column(
         modifier = Modifier
@@ -243,6 +253,30 @@ fun ChatInput(
             .navigationBarsPadding()
             .imePadding()
     ) {
+        if (photos.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                photos.forEachIndexed { index, photo ->
+                    Box(Modifier.size(80.dp).clip(RoundedCornerShape(12.dp))) {
+                        coil.compose.AsyncImage(
+                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                .data(photo.bytes).memoryCachePolicy(coil.request.CachePolicy.DISABLED)
+                                .diskCachePolicy(coil.request.CachePolicy.DISABLED).build(),
+                            contentDescription = "Eklenen fotoğraf ${index + 1}",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize())
+                        IconButton(onClick = { onRemovePhoto(photo.id) },
+                            enabled = !isSending && !preparingPhotos && photoControlsEnabled,
+                            modifier = Modifier.align(Alignment.TopEnd).background(c.surface, CircleShape)) {
+                            Icon(Icons.Rounded.Close, "Fotoğraf ${index + 1} ekini kaldır", tint = c.textPrimary)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        if (preparingPhotos) Text("Fotoğraf hazırlanıyor…", color = c.textPrimary)
+        photoError?.let { Text(it, color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         if (contextInfo != null) {
             Text(
                 text = contextInfo,
@@ -256,6 +290,10 @@ fun ChatInput(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            if (onAttachPhoto != null) IconButton(onClick = onAttachPhoto,
+                enabled = !isSending && !preparingPhotos && photos.size < ASSISTANT_MAX_PHOTOS && photoControlsEnabled) {
+                Icon(Icons.Rounded.AddPhotoAlternate, "Fotoğraf ekle", tint = c.accent)
+            }
             TextField(
                 value = text,
                 onValueChange = onTextChange,
@@ -264,6 +302,13 @@ fun ChatInput(
                 isError = tooLong,
                 maxLines = 5,
                 colors = TextFieldDefaults.colors(
+                    focusedTextColor = c.textPrimary,
+                    unfocusedTextColor = c.textPrimary,
+                    disabledTextColor = c.textMuted,
+                    focusedLabelColor = c.textPrimary,
+                    unfocusedLabelColor = c.textPrimary,
+                    disabledLabelColor = c.textMuted,
+                    cursorColor = c.accent,
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     disabledContainerColor = Color.Transparent,

@@ -4,7 +4,7 @@
 
 ## Dokümanlar
 
-- [Uç noktalar ve tüm veri modelleri](API_ENDPOINT_REFERANSI.md): 26 yol altında 32 backend işlemi ve 38 şema.
+- [Uç noktalar ve tüm veri modelleri](API_ENDPOINT_REFERANSI.md): 27 yol altında 33 backend işlemi ve 39 şema.
 - [OpenAPI JSON](API_OPENAPI.json): Swagger/Postman gibi araçlara aktarılabilir sözleşme. Sunucu adresini hedef ortama göre ayrıca seçin.
 
 ## Bağlantı mimarisi
@@ -112,3 +112,6 @@ Gün hesabı Europe/Istanbul kullanır. Varsayılan ücretsiz/premium günlük l
 Backend: `app/main.py`, `app/api`, `app/schemas`, `app/core/config.py`, kimlik bağımlılıkları ve köprü istemcisi. Native: `NetworkModule`, `WeatherApiService`, `BackendChatbotFactory`, `BackendFcmService`, `ReverseGeocoder`, OSRM ve harita sağlayıcıları. RN: `mobile/src/services/apiClient.ts`, `openMeteoApi.ts`.
 
 OpenAPI çevrimdışı uygulama tanımından üretildi; canlı servise istek gönderilmedi. Bu belgeler üretim ortamındaki dağıtımın birebir aynı sürüm olduğunu kanıtlamaz.
+
+
+26 Kasım fotoğraf eki: Android → POST /v1/chatbot/attachments → platform /upload; dönen attachment_id sonraki /ask isteğinin attachment_ids alanına eklenir. Dosya en fazla 8 MB, soru başına 4 farklı fotoğraf. Anahtar yalnız backend’de tutulur. Fotoğraf yüklemesi mesaj kotasını tüketmez. Canlı uçların dağıtım/kabul durumu platform ekibiyle ayrıca doğrulanmalıdır.

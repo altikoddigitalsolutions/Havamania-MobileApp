@@ -25,7 +25,8 @@ data class BackendChatbotAskRequest(
     val tone: String? = null,
     val personalization_enabled: Boolean = false,
     val selected_interests: List<String>? = null,
-    val context: AssistantClientContext? = null
+    val context: AssistantClientContext? = null,
+    val attachment_ids: List<String>? = null
 )
 
 @Serializable
@@ -39,7 +40,15 @@ data class BackendChatbotAskResponse(
     val is_premium: Boolean
 )
 
+@Serializable
+data class AssistantAttachmentReceipt(val attachment_id: String, val media_type: String, val size: Int)
+
 interface BackendChatbotService : BackendFcmService {
+    @retrofit2.http.Multipart
+    @POST("v1/chatbot/attachments")
+    suspend fun uploadPhoto(@Header("Authorization") authorization: String,
+        @retrofit2.http.Part file: okhttp3.MultipartBody.Part): Response<AssistantAttachmentReceipt>
+
     @GET("v1/chatbot/consent")
     suspend fun consent(@Header("Authorization") authorization: String): Response<AssistantConsentDocument>
 
@@ -83,6 +92,8 @@ object BackendChatbotFactory {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
         val client = OkHttpClient.Builder()
+            // Uploads are not idempotent. Only explicit, identity-preserving retries are allowed.
+            .retryOnConnectionFailure(false)
             .callTimeout(75, java.util.concurrent.TimeUnit.SECONDS)
             .addInterceptor { chain -> chain.proceed(chain.request().newBuilder()
                 .header("X-App-Version", BuildConfig.VERSION_NAME).build()) }

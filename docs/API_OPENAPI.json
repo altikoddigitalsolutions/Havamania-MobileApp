@@ -2,8 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Havamania API",
-    "version": "0.1.0",
-    "description": "Depo kodundan çevrimdışı üretilmiştir; canlı sunucu durumu doğrulanmamıştır."
+    "version": "0.1.0"
   },
   "paths": {
     "/health": {
@@ -1247,6 +1246,81 @@
         ]
       }
     },
+    "/v1/chatbot/attachments": {
+      "post": {
+        "tags": [
+          "chatbot"
+        ],
+        "summary": "Upload Assistant Photo",
+        "operationId": "upload_assistant_photo_v1_chatbot_attachments_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-App-Version",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-App-Version"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantAttachmentReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/subscription/status": {
       "get": {
         "tags": [
@@ -1500,6 +1574,38 @@
         ],
         "title": "AlertSeverity"
       },
+      "AssistantAttachmentReceipt": {
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attachment Id"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif"
+            ],
+            "title": "Media Type"
+          },
+          "size": {
+            "type": "integer",
+            "maximum": 8388608.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attachment_id",
+          "media_type",
+          "size"
+        ],
+        "title": "AssistantAttachmentReceipt"
+      },
       "AssistantClientContext": {
         "properties": {
           "city": {
@@ -1712,6 +1818,22 @@
       },
       "ChatbotAskRequest": {
         "properties": {
+          "attachment_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachment Ids"
+          },
           "conversation_id": {
             "anyOf": [
               {

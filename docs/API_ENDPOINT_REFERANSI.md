@@ -1001,6 +1001,22 @@ Belgelenmiş yanıtlar:
 ```json
 {
   "properties": {
+    "attachment_ids": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": "array",
+          "maxItems": 4
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Attachment Ids"
+    },
     "conversation_id": {
       "anyOf": [
         {
@@ -2761,5 +2777,47 @@ Belgelenmiş yanıtlar:
     "name"
   ],
   "title": "WeatherLocation"
+}
+```
+
+
+## POST /v1/chatbot/attachments — 26 Kasım fotoğraf eki
+
+Bearer kimlik doğrulaması ve güncel sunucu rızası gerekir. Multipart gövdede yalnız `file` alanı kabul edilir. 8 MB dosya ve 8 MB + 64 KB gövde sınırı vardır. Yanıt 201: AssistantAttachmentReceipt. Kota harcanmaz. 400/408/409/413/415/428/429/502/503/504 hataları ve Retry-After oluşabilir. Cache-Control: no-store. Ayrıntı: ASISTAN_PLATFORM_KOPRUSU.md fotoğraf eki bölümü.
+
+## AssistantAttachmentReceipt
+
+```json
+{
+  "properties": {
+    "attachment_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Attachment Id"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif"
+      ],
+      "title": "Media Type"
+    },
+    "size": {
+      "type": "integer",
+      "maximum": 8388608.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Size"
+    }
+  },
+  "type": "object",
+  "required": [
+    "attachment_id",
+    "media_type",
+    "size"
+  ],
+  "title": "AssistantAttachmentReceipt"
 }
 ```

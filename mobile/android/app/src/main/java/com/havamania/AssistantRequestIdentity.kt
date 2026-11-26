@@ -45,8 +45,8 @@ internal fun assistantHttpFailure(status: Int, body: String?, retryAfter: String
 
 internal class TerminalAssistantException(message: String) : Exception(message)
 
-internal class RateLimitedAssistantException(val seconds: Long?) : Exception(
-    seconds?.let { "Çok hızlı mesaj gönderdiniz. $it saniye sonra tekrar deneyebilirsiniz." }
+internal class RateLimitedAssistantException(val seconds: Long?, message: String? = null) : Exception(
+    message ?: seconds?.let { "Çok hızlı mesaj gönderdiniz. $it saniye sonra tekrar deneyebilirsiniz." }
         ?: "Çok hızlı mesaj gönderdiniz. Lütfen kısa bir süre bekleyin."
 )
 
@@ -56,7 +56,7 @@ private val localAssistantGreetings = setOf("merhaba", "selam", "hi", "hello", "
 internal fun isLocalAssistantPrompt(prompt: String): Boolean =
     prompt.trim().lowercase(java.util.Locale.forLanguageTag("tr")) in localAssistantGreetings
 
-internal suspend fun assistantPromptReply(prompt: String, platform: suspend () -> String): String =
-    if (isLocalAssistantPrompt(prompt))
+internal suspend fun assistantPromptReply(prompt: String, hasAttachments: Boolean = false, platform: suspend () -> String): String =
+    if (!hasAttachments && isLocalAssistantPrompt(prompt))
         "Merhaba! Hava durumu, seyahat planların veya güzergâh koşulları hakkında bana soru sorabilirsin. Sana nasıl yardımcı olabilirim?"
     else platform()

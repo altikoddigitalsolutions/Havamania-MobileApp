@@ -1,5 +1,14 @@
 # Güncel yayın sırası — 20 Kasım 2026
 
+## 26 Kasım — Asistan fotoğraf eki sözleşmesi geldi; uygulama entegrasyonu
+
+Fotoğraf API belgesi bekleme işi kapandı. Platform v4 sözleşmesine göre Android seçim/önizleme/kaldırma, bellek içinde hazırlama, backend /attachments yüklemesi ve /ask attachment_ids aktarımı eklendi. Fotoğraf-only mesaj ve fotoğraflı selamlaşma uzak asistanı kullanır. Kısmi yükleme tekrarları tamamlanmış kimlikleri korur; süreç kaybında eksik fotoğraflarla gönderim engellenir. Hesap/sohbet değişimi ve izin geri çekme belleği temizler. Teknik sözleşme: ASISTAN_PLATFORM_KOPRUSU.md son bölüm; OpenAPI ve API referansı güncellendi.
+
+Kanıtlar: backend toplu koşu 278 geçti/13 PostgreSQL testi atlandı; sonraki hedefli regresyon 60/60, son fotoğraf ve yavaş gövde paketi 16/16; Ruff başarılı. Android önceki kaynak koşusunda 948 JVM + SM-T500 üzerinde dört izole cihaz testi hatasız/atlamasız. Son kaynaklardaki HTTP/account-token ve geçersiz fotoğraf hata eşlemesi JVM derlemesinden geçti. Son görsel düzeltme sonrası SM-T500 dört fotoğraf testi yeniden 4/4 hatasız/atlamasız geçti (3 dk 13 sn). Sonbahar 320 dp yüzde200 yazı ve koyu tema normal yazı görselleri gözle incelendi; mesaj alanının düşük kontrastlı Material varsayılan renkleri tema textPrimary rengine bağlandı. Bu izole bileşen kabulüdür; tam gerçek asistan/Photo Picker kabulü değildir. USB ekran ayarı 0 olarak geri yüklendi.
+
+Açık kabul: platform /upload dağıtımı ve hedef backend deployment; proxy gövde/zaman sınırı ve çok-worker ortak hız sınırı; gerçek Photo Picker ve HEIC/HEIF cihaz matrisi; tam asistan ekranında rıza–yükleme–yanıt–geçmiş akışı; canlı A–B fotoğraf sahipliği ve hesap silme temizliği; fotoğraf işleme için gizlilik/izin metni ve mağaza veri beyanı kabulü. Canlı kullanıcı/model/platform çağrısı yapılmadı. Yeni AAB/push yok. Tarihsel kayıtlardaki “fotoğraf şeması bekleniyor” ifadeleri bu güncel kayıtla aşılmıştır.
+
+
 ## 18 Kasım — Güncel ilerleme özeti
 
 Genel tamamlanma yüzdesi hesaplanmış değildir. Sekiz ana paketin son yayın kabulü hâlâ açıktır; bu, yalnız sekiz küçük adım kaldığı anlamına gelmez. Eski 59/22/37 sayımı tarihsel kayıttır ve bugünkü yüzdeye çevrilemez. Artan test sayısı, tüm ekran veya üretim senaryolarının aynı oranda tamamlandığını göstermez. Güncel tamamlandı/yerelde doğrulandı/canlı kabul bekliyor envanteri tüm alt maddeler için yeniden sayılmadan yüzde vermek güvenilir olmaz.

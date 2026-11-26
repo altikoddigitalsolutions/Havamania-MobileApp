@@ -39,6 +39,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
     fun revokeAssistantConsent() {
         pendingConsentMessage = null
+        clearPhotos()
         if (loadingHistoryId == null) {
             requestRunner.reset()
             if (_requestState.value == AssistantRequestState.LOADING) {
@@ -84,7 +85,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         if (!busy) loadingHistoryId = null
         _isLoading.value = busy
         _isSending.value = busy
-    }, timeoutMillis = 75_000)
+    }, timeoutMillis = 210_000)
     var lastRequestId: String? = null
 
     private val _config = MutableStateFlow<AltikodBotConfig?>(null)
@@ -110,6 +111,70 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private var weatherJob: Job? = null
     private var fetchJob: Job? = null
 
+    var selectedPhotos by mutableStateOf<List<AssistantPhoto>>(emptyList())
+        private set
+    var preparingPhotos by mutableStateOf(false)
+        private set
+    var photoError by mutableStateOf<String?>(null)
+        private set
+    var photosEnabled by mutableStateOf(true)
+        private set
+    private var photoJob: Job? = null
+    private var photoGeneration = 0L
+    private val pendingPhotos = mutableMapOf<String, List<AssistantPhoto>>()
+
+    private fun clearPhotos() {
+        photoGeneration++
+        photoJob?.cancel()
+        photoJob = null
+        selectedPhotos = emptyList()
+        pendingPhotos.clear()
+        preparingPhotos = false
+        photoError = null
+    }
+
+    fun photoSelectionToken(): String = "$currentUid:$photoGeneration"
+
+    fun addPhotos(uris: List<android.net.Uri>, selectionToken: String = photoSelectionToken()) {
+        if (selectionToken != photoSelectionToken()) return
+        if (_isSending.value || preparingPhotos || !photosEnabled || assistantConsent.state.value.visible) return
+        val available = ASSISTANT_MAX_PHOTOS - selectedPhotos.size
+        if (available <= 0) { photoError = "Bir mesaja en fazla 4 fotoğraf ekleyebilirsin."; return }
+        if (uris.isEmpty()) return
+        val owner = currentUid
+        val epoch = photoGeneration
+        preparingPhotos = true
+        photoError = null
+        photoJob = viewModelScope.launch {
+            try {
+                val prepared = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    uris.take(available).map { uri ->
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                        prepareAssistantPhoto(getApplication<Application>().contentResolver, uri)
+                    }
+                }
+                if (owner == currentUid && epoch == photoGeneration) {
+                    selectedPhotos = selectedPhotos + prepared
+                    if (uris.size > available) photoError = "Bir mesaja en fazla 4 fotoğraf ekleyebilirsin."
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: OutOfMemoryError) {
+                if (owner == currentUid && epoch == photoGeneration) photoError = "Fotoğraf çok büyük. Daha küçük bir fotoğraf seçin."
+            } catch (_: Exception) {
+                if (owner == currentUid && epoch == photoGeneration) photoError = "Fotoğraf hazırlanamadı. Daha küçük bir JPEG, PNG veya WebP seçin."
+            } finally {
+                if (epoch == photoGeneration) preparingPhotos = false
+            }
+        }
+    }
+
+    fun removePhoto(id: String) {
+        if (!_isSending.value && !preparingPhotos && !assistantConsent.state.value.visible) {
+            selectedPhotos = selectedPhotos.filterNot { it.id == id }
+            photoError = null
+        }
+    }
+
     var draft by mutableStateOf("")
         private set
 
@@ -133,6 +198,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         _isSending.value = false
         _requestState.value = AssistantRequestState.IDLE
         draft = ""
+        clearPhotos()
+        photosEnabled = true
         _activeTravels.value = emptyList()
         userAboutMe = ""
         userInterests = emptySet()
@@ -153,6 +220,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        clearPhotos()
         super.onCleared()
         auth.removeAuthStateListener(authListener)
         accountTasks.close()
@@ -250,7 +318,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun sendDraft(prompt: String) {
-        if (prompt == draft) sendMessage(prompt, fromDraft = true)
+        if (prompt == draft) sendMessage(if (prompt.isBlank() && selectedPhotos.isNotEmpty()) "Bu fotoğrafı yorumlar mısın?" else prompt, fromDraft = true)
     }
 
     fun sendRecommendation(prompt: String, context: String?): Boolean {
@@ -260,8 +328,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
 
     fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false,
                     retryRequestId: String? = null, fromDraft: Boolean = false): Boolean {
-        if (_isSending.value || userPrompt.isBlank() || assistantQuestionTooLong(userPrompt)) return false
-        if (!isLocalAssistantPrompt(userPrompt) && !assistantConsent.state.value.allowed) {
+        if (_isSending.value || preparingPhotos || userPrompt.isBlank() || assistantQuestionTooLong(userPrompt)) return false
+        val retryMessage = _messages.value.firstOrNull { it.isUser && it.id == retryRequestId }
+        val hasPhotos = if (isRetry) (retryMessage?.photoCount ?: 0) > 0 else fromDraft && selectedPhotos.isNotEmpty()
+        if ((!isLocalAssistantPrompt(userPrompt) || hasPhotos) && !assistantConsent.state.value.allowed) {
             pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, isRetry,
                 retryRequestId, currentConversationId, currentUid, fromDraft)
             assistantConsent.load(showLoading = true)
@@ -269,20 +339,37 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         }
         if (isRetry && _messages.value.any { it.retryRequestId == retryRequestId &&
                 (it.retryNotBefore ?: 0L) > System.currentTimeMillis() }) return false
-        val userMessage = assistantMessageForSend(_messages.value, userPrompt, isRetry, retryRequestId)
+        val originalMessage = assistantMessageForSend(_messages.value, userPrompt, isRetry, retryRequestId)
             ?: return false
+        val userMessage = if (!isRetry && hasPhotos) originalMessage.copy(photoCount = selectedPhotos.size) else originalMessage
+        if (!isRetry && hasPhotos) pendingPhotos[userMessage.id] = selectedPhotos.toList()
         val conversationId = currentConversationId
         var platformReply: AssistantResult.Success? = null
         return requestRunner.start(
             onStart = {
-                if (fromDraft && draft == userPrompt) draft = ""
+                if (fromDraft) { draft = ""; selectedPhotos = emptyList() }
                 _requestState.value = AssistantRequestState.LOADING
                 _messages.value = _messages.value.filterNot {
                     it.isFallback && it.retryRequestId == userMessage.id
                 } + if (isRetry) emptyList() else listOf(userMessage)
             },
             operation = { owner ->
-                assistantPromptReply(userPrompt) {
+                assistantPromptReply(userPrompt, hasAttachments = hasPhotos) {
+                        val attachmentIds = uploadAssistantPhotoBatch(userMessage.photoCount,
+                            (_messages.value.firstOrNull { it.id == userMessage.id } ?: userMessage).attachmentIds,
+                            pendingPhotos[userMessage.id].orEmpty(),
+                            upload = { photo ->
+                                ensureOwner(owner)
+                                val id = assistantRepository.uploadPhoto(photo.bytes, owner)
+                                ensureOwner(owner)
+                                id
+                            },
+                            onUploaded = { photo, ids ->
+                                _messages.value = _messages.value.map { if (it.id == userMessage.id) it.copy(attachmentIds = ids) else it }
+                                pendingPhotos[userMessage.id] = pendingPhotos[userMessage.id].orEmpty().filterNot { it.id == photo.id }
+                            })
+                        pendingPhotos.remove(userMessage.id)
+
                         val preferences = ThemeManager.getPersonalizationSnapshot(getApplication<Application>(), owner).first()
                         val personalized = preferences.personalizationEnabled
                         val interests = preferences.selectedInterests.sorted().take(20).map { it.take(50) }
@@ -291,7 +378,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                             _weatherData.value, _activeTravels.value, personalized)
                         when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId, userMessage.id,
                             assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
-                            assistantTone.platformTone(), personalized, interests, context)) {
+                            assistantTone.platformTone(), personalized, interests, context, attachmentIds)) {
                             is AssistantResult.ConsentRequired -> throw AssistantConsentRequiredException()
                             is AssistantResult.RequestInProgress -> throw Exception(
                                 "İsteğiniz hâlâ işleniyor. Biraz sonra aynı isteği tekrar kontrol edebilirsiniz.")
@@ -318,7 +405,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                             is AssistantResult.TooLong -> throw TerminalAssistantException("Mesaj veya bağlam çok uzun. Lütfen kısaltın.")
                             is AssistantResult.Success -> { platformReply = result; result.content }
                             is AssistantResult.QuestionRejected -> throw Exception("Lütfen geçerli bir soru sorunuz.")
-                            is AssistantResult.HttpError -> throw Exception(
+                            is AssistantResult.HttpError -> if (hasPhotos && result.code == 400) throw TerminalAssistantException(
+                                "Fotoğrafın süresi dolmuş veya fotoğraf kullanılamıyor. Yeni bir mesaja tekrar ekleyin.") else throw Exception(
                                 if (result.code == 429) "Çok fazla istek gönderildi."
                                 else "Asistan sunucusuna ulaşılamadı (Hata: ${result.code}).")
                             is AssistantResult.NetworkError -> throw Exception("İnternet bağlantısı sorunu.")
@@ -343,12 +431,14 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun handleError(e: Exception, userPrompt: String, requestId: String) {
+        if (e is PhotosDisabledException) { photosEnabled = false; clearPhotos() }
+        if (e is TerminalAssistantException) pendingPhotos.remove(requestId)
         val errorText = e.message ?: "Bilinmeyen bir hata oluştu."
         _requestState.value = AssistantRequestState.ERROR
         val retryNotBefore = (e as? RateLimitedAssistantException)?.seconds?.let {
             System.currentTimeMillis() + it * 1000
         }
-        addErrorMessage(errorText, userPrompt, requestId.takeUnless { e is TerminalAssistantException }, retryNotBefore)
+        addErrorMessage(errorText, userPrompt, requestId.takeUnless { e is TerminalAssistantException || e is PhotosDisabledException }, retryNotBefore)
     }
 
     private fun addErrorMessage(text: String, retryPrompt: String, requestId: String?, retryNotBefore: Long?) {
@@ -364,6 +454,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun resetChat() {
+        clearPhotos()
         draft = ""
         pendingConsentMessage = null
         requestRunner.reset()
@@ -376,6 +467,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         // The route effect runs again on recreation, while this conversation stays in the ViewModel.
         if (currentConversationId == conversationId || loadingHistoryId == conversationId) return
         pendingConsentMessage = null
+        clearPhotos()
         requestRunner.reset()
         requestRunner.start(
             onStart = {

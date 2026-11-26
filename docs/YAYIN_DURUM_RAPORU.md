@@ -1131,3 +1131,7 @@ Doğrulama: 4 yeni AccountNotificationPublication testi dahil 361 Android JVM te
 4 Kasım — sistem bildirimine dokunma ve okunmamış sayacı
 - Doğrulanmış, açılabilir bildirim kendi hesabında okundu işaretleniyor. Kayıt kontrolü ve güncelleme liste silmeyle aynı kilidi kullanıyor. SQLite yazma hatasında hedef ekran açılabiliyor.
 - Debug APK ve SM-T500 üzerinde dört izole test geçti. Aynı bildirime tekrar dokunma, diğer hesap, onay bekleyen ve silinmiş kayıtlar kontrol edildi. Gerçek tepsiden dokunma ve Activity yaşam döngüsü doğrulaması açık.
+
+26 Kasım asistan fotoğraf eki: v4 sözleşmesi teslim alındı ve uygulandı. Android Photo Picker/önizleme/kaldırma, küçültme ve EXIF/GPS temizliği, backend bellek-only multipart, kimlik/izin/süre/boyut sınırları, /ask attachment_ids ve tekrar kimliği entegrasyonu eklendi. Güncel test ve açık canlı kabul listesi GUNCEL_YAYIN_SIRASI.md üst kaydında, teknik ayrıntılar ASISTAN_PLATFORM_KOPRUSU.md son bölümünde tutulur.
+
+26 Kasım fotoğraf eki son kabul: 948 JVM, son fotoğraf backend paketi 16/16 ve SM-T500 dört izole test hatasız/atlamasız. Önceki tam backend koşusu 278 geçti/13 PostgreSQL testi atlandı; sonraki ilgili regresyon 60/60. Ruff ve diff kontrolü başarılı. Sonbahar büyük yazı/koyu tema görsellerinde bulunan soluk mesaj etiketi düzeltildi; son görseller gözle incelendi. Gerçek galeri/tam ekran, canlı dağıtım/sahiplik/silme ve mağaza-gizlilik beyanı kabulü açık; push/yeni AAB yok.

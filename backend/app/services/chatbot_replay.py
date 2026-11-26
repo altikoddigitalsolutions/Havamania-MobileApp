@@ -10,10 +10,12 @@ from app.models.chatbot_request import ChatbotRequest
 def request_fingerprint(payload, wire):
     # Weather may refresh while the user retries. Pin the first weather snapshot;
     # question, city/trips, mode, tone and privacy/profile changes are conflicts.
-    data = payload.model_dump(mode="json", exclude={"context", "request_id"})
+    data = payload.model_dump(mode="json", exclude={"context", "request_id", "attachment_ids"})
     data["context"] = {
         key: wire["context"][key] for key in ("city", "trips", "profile") if key in wire["context"]
     }
+    if payload.attachment_ids:
+        data["attachment_ids"] = sorted({str(value) for value in payload.attachment_ids})
     data["resolved_tone"] = wire["tone"]
     data["resolved_health"] = wire["health_consent"]
     # A retry must never resend a frozen body accepted under an older document.

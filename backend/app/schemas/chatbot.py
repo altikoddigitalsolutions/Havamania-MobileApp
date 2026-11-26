@@ -15,6 +15,7 @@ class AssistantClientContext(BaseModel):
 
 
 class ChatbotAskRequest(BaseModel):
+    attachment_ids: list[UUID] | None = Field(None, max_length=4)
     conversation_id: UUID | None = None
     mode: Literal["genel", "agro", "fly"] = "genel"
     tone: Literal["samimi", "resmi", "dengeli", "kisa", "uzman"] | None = None
@@ -26,6 +27,15 @@ class ChatbotAskRequest(BaseModel):
     health_consent: StrictBool = False
     health_consent_version: int | None = Field(None, ge=1)
     question: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("attachment_ids", mode="before")
+    @classmethod
+    def normalized_attachments(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("Attachment IDs must be a list")
+        return sorted({UUID(str(item)) for item in value}, key=str) or None
 
     @field_validator("question")
     @classmethod
@@ -73,3 +83,9 @@ class AssistantConsentUpdate(BaseModel):
     health_accepted: StrictBool = False
     health_consent_version: int | None = Field(None, ge=1)
     health_consent_hash: str | None = Field(None, pattern=r"^[0-9a-f]{64}$")
+
+
+class AssistantAttachmentReceipt(BaseModel):
+    attachment_id: UUID
+    media_type: Literal["image/jpeg", "image/png", "image/webp", "image/gif"]
+    size: int = Field(gt=0, le=8 * 1024 * 1024, strict=True)

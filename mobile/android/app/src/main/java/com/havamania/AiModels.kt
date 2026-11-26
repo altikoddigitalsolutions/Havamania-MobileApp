@@ -23,6 +23,8 @@ data class AltikodChatMessage(
     val retryPrompt: String? = null,
     val retryRequestId: String? = null,
     val retryNotBefore: Long? = null,
+    val attachmentIds: List<String> = emptyList(),
+    val photoCount: Int = 0,
     val action: AssistantAction? = null
 )
 
