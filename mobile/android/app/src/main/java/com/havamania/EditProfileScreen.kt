@@ -9,8 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.semantics.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -36,31 +34,20 @@ fun EditProfileScreen(
     val themeColors = HavamaniaTheme.colors
     val themeStyles = HavamaniaTheme.styles
 
-    val profileState by profileViewModel.profileState.collectAsStateWithLifecycle()
-    val profile = (profileState as? ProfileState.Success)?.profile
-    val owner by profileViewModel.activeUid.collectAsStateWithLifecycle()
-    var name by rememberSaveable(owner) { mutableStateOf("") }
-    var bio by rememberSaveable(owner) { mutableStateOf("") }
-    var initialized by rememberSaveable(owner) { mutableStateOf(false) }
-    val saveState by profileViewModel.saveState.collectAsStateWithLifecycle()
-    val reconciling by profileViewModel.profileReconciliationBusy.collectAsStateWithLifecycle()
-    val saving = saveState == ProfileSaveState.Saving
-    val email = profile?.takeIf { it.uid == owner }?.email.orEmpty()
-    val createdAt = profile?.takeIf { it.uid == owner }?.createdAt ?: 0L
+    var name by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var createdAt by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(profile, owner) {
-        profile?.takeIf { it.uid == owner }?.let {
-            if (!initialized) {
-                name = it.name
-                bio = it.bio
-                initialized = true
-            }
-        }
-    }
-    LaunchedEffect(saveState) {
-        if (saveState == ProfileSaveState.Saved) {
-            profileViewModel.resetSaveState()
-            onBack()
+    val userProfileRepository = remember { UserProfileRepository.getInstance() }
+    val profile by userProfileRepository.profile.collectAsStateWithLifecycle()
+
+    LaunchedEffect(profile) {
+        profile?.let {
+            name = it.name
+            bio = it.bio
+            email = it.email
+            createdAt = it.createdAt
         }
     }
 
@@ -70,7 +57,7 @@ fun EditProfileScreen(
     HavamaniaScreen(
         topBar = {
             HavamaniaTopBar(
-                title = "PROFİLİ DÜZENLE",
+                title = "PROFILI DÜZENLE",
                 onBack = onBack
             )
         }
@@ -79,7 +66,6 @@ fun EditProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = themeStyles.pagePadding)
                 .then(
@@ -93,13 +79,28 @@ fun EditProfileScreen(
             // 1. HESAP BİLGİLERİ
             SectionLabel("HESAP BİLGİLERİ")
             HavamaniaGlassCard(alpha = 0.4f) {
-                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingMD)) {
-                    HavamaniaTextField(
+                Column(verticalArrangement = Arrangement.spacedBy(themeStyles.spacingSM)) {
+                    TextField(
                         value = name,
-                        onValueChange = { if (!saving && it.length <= 50) name = it },
-                        placeholder = "Ad Soyad",
-                        leadingIcon = Icons.Rounded.Person
+                        onValueChange = { if (it.length <= 50) name = it },
+                        placeholder = { Text("Ad Soyad", color = themeColors.textMuted) },
+                        leadingIcon = { Icon(Icons.Rounded.Person, null, tint = themeColors.accent) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            focusedTextColor = themeColors.textPrimary,
+                            unfocusedTextColor = themeColors.textPrimary,
+                            cursorColor = themeColors.accent
+                        ),
+                        singleLine = true
                     )
+
+                    HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
 
                     ReadOnlyField(
                         value = email,
@@ -117,13 +118,11 @@ fun EditProfileScreen(
                 Column {
                     TextField(
                         value = bio,
-                        enabled = !saving,
-                        label = { Text("Hava kimliği") },
-                        onValueChange = { if (!saving && it.length <= 500) bio = it },
+                        onValueChange = { if (it.length <= 500) bio = it },
                         placeholder = { Text("Hava durumuna bakış açını anlatan kısa bir yazı...", fontSize = 14.sp, color = themeColors.textMuted) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 120.dp),
+                            .height(120.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -167,19 +166,11 @@ fun EditProfileScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            (saveState as? ProfileSaveState.Failed)?.let { failure ->
-                Text(
-                    text = failure.message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite }
-                )
-            }
             HavamaniaPrimaryButton(
                 text = "DEĞİŞİKLİKLERİ KAYDET",
-                enabled = initialized && profile?.uid == owner && owner != null && !saving && !reconciling,
-                isLoading = saving,
                 onClick = {
                     profileViewModel.updateProfile(name, bio)
+                    onBack()
                 }
             )
 

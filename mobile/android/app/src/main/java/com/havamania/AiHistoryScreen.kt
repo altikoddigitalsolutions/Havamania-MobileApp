@@ -2,8 +2,6 @@ package com.havamania
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -39,19 +36,10 @@ fun AiHistoryScreen(
     viewModel: AiHistoryViewModel = viewModel()
 ) {
     val historyItems by viewModel.historyItems.collectAsStateWithLifecycle()
-    val listStatus by viewModel.listStatus.collectAsStateWithLifecycle()
-    val uploading by viewModel.uploading.collectAsStateWithLifecycle()
-    val uploadError by viewModel.uploadError.collectAsStateWithLifecycle()
-    val syncFailed by viewModel.syncFailed.collectAsStateWithLifecycle()
-    val pendingCount = historyItems.count { it.pendingUpload }
-    val deleting by viewModel.deleting.collectAsStateWithLifecycle()
-    val deleteError by viewModel.deleteError.collectAsStateWithLifecycle()
-    val owner by viewModel.detailOwner.collectAsStateWithLifecycle()
-    val confirmedEmptyOwner by viewModel.confirmedEmptyOwner.collectAsStateWithLifecycle()
     val themeColors = HavamaniaTheme.colors
 
-    var showDeleteConfirm by remember(owner) { mutableStateOf(false) }
-    var itemToDelete by remember(owner) { mutableStateOf<String?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var itemToDelete by remember { mutableStateOf<String?>(null) }
 
     HavamaniaScreen(
         topBar = {
@@ -60,54 +48,28 @@ fun AiHistoryScreen(
                 onBack = onBack,
                 actions = {
                     if (historyItems.isNotEmpty()) {
-                        IconButton(enabled = !deleting, onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Rounded.DeleteSweep, "Tüm sohbet geçmişini sil", tint = themeColors.textPrimary)
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Rounded.DeleteSweep, null, tint = themeColors.textPrimary)
                         }
                     }
                 }
             )
-        },
-        bottomBar = {
-            if (deleting || deleteError != null || pendingCount > 0 || uploadError != null || syncFailed) {
-                AiHistoryNoticePanel {
-                    if (deleting) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Text("Silme onayı bekleniyor…", color = themeColors.textPrimary)
-                    } else if (deleteError != null) {
-                        Text(deleteError.orEmpty(), color = themeColors.textPrimary)
-                        TextButton(onClick = viewModel::retryDeletion) { Text("Tekrar dene") }
-                    } else if (pendingCount > 0 || uploadError != null) {
-                        Text(uploadError ?: "$pendingCount sohbet için sunucu onayı bekleniyor.", color = themeColors.textPrimary)
-                        TextButton(enabled = !uploading, onClick = viewModel::retryPendingUploads) {
-                            Text(if (uploading) "Gönderiliyor…" else "Yeniden gönder")
-                        }
-                    }
-                    if (syncFailed && !deleting) {
-                        Text("Hesap geçmişi senkronize edilemedi.", color = themeColors.textPrimary)
-                        TextButton(onClick = viewModel::retryHistorySync) { Text("Senkronizasyonu tekrar dene") }
-                    }
-                }
-            }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (historyItems.isEmpty()) {
-                AiHistoryWithoutItems(
-                    listStatus, confirmedEmpty = owner == "legacy" || confirmedEmptyOwner == owner,
-                    onRetry = viewModel::loadHistory
-                )
+                AiHistoryEmptyState()
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(historyItems, key = { it.id }) { item ->
                         AiHistoryCard(
                             item = item,
-                            enabled = !deleting,
-                            onClick = { if (!viewModel.deleting.value) onNavigateToChat(item.id) },
-                            onDelete = { if (!viewModel.deleting.value) itemToDelete = item.id }
+                            onClick = { onNavigateToChat(item.id) },
+                            onDelete = { itemToDelete = item.id }
                         )
                     }
                 }
@@ -149,7 +111,6 @@ fun AiHistoryScreen(
 @Composable
 fun AiHistoryCard(
     item: AiHistorySummary,
-    enabled: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -158,13 +119,12 @@ fun AiHistoryCard(
     val dateStr = remember(item.timestamp) { dateFormat.format(Date(item.timestamp)) }
 
     HavamaniaGlassCard(
-        onClick = if (enabled) onClick else null,
+        onClick = onClick,
         alpha = if (themeColors.isDark) 0.5f else 0.7f,
         cornerRadius = 24.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -226,10 +186,10 @@ fun AiHistoryCard(
                 )
             }
 
-            IconButton(onClick = onDelete, enabled = enabled, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
                 Icon(
                     Icons.Rounded.DeleteOutline,
-                    "Sohbeti sil",
+                    null,
                     tint = themeColors.textMuted.copy(alpha = 0.6f),
                     modifier = Modifier.size(20.dp)
                 )
@@ -239,40 +199,10 @@ fun AiHistoryCard(
 }
 
 @Composable
-internal fun AiHistoryNoticePanel(content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = HavamaniaTheme.colors.surface) {
-        Column(
-            Modifier.navigationBarsPadding()
-                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.4f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            content = content
-        )
-    }
-}
-
-@Composable
-internal fun AiHistoryWithoutItems(status: AiHistoryListStatus, confirmedEmpty: Boolean, onRetry: () -> Unit) {
-    when (status) {
-        AiHistoryListStatus.LOADING -> HavamaniaLoading(text = "Sohbet geçmişi yükleniyor…")
-        AiHistoryListStatus.FAILED -> HavamaniaErrorState(
-            title = "Geçmiş yüklenemedi",
-            description = "Cihazdaki sohbet geçmişi okunamadı.",
-            onRetry = onRetry
-        )
-        AiHistoryListStatus.READY -> AiHistoryEmptyState(confirmedEmpty)
-    }
-}
-
-@Composable
-private fun AiHistoryEmptyState(confirmedEmpty: Boolean) {
+fun AiHistoryEmptyState() {
     HavamaniaEmptyState(
         icon = Icons.Rounded.HistoryEdu,
-        title = if (confirmedEmpty) "Henüz bir sohbet geçmişin yok." else "Bu cihazda sohbet kaydı yok.",
-        description = if (confirmedEmpty) {
-            "Asistana hava durumu, seyahat veya günlük planların hakkında soru sorabilirsin."
-        } else {
-            "Hesabındaki sohbetler senkronizasyon tamamlandığında burada görünür."
-        }
+        title = "Henüz bir sohbet geçmişin yok.",
+        description = "Havamania Dijital Asistanına hava, seyahat veya günlük planların hakkında soru sorabilirsin."
     )
 }
