@@ -371,8 +371,6 @@ Kimlik doğrulama: OpenAPI güvenlik bağımlılığı yok; hesap silme gibi uç
 
 - `lat` (query), zorunlu: `{"type": "number", "maximum": 90, "minimum": -90, "title": "Lat"}`
 - `lon` (query), zorunlu: `{"type": "number", "maximum": 180, "minimum": -180, "title": "Lon"}`
-- `max_requests` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Max Requests"}`
-- `window_seconds` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Window Seconds"}`
 
 Belgelenmiş yanıtlar:
 
@@ -390,8 +388,6 @@ Kimlik doğrulama: OpenAPI güvenlik bağımlılığı yok; hesap silme gibi uç
 - `lat` (query), zorunlu: `{"type": "number", "maximum": 90, "minimum": -90, "title": "Lat"}`
 - `lon` (query), zorunlu: `{"type": "number", "maximum": 180, "minimum": -180, "title": "Lon"}`
 - `hours` (query), isteğe bağlı: `{"type": "integer", "maximum": 72, "minimum": 1, "default": 24, "title": "Hours"}`
-- `max_requests` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Max Requests"}`
-- `window_seconds` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Window Seconds"}`
 
 Belgelenmiş yanıtlar:
 
@@ -409,8 +405,6 @@ Kimlik doğrulama: OpenAPI güvenlik bağımlılığı yok; hesap silme gibi uç
 - `lat` (query), zorunlu: `{"type": "number", "maximum": 90, "minimum": -90, "title": "Lat"}`
 - `lon` (query), zorunlu: `{"type": "number", "maximum": 180, "minimum": -180, "title": "Lon"}`
 - `days` (query), isteğe bağlı: `{"type": "integer", "maximum": 14, "minimum": 1, "default": 7, "title": "Days"}`
-- `max_requests` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Max Requests"}`
-- `window_seconds` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Window Seconds"}`
 
 Belgelenmiş yanıtlar:
 
@@ -428,8 +422,6 @@ Kimlik doğrulama: Bearer erişim belirteci; ilgili uç noktanın ek yetki koşu
 - `lat` (query), zorunlu: `{"type": "number", "maximum": 90, "minimum": -90, "title": "Lat"}`
 - `lon` (query), zorunlu: `{"type": "number", "maximum": 180, "minimum": -180, "title": "Lon"}`
 - `layer` (query), isteğe bağlı: `{"type": "string", "default": "temperature", "title": "Layer"}`
-- `max_requests` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Max Requests"}`
-- `window_seconds` (query), isteğe bağlı: `{"type": "integer", "default": 60, "title": "Window Seconds"}`
 
 Belgelenmiş yanıtlar:
 

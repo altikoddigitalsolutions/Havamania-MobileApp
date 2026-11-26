@@ -655,26 +655,6 @@
               "minimum": -180,
               "title": "Lon"
             }
-          },
-          {
-            "name": "max_requests",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Max Requests"
-            }
-          },
-          {
-            "name": "window_seconds",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Window Seconds"
-            }
           }
         ],
         "responses": {
@@ -742,26 +722,6 @@
               "default": 24,
               "title": "Hours"
             }
-          },
-          {
-            "name": "max_requests",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Max Requests"
-            }
-          },
-          {
-            "name": "window_seconds",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Window Seconds"
-            }
           }
         ],
         "responses": {
@@ -828,26 +788,6 @@
               "minimum": 1,
               "default": 7,
               "title": "Days"
-            }
-          },
-          {
-            "name": "max_requests",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Max Requests"
-            }
-          },
-          {
-            "name": "window_seconds",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Window Seconds"
             }
           }
         ],
@@ -918,26 +858,6 @@
               "type": "string",
               "default": "temperature",
               "title": "Layer"
-            }
-          },
-          {
-            "name": "max_requests",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Max Requests"
-            }
-          },
-          {
-            "name": "window_seconds",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "title": "Window Seconds"
             }
           }
         ],

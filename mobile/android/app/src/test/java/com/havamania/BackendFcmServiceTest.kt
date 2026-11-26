@@ -18,6 +18,17 @@ class BackendFcmServiceTest {
         }
     }
 
+    @Test fun createdReceiptConfirmsSnapshotButPendingAndEmptyResponsesDoNot() = runBlocking {
+        assertTrue(registerFcmTokenSnapshot(service { Response.success(201, receipt()) }, desired,
+            owner, "Bearer local-test-id-token") { true })
+        assertFalse(registerFcmTokenSnapshot(service { Response.success(202, receipt()) }, desired,
+            owner, "Bearer local-test-id-token") { true })
+        assertFalse(registerFcmTokenSnapshot(service { Response.success<BackendFcmReceipt>(204, null) }, desired,
+            owner, "Bearer local-test-id-token") { true })
+        assertFalse(registerFcmTokenSnapshot(service { Response.success(201, receipt().copy(user_id="other")) }, desired,
+            owner, "Bearer local-test-id-token") { true })
+    }
+
     @Test fun matchingReceiptConfirmsExactSnapshotAndRedactsTokens() = runBlocking {
         val api = service { request ->
             assertEquals(desired.token, request.token)

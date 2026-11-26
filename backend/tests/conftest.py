@@ -76,6 +76,8 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
                 middleware.hits.clear()
                 middleware._request_counter = 0
             middleware = getattr(middleware, "app", None)
+        from app.dependencies.rate_limit import _hits as weather_hits
+        weather_hits.clear()
         yield test_client
     app.dependency_overrides.clear()
 

@@ -6,6 +6,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="28"
         tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name=".HeroMotionTestActivity" android:exported="false" />
         <activity android:name=".ProfileEditSdkActivity" android:exported="false" />
         <activity android:name=".AccountEntrySdkActivity" android:exported="false" />
         <activity android:name=".AccountEntryTestActivity" android:exported="false" />

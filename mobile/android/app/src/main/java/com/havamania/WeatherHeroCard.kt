@@ -1,6 +1,6 @@
 package com.havamania
 
-import android.provider.Settings
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -30,7 +31,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -291,21 +293,28 @@ fun WeatherHeroCard(
 
     val liveEffectsEnabled = liveEffectsOverride ?: (themeViewModel ?: androidx.lifecycle.viewmodel.compose.viewModel<com.havamania.ui.theme.ThemeViewModel>()).liveEffectsEnabled.collectAsState().value
 
-    val context = LocalContext.current
-    val isReducedMotion = remember {
-        try { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1.0f) == 0f } catch (e: Exception) { false }
-    }
+    // Compose's duration scale observes system animation settings while the screen is open.
+    val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
+    val isReducedMotion = durationScale == 0f
+    val animateEffects = liveEffectsEnabled && !isReducedMotion
+    val cardHeight = (340 + (LocalDensity.current.fontScale.coerceAtLeast(1f) - 1f) * 260).dp
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
-    val scale by animateFloatAsState(targetValue = if (visible) 1f else 0.96f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
-    val alpha by animateFloatAsState(targetValue = if (visible) 1f else 0f, animationSpec = tween(800))
+    val scale = if (isReducedMotion) 1f else animateFloatAsState(
+        targetValue = if (visible) 1f else 0.96f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "heroEntryScale"
+    ).value
+    val alpha = if (isReducedMotion) 1f else animateFloatAsState(
+        targetValue = if (visible) 1f else 0f, animationSpec = tween(800), label = "heroEntryAlpha"
+    ).value
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(340.dp)
+            .height(cardHeight)
             .semantics { stateDescription = when {
                 !spec.phaseKnown -> "Gündüz/gece bilgisi bilinmiyor"
                 spec.dayPart == DayPhase.NIGHT -> "Gece görünümü"
@@ -317,15 +326,16 @@ fun WeatherHeroCard(
                 this.scaleX = if (isReducedMotion) 1f else scale
                 this.scaleY = if (isReducedMotion) 1f else scale
                 // Parallax Translation
-                translationY = parallaxOffset
+                translationY = if (isReducedMotion) 0f else parallaxOffset
             }
             .clip(RoundedCornerShape(32.dp))
             .border(1.2.dp, Color.White.copy(0.12f), RoundedCornerShape(32.dp))
     ) {
-        LiveBackgroundLayer(spec = spec)
+        LiveBackgroundLayer(spec = spec, isAnimationEnabled = animateEffects)
 
-        Box(modifier = Modifier.matchParentSize().clip(RoundedCornerShape(32.dp))) {
-            WeatherEffectLayer(spec = spec, isAnimationEnabled = !isReducedMotion && liveEffectsEnabled)
+        Box(modifier = Modifier.matchParentSize().padding(top = 104.dp, bottom = 100.dp).clipToBounds().alpha(0.55f)) {
+            // Keep the decorative disk wholly inside the area reserved below the controls.
+            WeatherEffectLayer(spec = spec.copy(sunMoonPosition = Offset(0.86f, 0.5f), sunMoonSize = 0.65f), isAnimationEnabled = animateEffects)
         }
 
         Box(modifier = Modifier.fillMaxSize().background(
@@ -346,19 +356,18 @@ fun WeatherHeroCard(
 }
 
 @Composable
-fun LiveBackgroundLayer(spec: HeroThemeSpec) {
+fun LiveBackgroundLayer(spec: HeroThemeSpec, isAnimationEnabled: Boolean = true) {
     if (!spec.phaseKnown) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(spec.gradientColors)))
         return
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val bgShift by infiniteTransition.animateFloat(
+    val bgShift = if (!isAnimationEnabled) 0f else rememberInfiniteTransition(label = "bg").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(20000, easing = SineEaseInOut), RepeatMode.Reverse),
         label = "bgShift"
-    )
+    ).value
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val sunCenter = Offset(size.width * spec.sunMoonPosition.x, size.height * spec.sunMoonPosition.y)
@@ -776,6 +785,7 @@ fun FogHazeEffect() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PremiumWeatherContent(
     cityName: String, districtName: String?, conditionLabel: String, temperature: String, feelsLike: String, humidity: String, windSpeed: String, uvIndex: String,
@@ -787,28 +797,27 @@ fun PremiumWeatherContent(
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(modifier = Modifier.clip(RoundedCornerShape(16.dp))
+            Row(modifier = Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(16.dp))
                 .background(if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.06f))
                 .clickable(
                     onClickLabel = "Konumu Değiştir",
                     onClick = { onCityClick() }
                 )
                 .padding(12.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.LocationOn, contentDescription = "Konum İkonu", tint = spec.accentColor, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.LocationOn, contentDescription = "Konum İkonu", tint = heroForegroundIconColor(spec), modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text((districtName ?: cityName).uppercase(java.util.Locale.forLanguageTag("tr")), style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
+                        Text((districtName ?: cityName).uppercase(java.util.Locale.forLanguageTag("tr")), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis, style = HavamaniaTheme.typography.label.copy(fontWeight = FontWeight.Black, letterSpacing = 1.sp, color = textColor))
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Şehir Seçiciyi Aç", tint = secondaryColor, modifier = Modifier.size(16.dp))
                     }
-                    Text("Konumu değiştir", style = HavamaniaTheme.typography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor.copy(0.5f)))
+                    Text("Konumu değiştir", style = HavamaniaTheme.typography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, color = secondaryColor))
                 }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PremiumNotificationButton(unreadCount, isDark, textColor, onNotificationsClick)
-                Spacer(Modifier.width(16.dp)) // Increased spacing
-                Icon(spec.icon, contentDescription = "Hava Durumu İkonu: $conditionLabel", tint = spec.accentColor, modifier = Modifier.size(34.dp))
+
             }
         }
 
@@ -834,20 +843,18 @@ fun PremiumWeatherContent(
 
         Spacer(Modifier.weight(0.8f)) // Balanced alignment
 
-        // Glassmorphism Metrics Bar
-        Surface(modifier = Modifier.fillMaxWidth().height(64.dp),
-            color = if (isDark) Color.White.copy(0.1f) else Color.Black.copy(0.06f), // Increased contrast
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, if (isDark) Color.White.copy(0.15f) else Color.Black.copy(0.1f))) {
-            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                val uvValue = if (spec.dayPart == DayPhase.NIGHT) "--" else "UV $uvIndex"
-
-                listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to uvValue).forEach { (icon, valStr) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, null, tint = spec.accentColor, modifier = Modifier.size(20.dp)) // Larger icon
-                        Spacer(Modifier.width(8.dp))
-                        Text(valStr, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Black), color = textColor)
-                    }
+        // Wrapping metrics avoid a nested card and remain usable with large text.
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            val uvValue = if (spec.dayPart == DayPhase.NIGHT) "UV --" else "UV $uvIndex"
+            listOf(Icons.Rounded.WaterDrop to humidity, Icons.Rounded.Air to windSpeed, Icons.Rounded.WbSunny to uvValue).forEach { (icon, value) ->
+                Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = heroForegroundIconColor(spec), modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Black), color = textColor)
                 }
             }
         }

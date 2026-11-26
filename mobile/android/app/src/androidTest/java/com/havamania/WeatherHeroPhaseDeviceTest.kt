@@ -44,6 +44,21 @@ class WeatherHeroPhaseDeviceTest {
   compose.onNodeWithText("Açık").assertIsDisplayed()
   compose.onNodeWithText("Güneşli").assertDoesNotExist()
  }
+ @Test fun disabledLiveBackgroundStaysStaticAfterPreferenceChange() {
+  var enabled by mutableStateOf(true)
+  val spec=WeatherHeroStyleManager.resolveWeatherHeroTheme(0,"",null,41.0,29.0,null,null,true)
+  compose.setContent { Box(Modifier.size(300.dp)) { LiveBackgroundLayer(spec,enabled) } }
+  compose.mainClock.autoAdvance=false
+  compose.mainClock.advanceTimeBy(1000)
+  compose.runOnIdle { enabled=false }
+  compose.mainClock.advanceTimeBy(100)
+  compose.waitForIdle()
+  val before=compose.onRoot().captureToImage().asAndroidBitmap()
+  compose.mainClock.advanceTimeBy(10000)
+  compose.waitForIdle()
+  val after=compose.onRoot().captureToImage().asAndroidBitmap()
+  org.junit.Assert.assertTrue("Disabled background must not change across animation frames",before.sameAs(after))
+ }
  private fun capture(name:String,status:String) {
   compose.mainClock.advanceTimeBy(1500)
   compose.waitForIdle()

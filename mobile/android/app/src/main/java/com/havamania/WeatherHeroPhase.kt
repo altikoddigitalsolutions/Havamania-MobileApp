@@ -58,3 +58,9 @@ internal fun neutralHeroTheme(code: Int): HeroThemeSpec {
         if (known && theme !in setOf(WeatherThemeType.SUNNY, WeatherThemeType.MOSTLY_SUNNY)) 3 else 0,
         Color(0xFFCBD5E1).copy(alpha = 0.6f), Offset(0.8f, 0.25f), 1f, 0.1f, phaseKnown = false)
 }
+
+/** Functional icons share the readable foreground on bright daytime palettes. */
+internal fun heroForegroundIconColor(spec: HeroThemeSpec): Color =
+    if (spec.phaseKnown && spec.dayPart in setOf(DayPhase.MORNING, DayPhase.DAY) &&
+        spec.themeType in setOf(WeatherThemeType.SUNNY, WeatherThemeType.MOSTLY_SUNNY, WeatherThemeType.PARTLY_CLOUDY, WeatherThemeType.SNOWY, WeatherThemeType.FOGGY))
+        spec.textColor else spec.accentColor

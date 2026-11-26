@@ -948,3 +948,28 @@ Rakam süzme ve eksik sıcaklığı 20 sayma kaldırıldı; ondalık/negatif/Cel
 ## 26 Kasım Hero nötr faz
 
 Ana kart 06/18/öğlen varsayımı kullanmıyor; doğrulanmış sağlayıcı fazı, yoksa geçerli güneş aralığı/saat, yoksa nötr stil. Günlük/eskimiş/legacy Boolean güncel faz sayılmıyor. Gün batımı başlık/efekt çelişkisi giderildi. 930 JVM +1 gerçek kart tablet testi hatasız; APK derlendi. Dört açık/koyu/gece/gündüz QA görseli incelendi. [Rapor](26_KASIM_HAVA_KARTI_NOTR_FAZ.md). Sıradaki: canlı efekt/hareket azaltma tercihinin arka plana uygulanması; gündüz küçük ikon kontrastı. Büyük yazı/yatay/tüm tema ve iç içe dikdörtgen matrisi ile önceki canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Hava kartı hareket ve kontrast
+
+Arka plan canlı efekt tercihini kullanıyor; sistem animasyon ölçeği Compose üzerinden okunuyor. Sıfır ölçekte giriş/paralaks devre dışı. Parlak gündüz ikonları ön plan renginde. 931 JVM testi ve debug APK başarılı. [Rapor](26_KASIM_HAVA_KARTI_HAREKET_KONTRAST.md). İki SM-T500 testi hatasız: tercih kapatıldıktan sonra arka plan sabitliği ve faz/tema geçişi geçti; sistem ayarı canlı değişimi ve görsel kabul açık. API dokümanındaki FCM 201/200, hava hız sınırı ve önceki yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Gerçek pencere hareket ayarı kabulü
+
+Sistem ölçeği 1→0→1 ve sıfır ölçekte Activity yeniden oluşturma izole gerçek pencerede geçti. Üç SM-T500 testi hatasız; önceki ayar geri yüklendi. Gündüz/gece kontrast görselleri incelendi. [Rapor](26_KASIM_HAVA_KARTI_HAREKET_KONTRAST.md). Sıradaki: güneş dekorasyonunun üst konum alanına yaklaşması/dar ekran yerleşimi; büyük yazı/yatay/tüm tema matrisi. API FCM 201/200, hava hız sınırı ve önceki canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım Hava kartı dar ekran kabulü
+
+Konum/bildirim alanları ayrıldı; büyük yazıda kart yüksekliği artıyor. İç metrik çerçevesi kaldırılıp satır kaydırma eklendi. Güneş/ay dekorasyonu kontrollerden ayrıldı; ilk görseldeki kesik disk de düzeltildi. Son kaynak 931 JVM +5 SM-T500 testi hatasız; iki son görsel incelendi. [Rapor](26_KASIM_HAVA_KARTI_DAR_EKRAN.md). Sıradaki FCM 201/200 uyuşmazlığı, sonra hava hız sınırı. Geniş/yatay/tüm hava-tema ve genel dikdörtgen matrisi ile önceki canlı/yayın kapıları açık. Push yok.
+
+
+## 26 Kasım FCM 201 kayıt uyumu
+
+İki Android gönderim yolu 200/201 yanıtlarını tam makbuz eşleşmesiyle kabul ediyor; 202/boş makbuz ve yanlış sahip kabul edilmiyor. Önce üç regresyon eski kodda başarısız oldu; düzeltme sonrası 933 JVM +8 backend testi hatasız, debug APK başarılı. [Rapor](26_KASIM_FCM_KAYIT_YANITI.md). Canlı FCM/protokol/teslimat kabulü açık. Sıradaki hava API hız sınırı parametreleri. Önceki görsel, Firebase/senkronizasyon/güvenlik ve yayın kapıları korunur. Push yok.
+
+
+## 26 Kasım Hava API hız sınırı
+
+İstemcinin max_requests/window_seconds ile kotayı değiştirmesi kapatıldı; OpenAPI/ref güncellendi. Sunucu 60/60 ortak IP kotası, monotonic süre, atomik thread kontrolü, sınırlı bellek ve Retry-After kullanıyor. Eski kodda üç regresyon başarısız; ilgili 11 test ve tam backend 267 test başarılı. PostgreSQL ortamı yok: 13 migration testi atlandı. [Rapor](26_KASIM_HAVA_API_HIZ_SINIRI.md). Sıradaki proxy IP güveni/çok worker ortak kota yapılandırması; önceki canlı FCM, Firebase/senkronizasyon, görsel ve yayın kapıları açık. Push yok.

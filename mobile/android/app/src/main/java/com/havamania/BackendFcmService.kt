@@ -48,7 +48,8 @@ internal suspend fun registerFcmTokenSnapshot(
         token = desired.token, installation_id = desired.installationId, revision = desired.revision
     ))
     currentCoroutineContext().ensureActive()
-    if (!isCurrent() || response.code() != 200) return false
+    // Backend creates/upserts with 201; retain 200 compatibility for older deployments.
+    if (!isCurrent() || (response.code() != 200 && response.code() != 201)) return false
     return matchingFcmReceipt(response.body(), desired, expectedBackendOwner)
 }
 

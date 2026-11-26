@@ -100,8 +100,8 @@ Gün hesabı Europe/Istanbul kullanır. Varsayılan ücretsiz/premium günlük l
 
 ## Yayın öncesi koddan görülen açık noktalar
 
-1. **FCM durum kodu uyuşmazlığı:** backend kayıt POST'u 201 döndürür; Native `BackendFcmService` başarı için 200 bekliyor. Geçerli kayıt başarısız sanılabilir. Bu dokümantasyon çalışmasında düzeltilmedi.
-2. **Hava hız sınırı:** `max_requests` ve `window_seconds`, bağımlılık imzası nedeniyle OpenAPI'de sorgu parametresi olarak görünüyor. İstemcinin sınırı değiştirebilmesi giderilmeli; ayrı global middleware sınırı bunu tasarım olarak çözmez.
+1. **FCM durum kodu uyumu — 26 Kasım düzeltmesi:** backend kayıt POST'u 201 döndürür. Native gönderim yolları artık 200/201 yanıtında tam sahiplik makbuzu eşleşirse başarı kabul eder; 202/boş yanıt başarı sayılmaz. Canlı FCM teslimatı ayrıca doğrulanmalıdır. [Düzeltme raporu](26_KASIM_FCM_KAYIT_YANITI.md).
+2. **Hava hız sınırı — 26 Kasım düzeltmesi:** İstemci `max_requests`/`window_seconds` ile politikayı değiştiremez; alanlar OpenAPI sorgu sözleşmesinden kaldırıldı. Hava uçları istemci IP'si başına süreç içinde ortak 60 istek/60 saniye uygular; 429 yanıtında `Retry-After` döner. Çok süreçli dağıtım ve güvenilir proxy IP yapılandırması ayrıca doğrulanmalıdır.
 3. **Abonelik:** makbuz doğrulama ve mağaza webhook'u production ortamında 403 ile kapalı; uçların varlığı satın alma doğrulamasının hazır olduğu anlamına gelmez.
 4. **Harita katmanı:** map-layers mevcut uygulaması gerçek hava katmanı yerine özet/yer tutucu veri döndürüyor.
 5. **Adres bütünlüğü:** RN `.app`, Native `.com` ve eski Altikod tanımları ayrıştırılıp üretim yapılandırması netleştirilmeli.

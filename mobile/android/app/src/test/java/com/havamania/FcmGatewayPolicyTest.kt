@@ -16,12 +16,31 @@ class FcmGatewayPolicyTest {
         override suspend fun registerPushToken(authorization: String, request: BackendFcmRegistration) = block(request)
     }
 
+    @Test fun createdReceiptAppliesOnlyToExactCurrentOwner() = runBlocking {
+        var calls=0
+        val created=api { calls++; Response.success(201,receipt()) }
+        assertEquals(FcmGatewayAction.APPLIED,sendFcmTokenWithAuth(created,desired,owner,
+            { "Bearer local-test" },{true}).action)
+        assertEquals(1,calls)
+        for (reply in listOf(Response.success(202,receipt()),
+            Response.success<BackendFcmReceipt>(204,null),
+            Response.success(201,receipt().copy(user_id="other")),
+            Response.success(201,receipt().copy(revision=2)))) {
+            assertEquals(FcmGatewayAction.STOP,sendFcmTokenWithAuth(api { reply },desired,owner,
+                { "Bearer local-test" },{true}).action)
+        }
+        var current=true
+        assertEquals(FcmGatewayAction.SUPERSEDED,sendFcmTokenWithAuth(api {
+            current=false;Response.success(201,receipt())
+        },desired,owner,{ "Bearer local-test" },{current}).action)
+    }
+
     @Test fun unauthorizedRefreshesOnceWithIdenticalSnapshot() = runBlocking {
         val requests = mutableListOf<BackendFcmRegistration>()
         val refreshes = mutableListOf<Boolean>()
         val service = api { request ->
             requests.add(request)
-            if (requests.size == 1) Response.error(401, "{}".toResponseBody()) else Response.success(receipt())
+            if (requests.size == 1) Response.error(401, "{}".toResponseBody()) else Response.success(201,receipt())
         }
         val result = sendFcmTokenWithAuth(service, desired, owner,
             { refreshes.add(it); "Bearer local-test" }, { true })

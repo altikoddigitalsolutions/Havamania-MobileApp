@@ -37,7 +37,7 @@ internal suspend fun sendFcmTokenWithAuth(
                     val delay = response.headers()["Retry-After"]?.toLongOrNull()?.takeIf { it in 1..86400 } ?: 60
                     return FcmGatewayResult(FcmGatewayAction.RETRY, delay)
                 }
-                200 -> return FcmGatewayResult(if (matchingFcmReceipt(response.body(), desired, expectedOwner))
+                200, 201 -> return FcmGatewayResult(if (matchingFcmReceipt(response.body(), desired, expectedOwner))
                     FcmGatewayAction.APPLIED else FcmGatewayAction.STOP)
                 408, in 500..599 -> return FcmGatewayResult(FcmGatewayAction.RETRY, 30)
                 else -> return FcmGatewayResult(FcmGatewayAction.STOP)
