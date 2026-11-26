@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.ui.theme.*
 
@@ -75,6 +76,13 @@ fun AiChatScreen(
 
     val upcomingPlans by viewModel.activeTravels.collectAsStateWithLifecycle()
     val activeTrip = upcomingPlans.firstOrNull()
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, viewModel) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            calendarDateChanges().collect { viewModel.refreshTravelDate() }
+        }
+    }
 
     LaunchedEffect(aboutMe, userInterests, assistantTone, language) {
         viewModel.userAboutMe = aboutMe

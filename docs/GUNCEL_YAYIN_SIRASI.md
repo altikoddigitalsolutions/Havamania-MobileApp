@@ -1,5 +1,9 @@
 # Güncel yayın sırası — 20 Kasım 2026
 
+## 27 Kasım — Kullanıcı kararı: fotoğraf canlı kabulü ekip dönüşüne kadar beklemede
+
+V26-2 açık kalır; kullanıcı isteğiyle sunucu ekibinden dönüş gelene kadar bu iş atlanacak. Canlı fotoğraf veya dağıtım denemesi yapılmayacak. Sıradaki bağımsız iş: V26-6 ön koşulu olarak asistan seyahat bağlamının Room değişiklikleri ve tarih geçişleriyle güncel tutulması. Çoklu seyahat seçimi, rota bağlamı ve güvenli yönlendirmeler ayrıca açık; bu ön koşul bunların tamamlandığı anlamına gelmez.
+
 ## 27 Kasım — Kullanıcı öncelik değişikliği: V26-2 FOTOĞRAF ÖNCELİK 1
 
 Asistana fotoğraf gönderememe sorunu diğer geliştirmelerin önüne alındı. Canlı upload → attachment_id → ask/model kabulü tamamlanmadan kapanmaz. Yerel Android/backend/platform sözleşmesi ve hata ayrımı öncelikle doğrulanacak; mevcut yalnız yerel test sınırı korunuyor. V26-6-R ve diğer maddeler sırada, ancak fotoğraf çözümünü ertelemeyecek.
@@ -1278,3 +1282,14 @@ app.photo_deployment_check CLI modülü eklendi. Yalnız GET /health, GET /v1/ch
 Son yerel hedefli backend koşusu 86 passed: 14 yeni dağıtım kontrol testi + önceki 72 fotoğraf/köprü testi. Gerçek ağ adaptörleri yerel testlerde yasaklıdır. Yeni modül/test Ruff kontrolünden geçti; pip check No broken requirements found. Bu, temiz üretim konteyneri kurulumu veya yeni imaj kabulü değildir; mevcut yerel ortamın bağımlılık kontrolüdür. Android kaynak/testi bu tur değiştirilmedi.
 
 Yeni CLI canlı adreste ayrıca çalıştırıldı; routing_ok=false, attachments=404 ve exit code 1 verdi. Güvenli çıktı .artifacts/photo-live-20261127/deployment-check.json içinde. Bu beklenen dağıtım engelidir, başarılı canlı fotoğraf kabulü değildir. Sunucu ekibine aktarılabilir docs/FOTOGRAF_CANLI_DAGITIM_KONTROLU.md hazır: iç konteyner 127.0.0.1:8000 ve dış API karşılaştırması, route kaydı, beklenen yanıtlar ve son upload/ask kabulü açıklanıyor. Gerçek sunucunun servis/compose/imaj bilgisi bilinmediği için doğrulanmamış restart/deploy/migration komutu uygulanmadı. Fotoğraf ÖNCELİK 1 açık; yeni AAB/push/deploy yok.
+
+
+## 27 Kasım — V26-6 ön koşulu: asistan seyahat verisinin güncel kalması
+
+AiChatViewModel seyahatleri yalnız Auth callback sırasında getUserTravelPlans ile bir kez okuyordu. Takvimde oluşturma/düzenleme/arşivleme/silme sonrasında aynı ViewModel açık kaldığında asistan kartı ve assistantClientContext eski listeyi kullanabiliyordu. Tek seferlik okuma yerine UID kapsamlı Room getAllTravelPlansFlow gözlemi eklendi. Üretim observeAssistantTravels akışı demo/arşiv/geçmiş ve başka UID kayıtlarını dışlar; başlangıç tarihi ve kimlikle kararlı sıralar. DB gözlem hatasında eski bağlam boşaltılır; iptal hataları yutulmaz. AccountTaskScope reset/close mevcut gözlemciyi iptal eder; her yayın öncesi ensureOwner kontrol edilir.
+
+Asistan ekranı yalnız RESUMED durumunda calendarDateChanges toplar: ön plana gelişte tarih hemen, açıkken dakikada bir yeniden okunur. Room akışı bu tarih ile birleştirilir; veritabanına yazma olmadan süresi biten seyahat listeden çıkar. Yeni ağ isteği veya uzak veri yazımı eklenmedi. Bu dakika aralıklı tarih kontrolü milisaniyesinde gece yarısı garantisi değildir.
+
+Son testDebugUnitTest sonucu: 973 test, 0 başarısızlık/hata/atlama. Yeni AssistantTravelsTest içinde 4 test; oluşturma/düzenleme/arşivleme/silme yayınları, gün geçişi ve devam eden seyahat, yabancı UID/demo/geçmiş dışlama ve kararlı sıra, AccountTaskScope ile A gözlemcisinin iptali/B listesine geçiş. Testler üretim akışını sentetik StateFlow ve tarih girdileriyle çalıştırır; gerçek Room/Firebase A–B oturumu veya tam AiChatScreen cihaz kabulü değildir. Üretim Kotlin derlemesi geçti. İlk derlemede eksik repeatOnLifecycle importu düzeltildi; son koşu başarılı. Diff whitespace kontrolü geçti.
+
+Açık kalan kabul: gerçek takvimde kayıt değiştirip aynı asistan ekranına dönüş; silinen kaydın kart/istek bağlamında kalmaması; gerçek cihaz lifecycle/tarih/saat dilimi ve Firebase A–B geçişi. Çoklu seyahat seçimi, yapılandırılmış yönlendirmeler ve güzergâh bağlamı V26-6/V26-6-R kapsamında hâlâ uygulanacak. Kullanıcı fotoğraf V26-2 işini sunucu ekibi dönüşüne kadar beklemeye aldı; sorun kapatılmadı ve canlı istek yapılmadı. Bu turun değişiklikleri yerel; push/yeni AAB/dağıtım yok.

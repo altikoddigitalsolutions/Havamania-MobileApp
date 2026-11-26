@@ -97,6 +97,9 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val _weatherUiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
     val weatherUiState: StateFlow<WeatherUiState> = _weatherUiState.asStateFlow()
 
+    private val travelDate = MutableStateFlow(LocalDate.now())
+    fun refreshTravelDate() { travelDate.value = LocalDate.now() }
+
     private val _activeTravels = MutableStateFlow<List<TravelPlan>>(emptyList())
     val activeTravels: StateFlow<List<TravelPlan>> = _activeTravels.asStateFlow()
 
@@ -244,15 +247,17 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private fun loadActiveTravels() {
         accountTasks.launch { owner ->
             try {
-                val entities = dao.getUserTravelPlans(owner)
-                ensureOwner(owner)
-                val today = LocalDate.now()
-                val active = entities.map { it.toDomain() }.filter {
-                    !it.isArchived && !it.endDate.isBefore(today)
+                observeAssistantTravels(
+                    dao.getAllTravelPlansFlow(owner).map { rows -> rows.map { it.toDomain() } },
+                    travelDate, owner
+                ).collect { active ->
+                    ensureOwner(owner)
+                    _activeTravels.value = active
                 }
-                _activeTravels.value = active
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                ensureOwner(owner)
+                _activeTravels.value = emptyList()
                 if (BuildConfig.DEBUG) Log.e("ASSISTANT_TRACE", "Could not load active trips")
             }
         }

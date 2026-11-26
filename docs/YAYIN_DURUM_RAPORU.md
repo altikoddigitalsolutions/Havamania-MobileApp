@@ -1327,3 +1327,14 @@ Yeni CLI canlı adreste ayrıca çalıştırıldı; routing_ok=false, attachment
 ## 27 Kasım — Toplu Git gönderimi öncesi son doğrulama
 
 Bekleyen kaynak/belge çalışmaları için son testDebugUnitTest 969/969 geçti. Tam backend pytest 314 passed, 13 PostgreSQL testi skipped; 4 mevcut FCM deprecation uyarısı var. Tam Ruff kontrolü eski test_push_provider.py içinde iki E402 import sırası hatası buldu; importlar üste taşındı, tam Ruff ve ilgili 9 test yeniden geçti. Üretim davranışı bu lint düzeltmesinde değişmedi. Yerel .artifacts QA çıktıları, AAB/APK, keystore ve kimlik dosyaları commit kapsamına alınmıyor. Git gönderimi canlı backend dağıtımı değildir; fotoğraf ucunun canlı 404 engeli ve son upload/ask kabulü hâlâ öncelik 1 açık.
+
+
+## 27 Kasım — V26-6 ön koşulu: asistan seyahat verisinin güncel kalması
+
+AiChatViewModel seyahatleri yalnız Auth callback sırasında getUserTravelPlans ile bir kez okuyordu. Takvimde oluşturma/düzenleme/arşivleme/silme sonrasında aynı ViewModel açık kaldığında asistan kartı ve assistantClientContext eski listeyi kullanabiliyordu. Tek seferlik okuma yerine UID kapsamlı Room getAllTravelPlansFlow gözlemi eklendi. Üretim observeAssistantTravels akışı demo/arşiv/geçmiş ve başka UID kayıtlarını dışlar; başlangıç tarihi ve kimlikle kararlı sıralar. DB gözlem hatasında eski bağlam boşaltılır; iptal hataları yutulmaz. AccountTaskScope reset/close mevcut gözlemciyi iptal eder; her yayın öncesi ensureOwner kontrol edilir.
+
+Asistan ekranı yalnız RESUMED durumunda calendarDateChanges toplar: ön plana gelişte tarih hemen, açıkken dakikada bir yeniden okunur. Room akışı bu tarih ile birleştirilir; veritabanına yazma olmadan süresi biten seyahat listeden çıkar. Yeni ağ isteği veya uzak veri yazımı eklenmedi. Bu dakika aralıklı tarih kontrolü milisaniyesinde gece yarısı garantisi değildir.
+
+Son testDebugUnitTest sonucu: 973 test, 0 başarısızlık/hata/atlama. Yeni AssistantTravelsTest içinde 4 test; oluşturma/düzenleme/arşivleme/silme yayınları, gün geçişi ve devam eden seyahat, yabancı UID/demo/geçmiş dışlama ve kararlı sıra, AccountTaskScope ile A gözlemcisinin iptali/B listesine geçiş. Testler üretim akışını sentetik StateFlow ve tarih girdileriyle çalıştırır; gerçek Room/Firebase A–B oturumu veya tam AiChatScreen cihaz kabulü değildir. Üretim Kotlin derlemesi geçti. İlk derlemede eksik repeatOnLifecycle importu düzeltildi; son koşu başarılı. Diff whitespace kontrolü geçti.
+
+Açık kalan kabul: gerçek takvimde kayıt değiştirip aynı asistan ekranına dönüş; silinen kaydın kart/istek bağlamında kalmaması; gerçek cihaz lifecycle/tarih/saat dilimi ve Firebase A–B geçişi. Çoklu seyahat seçimi, yapılandırılmış yönlendirmeler ve güzergâh bağlamı V26-6/V26-6-R kapsamında hâlâ uygulanacak. Kullanıcı fotoğraf V26-2 işini sunucu ekibi dönüşüne kadar beklemeye aldı; sorun kapatılmadı ve canlı istek yapılmadı. Bu turun değişiklikleri yerel; push/yeni AAB/dağıtım yok.
