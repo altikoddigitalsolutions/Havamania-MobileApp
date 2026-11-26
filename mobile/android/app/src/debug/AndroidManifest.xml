@@ -13,7 +13,13 @@
         <activity android:name=".AccountEntryTestActivity" android:exported="false" />
         <activity android:name=".ProfileSettingsIntegrationActivity" android:exported="false" />
         <activity android:name=".ProfileSettingsTestActivity" android:exported="false" />
+        <activity android:name=".ThemeSelectionPersistenceTestActivity" android:exported="false" />
+        <activity android:name=".TravelGuideRecreationTestActivity" android:exported="false" />
         <activity android:name=".TravelEditorTestActivity" android:exported="false" />
+        <activity android:name=".TravelGuideProcessDeathActivity"
+            android:exported="true" android:permission="android.permission.DUMP"
+            android:process=":guide_process_qa" android:launchMode="singleTask"
+            android:taskAffinity="com.havamania.guide_process_qa" />
         <!-- Shell-only entry point for process-death QA; absent from release. -->
         <activity android:name=".TravelEditorProcessDeathActivity"
             android:exported="true" android:permission="android.permission.DUMP"

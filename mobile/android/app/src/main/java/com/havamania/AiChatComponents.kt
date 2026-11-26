@@ -50,39 +50,35 @@ fun AssistantWeatherCard(data: WeatherData, c: HavamaniaColors) {
         modifier = Modifier.fillMaxWidth().padding(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = data.cityName,
-                    style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = c.textPrimary
-                )
-                if (data.districtName != null) {
-                    Text(
-                        text = " - ${data.districtName}",
-                        style = HavamaniaTheme.typography.bodyMedium,
-                        color = c.textSecondary
-                    )
-                }
-            }
+            Text(listOfNotNull(data.cityName, data.districtName?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), color = c.textPrimary)
+            if (data.isStale) Text("Son kaydedilen hava bilgisi", color = c.textSecondary,
+                style = HavamaniaTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = data.temperature,
-                    style = HavamaniaTheme.typography.heroTemperature.copy(fontSize = 32.sp),
-                    color = c.accent
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = data.condition,
-                        style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = c.textPrimary
-                    )
-                    Text(
-                        text = "Hissedilen: ${data.feelsLike}",
-                        style = HavamaniaTheme.typography.bodySmall,
-                        color = c.textSecondary
-                    )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val temperature: @Composable () -> Unit = {
+                    Text(data.temperature,
+                        style = HavamaniaTheme.typography.heroTemperature.copy(fontSize = 32.sp, letterSpacing = 0.sp), color = c.accent)
+                }
+                val details: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier) {
+                        Text(data.condition,
+                            style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = c.textPrimary)
+                        Text("Hissedilen: ${data.feelsLike}",
+                            style = HavamaniaTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                }
+                if (maxWidth / LocalDensity.current.fontScale < 280.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        temperature()
+                        details(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        temperature()
+                        details(Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -375,94 +371,33 @@ fun TodaySummarySection(data: WeatherData, c: HavamaniaColors) {
 }
 
 @Composable
-fun FeatureCards(c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean, onFeatureClick: (String) -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        val features = buildList {
-            add(Triple(Icons.Rounded.CloudQueue, "Hava durumunu yorumla", todayWeatherPrompt))
-            if (hasTrip) add(Triple(Icons.Rounded.Flight, "Seyahat havasını değerlendir", tripWeatherPrompt))
-            add(Triple(Icons.Rounded.TipsAndUpdates, "Günlük öneri ver", "Bugün ne giymeliyim?"))
-        }
-
-        val card: @Composable (Modifier, Triple<ImageVector, String, String>) -> Unit = { modifier, (icon, title, prompt) ->
-            Surface(
-                onClick = { onFeatureClick(prompt) },
-                enabled = enabled,
-                modifier = modifier.heightIn(min = 100.dp),
-                color = c.surface.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, c.border.copy(alpha = 0.1f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(icon, null, tint = c.accent, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = title,
-                        style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center,
-                        color = c.textPrimary
-                    )
-                }
-            }
-        }
-        if (maxWidth / LocalDensity.current.fontScale < 420.dp) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                features.forEach { card(Modifier.fillMaxWidth(), it) }
-            }
-        } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                features.forEach { card(Modifier.weight(1f), it) }
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickSuggestions(onSuggestionClick: (String) -> Unit, c: HavamaniaColors, hasTrip: Boolean, enabled: Boolean) {
-    val suggestions = mutableListOf(
-        todayWeatherPrompt,
-        "Yağmur bekleniyor mu?",
-        "Yarın hava nasıl?"
-    )
-    if (hasTrip) {
-        suggestions.add(tripWeatherPrompt)
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        suggestions.forEach { prompt ->
-            Surface(
-                onClick = { onSuggestionClick(prompt) },
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth(),
-                color = c.accent.copy(alpha = 0.05f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Rounded.ChatBubbleOutline, null, tint = c.accent, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = prompt,
-                        style = HavamaniaTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                        color = c.textPrimary
-                    )
+internal fun AssistantStarterSuggestions(c: HavamaniaColors, enabled: Boolean, onSelect: (String) -> Unit) {
+    val icons = listOf(Icons.Rounded.Schedule, Icons.Rounded.Checkroom, Icons.Rounded.CompareArrows)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text("Bir soruyla başla", color = c.textPrimary,
+            style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(bottom = 12.dp))
+        Surface(color = c.surface, shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, c.border)) {
+            Column {
+                assistantStarterPrompts.forEachIndexed { index, prompt ->
+                    if (index > 0) HorizontalDivider(color = c.border, modifier = Modifier.padding(horizontal = 16.dp))
+                    Row(Modifier.fillMaxWidth().clickable(enabled = enabled,
+                        role = androidx.compose.ui.semantics.Role.Button, onClick = { onSelect(prompt) })
+                        .heightIn(min = 56.dp).padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(icons[index], null, tint = if (enabled) c.accent else c.textMuted,
+                            modifier = Modifier.size(22.dp))
+                        Text(prompt, modifier = Modifier.weight(1f),
+                            style = HavamaniaTheme.typography.bodyMedium,
+                            color = if (enabled) c.textPrimary else c.textMuted)
+                    }
                 }
             }
         }
     }
 }
-
-private const val todayWeatherPrompt = "Bugün hava nasıl?"
-private const val tripWeatherPrompt = "Seyahatim için hava uygun mu?"
 
 @Composable
 fun TypingIndicator(c: HavamaniaColors) {

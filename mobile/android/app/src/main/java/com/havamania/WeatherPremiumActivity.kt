@@ -317,7 +317,7 @@ if (BuildConfig.DEBUG) {
                                         try {
 
                                             navController.navigate(route) {
-                                                accountTabOptions()
+                                                accountTabOptions(route)
                                             }
                                         } catch (e: Exception) {
 if (BuildConfig.DEBUG) {
@@ -471,7 +471,7 @@ if (BuildConfig.DEBUG) {
                                             onNavigateToPersonalization = { navController.navigateFromActiveScreen(backStackEntry, Routes.PERSONALIZATION) },
                                             onNavigateToTravels = {
                                                 navController.navigateFromActiveScreen(backStackEntry, Routes.CALENDAR_ROOT) {
-                                                    accountTabOptions()
+                                                    accountTabOptions(Routes.CALENDAR_ROOT)
                                                 }
                                             }
                                         )

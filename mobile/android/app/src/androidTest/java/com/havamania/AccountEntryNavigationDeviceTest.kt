@@ -87,7 +87,7 @@ class AccountEntryNavigationDeviceTest {
             val opened = ActivityScenario.launch(AccountEntryTestActivity::class.java); scenario = opened
             awaitRoute(opened, Routes.WEATHER_ROOT)
             for (route in listOf(Routes.CALENDAR_ROOT, Routes.PROFILE_ROOT, Routes.CALENDAR_ROOT)) {
-                opened.onActivity { it.nav.navigate(route) { accountTabOptions() } }
+                opened.onActivity { it.nav.navigate(route) { accountTabOptions(route) } }
                 awaitRoute(opened, route)
                 opened.onActivity { assertEquals(Routes.WEATHER_ROOT, it.nav.previousBackStackEntry?.destination?.route) }
             }
@@ -111,4 +111,51 @@ class AccountEntryNavigationDeviceTest {
             compose.runOnIdle { assertEquals(1, exits) }
         } finally { scenario?.close(); AccountEntryTestSession.inputs = null }
     }
+    @Test fun recommendationAssistantCanReturnToWeatherThroughActualBottomBar() {
+        val owner = MutableStateFlow<String?>("a")
+        val profile = MutableStateFlow<ProfileState>(ProfileState.Success(UserProfile(uid = "a", onboardingCompleted = true)))
+        AccountEntryTestSession.inputs = AccountEntryTestSession.Inputs(owner, profile, {}, {}, {}, tabControls = true)
+        var scenario: ActivityScenario<AccountEntryTestActivity>? = null
+        try {
+            val opened = ActivityScenario.launch(AccountEntryTestActivity::class.java); scenario = opened
+            awaitRoute(opened, Routes.WEATHER_ROOT)
+            compose.onNodeWithText("Soru sor (yerel test)").performClick()
+            awaitRoute(opened, Routes.AI_ROOT + "?conversationId={conversationId}")
+            compose.onNode(isSelectable() and hasText("Hava")).performClick()
+            awaitRoute(opened, Routes.WEATHER_ROOT)
+            compose.onNodeWithText("Hava hedefi").assertIsDisplayed()
+            opened.onActivity { assertNull(it.nav.previousBackStackEntry) }
+        } finally { scenario?.close(); AccountEntryTestSession.inputs = null }
+    }
+
+    @Test fun recommendationTabSwitchKeepsDraftAcrossRecreationAndOtherTabs() {
+        val owner = MutableStateFlow<String?>("a")
+        val profile = MutableStateFlow<ProfileState>(ProfileState.Success(UserProfile(uid = "a", onboardingCompleted = true)))
+        AccountEntryTestSession.inputs = AccountEntryTestSession.Inputs(owner, profile, {}, {}, {}, tabControls = true)
+        var scenario: ActivityScenario<AccountEntryTestActivity>? = null
+        val ai = Routes.AI_ROOT + "?conversationId={conversationId}"
+        try {
+            val opened = ActivityScenario.launch(AccountEntryTestActivity::class.java); scenario = opened
+            awaitRoute(opened, Routes.WEATHER_ROOT)
+            compose.onNodeWithText("Soru sor (yerel test)").performClick()
+            awaitRoute(opened, ai)
+            compose.onNodeWithText("Taslağı hazırla").performClick()
+            opened.recreate()
+            awaitRoute(opened, ai)
+            compose.onNodeWithText("Taslak korunmalı").assertIsDisplayed()
+            repeat(2) {
+                for ((label, route) in listOf("Hava" to Routes.WEATHER_ROOT, "Takvim" to Routes.CALENDAR_ROOT,
+                    "Profil" to Routes.PROFILE_ROOT, "Hava" to Routes.WEATHER_ROOT, "Asistan" to ai)) {
+                    compose.onNode(isSelectable() and hasText(label)).performClick()
+                    awaitRoute(opened, route)
+                    compose.onNode(isSelectable() and hasText(label)).assertIsSelected()
+                }
+                compose.onNodeWithText("Taslak korunmalı").assertIsDisplayed()
+            }
+            compose.onNode(isSelectable() and hasText("Hava")).performClick()
+            awaitRoute(opened, Routes.WEATHER_ROOT)
+            opened.onActivity { assertNull(it.nav.previousBackStackEntry) }
+        } finally { scenario?.close(); AccountEntryTestSession.inputs = null }
+    }
+
 }

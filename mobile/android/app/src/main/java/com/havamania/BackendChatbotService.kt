@@ -87,7 +87,9 @@ data class AccountDeletionAvailability(val available: Boolean)
 object BackendChatbotFactory {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun create(): BackendChatbotService {
+    fun create(): BackendChatbotService = createAt("https://api.havamania.com/")
+
+    internal fun createAt(baseUrl: String): BackendChatbotService {
         val logger = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
@@ -103,7 +105,7 @@ object BackendChatbotFactory {
             .build()
 
         return Retrofit.Builder()
-            .baseUrl("https://api.havamania.com/")
+            .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

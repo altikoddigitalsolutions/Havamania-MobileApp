@@ -355,11 +355,6 @@ fun TravelPlanCard(
 
             // City Personality Section (Trip-Type Aware & Clean Surface)
             val isTablet = LocalWindowSize.current.isTablet || LocalWindowSize.current.isLargeTablet
-            val guideRevision by TravelGuideUpdates.changes.collectAsStateWithLifecycle()
-    val guidePersonalization = LocalTravelPersonalization.current?.takeIf { it.uid == plan.userId }
-    val personality = remember(plan.city, plan.district, plan.tripType, guideRevision, guidePersonalization) {
-        CityPersonalityProvider.getPersonality(plan.city, plan.district, plan.tripType, guidePersonalization)
-    }
 
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = themeColors.border.copy(alpha = 0.1f))
@@ -375,8 +370,7 @@ fun TravelPlanCard(
                     Text(
                         text = when {
                             showPersonality -> "Rehberi kapat"
-                            isTablet -> "Rehberi aç"
-                            else -> personality.slogan
+                            else -> "Rehberi aç"
                         },
                         style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.accent,

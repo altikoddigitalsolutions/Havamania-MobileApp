@@ -190,11 +190,7 @@ fun AiChatScreen(
                         "Merhaba! Sana nasıl yardımcı olabilirim? 😊"
                     }
 
-                    WelcomeCard(greeting, themeColors, themeStyles)
-
-                    // truthfulness audit: context is no longer sent to AI to ensure reliable response
-                    // but we can still show that user preferences are respected in local UI or saved
-                    PersonalizedContextCard("Tercihlerin ve ilgi alanların kaydedildi", themeColors)
+                    WelcomeCard(greeting, themeColors)
 
                     if (activeTrip != null) {
                         ActiveTripContextCard(activeTrip, themeColors, enabled = !isSending) {
@@ -206,23 +202,10 @@ fun AiChatScreen(
 
                     currentWeatherData?.let { data ->
                         AssistantWeatherCard(data, themeColors)
-                        TodaySummarySection(data, themeColors)
                     }
 
-                    AssistantSectionLabel("NELER YAPABİLİRİM?")
-                    FeatureCards(themeColors, hasTrip = activeTrip != null, enabled = !isSending) { prompt ->
-                        viewModel.sendMessage(prompt)
-                    }
-
-                    AssistantSectionLabel("HIZLI SORULAR")
-                    QuickSuggestions(
-                        onSuggestionClick = { prompt ->
-                            viewModel.sendMessage(prompt)
-                        },
-                        c = themeColors,
-                        hasTrip = activeTrip != null,
-                        enabled = !isSending
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    AssistantStarterSuggestions(themeColors, enabled = !isSending) { viewModel.sendMessage(it) }
 
                     Spacer(Modifier.height(32.dp))
                 }
@@ -333,42 +316,9 @@ internal fun FollowAssistantConversation(listState: LazyListState, messages: Lis
 }
 
 @Composable
-private fun WelcomeCard(message: String, c: HavamaniaColors, s: HavamaniaStyles) {
-    Surface(
-        color = c.surface.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(HavamaniaTheme.styles.radiusLarge),
-        modifier = Modifier.fillMaxWidth().padding(HavamaniaTheme.styles.spacingMD)
-    ) {
-        Column(modifier = Modifier.padding(HavamaniaTheme.styles.spacingLG)) {
-            Text("HAVAMANİA ASİSTAN", style = HavamaniaTheme.typography.sectionTitle, color = c.accent)
-            Spacer(Modifier.height(HavamaniaTheme.styles.spacingSM))
-            Text(message, style = HavamaniaTheme.typography.bodyLarge, color = c.textPrimary)
-        }
-    }
-}
-
-@Composable
-private fun PersonalizedContextCard(text: String, c: HavamaniaColors) {
-    Surface(
-        color = c.accent.copy(alpha = 0.05f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-    ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(text, style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold), color = c.accent)
-        }
-    }
-}
-
-@Composable
-fun AssistantSectionLabel(text: String) {
-    Text(
-        text = text.uppercase(),
-        modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp),
-        style = HavamaniaTheme.typography.sectionTitle
-    )
+private fun WelcomeCard(message: String, c: HavamaniaColors) {
+    Text(message, style = HavamaniaTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+        color = c.textPrimary, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp))
 }
 
 fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
@@ -379,43 +329,44 @@ fun buildPersonalizedContext(aboutMe: String, interests: Set<String>): String {
 }
 
 @Composable
-private fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, enabled: Boolean, onAsk: () -> Unit) {
-    val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr")) }
+internal fun ActiveTripContextCard(trip: TravelPlan, c: HavamaniaColors, enabled: Boolean, onAsk: () -> Unit) {
+    val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale.forLanguageTag("tr")) }
     val formattedDate = remember(trip.startDate) { trip.startDate.format(formatter) }
-
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        color = c.accent.copy(alpha = 0.04f),
-        shape = RoundedCornerShape(20.dp),
+        color = c.accent.copy(alpha = 0.04f), shape = RoundedCornerShape(20.dp),
         border = BorderStroke(1.dp, c.accent.copy(alpha = 0.1f))
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(40.dp).background(c.accent.copy(alpha = 0.08f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.FlightTakeoff, null, tint = c.accent, modifier = Modifier.size(20.dp))
+        BoxWithConstraints(Modifier.padding(16.dp)) {
+            val summary: @Composable (Modifier) -> Unit = { modifier ->
+                Row(modifier, verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Rounded.FlightTakeoff, null, tint = c.accent, modifier = Modifier.size(24.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Yaklaşan seyahat", style = HavamaniaTheme.typography.bodySmall, color = c.textSecondary)
+                        Text(trip.displayName, style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = c.textPrimary)
+                        Text(formattedDate, style = HavamaniaTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                }
             }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "YAKLAŞAN SEYAHAT",
-                    style = HavamaniaTheme.typography.caption.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                    color = c.accent
-                )
-                Text(
-                    text = "${trip.displayName} • $formattedDate",
-                    style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = c.textPrimary
-                )
+            val ask: @Composable (Modifier) -> Unit = { modifier ->
+                TextButton(onClick = onAsk, enabled = enabled, modifier = modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = c.accent)) {
+                    Text("Havasını sor", style = HavamaniaTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                }
             }
-
-            TextButton(
-                onClick = onAsk,
-                enabled = enabled,
-                colors = ButtonDefaults.textButtonColors(contentColor = c.accent)
-            ) {
-                Text("SOR", style = HavamaniaTheme.typography.button.copy(fontWeight = FontWeight.Black))
+            if (maxWidth / androidx.compose.ui.platform.LocalDensity.current.fontScale < 400.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    summary(Modifier.fillMaxWidth())
+                    ask(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    summary(Modifier.weight(1f))
+                    ask(Modifier)
+                }
             }
         }
     }

@@ -70,3 +70,13 @@ Yerel doğrulama: backend ilk tam koşu 278 geçti, ayrı PostgreSQL ortamı ist
 
 
 26 Kasım gerçek seçici kabulü: AiChatScreen ve izole debug ekranı rememberAssistantPhotoPicker kullanır. Açılış istisnaları güvenli hataya çevrilir, açık seçiciye ikinci launch engellenir ve başlangıç token'i korunur. Son SM-T500 koşusunda gerçek seçim/iptal, hazırlama/önizleme/kaldırma ve güvenli açılış testleri 5/5 geçti. Yalnız fixture fotoğrafı okunup silindi; gerçek hesap/platform kullanılmadı. Teslim edilmiş 1.3/v6 AAB bu son Android değişikliğini içermez. Çoklu/HEIC/cloud/recreate/tam asistan kabulü açık; ayrıntı güncel yayın sırasının üst kaydında.
+
+## Fotoğraf yüklemede güvenli dağıtım tanısı — 27 Kasım
+
+Mobil /v1/chatbot/attachments için platform /upload yanıtı 401/403 ise backend 503 bridge_auth_failed; 404/405/501 ise 503 upload_endpoint_unavailable; 503 not_configured ise aynı kod döner. Bu kodlar backend–platform bağlantı/yayın tanısıdır; Firebase oturumunu 401 gibi yeniletmez. Ham platform mesajı dışarı aktarılmaz. Android kodları ayrı güvenli metinlerle gösterir. Bu sözleşme yerelde doğrulandı; canlı deploy/kabul ayrıca açık.
+
+## Canlı dağıtım kontrolü — 27 Kasım
+
+api.havamania.com health 200 ve consent 401 iken anonim POST /v1/chatbot/attachments standart 404 verdi. Aynı istek güncel yerel kaynakta 401 verir. Dağıtım imajı/kod sürümü ve reverse proxy yönlendirmesi kontrol edilmeden fotoğraf akışı canlı kabul edilmiş sayılmaz. Yalnız yerel Docker Desktop'ı başlatmak uzak API dağıtımını güncellemez.
+
+27 Kasım dağıtım tanısı: python -m app.photo_deployment_check --base-url https://api.havamania.com dosyasız/kimliksiz yönlendirme kontrolü sağlar; canlıda attachments 404 nedeniyle exit 1 doğrulandı. Konteyner içi karşılaştırma ve son kabul için FOTOGRAF_CANLI_DAGITIM_KONTROLU.md belgesine bakın. Bu modül mevcut canlı sunucuya kurulmadı ve fotoğrafın modele ulaştığını kanıtlamaz.

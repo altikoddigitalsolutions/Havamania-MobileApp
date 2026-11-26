@@ -1,8 +1,10 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from app.core.config import get_settings
+from app.services.push_provider import FCMApnsPushProvider
 
 
 def metadata():
@@ -15,9 +17,7 @@ def enabled(monkeypatch):
     monkeypatch.setattr("firebase_admin.get_app", lambda: object())
 
 
-from unittest.mock import patch
 
-from app.services.push_provider import FCMApnsPushProvider
 
 
 @patch("firebase_admin.messaging.send")

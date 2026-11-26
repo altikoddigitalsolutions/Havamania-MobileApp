@@ -59,7 +59,6 @@ fun TravelPlannerScreen(
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 
-    var selectedFilter by remember { mutableStateOf(TravelFilter.UPCOMING) }
     val session by viewModel.sessionVersion.collectAsStateWithLifecycle()
     val editorUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
     var editor by rememberTravelEditor(editorUid)
@@ -124,7 +123,9 @@ fun TravelPlannerScreen(
         }
     }
 
-    var selectedDate by remember { mutableStateOf(today) }
+    var plannerState by rememberTravelPlannerState(editorUid, session, today)
+    val selectedDate = LocalDate.parse(plannerState.date)
+    val selectedFilter = plannerState.filter
 
     LaunchedEffect(initialCity, initialTripType, initialStartDate) {
         if (initialCity != null && !editor.initialHandled) {
@@ -132,7 +133,7 @@ fun TravelPlannerScreen(
                 if (initialStartDate != null) LocalDate.parse(initialStartDate) else LocalDate.now()
             } catch(e: Exception) { LocalDate.now() }
 
-            selectedDate = start
+            plannerState = plannerState.copy(date = start.toString())
 
             val type = try {
                 if (initialTripType != null) TripType.valueOf(initialTripType) else TripType.VACATION
@@ -144,17 +145,16 @@ fun TravelPlannerScreen(
         }
     }
 
-    var focusHandled by remember(session, editorUid, focusId) { mutableStateOf(false) }
+    val focusHandled = focusId != null && plannerState.handledFocusId == focusId
     LaunchedEffect(focusId, plans, focusHandled) {
         if (!focusHandled && focusId != null && plans.isNotEmpty()) {
             val targetTrip = plans.find { it.id == focusId }
             if (targetTrip != null) {
-                focusHandled = true
-                selectedDate = targetTrip.startDate
+                plannerState = plannerState.copy(handledFocusId = focusId, date = targetTrip.startDate.toString())
                 val status = TravelStatusResolver.getStatus(targetTrip.startDate, targetTrip.endDate, today)
-                selectedFilter = if (targetTrip.isArchived) TravelFilter.ARCHIVED
+                plannerState = plannerState.copy(filter = if (targetTrip.isArchived) TravelFilter.ARCHIVED
                                  else if (status == TravelStatus.PAST) TravelFilter.PAST
-                                 else TravelFilter.UPCOMING
+                                 else TravelFilter.UPCOMING)
             }
         }
     }
@@ -218,12 +218,23 @@ fun TravelPlannerScreen(
         else upcomingPlans.firstOrNull()
     }
 
-    var expandedGuideId by remember(session, editorUid) { mutableStateOf<String?>(null) }
+    var guideSelection by rememberTravelGuideSelection(editorUid, session)
+    val expandedGuideId = guideSelection.visibleId(displayPlans.map { it.id },
+        autoOpen = selectedFilter == TravelFilter.UPCOMING)
     val expandedGuidePlan = displayPlans.firstOrNull { it.id == expandedGuideId }
-    val toggleGuide: (TravelPlan) -> Unit = { plan ->
-        expandedGuideId = if (expandedGuideId == plan.id) null else plan.id
+    val closeGuide: () -> Unit = {
+        expandedGuideId?.let { guideSelection = guideSelection.close(it) }
     }
-    val goBack = travelGuideBackAction(expandedGuidePlan != null, { expandedGuideId = null }, onBack)
+    val toggleGuide: (TravelPlan) -> Unit = { plan ->
+        guideSelection = if (expandedGuideId == plan.id) guideSelection.close(plan.id)
+            else guideSelection.open(plan.id)
+    }
+    val goBack = travelGuideBackAction(expandedGuidePlan != null, closeGuide, onBack)
+
+    val filterChoices: @Composable () -> Unit = {
+        TravelFilterChoices(selectedFilter, { plannerState = plannerState.copy(filter = it) },
+            Modifier.padding(horizontal = responsive.pagePadding))
+    }
 
     val tripListStatus: @Composable () -> Unit = {
         TripLoadStatusPanel(loadError, isLoading) { viewModel.loadPlans() }
@@ -310,7 +321,7 @@ fun TravelPlannerScreen(
                             ) {
                                 TravelCalendarStripe(
                                     selectedDate = selectedDate,
-                                    onDateSelect = { selectedDate = it },
+                                    onDateSelect = { plannerState = plannerState.copy(date = it.toString()) },
                                     tripDates = tripDates,
                                     today = today
                                 )
@@ -329,12 +340,14 @@ fun TravelPlannerScreen(
                                         }
                                     }
                             ) {
+                                filterChoices()
+                                Spacer(Modifier.height(themeStyles.spacingMD))
                                 tripListStatus()
                                 TripListSection(
                                     filter = selectedFilter,
                                     plans = displayPlans,
                                     isLoading = isLoading && plans.isEmpty(),
-                                    onFilterChange = { selectedFilter = it },
+                                    onFilterChange = { plannerState = plannerState.copy(filter = it) },
                                     selectedDate = selectedDate,
                                     onAddClick = { editor = editor.create() },
                                     onDelete = { deleteConfirmPlan = it },
@@ -375,7 +388,7 @@ fun TravelPlannerScreen(
                     if (selectedFilter == TravelFilter.UPCOMING) {
                         TravelCalendarStripe(
                             selectedDate = selectedDate,
-                            onDateSelect = { selectedDate = it },
+                            onDateSelect = { plannerState = plannerState.copy(date = it.toString()) },
                             tripDates = tripDates,
                             today = today
                         )
@@ -386,25 +399,7 @@ fun TravelPlannerScreen(
                         Spacer(Modifier.height(themeStyles.spacingMD))
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = responsive.pagePadding),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TravelFilter.entries.forEach { filter ->
-                            HavamaniaChip(
-                                selected = selectedFilter == filter,
-                                onClick = { selectedFilter = filter },
-                                label = when (filter) {
-                                    TravelFilter.UPCOMING -> "Yaklaşanlar"
-                                    TravelFilter.PAST -> "Geçmiş"
-                                    TravelFilter.ARCHIVED -> "Arşiv"
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                    filterChoices()
 
                     Spacer(Modifier.height(themeStyles.spacingMD))
 
@@ -413,7 +408,7 @@ fun TravelPlannerScreen(
                         filter = selectedFilter,
                         plans = displayPlans,
                         isLoading = isLoading && plans.isEmpty(),
-                        onFilterChange = { selectedFilter = it },
+                        onFilterChange = { plannerState = plannerState.copy(filter = it) },
                         selectedDate = selectedDate,
                         onAddClick = { editor = editor.create() },
                         onDelete = { deleteConfirmPlan = it },
@@ -452,10 +447,9 @@ fun TravelPlannerScreen(
             onSave = { plan ->
                 val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "legacy"
                 if (editor.owner == activeUid) viewModel.savePlan(plan) { saved ->
-                    focusHandled = true
-                    selectedDate = saved.startDate
-                    selectedFilter = if (saved.isArchived) TravelFilter.ARCHIVED else TravelFilter.UPCOMING
-                    expandedGuideId = saved.id
+                    plannerState = plannerState.copy(handledFocusId = focusId, date = saved.startDate.toString(),
+                        filter = if (saved.isArchived) TravelFilter.ARCHIVED else TravelFilter.UPCOMING)
+                    guideSelection = guideSelection.open(saved.id)
                 }
                 editor = editor.close()
             }

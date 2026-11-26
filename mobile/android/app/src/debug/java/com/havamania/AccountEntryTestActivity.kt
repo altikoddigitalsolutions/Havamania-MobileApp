@@ -3,6 +3,8 @@ package com.havamania
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -13,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 internal object AccountEntryTestSession {
     data class Inputs(val owner: StateFlow<String?>, val profile: StateFlow<ProfileState>,
-        val retry: () -> Unit, val exit: () -> Unit, val complete: () -> Unit)
+        val retry: () -> Unit, val exit: () -> Unit, val complete: () -> Unit, val tabControls: Boolean = false)
     @Volatile var inputs: Inputs? = null
 }
 
@@ -24,6 +26,7 @@ class AccountEntryTestActivity : ComponentActivity() {
     var route: String? = null
         private set
     val visited = mutableListOf<String>()
+    private var visitedOwner: String? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val inputs = checkNotNull(AccountEntryTestSession.inputs)
@@ -39,11 +42,19 @@ class AccountEntryTestActivity : ComponentActivity() {
                         val entry by controller.currentBackStackEntryAsState()
                         val activeRoute = entry?.destination?.route
                         SideEffect {
+                            // Observations are account-local, like the keyed NavController.
+                            if (visitedOwner != owner) { visited.clear(); visitedOwner = owner }
                             nav = controller; route = activeRoute
                             route?.let { if (visited.lastOrNull() != it) visited.add(it) }
                         }
                         AccountEntryRedirect(controller, owner, profile, enabled = true)
-                        NavHost(controller, startDestination = if (owner == null) Routes.AUTH_WELCOME else Routes.ACCOUNT_LOADING) {
+                        Scaffold(bottomBar = {
+                            if (inputs.tabControls && activeRoute?.substringBefore('?') in setOf(Routes.WEATHER_ROOT, Routes.AI_ROOT, Routes.CALENDAR_ROOT, Routes.PROFILE_ROOT)) {
+                                WeatherBottomBar(activeRoute, { target -> controller.navigate(target) { accountTabOptions(target) } })
+                            }
+                        }) { padding ->
+                        NavHost(controller, startDestination = if (owner == null) Routes.AUTH_WELCOME else Routes.ACCOUNT_LOADING,
+                            modifier = Modifier.padding(padding)) {
                             composable(Routes.ACCOUNT_LOADING) {
                                 AccountProfileLoadingScreen(owner, profile, inputs.retry, inputs.exit)
                             }
@@ -59,7 +70,25 @@ class AccountEntryTestActivity : ComponentActivity() {
                             }
                             composable(Routes.CALENDAR_ROOT) { Text("Takvim hedefi") }
                             composable(Routes.PROFILE_ROOT) { Text("Profil hedefi") }
-                            composable(Routes.WEATHER_ROOT) { Text("Hava hedefi") }
+                            composable(Routes.WEATHER_ROOT) { source ->
+                                androidx.compose.foundation.layout.Column {
+                                    Text("Hava hedefi")
+                                    if (inputs.tabControls) TextButton(onClick = {
+                                        controller.navigateFromActiveScreen(source, Routes.AI_ROOT)
+                                    }) { Text("Soru sor (yerel test)") }
+                                }
+                            }
+                            composable(Routes.AI_ROOT + "?conversationId={conversationId}", arguments = listOf(
+                                androidx.navigation.navArgument("conversationId") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null }
+                            )) {
+                                var draft by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+                                androidx.compose.foundation.layout.Column {
+                                    Text("Asistan hedefi")
+                                    TextField(draft, { draft = it }, label = { Text("Test mesajı") })
+                                    TextButton(onClick = { draft = "Taslak korunmalı" }) { Text("Taslağı hazırla") }
+                                }
+                            }
+                        }
                         }
                     }
                 } }

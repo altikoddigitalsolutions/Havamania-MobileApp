@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 
 enum class AppTheme(val title: String) {
-    AUTO("🤖 Otomatik"),
+    AUTO("Otomatik (mevsime göre)"),
     SPRING("🌸 İlkbahar"),
     SUMMER("☀️ Yaz"),
     AUTUMN("🍂 Sonbahar"),

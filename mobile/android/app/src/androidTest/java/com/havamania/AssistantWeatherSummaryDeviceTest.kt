@@ -1,5 +1,9 @@
 package com.havamania
 
+import androidx.compose.ui.test.performScrollTo
+
+import androidx.compose.foundation.verticalScroll
+
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.view.WindowManager
@@ -9,6 +13,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
@@ -77,6 +82,50 @@ class AssistantWeatherSummaryDeviceTest {
             messages.value = messages.value + AltikodChatMessage(text = "İkinci yeni yanıt", isUser = false)
         }
         compose.onNodeWithText("İkinci yeni yanıt").assertIsDisplayed()
+    }
+
+    @Test fun consentOpenedWithSystemKeyboardKeepsDraftAndSendLockedUntilDismissed() {
+        val sent = mutableListOf<String>()
+        val visible = mutableStateOf(false)
+        val draft = mutableStateOf("Taslak korunmalı")
+        compose.activityRule.scenario.onActivity { activity ->
+            activity.enableEdgeToEdge()
+            activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        compose.setContent {
+            val colors = ThemeFactory.createColors(AppTheme.DARK)
+            CompositionLocalProvider(LocalHavamaniaColors provides colors,
+                LocalHavamaniaTypography provides ThemeFactory.createTypography(colors)) {
+                androidx.compose.material3.MaterialTheme {
+                    Scaffold(bottomBar = {
+                        ChatInput(draft.value, { draft.value = it }, { sent.add(it) }, false, colors, HavamaniaStyles(),
+                            photoControlsEnabled = !visible.value)
+                    }) { padding ->
+                        Box(Modifier.then(Modifier.padding(padding))) {
+                            androidx.compose.material3.TextButton(onClick = { visible.value = true }) {
+                                Text("İzinleri aç (yerel test)")
+                            }
+                        }
+                    }
+                    AssistantConsentDialog(AssistantConsentState(visible = visible.value,
+                        error = "Yerel bağlantı testi"), {}, {}, {}, { visible.value = false })
+                }
+            }
+        }
+        val input = compose.onNode(hasSetTextAction())
+        input.performTouchInput { click() }
+        val decor = compose.activity.window.decorView
+        compose.waitUntil(8_000) {
+            compose.runOnUiThread { ViewCompat.getRootWindowInsets(decor)?.isVisible(WindowInsetsCompat.Type.ime()) == true }
+        }
+        compose.onNodeWithText("İzinleri aç (yerel test)").performTouchInput { click() }
+        compose.onNodeWithTag("assistant_consent_dialog").assertIsDisplayed()
+        compose.onNodeWithText("Vazgeç").performScrollTo().assertIsDisplayed().performTouchInput { click() }
+        compose.onNodeWithTag("assistant_consent_dialog").assertDoesNotExist()
+        input.assertTextContains("Taslak korunmalı")
+        compose.runOnIdle { assertTrue(sent.isEmpty()) }
+        compose.onNodeWithContentDescription("Mesaj gönder").assertIsDisplayed().performTouchInput { click() }
+        compose.runOnIdle { assertEquals(listOf("Taslak korunmalı"), sent) }
     }
 
     @Test fun systemKeyboardMovesTheSendButtonUpAndKeepsItUsable() {
@@ -170,9 +219,8 @@ class AssistantWeatherSummaryDeviceTest {
         send.assertIsNotEnabled()
     }
 
-    @Test fun narrowLayoutKeepsAllFeatureCardsVisibleAndClickableAtLargeFontScale() {
+    @Test fun narrowLayoutKeepsDistinctSuggestionsClickableAtLargeFontScale() {
         val prompts = mutableListOf<String>()
-        val hasTrip = mutableStateOf(false)
         val enabled = mutableStateOf(false)
         compose.setContent {
             val colors = ThemeFactory.createColors(AppTheme.DARK)
@@ -181,19 +229,19 @@ class AssistantWeatherSummaryDeviceTest {
                 LocalHavamaniaTypography provides ThemeFactory.createTypography(colors),
                 LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)
             ) {
-                Box(Modifier.width(320.dp)) { FeatureCards(colors, hasTrip.value, enabled.value) { prompts.add(it) } }
+                Box(Modifier.width(320.dp)) {
+                    androidx.compose.foundation.layout.Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        AssistantStarterSuggestions(colors, enabled.value) { prompts.add(it) }
+                    }
+                }
             }
         }
-        compose.onNodeWithText("Seyahat havasını değerlendir").assertDoesNotExist()
-        compose.onNodeWithText("Hava durumunu yorumla").assertIsNotEnabled()
+        compose.onNodeWithText(assistantStarterPrompts.first()).assertIsNotEnabled()
         compose.runOnIdle { enabled.value = true }
-        compose.onNodeWithText("Hava durumunu yorumla").assertIsDisplayed().performClick()
-        compose.runOnIdle { hasTrip.value = true }
-        compose.onNodeWithText("Seyahat havasını değerlendir").assertIsDisplayed().performClick()
-        compose.onNodeWithText("Günlük öneri ver").assertIsDisplayed().performClick()
-        compose.runOnIdle {
-            assertEquals(listOf("Bugün hava nasıl?", "Seyahatim için hava uygun mu?", "Bugün ne giymeliyim?"), prompts)
+        assistantStarterPrompts.forEach { prompt ->
+            compose.onNodeWithText(prompt).performScrollTo().assertIsDisplayed().performClick()
         }
+        compose.runOnIdle { assertEquals(assistantStarterPrompts, prompts) }
     }
 
     @Test fun lightThemeShowsCurrentSummaryAtLargeFontScale() {

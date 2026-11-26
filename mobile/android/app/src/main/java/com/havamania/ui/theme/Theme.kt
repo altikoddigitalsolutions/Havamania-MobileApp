@@ -15,11 +15,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.havamania.WeatherViewModel
 import com.havamania.WeatherUiState
-import java.time.LocalDateTime
-import kotlinx.coroutines.delay
 
 val AppTypography = Typography(
     displayLarge = TextStyle(
@@ -83,22 +82,16 @@ fun HavamaniaTheme(
 ) {
     val currentThemeSelection by themeViewModel.currentTheme.collectAsState()
 
-    // Real-time time tracking for Auto Theme
-    var currentDateTime by remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(currentThemeSelection) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var currentDate by remember { mutableStateOf(java.time.LocalDate.now()) }
+    LaunchedEffect(currentThemeSelection, lifecycleOwner) {
         if (currentThemeSelection == AppTheme.AUTO) {
-            while (true) {
-                currentDateTime = LocalDateTime.now()
-                kotlinx.coroutines.delay(60000) // Check every minute
+            lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                com.havamania.calendarDateChanges().collect { currentDate = it }
             }
         }
     }
-
-    val finalTheme = if (currentThemeSelection == AppTheme.AUTO) {
-        ThemeManager.getSeasonalTheme(currentDateTime.monthValue)
-    } else {
-        currentThemeSelection
-    }
+    val finalTheme = resolveThemeSelection(currentThemeSelection, currentDate)
 
     // Get base colors from factory
     val targetColors = ThemeFactory.createColors(finalTheme)

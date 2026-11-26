@@ -1,8 +1,6 @@
 package com.havamania
 
 import android.util.Log
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,41 +20,23 @@ class AiAssistantRepository(
             if (AndroidAssistantWithdrawalStore().pending(owner)) throw AssistantConsentRequiredException()
         }
         checkOwner()
-        val body = bytes.toRequestBody("image/jpeg".toMediaType())
-        val part = okhttp3.MultipartBody.Part.createFormData("file", "photo.jpg", body)
         var token = user.getIdToken(false).await()?.token ?: throw java.io.IOException()
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
         checkOwner()
-        var response = api.uploadPhoto("Bearer $token", part)
+        var response = requestAssistantPhoto(api, "Bearer $token", bytes)
         if (response.code() == 401) {
             token = user.getIdToken(true).await()?.token ?: throw java.io.IOException()
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             checkOwner()
-            response = api.uploadPhoto("Bearer $token", part)
+            response = requestAssistantPhoto(api, "Bearer $token", bytes)
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
         checkOwner()
         if (!response.isSuccessful) {
-            val error = response.errorBody()?.string().orEmpty()
-            when {
-                response.code() == 400 -> throw TerminalAssistantException("Fotoğraf doğrulanamadı. Yeni bir mesaja başka bir fotoğraf ekleyin.")
-                response.code() == 428 -> throw AssistantConsentRequiredException()
-                response.code() == 409 && error.contains("photos_disabled") -> throw PhotosDisabledException()
-                response.code() == 409 -> throw TerminalAssistantException("Bu hesapla fotoğraf gönderilemedi. Yeni sohbet başlatın.")
-                response.code() == 413 -> throw TerminalAssistantException("Fotoğraf çok büyük. Daha küçük bir fotoğraf seçin.")
-                response.code() == 415 -> throw TerminalAssistantException("Fotoğraf biçimi desteklenmiyor. Başka bir fotoğraf seçin.")
-                response.code() == 503 && error.contains("busy") -> throw RateLimitedAssistantException(
-                    response.headers()["Retry-After"]?.toLongOrNull()?.takeIf { it in 1..86400 } ?: 5,
-                    "Fotoğraf hizmeti yoğun. Biraz sonra tekrar deneyin.")
-                response.code() == 429 -> throw RateLimitedAssistantException(response.headers()["Retry-After"]?.toLongOrNull()?.takeIf { it in 1..86400 })
-                else -> throw java.io.IOException("Fotoğraf yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.")
-            }
+            if (BuildConfig.DEBUG) Log.w("ASSISTANT_DEBUG", "PHOTO_UPLOAD_FAILED | httpCode=${response.code()}")
+            throw assistantPhotoHttpFailure(response.code(), response.errorBody()?.string(), response.headers()["Retry-After"])
         }
-        val receipt = response.body() ?: throw java.io.IOException("Fotoğraf yüklemesi doğrulanamadı.")
-        if (receipt.size !in 1..(8 * 1024 * 1024) || receipt.media_type !in setOf("image/jpeg", "image/png", "image/webp", "image/gif"))
-            throw java.io.IOException("Fotoğraf yüklemesi doğrulanamadı.")
-        runCatching { java.util.UUID.fromString(receipt.attachment_id).toString() }
-            .getOrElse { throw java.io.IOException("Fotoğraf yüklemesi doğrulanamadı.") }
+        assistantPhotoReceiptId(response.body())
     }
 
     suspend fun getBotConfig(): AltikodBotConfig? = withContext(Dispatchers.IO) {

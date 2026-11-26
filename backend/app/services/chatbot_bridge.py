@@ -50,6 +50,22 @@ class ChatbotBridgeClient:
         except httpx.RequestError:
             raise BridgeError(503, "unavailable", "Fotoğraf yüklenemedi. Daha sonra deneyin.") from None
         if response.status_code != 201:
+            # Upstream deployment/key failures are not Firebase-session failures.
+            # Preserve a safe diagnosis without exposing upstream response text.
+            status = response.status_code
+            if status in {401, 403}:
+                logger.error("Assistant photo bridge credential rejected http_status=%s", status)
+                raise BridgeError(503, "bridge_auth_failed", "Fotoğraf hizmetinin bağlantı ayarları doğrulanamadı.")
+            if status in {404, 405, 501}:
+                logger.error("Assistant photo upload endpoint unavailable http_status=%s", status)
+                raise BridgeError(503, "upload_endpoint_unavailable", "Fotoğraf yükleme hizmeti sunucuda kullanılamıyor.")
+            if status == 503:
+                try:
+                    error_body = response.json()
+                except ValueError:
+                    error_body = None
+                if isinstance(error_body, dict) and error_body.get("error") == "not_configured":
+                    raise BridgeError(503, "not_configured", "Fotoğraf hizmeti sunucuda henüz hazır değil.")
             self._raise_error(response)
         try:
             return AssistantAttachmentReceipt.model_validate(response.json())

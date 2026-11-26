@@ -43,10 +43,12 @@ internal fun AccountProfileLoadingScreen(owner: String?, state: ProfileState, on
         onRetry = { attempt++; onRetry() }, onBack = onExit)
 }
 /** The graph begins at a transient gate; tab stacks must use the real weather root. */
-internal fun androidx.navigation.NavOptionsBuilder.accountTabOptions() {
+internal fun androidx.navigation.NavOptionsBuilder.accountTabOptions(targetRoute: String) {
     popUpTo(Routes.WEATHER_ROOT) { saveState = true }
     launchSingleTop = true
-    restoreState = true
+    // Weather is the retained root: restoring its saved alias can restore the
+    // assistant pushed by a recommendation instead of returning to weather.
+    restoreState = targetRoute.substringBefore('?') != Routes.WEATHER_ROOT
 }
 
 internal fun NavHostController.leavePersonalization(source: androidx.navigation.NavBackStackEntry, onExit: () -> Unit) {

@@ -601,7 +601,7 @@ fun ThemeSelectionDialog(currentTheme: AppTheme, onThemeSelected: (AppTheme) -> 
         onConfirm = onDismiss,
         content = {
             Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
-                AppTheme.entries.filter { it != AppTheme.AUTO }.forEach { theme ->
+                AppTheme.entries.forEach { theme ->
                     Row(
                         modifier = Modifier.fillMaxWidth().selectable(selected = theme == currentTheme,
                             role = androidx.compose.ui.semantics.Role.RadioButton,
