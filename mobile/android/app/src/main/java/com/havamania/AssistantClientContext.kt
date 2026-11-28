@@ -52,7 +52,7 @@ internal fun AssistantTone.platformTone(): String = when (this) {
 
 /** Snapshot only: no network lookup, notes, precise coordinates or profile health fields. */
 internal fun assistantClientContext(city: String?, weather: WeatherData?, trips: List<TravelPlan>,
-    personalization: Boolean, now: Long = System.currentTimeMillis()): AssistantClientContext {
+    personalization: Boolean, now: Long = System.currentTimeMillis(), owner: String? = null): AssistantClientContext {
     val selected = (city?.takeIf { it.isNotBlank() } ?: weather?.cityName)?.take(100)
     val fresh = weather != null && !weather.isStale && weather.timestamp > 0 &&
         now - weather.timestamp in 0..(30 * 60 * 1000L) &&
@@ -70,9 +70,7 @@ internal fun assistantClientContext(city: String?, weather: WeatherData?, trips:
             append(". Paylaşılmayan tarihler için güncel hava gerekiyorsa platformun hava araçlarıyla doğrula; doğrulanmayan değer üretme.")
         }.take(2000)
     } else "Bu konum için uygulamadan doğrulanmış güncel hava verisi paylaşılmadı. Güncel hava gerekiyorsa platformun hava araçlarını kullan; doğrulanmayan değer üretme."
-    val tripText = if (personalization) trips.sortedBy { it.startDate }.take(3).joinToString("; ") {
-        "${it.city.take(100)}: ${it.startDate}–${it.endDate}"
-    }.take(2000).ifBlank { null } else null
+    val tripText = if (personalization) assistantTripContext(trips, Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate(), owner) else null
     val snapshot = assistantWeatherSnapshot(selected, weather, now)
     val text = if (snapshot != null && !fresh) "Hava bilgisi weather_data alanında veri zamanı ve eski veri işaretiyle paylaşıldı. Güncel veya verilen tarihlerin dışında hava gerekiyorsa platformun hava araçlarıyla doğrula; doğrulanmayan değer üretme." else weatherText
     return AssistantClientContext(selected, text, tripText, snapshot)

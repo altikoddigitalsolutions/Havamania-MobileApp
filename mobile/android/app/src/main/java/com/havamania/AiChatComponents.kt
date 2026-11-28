@@ -90,7 +90,8 @@ fun ChatBubble(
     message: AltikodChatMessage,
     c: HavamaniaColors,
     onRetry: ((String) -> Unit)?,
-    onActionClick: ((AssistantAction) -> Unit)?
+    onActionClick: ((AssistantAction) -> Unit)?,
+    photos: List<AssistantPhoto> = emptyList()
 ) {
     val isUser = message.isUser
 
@@ -117,8 +118,13 @@ fun ChatBubble(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 if (isUser) {
+                    if (photos.isNotEmpty()) AssistantMessagePhotos(photos)
                     if (message.photoCount > 0) Text("${message.photoCount} fotoğraf", color = contentColor,
                         style = HavamaniaTheme.typography.caption)
+                    if (message.photoCount > 0 && photos.isEmpty()) {
+                        Text("Fotoğraf önizlemesi bu oturumda bulunmuyor.", color = contentColor,
+                            style = HavamaniaTheme.typography.caption)
+                    }
                     Text(text = message.text, color = contentColor)
                 } else {
                     AssistantMessageContent(text = message.text, c = c)

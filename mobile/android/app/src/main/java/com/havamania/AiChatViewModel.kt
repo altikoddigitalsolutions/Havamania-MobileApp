@@ -32,13 +32,13 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     private val auth = FirebaseAuth.getInstance()
     private val currentUid: String get() = auth.currentUser?.uid ?: "legacy"
     internal val assistantConsent = AssistantConsentController(viewModelScope, { currentUid })
-    private data class PendingConsentMessage(val prompt: String, val context: String?,
-        val retry: Boolean, val requestId: String?, val conversation: String, val owner: String,
-        val fromDraft: Boolean = false)
-    private var pendingConsentMessage: PendingConsentMessage? = null
+    private val pendingMessages = AssistantPendingMessages()
+    var tripQuestionError by mutableStateOf<String?>(null)
+        private set
 
     fun revokeAssistantConsent() {
-        pendingConsentMessage = null
+        tripQuestionError = null
+        pendingMessages.clear()
         clearPhotos()
         if (loadingHistoryId == null) {
             requestRunner.reset()
@@ -53,13 +53,19 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             revokeAssistantConsent()
         } else assistantConsent.retry()
     }
-    fun dismissAssistantConsent() { pendingConsentMessage = null; assistantConsent.dismiss() }
+    fun dismissAssistantConsent() { tripQuestionError = null; pendingMessages.clear(); assistantConsent.dismiss() }
+    fun dismissTripQuestionError() { tripQuestionError = null }
     fun resumeAfterConsent() {
         if (_isSending.value || !assistantConsent.state.value.allowed || assistantConsent.state.value.visible) return
-        val pending = pendingConsentMessage ?: return
-        pendingConsentMessage = null
+        val pending = pendingMessages.take(currentUid, currentConversationId) ?: return
         if (pending.owner == currentUid && pending.conversation == currentConversationId) {
-            sendMessage(pending.prompt, pending.context, pending.retry, pending.requestId, pending.fromDraft)
+            if (pending.tripId != null && !assistantTripQuestionStillCurrent(
+                    _activeTravels.value, currentUid, pending.tripId, pending.prompt, LocalDate.now())) {
+                tripQuestionError = ASSISTANT_TRIP_CHANGED_MESSAGE
+                return
+            }
+            sendMessage(pending.prompt, pending.context, pending.retry, pending.requestId, pending.fromDraft,
+                tripId = pending.tripId)
         }
     }
 
@@ -124,6 +130,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         private set
     private var photoJob: Job? = null
     private var photoGeneration = 0L
+    var messagePhotos by mutableStateOf<Map<String, List<AssistantPhoto>>>(emptyMap())
+        private set
     private val pendingPhotos = mutableMapOf<String, List<AssistantPhoto>>()
 
     private fun clearPhotos() {
@@ -132,6 +140,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         photoJob = null
         selectedPhotos = emptyList()
         pendingPhotos.clear()
+        messagePhotos = emptyMap()
         preparingPhotos = false
         photoError = null
     }
@@ -186,9 +195,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     fun updateDraft(text: String) {
-        if (text != draft && pendingConsentMessage?.fromDraft == true) {
-            pendingConsentMessage = null
-        }
+        pendingMessages.onDraftChanged(draft, text)
         draft = text
     }
 
@@ -197,7 +204,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         val newUid = user?.uid ?: "legacy"
         accountTasks.reset()
         assistantConsent.reset()
-        pendingConsentMessage = null
+        pendingMessages.clear()
         if (newUid != "legacy") assistantConsent.load()
         requestRunner.reset()
         fetchJob?.cancel()
@@ -208,6 +215,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         clearPhotos()
         photosEnabled = true
         _activeTravels.value = emptyList()
+        tripQuestionError = null
         userAboutMe = ""
         userInterests = emptySet()
         _messages.value = emptyList()
@@ -330,28 +338,48 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
         if (prompt == draft) sendMessage(if (prompt.isBlank() && selectedPhotos.isNotEmpty()) "Bu fotoğrafı yorumlar mısın?" else prompt, fromDraft = true)
     }
 
+    fun askTripWeather(id: String): Boolean {
+        val question = assistantTripWeatherQuestion(_activeTravels.value, currentUid, id, LocalDate.now())
+            ?: return false
+        if (assistantConsent.state.value.visible || pendingMessages.hasPending) return false
+        return sendMessage(question, tripId = id)
+    }
+
     fun sendRecommendation(prompt: String, context: String?): Boolean {
-        if (pendingConsentMessage != null || assistantConsent.state.value.visible) return false
+        if (pendingMessages.hasPending || assistantConsent.state.value.visible) return false
         return sendMessage(prompt, systemContext = context)
     }
 
     fun sendMessage(userPrompt: String, systemContext: String? = null, isRetry: Boolean = false,
-                    retryRequestId: String? = null, fromDraft: Boolean = false): Boolean {
+                    retryRequestId: String? = null, fromDraft: Boolean = false, tripId: String? = null): Boolean {
         if (_isSending.value || preparingPhotos || userPrompt.isBlank() || assistantQuestionTooLong(userPrompt)) return false
         val retryMessage = _messages.value.firstOrNull { it.isUser && it.id == retryRequestId }
-        val hasPhotos = if (isRetry) (retryMessage?.photoCount ?: 0) > 0 else fromDraft && selectedPhotos.isNotEmpty()
-        if ((!isLocalAssistantPrompt(userPrompt) || hasPhotos) && !assistantConsent.state.value.allowed) {
-            pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, isRetry,
-                retryRequestId, currentConversationId, currentUid, fromDraft)
-            assistantConsent.load(showLoading = true)
-            return true
+        val selectedTripId = tripId ?: retryMessage?.selectedTripId?.takeIf { isRetry }
+        if (selectedTripId != null && !assistantTripQuestionStillCurrent(
+                _activeTravels.value, currentUid, selectedTripId, userPrompt, LocalDate.now())) {
+            tripQuestionError = ASSISTANT_TRIP_CHANGED_MESSAGE
+            return false
         }
         if (isRetry && _messages.value.any { it.retryRequestId == retryRequestId &&
                 (it.retryNotBefore ?: 0L) > System.currentTimeMillis() }) return false
         val originalMessage = assistantMessageForSend(_messages.value, userPrompt, isRetry, retryRequestId)
             ?: return false
-        val userMessage = if (!isRetry && hasPhotos) originalMessage.copy(photoCount = selectedPhotos.size) else originalMessage
-        if (!isRetry && hasPhotos) pendingPhotos[userMessage.id] = selectedPhotos.toList()
+        val intentVersion = pendingMessages.beginAcceptedSend()
+        tripQuestionError = null
+        val hasPhotos = if (isRetry) (retryMessage?.photoCount ?: 0) > 0 else fromDraft && selectedPhotos.isNotEmpty()
+        if ((!isLocalAssistantPrompt(userPrompt) || hasPhotos) && !assistantConsent.state.value.allowed) {
+            pendingMessages.queue(PendingAssistantMessage(userPrompt, systemContext, isRetry,
+                retryRequestId, currentConversationId, currentUid, fromDraft, selectedTripId), intentVersion)
+            assistantConsent.load(showLoading = true)
+            return true
+        }
+        val userMessage = originalMessage.copy(
+            photoCount = if (!isRetry && hasPhotos) selectedPhotos.size else originalMessage.photoCount,
+            selectedTripId = selectedTripId)
+        if (!isRetry && hasPhotos) {
+            pendingPhotos[userMessage.id] = selectedPhotos.toList()
+            messagePhotos = retainAssistantPreviews(messagePhotos, userMessage.id, selectedPhotos)
+        }
         val conversationId = currentConversationId
         var platformReply: AssistantResult.Success? = null
         return requestRunner.start(
@@ -384,7 +412,7 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
                         val interests = preferences.selectedInterests.sorted().take(20).map { it.take(50) }
                         ensureOwner(owner)
                         val context = assistantClientContext(contextCity,
-                            _weatherData.value, _activeTravels.value, personalized)
+                            _weatherData.value, _activeTravels.value, personalized, owner = owner)
                         when (val result = assistantRepository.getAssistantResponse(userPrompt, conversationId, userMessage.id,
                             assistantConsent.state.value.document ?: throw AssistantConsentRequiredException(),
                             assistantTone.platformTone(), personalized, interests, context, attachmentIds)) {
@@ -430,8 +458,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
             },
             onError = {
                 if (it is AssistantConsentRequiredException) {
-                    pendingConsentMessage = PendingConsentMessage(userPrompt, systemContext, true,
-                        userMessage.id, conversationId, currentUid)
+                    pendingMessages.queue(PendingAssistantMessage(userPrompt, systemContext, true,
+                        userMessage.id, conversationId, currentUid, tripId = selectedTripId), intentVersion)
                     _requestState.value = AssistantRequestState.IDLE
                     assistantConsent.open()
                 } else handleError(it, userPrompt, userMessage.id)
@@ -463,9 +491,10 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun resetChat() {
+        tripQuestionError = null
         clearPhotos()
         draft = ""
-        pendingConsentMessage = null
+        pendingMessages.clear()
         requestRunner.reset()
         _messages.value = emptyList()
         currentConversationId = java.util.UUID.randomUUID().toString()
@@ -475,7 +504,8 @@ class AiChatViewModel(application: Application) : AndroidViewModel(application) 
     fun loadConversation(conversationId: String) {
         // The route effect runs again on recreation, while this conversation stays in the ViewModel.
         if (currentConversationId == conversationId || loadingHistoryId == conversationId) return
-        pendingConsentMessage = null
+        tripQuestionError = null
+        pendingMessages.clear()
         clearPhotos()
         requestRunner.reset()
         requestRunner.start(

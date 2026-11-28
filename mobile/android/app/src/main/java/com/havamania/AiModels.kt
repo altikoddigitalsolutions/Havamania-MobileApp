@@ -25,6 +25,7 @@ data class AltikodChatMessage(
     val retryNotBefore: Long? = null,
     val attachmentIds: List<String> = emptyList(),
     val photoCount: Int = 0,
+    val selectedTripId: String? = null,
     val action: AssistantAction? = null
 )
 

@@ -50,6 +50,13 @@ fun AiChatScreen(
     val consentState by viewModel.assistantConsent.state.collectAsStateWithLifecycle()
     AssistantConsentDialog(consentState, viewModel.assistantConsent::save, viewModel::revokeAssistantConsent,
         viewModel::retryAssistantConsent, viewModel::dismissAssistantConsent)
+    viewModel.tripQuestionError?.let { error ->
+        AlertDialog(onDismissRequest = viewModel::dismissTripQuestionError,
+            title = { Text("Seyahat bilgisi değişti") }, text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissTripQuestionError) { Text("Anladım") }
+            })
+    }
     val openPhotoPicker = rememberAssistantPhotoPicker(
         viewModel::photoSelectionToken,
         { uris, token -> viewModel.addPhotos(uris, token) },
@@ -75,7 +82,6 @@ fun AiChatScreen(
     val profile by userProfileRepository.profile.collectAsStateWithLifecycle()
 
     val upcomingPlans by viewModel.activeTravels.collectAsStateWithLifecycle()
-    val activeTrip = upcomingPlans.firstOrNull()
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, viewModel) {
@@ -200,13 +206,8 @@ fun AiChatScreen(
 
                     WelcomeCard(greeting, themeColors)
 
-                    if (activeTrip != null) {
-                        ActiveTripContextCard(activeTrip, themeColors, enabled = !isSending) {
-                            val formatter = java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale("tr"))
-                            val dateStr = activeTrip.startDate.format(formatter)
-                            viewModel.sendMessage("${activeTrip.city} seyahati için $dateStr tarihindeki hava durumu nasıl?")
-                        }
-                    }
+                    AssistantTripSuggestions(upcomingPlans, historyOwner.orEmpty(), themeColors,
+                        enabled = !isSending && !viewModel.preparingPhotos, onAsk = viewModel::askTripWeather)
 
                     currentWeatherData?.let { data ->
                         AssistantWeatherCard(data, themeColors)
@@ -226,6 +227,7 @@ fun AiChatScreen(
                 ) {
                     items(items = messages, key = { it.id }) { message ->
                         ChatBubble(message, themeColors,
+                            photos = viewModel.messagePhotos[message.id].orEmpty(),
                             onRetry = { viewModel.sendMessage(it, isRetry = true, retryRequestId = message.retryRequestId) },
                             onActionClick = { action ->
                                 if (action.type == AssistantActionType.CREATE_TRAVEL_PLAN) {
